@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! Renders the application into PNG files without opening a window.
 //!
 //! This is used to produce the screenshots in the documentation and to inspect

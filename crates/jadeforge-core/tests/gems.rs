@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! Gem reading, moving and removal against real savegames.
 
 use std::path::PathBuf;

@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! Editing tests against real savegames: values are changed, the file is
 //! written to a temporary directory and read back.
 

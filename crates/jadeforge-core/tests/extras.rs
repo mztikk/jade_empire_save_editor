@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! Tests for the newer editing surfaces: styles, henchmen and screenshots.
 
 use std::path::{Path, PathBuf};

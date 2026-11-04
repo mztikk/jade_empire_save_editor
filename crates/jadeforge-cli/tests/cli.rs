@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! End-to-end tests for the `jadeforge` binary.
 //!
 //! The tests build a small synthetic savegame and invoke the real executable,

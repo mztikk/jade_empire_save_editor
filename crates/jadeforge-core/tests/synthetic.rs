@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! Tests that build savegames from scratch.
 //!
 //! These run on any machine (including CI) because they do not need a copy of

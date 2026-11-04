@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! Round trip tests against real savegames.
 //!
 //! The tests look for a Jade Empire save folder in `JADEFORGE_SAVE_DIR`. When

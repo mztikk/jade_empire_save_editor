@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! Field codec and malformed-block tests.
 //!
 //! The savegame tests cover the field types that real savegames use. This test

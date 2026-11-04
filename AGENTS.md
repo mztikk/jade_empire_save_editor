@@ -70,13 +70,14 @@ cargo commands above remain canonical.
 - Clippy runs with `-D warnings` and the workspace enables `clippy::pedantic`.
   If a lint genuinely does not fit, add a scoped `#[allow(...)]` **with a
   reason comment**; do not weaken the workspace lint configuration.
-- The workspace also **denies** `unwrap_used`, `panic`, `todo`, `unimplemented`,
-  `unreachable`, `exit`, `string_slice` and `panic_in_result_fn`, and denies
-  `missing_docs`. `expect` is allowed only where a preceding check proves the
-  invariant; `crates/jadeforge-gff` denies it crate-wide and converts those
-  cases into `jadeforge_gff::Error::Malformed` instead. Tests may panic
-  (`clippy.toml`), but the test allowances do not cover helper functions in
-  `tests/*.rs`; add a crate-level allow there if a test helper needs it.
+- The workspace also **denies** `unwrap_used`, `expect_used`, `panic`, `todo`,
+  `unimplemented`, `unreachable`, `exit`, `string_slice` and
+  `panic_in_result_fn`, and denies `missing_docs`. Production code therefore
+  propagates errors; `expect` is not an escape hatch. The `clippy.toml` test
+  allowance covers `#[test]` functions and `cfg(test)` modules, and integration
+  tests plus `examples/snapshot.rs` carry a file-level `#![allow]` because
+  panicking is their assertion mechanism. Do not add a production `#[allow]` for
+  these lints without a documented invariant.
 - `just strict` reports the lints that are not gated yet
   (`expect_used`, `indexing_slicing`, `arithmetic_side_effects`, `nursery`) as
   an audit that never gates the build. Run it before promoting a lint: only add
@@ -86,8 +87,8 @@ cargo commands above remain canonical.
 - Errors carry context: use `Error::Corrupt`/`Error::Gff` with the path, block
   or field that failed, not bare strings; the GFF crate uses its own
   `Error::Malformed` for the same reason.
-- No panics on user data. `expect`/`unwrap` are only allowed where a preceding
-  check proves the invariant, and the message must state why.
+- No panics on user data. `unwrap` and `expect` are denied in production code;
+  propagate errors with context instead.
 - Keep the core free of UI dependencies; keep the GUI free of format knowledge.
 - JSON is reserved for machine-readable output and machine-to-machine
   communication: the CLI's `dump --json` export (`jadeforge-core::json`). Do not

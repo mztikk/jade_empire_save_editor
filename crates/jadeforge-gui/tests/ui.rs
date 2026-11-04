@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! Headless UI tests.
 //!
 //! The tests render the real component tree with `freya-testing`, which is the
