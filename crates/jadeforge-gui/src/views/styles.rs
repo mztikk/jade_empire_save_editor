@@ -3,17 +3,21 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::session::StyleRow;
+use crate::session::{StyleRow, StyleSuggestion};
 use crate::theme;
 use crate::widgets;
 
 /// Renders the styles tab.
+#[allow(clippy::too_many_arguments)]
 pub fn view(
     ctx: &Ctx,
     styles: &[StyleRow],
     query: State<String>,
-    matches: &[(u16, String, String)],
+    matches: &[StyleSuggestion],
     game_ready: bool,
+    learnable: usize,
+    matching: usize,
+    show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for style in styles {
@@ -35,35 +39,70 @@ pub fn view(
         widgets::divider(),
         widgets::section_label("LEARN A STYLE"),
         widgets::hint(
-            "New styles copy the combat data of a style the player already owns; \
-             the game recomputes the rest from its own tables.",
+            "A new style is stored with the same field layout as one the player already owns; \
+             the game fills in the remaining data from its own tables.",
         ),
     ];
 
     if game_ready {
         children.push(
             Input::new(query)
-                .placeholder("Search styles, for example \"sword\" or \"dragon\"")
+                .placeholder("Filter the style list, or leave empty to browse it")
                 .width(Size::fill())
                 .into_element(),
         );
-        if !query.read().trim().is_empty() {
-            if matches.is_empty() {
-                children.push(widgets::hint("Every matching style is already known."));
+        if matches.is_empty() {
+            children.push(widgets::hint(if query.read().trim().is_empty() {
+                "Every style of the game is already known."
             } else {
-                let mut result_rows: Vec<Element> = Vec::new();
-                for (style_id, name, label) in matches.iter().take(8) {
-                    result_rows.push(learn_row(ctx, *style_id, name, label));
-                }
-                children.push(
-                    rect()
-                        .vertical()
-                        .width(Size::fill())
-                        .spacing(2.)
-                        .children(result_rows)
-                        .into_element(),
+                "No styles match this search."
+            }));
+        } else {
+            let browsing = query.read().trim().is_empty();
+            let shown = matches.len();
+            let mut heading = rect()
+                .horizontal()
+                .width(Size::fill())
+                .spacing(10.)
+                .content(Content::Flex)
+                .child(widgets::section_label(if browsing {
+                    "ALL STYLES"
+                } else {
+                    "SEARCH RESULTS"
+                }))
+                .child(rect().width(Size::flex(1.0)))
+                .child(
+                    label()
+                        .text(match (browsing, shown == matching) {
+                            (true, _) => format!("{shown} of {matching}"),
+                            (false, true) => format!("{matching} matches"),
+                            (false, false) => format!("{shown} of {matching} matches"),
+                        })
+                        .font_size(10.)
+                        .color(theme::DIM),
+                );
+            if shown < matching {
+                heading = heading.child(
+                    Button::new()
+                        .compact()
+                        .outline()
+                        .child("Show more")
+                        .on_press(show_more),
                 );
             }
+            children.push(heading.into_element());
+            let mut result_rows: Vec<Element> = Vec::new();
+            for suggestion in matches {
+                result_rows.push(learn_row(ctx, suggestion));
+            }
+            children.push(
+                rect()
+                    .vertical()
+                    .width(Size::fill())
+                    .spacing(2.)
+                    .children(result_rows)
+                    .into_element(),
+            );
         }
     } else {
         children.push(widgets::hint(
@@ -73,7 +112,11 @@ pub fn view(
 
     widgets::card(
         "Fighting styles",
-        Some(format!("{} learned", styles.len())),
+        Some(format!(
+            "{} learned · {} learnable",
+            styles.len(),
+            learnable
+        )),
         children,
     )
 }
@@ -121,16 +164,17 @@ fn style_row(ctx: &Ctx, style: &StyleRow) -> Element {
                 )
                 .child(
                     label()
-                        .text(format!("style id {}", style.style_id))
+                        .text(style_subtitle(style.style_id, &style.label))
                         .font_size(10.)
                         .color(theme::DIM),
-                ),
+                )
+                .into_element(),
         )
-        .child(if style.weapon {
-            widgets::badge("weapon", theme::SURFACE_ACTIVE, theme::JADE)
-        } else {
-            widgets::badge("unarmed", theme::SURFACE_ACTIVE, theme::MUTED)
-        })
+        .child(widgets::badge(
+            style.kind,
+            theme::SURFACE_ACTIVE,
+            style_badge_color(style.kind),
+        ))
         .child(Button::new().compact().flat().child("−").on_press(lower))
         .child(
             label()
@@ -151,9 +195,29 @@ fn style_row(ctx: &Ctx, style: &StyleRow) -> Element {
         .into_element()
 }
 
-fn learn_row(ctx: &Ctx, style_id: u16, name: &str, style_label: &str) -> Element {
+/// Secondary line shown for a style, owned or not.
+#[must_use]
+pub fn style_subtitle(style_id: u16, label: &str) -> String {
+    if label.is_empty() {
+        format!("#{style_id}")
+    } else {
+        format!("{label} · #{style_id}")
+    }
+}
+
+/// Badge colour for a style kind.
+fn style_badge_color(kind: &str) -> Color {
+    match kind {
+        "magic" | "support" => theme::JADE,
+        "transformation" | "unique" => theme::ACCENT,
+        _ => theme::MUTED,
+    }
+}
+
+fn learn_row(ctx: &Ctx, suggestion: &StyleSuggestion) -> Element {
     let learn = {
         let ctx = ctx.clone();
+        let style_id = suggestion.style_id;
         move |_| ctx.run(|session| session.add_style(style_id))
     };
     rect()
@@ -171,25 +235,25 @@ fn learn_row(ctx: &Ctx, style_id: u16, name: &str, style_label: &str) -> Element
                 .width(Size::flex(1.0))
                 .child(
                     label()
-                        .text(name.to_owned())
+                        .text(suggestion.name.clone())
                         .font_size(12.)
                         .max_lines(1)
                         .color(theme::TEXT),
                 )
                 .child(
                     label()
-                        .text(style_label.to_owned())
-                        .font_size(9.)
+                        .text(style_subtitle(suggestion.style_id, &suggestion.label))
+                        .font_size(10.)
                         .max_lines(1)
                         .color(theme::DIM),
-                ),
+                )
+                .into_element(),
         )
-        .child(
-            label()
-                .text(format!("#{style_id}"))
-                .font_size(10.)
-                .color(theme::DIM),
-        )
+        .child(widgets::badge(
+            suggestion.kind,
+            theme::SURFACE_ACTIVE,
+            style_badge_color(suggestion.kind),
+        ))
         .child(
             Button::new()
                 .compact()

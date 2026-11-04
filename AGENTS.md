@@ -76,6 +76,11 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
   `plot_items` → 6, `mgweapons` → 7, `improve` → 8) was derived from real
   savegames and lives in `save_type_for_category`. New categories need evidence
   from a savegame before they are added.
+- Style kinds come from the template label prefix (`StyleKind`), not from the
+  `Type` column: the table stores dual weapon styles as `MONSTER` and the
+  Spirit Thief style as `SpiritThief`, so `Type` is not a usable description.
+- Development placeholders (`[TEMP] ...`, `temp_*`, `zzz*`, `cut_*`) are hidden
+  from the item picker (`is_playable_item`) but stay resolvable by id.
 
 ## Adding an editable field
 
@@ -112,6 +117,10 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 - Prefer small, focused tests over one giant test.
 - UI changes should be verified with the headless runner
   (`cargo test -p jadeforge-gui`) or the snapshot example.
+- A list the user cannot browse without typing a search is a bug: every picker
+  shows its full contents and *additionally* offers a filter.
+- The same value is spelled the same way everywhere. Item rows and style rows
+  use `category · #id` / `template · #id` in both the owned list and the picker.
 - A change is not done until `cargo test --workspace`, `cargo clippy
   --workspace --all-targets -- -D warnings` and `cargo fmt --all --check` pass.
 

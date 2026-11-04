@@ -13,14 +13,19 @@ the game does, verifies the result and keeps a backup of the original.
 
 - **Character editing** – name, level, experience, gold, unspent attribute
   points, health, chi and focus (current and maximum), body/mind/spirit,
-  charm/intuition/intimidate, alignment, chapter and kill counter.
-- **Fighting styles** – every learned style with its localized name, type and
+  charm/intuition/intimidate, alignment (with the game's Closed Fist / Open
+  Palm label), appearance, chapter and kill counter.
+- **Fighting styles** – every learned style with its localized name, kind
+  (martial, weapon, magic, support, transformation, improvised, unique) and
   level. Levels can be raised or lowered; raising a level unlocks the next
-  upgrade slot so the game's own level-up accounting stays consistent. Styles
-  can also be learned and removed.
+  upgrade slot so the game's own level-up accounting stays consistent. All
+  learnable styles are listed for browsing, with a filter for searching, and
+  styles can be learned and removed.
 - **Inventory** – every stack with its real name and category resolved from
   `items.2da` and `dialog.tlk`. Stack sizes can be changed, items removed, and
-  new items can be added through a searchable database of the game's items.
+  new items can be added from the game's item database, which is browsable in
+  full and searchable by name or template. Rows always show the same
+  `category · #id` (items) and `template · #id` (styles) subtitle.
 - **Companions** – all party members with their level and availability, editable.
 - **Savegame browser** – scans the save folder and shows the game's own
   screenshot, character name, level and play time for every savegame.
@@ -32,6 +37,8 @@ the game does, verifies the result and keeps a backup of the original.
 - **Command line tool** for scripting, bulk inspection and debugging.
 
 ![Character tab](docs/screenshot-character.png)
+
+![Fighting styles](docs/screenshot-styles.png)
 
 ## Requirements
 
@@ -189,7 +196,8 @@ Not implemented yet:
 
 - editing story variables, journal entries and gem slots,
 - companion stats beyond level and availability,
-- item icons in the interface (names and categories are resolved).
+- item icons and item/style descriptions in the interface (names, categories and
+  descriptions are resolved from the game data, but not shown yet).
 
 ## License
 

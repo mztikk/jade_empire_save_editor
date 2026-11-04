@@ -80,7 +80,9 @@ fn main() {
                 click(&mut test, &node);
             }
             if let Some(query) = &query {
-                if let Some(node) = find_paragraph(&test, "Search ") {
+                if let Some(node) =
+                    find_paragraph(&test, "Filter ").or_else(|| find_paragraph(&test, "Search "))
+                {
                     click(&mut test, &node);
                     test.write_text(query.clone());
                     test.sync_and_update();

@@ -46,6 +46,8 @@ pub struct Form {
     pub intimidate: State<String>,
     /// Alignment.
     pub alignment: State<String>,
+    /// Appearance index.
+    pub appearance: State<String>,
     /// Story chapter.
     pub chapter: State<String>,
     /// Kills.
@@ -80,6 +82,7 @@ impl Form {
             intuition: use_state(String::new),
             intimidate: use_state(String::new),
             alignment: use_state(String::new),
+            appearance: use_state(String::new),
             chapter: use_state(String::new),
             kills: use_state(String::new),
         }
@@ -108,6 +111,7 @@ impl Form {
         assign(self.intuition, &form.intuition);
         assign(self.intimidate, &form.intimidate);
         assign(self.alignment, &form.alignment);
+        assign(self.appearance, &form.appearance);
         assign(self.chapter, &form.chapter);
         assign(self.kills, &form.kills);
     }
@@ -134,6 +138,7 @@ impl Form {
             intuition: value(self.intuition),
             intimidate: value(self.intimidate),
             alignment: value(self.alignment),
+            appearance: value(self.appearance),
             chapter: value(self.chapter),
             kills: value(self.kills),
         }

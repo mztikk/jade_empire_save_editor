@@ -99,6 +99,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let tab = use_state(|| Tab::Overview);
     let item_query = use_state(String::new);
     let style_query = use_state(String::new);
+    let item_limit = use_state(|| 30_usize);
+    let style_limit = use_state(|| 20_usize);
     let preview_cache: Rc<RefCell<Option<(u64, ImageHandle)>>> =
         use_hook(|| Rc::new(RefCell::new(None)));
 
@@ -129,23 +131,31 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         .is_some_and(|character| form.differs_from(character));
     let preview_handle = cached_preview(&preview_cache, preview.as_ref());
     let game_ready = matches!(game_status, GameStatus::Loaded { .. });
-    let item_results = {
+    let total_items = session
+        .borrow()
+        .game
+        .as_ref()
+        .map_or(0, |game| game.playable_item_count());
+    let total_missing = session.borrow().missing_styles().len();
+    let (item_results, item_matches) = {
         let query = item_query.read().clone();
-        session.borrow().search_items(&query, 8)
+        session.borrow().search_items(&query, *item_limit.read())
     };
-    let style_matches = {
+    let (style_matches, style_matches_total) = {
         let query = style_query.read().trim().to_lowercase();
-        let missing = session.borrow().missing_styles();
-        if query.is_empty() {
-            Vec::new()
-        } else {
-            missing
-                .into_iter()
-                .filter(|(_, name, label)| {
-                    name.to_lowercase().contains(&query) || label.to_lowercase().contains(&query)
-                })
-                .collect()
-        }
+        let limit = *style_limit.read();
+        let matching: Vec<_> = session
+            .borrow()
+            .missing_styles()
+            .into_iter()
+            .filter(|style| {
+                query.is_empty()
+                    || style.name.to_lowercase().contains(&query)
+                    || style.label.to_lowercase().contains(&query)
+            })
+            .collect();
+        let total = matching.len();
+        (matching.into_iter().take(limit).collect::<Vec<_>>(), total)
     };
 
     let sync: Rc<dyn Fn()> = {
@@ -169,10 +179,30 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         ),
         (Tab::Character, Some(character)) => views::character::view(&ctx, character),
         (Tab::Styles, _) => {
-            views::styles::view(&ctx, &styles, style_query, &style_matches, game_ready)
+            let mut style_limit = style_limit;
+            views::styles::view(
+                &ctx,
+                &styles,
+                style_query,
+                &style_matches,
+                game_ready,
+                total_missing,
+                style_matches_total,
+                move |_| *style_limit.write() += 50,
+            )
         }
         (Tab::Inventory, _) => {
-            views::inventory::view(&ctx, &items, item_query, &item_results, game_ready)
+            let mut item_limit = item_limit;
+            views::inventory::view(
+                &ctx,
+                &items,
+                item_query,
+                &item_results,
+                game_ready,
+                item_matches,
+                total_items,
+                move |_| *item_limit.write() += 50,
+            )
         }
         (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen),
         (_, None) => empty_state(entries.len()),
