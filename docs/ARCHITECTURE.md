@@ -1,12 +1,13 @@
 # Architecture
 
-JadeForge is a Cargo workspace with three crates. The split keeps all savegame
+JadeForge is a Cargo workspace with five crates. The split keeps all savegame
 knowledge in one place so that both front ends stay thin and the interesting
 logic can be tested without a window or a terminal.
 
 ```
 crates/
   jadeforge-core/     format reader/writer, editing model, verification
+  jadeforge-session/  UI independent session state and settings
   jadeforge-gamedata/ talk table and 2DA readers for names
   jadeforge-cli/      `jadeforge` command line tool
   jadeforge-gui/      `jadeforge-gui` desktop application (Freya)
@@ -105,15 +106,24 @@ A thin wrapper over the core: `info`, `blocks`, `character`, `items`, `get`,
 `set`, `dump`, `verify`, `add-item`. It is intentionally useful on its own and
 serves as an end-to-end test target (see `crates/jadeforge-cli/tests`).
 
+## `jadeforge-session`
+
+UI independent state and behaviour of the desktop application. `session` scans
+the save folder, holds the opened savegame, applies form edits, searches the
+item database and saves or reverts; `config` is the small TOML settings file
+(save folder and list sorting; old `key=value` files are still read). The crate
+depends on `jadeforge-core` and `jadeforge-gamedata` but on no windowing
+toolkit, so its tests run on every platform without the GUI system libraries.
+`jadeforge-gui` re-exports the modules, which keeps the views' `crate::session`
+paths unchanged.
+
 ## `jadeforge-gui`
 
 Freya 0.4 application with a small, explicit structure:
 
 | module | responsibility |
 | --- | --- |
-| `session` | all behaviour (no Freya types): loading, editing, search, save/revert |
 | `app` | the shell: header, save list with screenshot, tabs, action bar |
-| `config` | the small TOML settings file (save folder and list sorting; old `key=value` files are still read) |
 | `dialog` | the native folder dialog (`rfd`) with a test seam for the headless suite |
 | `theme` | palette and the Freya component theme (dark surfaces, gold accents) |
 | `app::HoverKey` | one shared hover state for save, item, style rows and upgrade orbs |
@@ -151,7 +161,8 @@ documentation.
 
 | layer | file | needs the game? |
 | --- | --- | --- |
-| format unit tests | `gff::path`, `gff::value`, `character`, `session` | no |
+| format unit tests | `gff::path`, `gff::value`, `character` | no |
+| session unit tests | `crates/jadeforge-session/src/session.rs`, `config.rs` | no |
 | synthetic savegames | `crates/jadeforge-core/tests/synthetic.rs` | no |
 | real savegames | `tests/roundtrip.rs`, `tests/rewrite.rs`, `tests/editing.rs` | yes, skipped otherwise |
 | CLI end to end | `crates/jadeforge-cli/tests/cli.rs` | synthetic |
@@ -168,5 +179,6 @@ Deliberately small:
 * `clap` for the CLI,
 * `serde_json` for dumps,
 * `thiserror` for errors,
+* `serde` and `toml` for the settings file,
 * `freya` for the GUI,
 * `freya-testing` (dev only) for headless UI tests.

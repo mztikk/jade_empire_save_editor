@@ -20,8 +20,9 @@ of a fine-grained token.
 What the workflow does:
 
 - `formatting`: `cargo fmt --all --check` on Linux.
-- `core and cli`: tests and `clippy -D warnings` for `jadeforge-core` and
-  `jadeforge-cli` on Linux, Windows and macOS (no GUI system libraries needed).
+- `core, session and cli`: tests and `clippy -D warnings` for
+  `jadeforge-core`, `jadeforge-session` and `jadeforge-cli` on Linux, Windows
+  and macOS (no GUI system libraries needed).
 - `gui`: installs the X11/Wayland/EGL development packages, runs the headless
   `freya-testing` UI tests and clippy on Linux.
 - `publish`: runs `just publish` on Linux, Windows and macOS, runs the headless

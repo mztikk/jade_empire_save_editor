@@ -157,11 +157,12 @@ documentation, not ground truth — verify against the game files where possible
 2. Add it to `crates/jadeforge-core/src/character.rs`
    (`Character`, `Character::read`, `Character::write`) with a range check and a
    path that is relative to the player block.
-3. Add it to the form in `crates/jadeforge-gui/src/session.rs` (`CharacterForm`),
-   to `crates/jadeforge-gui/src/form.rs` and to the matching view in
-   `crates/jadeforge-gui/src/views/character.rs`.
+3. Add it to the form in `crates/jadeforge-session/src/session.rs`
+   (`CharacterForm`), to `crates/jadeforge-gui/src/form.rs` and to the matching
+   view in `crates/jadeforge-gui/src/views/character.rs`.
 4. Extend the tests:
-   - `CharacterForm` round trip in `session.rs`,
+   - `CharacterForm` round trip in
+     `crates/jadeforge-session/src/session.rs`,
    - synthetic test if the encoding is new (`tests/synthetic.rs`),
    - real savegame test in `tests/editing.rs` when the field exists in the test
      saves.
@@ -209,9 +210,10 @@ documentation, not ground truth — verify against the game files where possible
 | path | content |
 | --- | --- |
 | `crates/jadeforge-core` | format reader/writer, character, inventory, styles, companions, screenshots |
+| `crates/jadeforge-session` | UI independent session state and settings (no Freya) |
 | `crates/jadeforge-gamedata` | talk table and 2DA readers, names for items and styles |
 | `crates/jadeforge-cli` | `jadeforge` command line tool |
-| `crates/jadeforge-gui` | Freya application: `session` (logic), `app` (shell), `views` (tabs), `theme`, `widgets` |
+| `crates/jadeforge-gui` | Freya application: `app` (shell), `views` (tabs), `theme`, `widgets` |
 | `docs/FORMAT.md` | savegame format reference |
 | `docs/ARCHITECTURE.md` | crate layout, data flow, safety model |
 | `.dsh/skills` | task-specific skills for working on this repository |
