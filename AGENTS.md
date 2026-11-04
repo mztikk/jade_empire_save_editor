@@ -94,10 +94,11 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
   a family is therefore always a gap-free prefix; do not add a free-selection
   path that can create gaps, and do not edit the level directly (it is derived
   from the mask and has no UI control).
-- `<Style>LV.2da` tables limit what the game's level-up screen offers. They are
-  matched by normalized style label and only a few ship in `override/`; when one
-  is missing the editor offers the full table, which the Game rules toggle can
-  restrict.
+- `<Style>LV.2da` tables limit what the game's level-up screen offers. They ship
+  as binary `2DA V2.b` resources inside `data/miniglobal-a.rim`; the mapping is
+  `stylesuperlist.StyleData` -> `styledata.2da` row -> `levelup2da` column.
+  `override/` text tables take precedence over the archive (mods). When a style
+  has no table the editor offers the full table instead of guessing.
 - Development placeholders (`[TEMP] ...`, `temp_*`, `zzz*`, `cut_*`) are hidden
   from the item picker (`is_playable_item`) but stay resolvable by id.
 

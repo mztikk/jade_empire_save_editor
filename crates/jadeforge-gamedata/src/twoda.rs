@@ -70,6 +70,83 @@ pub struct TwoDa {
 }
 
 impl TwoDa {
+    /// Parses a binary `2DA V2.b` table as shipped inside the game archives.
+    ///
+    /// Layout: signature, tab separated column headers, the row count, tab
+    /// separated row labels, one 16 bit offset per cell (row major), the cell
+    /// data size and finally a NUL separated string pool the offsets point
+    /// into.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::TwoDa`] when the signature or the structure is invalid.
+    pub fn parse_binary(data: &[u8]) -> Result<Self> {
+        if data.len() < 10 || &data[..9] != b"2DA V2.b\n" {
+            return Err(Error::TwoDa("not a binary 2DA table".to_owned()));
+        }
+        let mut position = 9;
+        let mut columns: Vec<String> = Vec::new();
+        while position < data.len() && data[position] != 0 {
+            let end = find_byte(data, position, b'\t')?;
+            columns.push(
+                std::str::from_utf8(&data[position..end])
+                    .map_err(|error| Error::TwoDa(format!("invalid column name: {error}")))?
+                    .to_owned(),
+            );
+            position = end + 1;
+        }
+        if columns.is_empty() {
+            return Err(Error::TwoDa("binary 2DA has no columns".to_owned()));
+        }
+        position += 1;
+        let row_count = read_u32(data, position)? as usize;
+        position += 4;
+        let mut labels: Vec<String> = Vec::with_capacity(row_count);
+        for _ in 0..row_count {
+            let end = find_byte(data, position, b'\t')?;
+            labels.push(
+                std::str::from_utf8(&data[position..end])
+                    .map_err(|error| Error::TwoDa(format!("invalid row label: {error}")))?
+                    .to_owned(),
+            );
+            position = end + 1;
+        }
+        let cell_count = row_count.saturating_mul(columns.len());
+        let mut offsets: Vec<u16> = Vec::with_capacity(cell_count);
+        for _ in 0..cell_count {
+            offsets.push(read_u16(data, position)?);
+            position += 2;
+        }
+        let _cells_size = read_u16(data, position)?;
+        position += 2;
+        let cell_base = position;
+
+        let mut column_index = HashMap::new();
+        for (index, column) in columns.iter().enumerate() {
+            column_index.insert(column.to_lowercase(), index);
+        }
+        let mut table = Self {
+            columns,
+            column_index,
+            rows: Vec::new(),
+        };
+        for (row_number, label) in labels.iter().enumerate() {
+            let width = table.columns.len();
+            let mut values: Vec<Option<String>> = Vec::with_capacity(width);
+            for column in 0..width {
+                let offset = usize::from(offsets[row_number * width + column]);
+                values.push(binary_cell(data, cell_base + offset));
+            }
+            let row = Row { values };
+            let index = label.parse::<usize>().unwrap_or(row_number);
+            if table.rows.len() <= index {
+                table.rows.resize(index + 1, None);
+            }
+            table.rows[index] = Some(row);
+        }
+        Ok(table)
+    }
+
     /// Parses a text 2DA file.
     pub fn parse(text: &str) -> Result<Self> {
         let mut lines = text.lines();
@@ -182,6 +259,39 @@ impl TwoDa {
     }
 }
 
+/// Finds the next occurrence of `needle` at or after `from`.
+fn find_byte(data: &[u8], from: usize, needle: u8) -> Result<usize> {
+    data.get(from..)
+        .and_then(|tail| tail.iter().position(|byte| *byte == needle))
+        .map(|offset| from + offset)
+        .ok_or_else(|| Error::TwoDa("truncated binary 2DA table".to_owned()))
+}
+
+fn read_u16(data: &[u8], position: usize) -> Result<u16> {
+    let bytes = data
+        .get(position..position + 2)
+        .ok_or_else(|| Error::TwoDa("truncated binary 2DA table".to_owned()))?;
+    Ok(u16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
+fn read_u32(data: &[u8], position: usize) -> Result<u32> {
+    let bytes = data
+        .get(position..position + 4)
+        .ok_or_else(|| Error::TwoDa("truncated binary 2DA table".to_owned()))?;
+    Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+/// Reads a NUL terminated cell from the string pool.
+fn binary_cell(data: &[u8], start: usize) -> Option<String> {
+    let end = find_byte(data, start, 0).ok()?;
+    let text = std::str::from_utf8(&data[start..end]).ok()?;
+    if text.is_empty() || text == "****" {
+        None
+    } else {
+        Some(text.to_owned())
+    }
+}
+
 /// Splits a 2DA line into tokens, honouring double quotes.
 fn tokenize(line: &str) -> Vec<String> {
     let mut tokens = Vec::new();
@@ -245,5 +355,40 @@ mod tests {
             tokenize("0  \"two words\"  three"),
             vec!["0", "two words", "three"]
         );
+    }
+}
+
+#[cfg(test)]
+mod binary_tests {
+    use super::*;
+
+    /// Builds a one row, two column binary table: `0` with cells `sword`, `5`.
+    fn sample() -> Vec<u8> {
+        let mut data = Vec::new();
+        data.extend_from_slice(b"2DA V2.b\n");
+        data.extend_from_slice(b"label\tcost\t");
+        data.push(0);
+        data.extend_from_slice(&1_u32.to_le_bytes());
+        data.extend_from_slice(b"0\t");
+        data.extend_from_slice(&0_u16.to_le_bytes());
+        data.extend_from_slice(&6_u16.to_le_bytes());
+        data.extend_from_slice(&0_u16.to_le_bytes());
+        data.extend_from_slice(b"sword\0");
+        data.extend_from_slice(b"5\0");
+        data
+    }
+
+    #[test]
+    fn reads_a_binary_table() {
+        let table = TwoDa::parse_binary(&sample()).expect("parse");
+        assert_eq!(table.column("Label"), Some(0));
+        assert_eq!(table.cell(0, "Label"), Some("sword"));
+        assert_eq!(table.uint(0, "cost"), Some(5));
+    }
+
+    #[test]
+    fn rejects_foreign_data() {
+        assert!(TwoDa::parse_binary(b"2DA V2.0\n").is_err());
+        assert!(TwoDa::parse_binary(b"nonsense").is_err());
     }
 }

@@ -25,9 +25,10 @@ the game does, verifies the result and keeps a backup of the original.
   owned tier removes it together with everything above it, so `1 -> 4` and
   `5 -> 0` are one click and a family is always a gap-free prefix. A **Game
   rules** toggle (on by default) limits the chips to the upgrades the style's own
-  `<Style>LV.2da` table offers when the installation ships one. All learnable
-  styles are listed for browsing, with a filter for searching, and styles can be
-  learned and removed.
+  `<Style>LV.2da` table offers, read from the shipped `data/miniglobal-a.rim`
+  archive through `styledata.2da` (most player styles have one; the rest fall
+  back to the full list). All learnable styles are listed for browsing, with a
+  filter for searching, and styles can be learned and removed.
 - **Inventory** – every stack with its real name and category resolved from
   `items.2da` and `dialog.tlk`. Stack sizes can be changed, items removed, and
   new items can be added from the game's item database, which is browsable in

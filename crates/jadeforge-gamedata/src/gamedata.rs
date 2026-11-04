@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
+use crate::rim::RimArchive;
 use crate::talktable::TalkTable;
 use crate::twoda::TwoDa;
 
@@ -227,9 +228,11 @@ impl GameData {
             .find(|path| path.is_file())
             .and_then(|path| TalkTable::open(path).ok());
 
-        let items = load_two_da(&root, "items.2da");
-        let styles = load_two_da(&root, "stylesuperlist.2da");
-        let advances = load_two_da(&root, "StyleAdvance.2da");
+        let source = TableSource::new(&root);
+        let items = source.load("items.2da");
+        let styles = source.load("stylesuperlist.2da");
+        let advances = source.load("StyleAdvance.2da");
+        let style_data = source.load("styledata.2da");
 
         let mut item_records = Vec::new();
         if let (Some(table), Some(talk)) = (&items, &talktable) {
@@ -333,7 +336,6 @@ impl GameData {
             );
         }
 
-        let level_tables = load_level_tables(&root);
         let mut advance_slots: Vec<Option<Advance>> = Vec::new();
         if let Some(table) = &advances {
             advance_slots.resize(table.len(), None);
@@ -374,11 +376,29 @@ impl GameData {
             }
         }
 
+        // Each style row points at a `styledata.2da` row, which names the
+        // `<Style>LV.2da` table with the upgrades the level-up screen offers.
         let mut style_advances: Vec<Option<Vec<u16>>> = vec![None; style_slots.len()];
-        for (index, style) in style_slots.iter().enumerate() {
-            if let Some(style) = style {
-                if let Some(allowed) = level_tables.get(&normalize_style_name(&style.label)) {
-                    style_advances[index] = Some(allowed.clone());
+        if let (Some(styles), Some(style_data)) = (&styles, &style_data) {
+            for (index, style) in style_slots.iter().enumerate() {
+                if style.is_none() {
+                    continue;
+                }
+                let Some(data_index) = styles
+                    .uint(index, "StyleData")
+                    .and_then(|value| usize::try_from(value).ok())
+                else {
+                    continue;
+                };
+                let Some(table_name) = style_data.cell(data_index, "levelup2da") else {
+                    continue;
+                };
+                let table_name = table_name.trim();
+                if table_name.is_empty() || table_name == "****" {
+                    continue;
+                }
+                if let Some(table) = source.load(&format!("{table_name}.2da")) {
+                    style_advances[index] = Some(choice_rows(&table));
                 }
             }
         }
@@ -545,79 +565,71 @@ pub fn is_playable_item(item: &ItemInfo) -> bool {
         || name.starts_with("zzz"))
 }
 
-/// Loads every `<Style>LV.2da` in `override/`, keyed by the normalized style
-/// name, and returns the union of the advancement rows each table offers.
-fn load_level_tables(root: &Path) -> HashMap<String, Vec<u16>> {
-    let mut tables = HashMap::new();
-    let Ok(entries) = std::fs::read_dir(root.join("override")) else {
-        return tables;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-            continue;
-        };
-        let lower = name.to_lowercase();
-        if !lower.ends_with("lv.2da") {
-            continue;
-        }
-        let Some(text) = std::fs::read_to_string(&path).ok() else {
-            continue;
-        };
-        let Ok(table) = TwoDa::parse(&text) else {
-            continue;
-        };
-        let mut rows: Vec<u16> = Vec::new();
-        for (_, row) in table.iter() {
-            for column in ["Choice_1", "Choice_2", "Choice_3", "Choice_4", "Choice_5"] {
-                let Some(column) = table.column(column) else {
-                    continue;
-                };
-                if let Some(value) = row.uint(column) {
-                    if let Ok(value) = u16::try_from(value) {
-                        if value > 0 && !rows.contains(&value) {
-                            rows.push(value);
-                        }
+/// Rows referenced by `Choice_1..5` of a `<Style>LV.2da` table.
+fn choice_rows(table: &TwoDa) -> Vec<u16> {
+    let mut rows: Vec<u16> = Vec::new();
+    for (_, row) in table.iter() {
+        for column in ["Choice_1", "Choice_2", "Choice_3", "Choice_4", "Choice_5"] {
+            let Some(column) = table.column(column) else {
+                continue;
+            };
+            if let Some(value) = row.uint(column) {
+                if let Ok(value) = u16::try_from(value) {
+                    if value > 0 && !rows.contains(&value) {
+                        rows.push(value);
                     }
                 }
             }
         }
-        rows.sort_unstable();
-        let stem = lower.trim_end_matches("lv.2da").to_owned();
-        tables.insert(normalize_style_name(&stem), rows);
     }
-    tables
+    rows.sort_unstable();
+    rows
 }
 
-/// Normalizes style labels and table names for matching.
-///
-/// `C_Iron_palm` matches `IronPalmLV`, `cutC_Ghost_King__` matches
-/// `Ghost_KingLV`: strip the cut and creature prefixes, the `lv` suffix and
-/// every separator, then compare.
-#[must_use]
-pub fn normalize_style_name(name: &str) -> String {
-    let mut name = name.to_lowercase();
-    for prefix in ["cut_", "cut"] {
-        if let Some(rest) = name.strip_prefix(prefix) {
-            name = rest.to_owned();
-        }
-    }
-    if let Some(rest) = name.strip_prefix("c_") {
-        name = rest.to_owned();
-    }
-    name.chars().filter(|c| c.is_alphanumeric()).collect()
+/// Where the 2DA tables come from: `override/` first, the RIM archive second.
+struct TableSource {
+    overrides: HashMap<String, PathBuf>,
+    rim: Option<RimArchive>,
 }
 
-fn load_two_da(root: &Path, name: &str) -> Option<TwoDa> {
-    let candidates = [root.join("override").join(name), root.join(name)];
-    for path in candidates {
-        if path.is_file() {
-            if let Ok(text) = std::fs::read_to_string(&path) {
-                return TwoDa::parse(&text).ok();
+impl TableSource {
+    fn new(root: &Path) -> Self {
+        let mut overrides = HashMap::new();
+        if let Ok(entries) = std::fs::read_dir(root.join("override")) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                    continue;
+                };
+                if name.to_lowercase().ends_with(".2da") {
+                    overrides.insert(name.to_lowercase(), path);
+                }
             }
         }
+        let rim = ["miniglobal-a.rim", "globalunload-a.rim"]
+            .iter()
+            .map(|name| root.join("data").join(name))
+            .find(|path| path.is_file())
+            .and_then(|path| RimArchive::open(path).ok());
+        Self { overrides, rim }
     }
-    None
+
+    /// Loads a table by file name, honouring `override/` before the archive.
+    fn load(&self, name: &str) -> Option<TwoDa> {
+        let key = name.to_lowercase();
+        if let Some(path) = self.overrides.get(&key) {
+            if let Ok(text) = std::fs::read_to_string(path) {
+                if let Ok(table) = TwoDa::parse(&text) {
+                    return Some(table);
+                }
+            }
+        }
+        let stem = key.strip_suffix(".2da").unwrap_or(&key);
+        self.rim
+            .as_ref()
+            .and_then(|rim| rim.get_2da(stem))
+            .and_then(|bytes| TwoDa::parse_binary(bytes).ok())
+    }
 }
 
 #[cfg(test)]
@@ -652,15 +664,6 @@ mod tests {
         assert_eq!(style_kind("Unique_Spirit_Thief"), StyleKind::Unique);
         assert_eq!(style_kind("EMPEROR_STAFF"), StyleKind::Other);
         assert_eq!(StyleKind::Support.label(), "support");
-    }
-
-    #[test]
-    fn style_names_normalize_for_table_matching() {
-        assert_eq!(normalize_style_name("C_Iron_palm"), "ironpalm");
-        assert_eq!(normalize_style_name("IronPalmLV"), "ironpalmlv");
-        assert_eq!(normalize_style_name("Ghost_KingLV"), "ghostkinglv");
-        assert_eq!(normalize_style_name("cutC_Ghost_King__"), "ghostking");
-        assert_eq!(normalize_style_name("Viper"), "viper");
     }
 
     #[test]

@@ -26,6 +26,10 @@ pub enum Error {
     #[error("cannot read a 2DA table: {0}")]
     TwoDa(String),
 
+    /// A RIM archive is damaged or uses an unsupported version.
+    #[error("cannot read a RIM archive: {0}")]
+    Archive(String),
+
     /// The directory does not look like a Jade Empire installation.
     #[error("{} is not a Jade Empire installation", .0.display())]
     NotAGameInstallation(PathBuf),
