@@ -21,7 +21,8 @@ that proves the format handling still works against retail data:
 
 ```sh
 JADEFORGE_SAVE_DIR="/path/to/Jade Empire/Save" \
-JADEFORGE_GAME_DIR="/path/to/Jade Empire" cargo test --workspace
+JADEFORGE_GAME_DIR="/path/to/Jade Empire" \
+JADEFORGE_CONFIG_DIR="$(mktemp -d)" cargo test --workspace
 ```
 
 Expect `round tripped 88 savegames` and `rewrote 943 blocks` from the core
