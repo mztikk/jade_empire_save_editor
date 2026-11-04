@@ -90,7 +90,9 @@ bit *i* selects row *i+1*, so the editor can show and toggle individual upgrades
 `<Style>LV.2da` tables limit the chips: `stylesuperlist.StyleData` selects a
 row of `styledata.2da`, whose `levelup2da` column names the table. Most of them
 live in `data/miniglobal-a.rim` as binary `2DA V2.b` resources, so the crate has
-a `rim` reader and a binary 2DA parser; `override/` text tables take precedence.
+a `rim` reader and a binary 2DA parser; `override/` text tables take precedence
+(case-insensitive lookup, lossy decoding), which is what makes modded styles work.
+`tests/modded.rs` builds a small modded installation and asserts the resolution.
 `search_items` powers the item picker. Every table is optional: without the game
 files the UI falls back to numeric ids.
 

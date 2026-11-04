@@ -122,6 +122,15 @@ JadeForge looks for the game installation next to the save folder (the parent of
 | `override/items.2da` | item names, categories, icons |
 | `override/stylesuperlist.2da` | fighting style names and weapon data |
 
+Most tables are not loose files at all: they ship as binary `2DA V2.b` resources
+inside `data/miniglobal-a.rim`, and the editor reads them from there (for
+example `styledata.2da`, which maps every style to its own level-up table).
+Files in `override/` take precedence over the archive exactly like the engine
+does, so **mods that add styles or change tables are picked up**: extend
+`stylesuperlist.2da`, add a `styledata.2da` row pointing at the new
+`<Style>LV.2da`, and the editor resolves the modded upgrades like the shipped
+ones. Override files are read case-insensitively and tolerate non-UTF-8 text.
+
 Set `JADEFORGE_GAME_DIR` to point at an installation somewhere else. When the
 files are missing the editor still works, it just shows numeric ids instead of
 names. Nothing in the game folder is ever written.

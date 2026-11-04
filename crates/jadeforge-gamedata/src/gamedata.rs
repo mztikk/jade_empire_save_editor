@@ -618,7 +618,9 @@ impl TableSource {
     fn load(&self, name: &str) -> Option<TwoDa> {
         let key = name.to_lowercase();
         if let Some(path) = self.overrides.get(&key) {
-            if let Ok(text) = std::fs::read_to_string(path) {
+            // Mod tables are not always UTF-8; decoding lossily keeps them usable.
+            if let Ok(bytes) = std::fs::read(path) {
+                let text = String::from_utf8_lossy(&bytes);
                 if let Ok(table) = TwoDa::parse(&text) {
                     return Some(table);
                 }
