@@ -18,14 +18,15 @@ truth and must be updated whenever the understanding of the format changes.
 
 ```sh
 cargo build --workspace                       # build everything
-cargo test --workspace                        # all tests
+cargo nextest run --workspace                 # all tests (cargo-nextest)
+cargo test --workspace --doc                  # doctests
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 
 # Tests against real savegames (skipped when the variable is not set)
 JADEFORGE_SAVE_DIR="$HOME/games/Jade Empire/Save" \
 JADEFORGE_GAME_DIR="$HOME/games/Jade Empire" \
-JADEFORGE_CONFIG_DIR="$(mktemp -d)" cargo test --workspace
+JADEFORGE_CONFIG_DIR="$(mktemp -d)" cargo nextest run --workspace
 
 # Render the UI into a PNG without a window (screenshots, layout debugging)
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.png [TAB|all]
@@ -194,7 +195,7 @@ documentation, not ground truth — verify against the game files where possible
   the fix.
 - Prefer small, focused tests over one giant test.
 - UI changes should be verified with the headless runner
-  (`cargo test -p jadeforge-gui`) or the snapshot example.
+  (`cargo nextest run -p jadeforge-gui`) or the snapshot example.
 - UI tests isolate the settings file through a thread-local override
   (`jadeforge_session::config::ensure_test_path`), so a developer's remembered
   sort order or save folder can never influence them. Keep it that way; do not
@@ -210,7 +211,8 @@ documentation, not ground truth — verify against the game files where possible
   empty ring when buyable, no numerals (left-to-right order is the tier, the
   a11y label carries it). Do not turn them back into rectangular buttons or add
   text to them.
-- A change is not done until `cargo test --workspace`, `cargo clippy
+- A change is not done until `cargo nextest run --workspace` (+ `cargo test
+  --workspace --doc`), `cargo clippy
   --workspace --all-targets -- -D warnings` and `cargo fmt --all --check` pass.
 
 ## Commits

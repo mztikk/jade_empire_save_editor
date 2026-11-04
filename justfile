@@ -21,9 +21,11 @@ default:
 build:
     cargo build --workspace
 
-# Run every test. Tests that need savegames run when JADEFORGE_SAVE_DIR is set.
+# Run every test with nextest, plus doctests (nextest does not run those).
+# Tests that need savegames run when JADEFORGE_SAVE_DIR is set.
 test:
-    cargo test --workspace
+    cargo nextest run --workspace
+    cargo test --workspace --doc
 
 # Lint the whole workspace and deny warnings.
 clippy:
