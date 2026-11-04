@@ -216,6 +216,11 @@ Adding a gem builds the struct from scratch with the field types the game uses:
 from `gems.2da` (`Effect0..2`, `Parameter0..2`, `Duration0`), joined to
 `items.2da` by label, so only gems the game defines can be created.
 
+Effect ids point at rows of `effects.2da` inside `data/miniglobal-a.rim`
+(`label`, `effectid`, `durationtype`, `2da`, `row`); the label is what the UI
+shows (`EFFECT_MODIFYBODYBASE` → `Body`). An amulet entry with no `ItemID` and
+an empty effect list is an empty socket and is displayed read-only.
+
 The global story variables live in `Campaign.VarTable` (`ID`, `Type`, `Value`,
 sometimes `Number`). The IDs are hashes without a name table in the savegame, and
 journal entries were not found in `save.sav`; both need more mapping work before

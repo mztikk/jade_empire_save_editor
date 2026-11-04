@@ -397,8 +397,10 @@ pub struct GemRow {
     pub struct_index: usize,
     /// Display name from the item table.
     pub name: String,
-    /// Number of effects on the gem.
-    pub effects: usize,
+    /// Readable effect lines, for example `+2 Body`.
+    pub effects: Vec<String>,
+    /// Empty amulet socket: no gem in it.
+    pub empty: bool,
     /// Whether the gem is socketed or carried.
     pub location: GemLocation,
 }
@@ -1168,15 +1170,41 @@ impl Session {
             return Vec::new();
         };
         gems.into_iter()
-            .map(|gem| GemRow {
-                struct_index: gem.struct_index,
-                name: self
-                    .game
-                    .as_ref()
-                    .and_then(|game| game.item(gem.item_id))
-                    .map_or_else(|| format!("Gem {}", gem.item_id), |item| item.name.clone()),
-                effects: gem.effects.len(),
-                location: gem.location,
+            .map(|gem| {
+                let info = self.game.as_ref().and_then(|game| game.item(gem.item_id));
+                let empty = info.is_none() && gem.effects.is_empty();
+                let effects: Vec<String> = gem
+                    .effects
+                    .iter()
+                    .map(|effect| {
+                        let name = self
+                            .game
+                            .as_ref()
+                            .and_then(|game| game.effect_name(u32::try_from(effect.kind).ok()?))
+                            .map_or_else(|| format!("Effect {}", effect.kind), ToOwned::to_owned);
+                        if effect.duration > 0.0 {
+                            format!("{:+} {} ({:.0}s)", effect.value, name, effect.duration)
+                        } else {
+                            format!("{:+} {}", effect.value, name)
+                        }
+                    })
+                    .collect();
+                GemRow {
+                    struct_index: gem.struct_index,
+                    name: info.map_or_else(
+                        || {
+                            if empty {
+                                "Empty socket".to_owned()
+                            } else {
+                                format!("Gem {}", gem.item_id)
+                            }
+                        },
+                        |item| item.name.clone(),
+                    ),
+                    effects,
+                    empty,
+                    location: gem.location,
+                }
             })
             .collect()
     }

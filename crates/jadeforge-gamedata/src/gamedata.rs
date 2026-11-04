@@ -147,6 +147,7 @@ pub struct GameData {
     advances: Vec<Option<Advance>>,
     style_choices: Vec<Option<Vec<StyleChoice>>>,
     gems: Vec<GemInfo>,
+    effects: Vec<Option<String>>,
     search_index: HashMap<u16, String>,
 }
 
@@ -214,6 +215,45 @@ pub struct StyleChoice {
     pub tier: u8,
 }
 
+/// Turns an `effects.2da` label into something readable.
+///
+/// `EFFECT_MODIFYBODYBASE` becomes `Body`, `EFFECT_DAMAGEARMOR` becomes
+/// `Damage armor`; unknown labels fall back to the lower case label.
+#[must_use]
+pub fn pretty_effect_name(label: &str) -> String {
+    let name = label
+        .strip_prefix("EFFECT_")
+        .unwrap_or(label)
+        .to_uppercase();
+    for (keyword, display) in [
+        ("BODY", "Body"),
+        ("MIND", "Mind"),
+        ("SPIRIT", "Spirit"),
+        ("CHARM", "Charm"),
+        ("INTUITION", "Intuition"),
+        ("INTIMIDATE", "Intimidate"),
+        ("FOCUS", "Focus"),
+        ("HEALTH", "Health"),
+        ("CHI", "Chi"),
+    ] {
+        if name.contains(keyword) {
+            return display.to_owned();
+        }
+    }
+    let mut words = String::new();
+    for (index, part) in name.split('_').enumerate() {
+        if index > 0 {
+            words.push(' ');
+        }
+        let mut chars = part.chars();
+        if let Some(first) = chars.next() {
+            words.push(first);
+            words.extend(chars.flat_map(char::to_lowercase));
+        }
+    }
+    words
+}
+
 /// Splits `Increase_Damage_3` into `("Increase_Damage", 3)`.
 #[must_use]
 pub fn family_and_tier(label: &str) -> (String, u8) {
@@ -270,6 +310,7 @@ impl GameData {
         let advances = source.load("StyleAdvance.2da");
         let style_data = source.load("styledata.2da");
         let gem_table = source.load("gems.2da");
+        let effects_table = source.load("effects.2da");
 
         let mut item_records = Vec::new();
         if let (Some(table), Some(talk)) = (&items, &talktable) {
@@ -371,6 +412,18 @@ impl GameData {
                 item.id,
                 format!("{} {}", item.name, item.label).to_lowercase(),
             );
+        }
+
+        let mut effect_names: Vec<Option<String>> = Vec::new();
+        if let Some(table) = &effects_table {
+            effect_names.resize(table.len(), None);
+            for (index, _) in table.iter() {
+                let label = table.cell(index, "Label").unwrap_or_default();
+                if label.is_empty() || label.eq_ignore_ascii_case("EFFECT_INVALID") {
+                    continue;
+                }
+                effect_names[index] = Some(pretty_effect_name(label));
+            }
         }
 
         let mut gem_infos: Vec<GemInfo> = Vec::new();
@@ -496,6 +549,7 @@ impl GameData {
             advances: advance_slots,
             style_choices,
             gems: gem_infos,
+            effects: effect_names,
             search_index,
         })
     }
@@ -548,6 +602,12 @@ impl GameData {
     #[must_use]
     pub fn gem(&self, item_id: u16) -> Option<&GemInfo> {
         self.gems.iter().find(|gem| gem.item_id == item_id)
+    }
+
+    /// Human readable name of an effect id, for example `Body`.
+    #[must_use]
+    pub fn effect_name(&self, effect: u32) -> Option<&str> {
+        self.effects.get(effect as usize).and_then(Option::as_deref)
     }
 
     /// Number of resolved styles.
