@@ -113,6 +113,7 @@ Freya 0.4 application with a small, explicit structure:
 | `config` | the small settings file that remembers the save folder |
 | `dialog` | the native folder dialog (`rfd`) with a test seam for the headless suite |
 | `theme` | palette and the Freya component theme (dark surfaces, gold accents) |
+| `app::HoverKey` | one shared hover state for save, item, style rows and upgrade orbs |
 | `widgets` | cards, fields, badges, dividers |
 | `views` | one module per tab (overview, character, styles, inventory, companions); item and style rows expand to show the game's description |
 | `form` | the text input states of the character sheet |

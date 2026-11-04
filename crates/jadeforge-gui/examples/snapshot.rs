@@ -32,6 +32,7 @@ fn main() {
     );
     let mut wanted = None;
     let mut click_text = None;
+    let mut cursor: Option<(f64, f64)> = None;
     let mut width = 1280.0_f32;
     let mut height = 800.0_f32;
     let mut query = None;
@@ -51,6 +52,14 @@ fn main() {
             }
             "--query" => query = arguments.next(),
             "--click" => click_text = arguments.next(),
+            "--cursor" => {
+                cursor = arguments.next().and_then(|value| {
+                    let mut parts = value.split(',');
+                    let x = parts.next()?.trim().parse().ok()?;
+                    let y = parts.next()?.trim().parse().ok()?;
+                    Some((x, y))
+                });
+            }
             other => wanted = Some(other.to_owned()),
         }
     }
@@ -87,6 +96,10 @@ fn main() {
         Some(tab) => {
             if let Some(node) = find_label(&test, tab) {
                 click(&mut test, &node);
+            }
+            if let Some((x, y)) = cursor {
+                test.move_cursor(CursorPoint::new(x, y));
+                test.sync_and_update();
             }
             if let Some(text) = &click_text
                 && let Some(node) = find_label(&test, text)

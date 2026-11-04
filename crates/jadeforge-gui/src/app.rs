@@ -46,6 +46,19 @@ impl Ctx {
     }
 }
 
+/// Which interactive row is currently hovered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoverKey {
+    /// A savegame row, by index in `Session::entries`.
+    Save(usize),
+    /// An inventory row, by item id.
+    Item(u16),
+    /// A style row, by struct index.
+    Style(usize),
+    /// An upgrade orb: style struct index and slot.
+    Orb(usize, u16),
+}
+
 /// The tabs of the editor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
@@ -101,6 +114,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let style_query = use_state(String::new);
     let item_limit = use_state(|| 30_usize);
     let style_limit = use_state(|| 20_usize);
+    let hovered = use_state(|| None::<HoverKey>);
     let expanded_item = use_state(|| None::<u16>);
     let expanded_style = use_state(|| None::<u16>);
     let save_query = use_state(String::new);
@@ -193,6 +207,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 game_ready.then_some(total_missing),
                 style_matches_total,
                 expanded_style,
+                hovered,
                 move |_| *style_limit.write() += 50,
             )
         }
@@ -207,6 +222,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 item_matches,
                 total_items,
                 expanded_item,
+                hovered,
                 move |_| *item_limit.write() += 50,
             )
         }
@@ -236,6 +252,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         form_differs,
         save_query,
         save_sort,
+        hovered,
         sync.clone(),
     );
     let tabs = tab_bar(tab, active_tab);
@@ -449,6 +466,7 @@ fn sidebar(
     form_differs: bool,
     query: State<String>,
     sort: State<(crate::session::SaveSort, bool)>,
+    hovered: State<Option<HoverKey>>,
     sync: Rc<dyn Fn()>,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
@@ -457,6 +475,7 @@ fn sidebar(
         let ctx = ctx.clone();
         let sync = sync.clone();
         let is_selected = selected == Some(index);
+        let is_hovered = *hovered.read() == Some(HoverKey::Save(index));
         let broken = entry.error.is_some();
         let summary = entry.summary();
         let title = entry.label.clone();
@@ -485,8 +504,22 @@ fn sidebar(
                         .corner_radius(8.)
                         .background(if is_selected {
                             theme::SURFACE_ACTIVE
+                        } else if is_hovered {
+                            theme::SURFACE_HOVER
                         } else {
                             theme::SURFACE
+                        })
+                        .on_pointer_enter({
+                            let mut hovered = hovered;
+                            move |_| *hovered.write() = Some(HoverKey::Save(index))
+                        })
+                        .on_pointer_leave({
+                            let mut hovered = hovered;
+                            move |_| {
+                                if *hovered.read() == Some(HoverKey::Save(index)) {
+                                    *hovered.write() = None;
+                                }
+                            }
                         })
                         .maybe_child(is_selected.then(|| {
                             rect()
