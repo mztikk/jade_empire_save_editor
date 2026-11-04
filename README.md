@@ -28,7 +28,14 @@ the game does, verifies the result and keeps a backup of the original.
   `category · #id` (items) and `template · #id` (styles) subtitle.
 - **Companions** – all party members with their level and availability, editable.
 - **Savegame browser** – scans the save folder and shows the game's own
-  screenshot, character name, level and play time for every savegame.
+  screenshot, character name, level and play time for every savegame. The list
+  can be filtered by name and sorted by name, level or play time, with natural
+  ordering (`Auto 2` before `Auto 10`).
+- **Folder picker** – a **Browse…** dialog walks the file system, so the save
+  folder never has to be typed. The choice is remembered between runs and no
+  installation path is baked into the program.
+- **Responsive layout** – the sidebar, tab bar and stat rows adapt down to small
+  windows instead of clipping.
 - **Safe by design** – every write is verified by re-parsing the produced file,
   written atomically through a temporary file, and guarded by a timestamped
   backup.
@@ -67,16 +74,19 @@ Run them directly:
 or start the CLI against a save folder:
 
 ```sh
-./target/release/jadeforge info "/media/Games/Heroic/Jade Empire/Save/Auto 56 - 16h 22min - level 15"
+./target/release/jadeforge info "/path/to/Jade Empire/Save/Auto 56 - 16h 22min - level 15"
 ```
 
 ## Using the desktop application
 
 1. Start `jadeforge-gui`.
-2. Put the path of your Jade Empire `Save` folder into the *Save folder* field
-   and press **Scan**. On Linux the GOG default
-   (`/media/Games/Heroic/Jade Empire/Save`) is used if it exists, on Windows the
-   GOG Galaxy default. `JADEFORGE_SAVE_DIR` overrides both.
+2. Pick your Jade Empire `Save` folder with **Browse…** (or type the path) and
+   press **Scan**. JadeForge has no built-in guess where the game is installed:
+   GOG, Steam, Heroic, Wine and manual installs all differ, so the folder is
+   chosen once and remembered in the user configuration
+   (`$XDG_CONFIG_HOME/jadeforge/config`, `%APPDATA%\jadeforge\config` or
+   `~/Library/Application Support/jadeforge/config`). `JADEFORGE_SAVE_DIR`
+   overrides it for one run.
 3. Pick a savegame on the left; the game's own screenshot and character summary
    appear above the list.
 4. Edit the values on the tabs. Text fields are staged until you press **Apply
@@ -146,14 +156,18 @@ jadeforge save.sac verify
 
 ## Where are my savegames?
 
-| platform | default location |
-| --- | --- |
-| Linux (GOG / Heroic) | `/media/Games/Heroic/Jade Empire/Save` |
-| Windows (GOG) | `C:\Program Files (x86)\GOG Galaxy\Games\Jade Empire\Save` |
-| macOS | `/Applications/Jade Empire/Save` |
+Jade Empire keeps its savegames in a folder called `Save` next to the game
+executable (`dialog.tlk`, `override/`). Where that folder is depends on how the
+game was installed, so JadeForge asks for it once instead of guessing:
+
+- GOG: the folder the GOG installer created, usually below `Galaxy/Games` or
+  your library drive.
+- Steam or Heroic: the prefix/library folder you installed it into.
+- Wine/Proton: the prefix's `drive_c` path.
 
 Any folder works as long as it contains one sub-folder per savegame with a
-`save.sac` inside. Point `JADEFORGE_SAVE_DIR` at it to override the default.
+`save.sac` inside. Use **Browse…** in the application, or set
+`JADEFORGE_SAVE_DIR` for scripts and CI.
 
 ## How it works
 

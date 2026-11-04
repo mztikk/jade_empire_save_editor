@@ -11,11 +11,14 @@ names come from. Anything you learn belongs in there.
 
 ## Finding data to test with
 
-Real savegames live in the game folder (`/media/Games/Heroic/Jade Empire/Save`
-on this machine). The repository never contains them.
+Real savegames live in the game installation's `Save` folder. The repository
+never contains them, and no path is hardcoded anywhere: point
+`JADEFORGE_SAVE_DIR` at your installation and `JADEFORGE_GAME_DIR` at the game
+root (the folder that holds `dialog.tlk`).
 
 ```sh
-export JADEFORGE_SAVE_DIR="/media/Games/Heroic/Jade Empire/Save"
+export JADEFORGE_SAVE_DIR="/path/to/Jade Empire/Save"
+export JADEFORGE_GAME_DIR="/path/to/Jade Empire"
 
 cargo test -p jadeforge-core --test roundtrip -- --nocapture   # parse + byte identical
 cargo test -p jadeforge-core --test rewrite   -- --nocapture   # serialize/parse every block
@@ -49,6 +52,10 @@ stable in every sandbox.
 - Block size is always `listIndicesOffset + listIndicesSize`.
 - Style levels: `StyleLevel == 1 + population count of the StyleLevelInfo mask`.
   Never set one without the other.
+- Alignment: the field is absent until the first decision; in the 76 savegames
+  that have it the values run 131..255 with a peak at exactly 255, so the scale
+  is 0..255 with 128 neutral (`DEFAULT_ALIGNMENT`). Below 128 is the Closed
+  Fist, above is the Open Palm. There is no second alignment field.
 - Item `Type` values in savegames map to 2DA categories: 1 gems, 4 powerups,
   5 weapons, 6 plot_items, 7 mgweapons, 8 improve. Measure before adding more.
 
