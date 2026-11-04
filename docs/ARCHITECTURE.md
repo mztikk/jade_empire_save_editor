@@ -6,9 +6,10 @@ logic can be tested without a window or a terminal.
 
 ```
 crates/
-  jadeforge-core/   format reader/writer, editing model, verification
-  jadeforge-cli/    `jadeforge` command line tool
-  jadeforge-gui/    `jadeforge-gui` desktop application (Freya)
+  jadeforge-core/     format reader/writer, editing model, verification
+  jadeforge-gamedata/ talk table and 2DA readers for names
+  jadeforge-cli/      `jadeforge` command line tool
+  jadeforge-gui/      `jadeforge-gui` desktop application (Freya)
 ```
 
 ## `jadeforge-core`
@@ -22,6 +23,9 @@ crates/
 | `save` | the container: parsing, block access, locking in byte ranges, atomic save |
 | `character` | typed view of the player: read, validate, write, report changes |
 | `inventory` | item list: list, count changes, add, remove |
+| `styles` | fighting styles: names, levels, upgrade masks, add/remove |
+| `henchmen` | companions: level and availability |
+| `screenshot` | `SaveImage.tga` decoder (TGA 24/32 bit, RLE and raw) |
 | `json` | JSON export used by `jadeforge dump` and debugging |
 | `error` | one error enum with context for every failure |
 
@@ -72,6 +76,18 @@ compares every struct and label. A mismatch aborts the save.
    interrupted save can never truncate the original.
 6. A timestamped backup is created next to the savegame by default.
 
+## `jadeforge-gamedata`
+
+Names live in the installation, not in the savegame. The crate reads
+
+* `dialog.tlk` (format `TLK V4.0`, fixed 10 byte entries with UTF-8 offsets),
+* text 2DA tables from `override/` (`items.2da`, `stylesuperlist.2da`).
+
+`GameData::discover` walks up from the save folder (`JADEFORGE_GAME_DIR`
+overrides) and resolves items and styles once, caching the decoded names.
+`search_items` powers the item picker. Every table is optional: without the game
+files the UI falls back to numeric ids.
+
 ## `jadeforge-cli`
 
 A thin wrapper over the core: `info`, `blocks`, `character`, `items`, `get`,
@@ -80,9 +96,18 @@ serves as an end-to-end test target (see `crates/jadeforge-cli/tests`).
 
 ## `jadeforge-gui`
 
-Freya 0.4 application. The `session` module owns all behaviour and has no Freya
-types, which makes it unit testable. `app` renders the session and forwards
-input:
+Freya 0.4 application with a small, explicit structure:
+
+| module | responsibility |
+| --- | --- |
+| `session` | all behaviour (no Freya types): loading, editing, search, save/revert |
+| `app` | the shell: header, save list with screenshot, tabs, action bar |
+| `theme` | palette and the Freya component theme (dark surfaces, gold accents) |
+| `widgets` | cards, fields, badges, dividers |
+| `views` | one module per tab: overview, character, styles, inventory, companions |
+| `form` | the text input states of the character sheet |
+
+The shell renders the session and forwards input:
 
 * scan a save folder, list savegames with level, name and play time,
 * edit name, level, experience, gold, unspent points, vitals, attributes and
@@ -91,9 +116,12 @@ input:
 * apply changes in memory, save to disk, revert.
 
 The GUI is tested headlessly through `freya-testing`: the real component tree is
-rendered off-screen, a savegame is opened by clicking it, and the rendered
-frame is checked. `cargo run -p jadeforge-gui --example snapshot -- <dir> <png>`
-produces the screenshots used in the documentation.
+rendered off-screen, a savegame is opened by clicking it, tabs are switched, an
+item is searched and added, and the rendered frames are checked. The tests build
+a miniature installation (talk table + two 2DA files + one savegame) in a
+temporary folder. `cargo run -p jadeforge-gui --example snapshot -- <dir> <png>
+[TAB|all] [--height N] [--query TEXT]` produces the screenshots used in the
+documentation.
 
 ## Test strategy
 
@@ -103,7 +131,8 @@ produces the screenshots used in the documentation.
 | synthetic savegames | `crates/jadeforge-core/tests/synthetic.rs` | no |
 | real savegames | `tests/roundtrip.rs`, `tests/rewrite.rs`, `tests/editing.rs` | yes, skipped otherwise |
 | CLI end to end | `crates/jadeforge-cli/tests/cli.rs` | synthetic |
-| UI | `crates/jadeforge-gui/tests/ui.rs` | yes for the open-a-save test, otherwise no |
+| game data | `crates/jadeforge-gamedata/tests/real_data.rs` | yes, skipped otherwise |
+| UI | `crates/jadeforge-gui/tests/ui.rs` | yes (saves + game files), skipped otherwise |
 
 Tests that need the game look for `JADEFORGE_SAVE_DIR` and skip with a note when
 it is not set, so CI stays green on machines without Jade Empire.

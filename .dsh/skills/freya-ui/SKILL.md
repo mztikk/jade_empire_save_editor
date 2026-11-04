@@ -1,6 +1,6 @@
 ---
 name: freya-ui
-description: Use when building or changing the JadeForge desktop UI with Freya 0.4, when a view renders incorrectly, or when the headless UI tests fail.
+description: Use when building or changing the JadeForge desktop UI with Freya 0.4, when a view renders incorrectly or looks off-theme, or when the headless UI tests fail.
 ---
 
 # Building the JadeForge UI with Freya 0.4
@@ -8,100 +8,64 @@ description: Use when building or changing the JadeForge desktop UI with Freya 0
 ## Structure that must not be broken
 
 - `crates/jadeforge-gui/src/session.rs` owns every behaviour and has **no Freya
-  types**. It can be unit tested.
-- `crates/jadeforge-gui/src/app.rs` only renders state and forwards input.
+  types**. It is unit tested.
+- `app.rs` is the shell (header, save list, tabs, action bar); `views/` holds one
+  module per tab; `widgets.rs` holds cards/fields/badges; `theme.rs` holds the
+  palette.
 - `Session` lives in an `Rc<RefCell<..>>` created with `use_hook`. Callbacks
-  mutate it and bump a `use_state(u32)` revision.
+  mutate it through `Ctx::run` and bump a `use_state(u32)` revision.
 - The root component **must read** the revision (`let _ = *revision.read();`).
   Without the read Freya does not subscribe and the view never re-renders after
-  a click. This was a real bug once.
+  a click.
 
-## Freya 0.4 API notes
+## Theming
 
-```rust
-launch(LaunchConfig::new().with_window(
-    WindowConfig::new(app).with_title("JadeForge").with_size(1180.0, 760.0),
-));
+Never rely on Freya's default (light) component colours. `theme::theme()` starts
+from `dark_theme()` and then:
 
-let mut name = use_state(String::new);      // State<T>
-Input::new(name)                            // State<String> -> Writable<String>
-Button::new().filled().child("Save").on_press(move |_| { ... });
-ScrollView::new().show_scrollbar(true).child(...);
-rect().vertical().horizontal().center().spacing(8.).padding(Gaps::new_all(12.));
-label().text("x").font_size(12.).color((228, 231, 237));
-```
+1. replaces `theme.colors` with `theme::palette()`,
+2. overrides the `button`, `filled_button`, `outline_button`, `flat_button`,
+   `input`, `flat_input`, `scrollbar` and `tooltip` component themes.
 
-- Sizes: `Size::fill()` is 100 % of the parent, `Size::flex(1.0)` grows inside a
-  `Content::Flex` parent, `Size::px(n)` is fixed.
-- `Content::wrap_spacing(n)` makes a row wrap to the next line, which is what
-  form sections use so fields do not get squeezed.
-- Styling `.color()`/`.font_size()` come from `TextStyleExt`; they are available
-  on `rect()` and `label()`.
-- Reading a `State` inside a callback: use `peek()`; inside rendering: `read()`.
+The palette is unit tested: every surface must stay dark (`luminance < 0.25`),
+the accent must be warm, and component surfaces must never be white. If a
+component looks wrong, the fix belongs in `theme.rs`, not in a one-off
+`.background()` on a widget.
 
-## Layout pitfalls seen in this project
+## Layout rules learned the hard way
 
-- A `rect().width(Size::fill())` used as a spacer squeezes the next label to
-  zero width; the label then wraps one character per line and the parent grows
-  to thousands of pixels. Put the text on its own row or give it a size.
-- `Size::fill()` for a child of a vertical stack takes 100 % of the parent
-  height, not the remaining space. Use `Content::Flex` + `Size::flex(1.0)` for
-  the main area.
-- Rows that should be one line high need an explicit `.height(Size::px(34.))`;
-  otherwise a `fill` child can make them grow.
-- Item rows use a trailing `rect().width(Size::flex(1.0))` to push the action
-  button to the right inside a `Content::Flex` row.
+- `Size::flex(1.0)` only works inside a parent with `.content(Content::Flex)`.
+  A flex spacer in a normal row pushes siblings off screen and can explode the
+  row height (this produced a 180 px header gap once).
+- `Size::fill()` is 100 % of the parent, not "the rest". For the main area use
+  `Content::Flex` + `Size::flex(1.0)`.
+- Rows that must stay one line high need an explicit height; otherwise a fill
+  child grows them.
+- Form fields wrap with `.content(Content::wrap_spacing(14.0))`.
+- Scroll views need a constrained parent (`Size::flex(1.0)` in a flex column).
 
-## The feedback loop
+## Feedback loop
 
 ```sh
-# compile
 cargo check -p jadeforge-gui
-
-# headless tests (render the real tree, click things)
-cargo test -p jadeforge-gui
-
-# screenshot without a window: inspect the layout visually
-cargo run -p jadeforge-gui --example snapshot -- \
-  "/media/Games/Heroic/Jade Empire/Save" /tmp/ui.png
+cargo test -p jadeforge-gui                 # headless UI tests
+cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/ui.png all
+cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/inv.png Inventory --height 1900 --query "Drachen"
 ```
 
-Read the produced PNG. Text overflow, squeezed inputs and off-screen buttons are
-obvious there and impossible to see from a compiler error.
+Look at the PNG. Squeezed inputs, clipped rows and off-screen buttons are
+invisible to the compiler.
 
-The UI tests use `freya-testing`:
+## Headless tests
 
-```rust
-let (mut test, ()) = TestingRunner::new(
-    move || app_with_directory(dir.clone()),
-    (1280., 800.).into(),
-    |_| {},
-    1.0,
-);
-test.sync_and_update();
-let node = test.find(|_, element| {
-    Label::try_downcast(element).filter(|label| label.text.contains("Level ")).map(|_| ())
-});
-```
+`freya-testing` renders the real tree. Useful patterns:
 
-Click a node by its layout area:
-
-```rust
-let area = node.layout().area;
-test.click_cursor(CursorPoint::new(
-    f64::from(area.origin.x) + f64::from(area.size.width) / 2.0,
-    f64::from(area.origin.y) + f64::from(area.size.height) / 2.0,
-));
-test.sync_and_update();
-```
-
-## Accessibility and polish
-
-- Every actionable element is a `Button` with a text child; do not use bare
-  rects with click handlers.
-- Keep the palette in the constants at the top of `app.rs`.
-- Status messages go through `Session::message` so both the UI and tests see
-  them.
+- find text: `test.find(|_, el| Label::try_downcast(el).filter(|l| l.text.contains(..)).map(|_| ()))`
+- inputs are **paragraphs**, not labels: use `Paragraph::try_downcast` and
+  `to_string()` to find a search field, click it, then `test.write_text("...")`.
+- content below the fold cannot be clicked; launch the runner with a tall window
+  for those tests (`(1280.0_f32, 1800.0_f32).into()`).
+- clicks: take `node.layout().area`, use its centre with `click_cursor`.
 
 ## Before you finish
 
@@ -111,4 +75,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
-Regenerate `docs/screenshot.png` if the layout changed visibly.
+Regenerate `docs/screenshot*.png` if the layout changed visibly.

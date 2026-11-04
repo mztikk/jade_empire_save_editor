@@ -1,78 +1,62 @@
 ---
 name: savegame-format
-description: Use when working on the Jade Empire savegame format in jadeforge-core, adding or changing field types, debugging a savegame that fails to parse or round trip, or validating edits against real savegames.
+description: Use when working on the Jade Empire savegame format in jadeforge-core, adding or changing field types, resolving names from the game data, debugging a savegame that fails to parse or round trip, or validating edits against real savegames.
 ---
 
 # Working on the savegame format
 
 Read [docs/FORMAT.md](../../../docs/FORMAT.md) first. It documents the container,
-the block header, all three tables, the type encodings and the player paths.
-Anything you learn that is not in there belongs in there.
+the block header, the tables, the type encodings, the player paths and where
+names come from. Anything you learn belongs in there.
 
-## Finding a savegame to test with
+## Finding data to test with
 
 Real savegames live in the game folder (`/media/Games/Heroic/Jade Empire/Save`
-on this machine, or whatever `JADEFORGE_SAVE_DIR` points at). The repository
-never contains them.
+on this machine). The repository never contains them.
 
 ```sh
 export JADEFORGE_SAVE_DIR="/media/Games/Heroic/Jade Empire/Save"
 
-# every block of every savegame must parse
-cargo test -p jadeforge-core --test roundtrip -- --nocapture
-
-# every block must survive a serialize/parse round trip
-cargo test -p jadeforge-core --test rewrite -- --nocapture
-
-# editing must survive a save/reload
-cargo test -p jadeforge-core --test editing -- --nocapture
+cargo test -p jadeforge-core --test roundtrip -- --nocapture   # parse + byte identical
+cargo test -p jadeforge-core --test rewrite   -- --nocapture   # serialize/parse every block
+cargo test -p jadeforge-core --test editing   -- --nocapture   # character edits
+cargo test -p jadeforge-core --test extras    -- --nocapture   # styles, companions, screenshots
+cargo test -p jadeforge-gamedata --test real_data              # item/style names
 ```
 
-The round trip tests print how many savegames and blocks they checked. If they
-print "skipping", the environment variable is not set.
+If a test prints "skipping", the environment variables did not reach it.
 
-## Inspecting a savegame by hand
+## Inspecting by hand
 
 ```sh
-cargo run -q -p jadeforge-cli -- "<SAVE_DIR>/Auto 56 - 16h 22min - level 15" blocks
-cargo run -q -p jadeforge-cli -- "<SAVE_DIR>/Auto 56 - 16h 22min - level 15" info
-cargo run -q -p jadeforge-cli -- "<SAVE_DIR>/Auto 56 - 16h 22min - level 15" dump save.sav --path PlayerCreature.Stats
+cargo run -q -p jadeforge-cli -- "<SAVE_DIR>/<save>" blocks
+cargo run -q -p jadeforge-cli -- "<SAVE_DIR>/<save>" styles
+cargo run -q -p jadeforge-cli -- "<SAVE_DIR>/<save>" items
+cargo run -q -p jadeforge-cli -- "<SAVE_DIR>/<save>" dump save.sav --path PlayerCreature.Stats
 ```
 
-`dump` without `--path` prints the whole block as JSON (structs become objects,
-lists become arrays, blobs become hex strings).
-
-To look at raw bytes, copy the savegame into the repository scratch folder first
-(`scratch/` is ignored by git) and use `xxd`. `/tmp` is not stable in every
-sandbox.
+Copy savegames into `scratch/` (git ignored) before touching them; `/tmp` is not
+stable in every sandbox.
 
 ## Facts that are easy to get wrong
 
-- Field table entries are `(type, label, data)`, in that order. Swapping type and
-  label parses without error but produces nonsense.
-- Labels are 16 bytes, fixed size, and may use all 16 bytes without a NUL
-  terminator (`VisualEffectNode`).
-- A struct with exactly one field stores the field index **inline** in the data
-  word. A struct with two or more fields stores a **byte offset** into the
-  field-index section.
-- Field indices in that section are 32 bit and tile the section exactly; any gap
-  or overlap means the interpretation is wrong.
-- `totalSize` of a localized string counts the bytes *after* the size word, so a
-  talk-table-only string is 8 bytes with `totalSize = 4`.
+- Field table entries are `(type, label, data)`, in that order.
+- Labels are 16 bytes, fixed size, and may use all 16 without a NUL.
+- A struct with exactly one field stores the field index **inline**; two or more
+  fields store a **byte offset** into the field-index section. That section is
+  tiled exactly by the multi-field structs.
+- `totalSize` of a localized string counts the bytes after the size word.
 - Block size is always `listIndicesOffset + listIndicesSize`.
-- All integers are little endian.
+- Style levels: `StyleLevel == 1 + population count of the StyleLevelInfo mask`.
+  Never set one without the other.
+- Item `Type` values in savegames map to 2DA categories: 1 gems, 4 powerups,
+  5 weapons, 6 plot_items, 7 mgweapons, 8 improve. Measure before adding more.
 
-## Adding a type or a field
+## Game data
 
-1. Write the decoder in `crates/jadeforge-core/src/gff/value.rs` and the encoder
-   in the same enum (`Value::encode`, `Value::encode_inline`).
-2. Extend `Value::type_id`, `Value::type_name`, `Value::is_in_field_data` and
-   `PartialEq`.
-3. Add the type to the table in `docs/FORMAT.md`.
-4. Add a case to `crates/jadeforge-core/tests/synthetic.rs` so CI covers it
-   without game data.
-5. Run the three real-savegame tests above; a new type that no savegame uses
-   will not be exercised there, so the synthetic test matters.
+`crates/jadeforge-gamedata` reads `dialog.tlk` (TLK V4.0: header of 24 bytes,
+10 byte entries `(u32 flags, u32 offset, u16 length)`, UTF-8 text) and text 2DA
+tables. It is read only and optional; the editor must keep working without it.
 
 ## Before you finish
 
@@ -82,7 +66,6 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
-If a format change alters what the writer produces, explain in the commit
-message why the new layout is still valid for the game (the engine reads by
-offset, so table order and de-duplication are free, but offsets, counts and
-type tags are not).
+Update `docs/FORMAT.md` whenever format knowledge changed, and add a synthetic
+test in `crates/jadeforge-core/tests/synthetic.rs` for code paths that the real
+savegames do not exercise.
