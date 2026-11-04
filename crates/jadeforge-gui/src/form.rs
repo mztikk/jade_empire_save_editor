@@ -61,6 +61,38 @@ impl Default for Form {
 }
 
 impl Form {
+    /// One string that changes whenever any input changes.
+    ///
+    /// Reading every state in the render subscribes the shell to all of them;
+    /// the value is the dependency of the auto-apply effect.
+    #[must_use]
+    pub fn snapshot(&self) -> String {
+        format!(
+            "{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}",
+            *self.name.read(),
+            *self.level.read(),
+            *self.experience.read(),
+            *self.gold.read(),
+            *self.attribute_points.read(),
+            *self.health.read(),
+            *self.health_max.read(),
+            *self.chi.read(),
+            *self.chi_max.read(),
+            *self.focus.read(),
+            *self.focus_max.read(),
+            *self.body.read(),
+            *self.mind.read(),
+            *self.spirit.read(),
+            *self.charm.read(),
+            *self.intuition.read(),
+            *self.intimidate.read(),
+            *self.alignment.read(),
+            *self.appearance.read(),
+            *self.chapter.read(),
+            *self.kills.read(),
+        )
+    }
+
     /// Creates all state handles. Must be called in a stable order.
     pub fn new() -> Self {
         Self {

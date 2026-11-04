@@ -135,7 +135,7 @@ There are no hardcoded installation paths anywhere. The folder comes from
 * edit name, level, experience, gold, unspent points, vitals, attributes and
   chapter/kills,
 * edit inventory stacks and add or remove items,
-* apply changes in memory, save to disk, revert.
+* apply every edit in memory immediately, save to disk, revert.
 
 The GUI is tested headlessly through `freya-testing`: the real component tree is
 rendered off-screen, a savegame is opened by clicking it, tabs are switched, a

@@ -63,5 +63,12 @@ lto = "thin"
 codegen-units = 1
 strip = "symbols"
 
+# Distribution builds produced by `just publish`: release optimisation with fat
+# LTO over the whole dependency graph. The release profile keeps thin LTO so
+# that `cargo build --release` stays usable during development.
+[profile.dist]
+inherits = "release"
+lto = "fat"
+
 [profile.dev.package."*"]
 opt-level = 1

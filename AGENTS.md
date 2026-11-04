@@ -33,6 +33,11 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 # `--width 900` to check narrow windows.
 ```
 
+The same commands are available through `just` (see the `justfile`): `just
+check` runs formatting, clippy and the tests, `just snapshot …` renders the UI,
+and `just publish` builds the fat-LTO distribution binaries. The cargo commands
+above remain canonical.
+
 ## Non-negotiable rules
 
 1. **No `unsafe` code.** The workspace denies it in `Cargo.toml`. There is no
@@ -70,10 +75,11 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
   those cases into `Error::Gff` instead. Tests may panic (`clippy.toml`), but the
   test allowances do not cover helper functions in `tests/*.rs`; add a
   crate-level allow there if a test helper needs it.
-- `ci/clippy-strict.sh` reports the lints that are not gated yet
-  (`expect_used`, `indexing_slicing`, `arithmetic_side_effects`, `nursery`) without
-  failing. Run it before promoting a lint: only add a lint to the workspace config
-  once its count is zero, so the `-D warnings` gate stays meaningful.
+- `just strict` reports the lints that are not gated yet
+  (`expect_used`, `indexing_slicing`, `arithmetic_side_effects`, `nursery`) as
+  an audit that never gates the build. Run it before promoting a lint: only add
+  a lint to the workspace config once its count is zero, so the `-D warnings`
+  gate stays meaningful.
 - Public items have doc comments that explain behaviour, not syntax.
 - Errors carry context: use `Error::Corrupt`/`Error::Gff` with the path, block
   or field that failed, not bare strings.
@@ -210,6 +216,7 @@ documentation, not ground truth — verify against the game files where possible
 | `docs/ARCHITECTURE.md` | crate layout, data flow, safety model |
 | `.dsh/skills` | task-specific skills for working on this repository |
 | `ci/github-actions.yml` | GitHub Actions workflow (see `ci/README.md`) |
+| `justfile` | `just` shortcuts for the commands above (`just check`, `just publish`) |
 | `SaveEditorDoc.md` | the original project brief |
 
 ## Skills

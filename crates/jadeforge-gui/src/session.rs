@@ -51,6 +51,15 @@ pub mod format {
         }
     }
 
+    /// Formats a float so that parsing it yields the exact same value again.
+    ///
+    /// The form is auto-applied while typing, so a rounded display value would
+    /// otherwise "change" the savegame just by opening it.
+    #[must_use]
+    pub fn exact(value: f32) -> String {
+        value.to_string()
+    }
+
     /// Names the alignment the way the game does.
     ///
     /// The engine starts a character at [`jadeforge_core::DEFAULT_ALIGNMENT`]
@@ -505,12 +514,12 @@ impl CharacterForm {
             experience: character.experience.to_string(),
             gold: character.gold.unwrap_or(0).to_string(),
             attribute_points: character.attribute_points.to_string(),
-            health: format::number(character.health),
+            health: format::exact(character.health),
             health_max: character.health_max.to_string(),
-            chi: format::number(character.chi),
+            chi: format::exact(character.chi),
             chi_max: character.chi_max.to_string(),
-            focus: format::number(character.focus),
-            focus_max: format::number(character.focus_max),
+            focus: format::exact(character.focus),
+            focus_max: format::exact(character.focus_max),
             body: character.body.to_string(),
             mind: character.mind.to_string(),
             spirit: character.spirit.to_string(),
@@ -907,6 +916,34 @@ impl Session {
                 self.message = Message::error(error.to_string());
                 Err(error.to_string())
             }
+        }
+    }
+
+    /// Applies the form to the in-memory savegame without a message.
+    ///
+    /// Used by the shell to apply character edits as soon as they are valid, so
+    /// every edit behaves like the item/style/gem edits. Invalid input is left
+    /// in the form for the user to fix and reported by Save.
+    pub fn apply_form_silently(&mut self, form: &CharacterForm) -> bool {
+        let Some(base) = self.character.as_ref() else {
+            return false;
+        };
+        let Ok(character) = form.to_character(base) else {
+            return false;
+        };
+        if self.character.as_ref() == Some(&character) {
+            return false;
+        }
+        let Some(save) = self.save.as_mut() else {
+            return false;
+        };
+        match save.apply_character(&character) {
+            Ok(changes) if !changes.is_empty() => {
+                self.character = Some(character);
+                self.refresh_entry();
+                true
+            }
+            _ => false,
         }
     }
 
