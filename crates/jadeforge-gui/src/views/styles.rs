@@ -258,7 +258,7 @@ fn upgrade_panel(ctx: &Ctx, style: &StyleRow) -> Element {
         rows.push(upgrade_row(family, chips));
     }
     rows.push(widgets::hint(
-        "One chip per upgrade tier; the level follows the number of owned upgrades.",
+        "One orb per upgrade tier; the level follows the number of owned upgrades.",
     ));
     rect()
         .vertical()
@@ -292,17 +292,42 @@ fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Eleme
     let taken = upgrade.taken;
     let row = upgrade.row;
     let ctx = ctx.clone();
-    let button = Button::new().compact();
-    let button = if taken {
-        button.filled()
+    // The game shows upgrade choices as golden circles: filled when owned,
+    // an empty ring when the tier can still be bought.
+    let background = if taken {
+        theme::ACCENT
     } else {
-        button.outline()
+        theme::BACKGROUND
     };
-    button
-        .child(upgrade.tier.to_string())
-        .on_press(move |_| {
+    let border = if taken {
+        theme::ACCENT_HOVER
+    } else {
+        theme::ACCENT
+    };
+    let color = if taken {
+        theme::ON_ACCENT
+    } else {
+        theme::ACCENT
+    };
+    rect()
+        .center()
+        .width(Size::px(26.))
+        .height(Size::px(26.))
+        .corner_radius(13.)
+        .background(background)
+        .border(Border::new().fill(border).width(1.5))
+        .on_pointer_enter(move |_| Cursor::set(CursorIcon::Pointer))
+        .on_pointer_leave(move |_| Cursor::set(CursorIcon::default()))
+        .on_all_press(move |_| {
             ctx.run(|session| session.change_upgrade(struct_index, row));
         })
+        .child(
+            label()
+                .text(upgrade.tier.to_string())
+                .font_size(12.)
+                .font_weight(FontWeight::BOLD)
+                .color(color),
+        )
         .into_element()
 }
 

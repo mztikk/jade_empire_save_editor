@@ -407,6 +407,30 @@ fn style_rows_have_no_level_stepper() {
 }
 
 #[test]
+fn clicking_an_upgrade_orb_changes_the_style() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_text(&mut test, "Styles"));
+    let subtitle = find_node_with_text(&test, " · #").expect("style subtitle");
+    click_node(&mut test, &subtitle);
+    assert!(find_label_text(&test, "UPGRADES").is_some());
+    // The first orb is tier 1 of the first family.
+    let orb = test
+        .find(|node, element| {
+            let label = Label::try_downcast(element)?;
+            (label.text == "1").then_some(node)
+        })
+        .expect("no upgrade orb");
+    click_node(&mut test, &orb);
+    let changed =
+        find_label_text(&test, "Bought").is_some() || find_label_text(&test, "Removed").is_some();
+    assert!(changed, "clicking an orb did not change an upgrade");
+}
+
+#[test]
 fn the_game_rules_toggle_can_be_switched() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
