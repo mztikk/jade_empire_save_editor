@@ -17,11 +17,12 @@ pub fn view(
     game_ready: bool,
     matching: usize,
     total_items: usize,
+    expanded: State<Option<u16>>,
     show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for item in items {
-        rows.push(item_row(ctx, item));
+        rows.push(item_row(ctx, item, expanded));
     }
     if rows.is_empty() {
         rows.push(widgets::hint("The inventory is empty."));
@@ -88,7 +89,7 @@ pub fn view(
             children.push(heading.into_element());
             let mut result_rows: Vec<Element> = Vec::new();
             for suggestion in results {
-                result_rows.push(suggestion_row(ctx, suggestion));
+                result_rows.push(suggestion_row(ctx, suggestion, expanded));
             }
             children.push(
                 rect()
@@ -124,7 +125,7 @@ pub fn item_subtitle(item_id: u16, category: Option<&str>, kind: u8) -> String {
     }
 }
 
-fn item_row(ctx: &Ctx, item: &ItemRow) -> Element {
+fn item_row(ctx: &Ctx, item: &ItemRow, expanded: State<Option<u16>>) -> Element {
     let minus = {
         let ctx = ctx.clone();
         let index = item.struct_index;
@@ -140,59 +141,53 @@ fn item_row(ctx: &Ctx, item: &ItemRow) -> Element {
         let index = item.struct_index;
         move |_| ctx.run(|session| session.remove_item(index))
     };
+    let is_expanded = *expanded.read() == Some(item.item_id);
 
     rect()
-        .horizontal()
+        .vertical()
         .width(Size::fill())
-        .spacing(10.)
-        .content(Content::Flex)
-        .padding(Gaps::new_symmetric(6., 10.))
         .background(theme::SURFACE)
         .corner_radius(8.)
         .child(
             rect()
-                .vertical()
-                .spacing(1.)
-                .width(Size::flex(1.0))
+                .horizontal()
+                .width(Size::fill())
+                .spacing(10.)
+                .content(Content::Flex)
+                .padding(Gaps::new_symmetric(4., 6.))
+                .child(widgets::expanding_name(
+                    item.item_id,
+                    item.name.clone(),
+                    item_subtitle(item.item_id, item.category.as_deref(), item.kind),
+                    expanded,
+                    13.,
+                ))
+                .child(Button::new().compact().flat().child("−").on_press(minus))
                 .child(
                     label()
-                        .text(item.name.clone())
+                        .text(item.count.to_string())
                         .font_size(13.)
-                        .max_lines(1)
-                        .color(theme::TEXT),
+                        .width(Size::px(30.))
+                        .text_align(TextAlign::Center),
                 )
+                .child(Button::new().compact().flat().child("+").on_press(plus))
                 .child(
-                    label()
-                        .text(item_subtitle(
-                            item.item_id,
-                            item.category.as_deref(),
-                            item.kind,
-                        ))
-                        .font_size(10.)
-                        .color(theme::DIM),
-                )
-                .into_element(),
+                    Button::new()
+                        .compact()
+                        .flat()
+                        .child("Remove")
+                        .on_press(remove),
+                ),
         )
-        .child(Button::new().compact().flat().child("−").on_press(minus))
-        .child(
-            label()
-                .text(item.count.to_string())
-                .font_size(13.)
-                .width(Size::px(30.))
-                .text_align(TextAlign::Center),
-        )
-        .child(Button::new().compact().flat().child("+").on_press(plus))
-        .child(
-            Button::new()
-                .compact()
-                .flat()
-                .child("Remove")
-                .on_press(remove),
-        )
+        .maybe_child(if is_expanded {
+            widgets::details(item.description.as_deref())
+        } else {
+            None
+        })
         .into_element()
 }
 
-fn suggestion_row(ctx: &Ctx, suggestion: &ItemSuggestion) -> Element {
+fn suggestion_row(ctx: &Ctx, suggestion: &ItemSuggestion, expanded: State<Option<u16>>) -> Element {
     let add = {
         let ctx = ctx.clone();
         let item_id = suggestion.item_id;
@@ -202,38 +197,36 @@ fn suggestion_row(ctx: &Ctx, suggestion: &ItemSuggestion) -> Element {
             });
         }
     };
+    let is_expanded = *expanded.read() == Some(suggestion.item_id);
     rect()
-        .horizontal()
+        .vertical()
         .width(Size::fill())
-        .spacing(10.)
-        .content(Content::Flex)
-        .padding(Gaps::new_symmetric(5., 8.))
         .background(theme::PANEL)
         .corner_radius(6.)
         .child(
             rect()
-                .vertical()
-                .spacing(1.)
-                .width(Size::flex(1.0))
-                .child(
-                    label()
-                        .text(suggestion.name.clone())
-                        .font_size(12.)
-                        .max_lines(1)
-                        .color(theme::TEXT),
-                )
-                .child(
-                    label()
-                        .text(item_subtitle(
-                            suggestion.item_id,
-                            Some(suggestion.category.as_str()),
-                            suggestion.save_type,
-                        ))
-                        .font_size(10.)
-                        .color(theme::DIM),
-                )
-                .into_element(),
+                .horizontal()
+                .width(Size::fill())
+                .spacing(10.)
+                .content(Content::Flex)
+                .padding(Gaps::new_symmetric(3., 4.))
+                .child(widgets::expanding_name(
+                    suggestion.item_id,
+                    suggestion.name.clone(),
+                    item_subtitle(
+                        suggestion.item_id,
+                        Some(suggestion.category.as_str()),
+                        suggestion.save_type,
+                    ),
+                    expanded,
+                    12.,
+                ))
+                .child(Button::new().compact().outline().child("Add").on_press(add)),
         )
-        .child(Button::new().compact().outline().child("Add").on_press(add))
+        .maybe_child(if is_expanded {
+            widgets::details(suggestion.description.as_deref())
+        } else {
+            None
+        })
         .into_element()
 }

@@ -32,6 +32,7 @@ fn main() {
     );
     let mut wanted = None;
     let mut browse = false;
+    let mut click_text = None;
     let mut width = 1280.0_f32;
     let mut height = 800.0_f32;
     let mut query = None;
@@ -51,6 +52,7 @@ fn main() {
             }
             "--query" => query = arguments.next(),
             "--browse" => browse = true,
+            "--click" => click_text = arguments.next(),
             other => wanted = Some(other.to_owned()),
         }
     }
@@ -90,6 +92,11 @@ fn main() {
         }
         Some(tab) => {
             if let Some(node) = find_label(&test, tab) {
+                click(&mut test, &node);
+            }
+            if let Some(text) = &click_text
+                && let Some(node) = find_label(&test, text)
+            {
                 click(&mut test, &node);
             }
             if let Some(query) = &query {

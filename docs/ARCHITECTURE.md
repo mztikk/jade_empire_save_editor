@@ -105,7 +105,7 @@ Freya 0.4 application with a small, explicit structure:
 | `config` | the small settings file that remembers the save folder |
 | `theme` | palette and the Freya component theme (dark surfaces, gold accents) |
 | `widgets` | cards, fields, badges, dividers |
-| `views` | one module per tab (overview, character, styles, inventory, companions) plus the folder picker overlay |
+| `views` | one module per tab (overview, character, styles, inventory, companions) plus the folder picker overlay; item and style rows expand to show the game's description |
 | `form` | the text input states of the character sheet |
 
 The shell renders the session and forwards input. The savegame list has its own

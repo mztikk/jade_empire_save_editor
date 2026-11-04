@@ -17,11 +17,12 @@ pub fn view(
     game_ready: bool,
     learnable: Option<usize>,
     matching: usize,
+    expanded: State<Option<u16>>,
     show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for style in styles {
-        rows.push(style_row(ctx, style));
+        rows.push(style_row(ctx, style, expanded));
     }
     if rows.is_empty() {
         rows.push(widgets::hint(
@@ -93,7 +94,7 @@ pub fn view(
             children.push(heading.into_element());
             let mut result_rows: Vec<Element> = Vec::new();
             for suggestion in matches {
-                result_rows.push(learn_row(ctx, suggestion));
+                result_rows.push(learn_row(ctx, suggestion, expanded));
             }
             children.push(
                 rect()
@@ -120,7 +121,7 @@ pub fn view(
     )
 }
 
-fn style_row(ctx: &Ctx, style: &StyleRow) -> Element {
+fn style_row(ctx: &Ctx, style: &StyleRow, expanded: State<Option<u16>>) -> Element {
     let index = style.struct_index;
     let level = style.level;
 
@@ -141,59 +142,57 @@ fn style_row(ctx: &Ctx, style: &StyleRow) -> Element {
         move |_| ctx.run(|session| session.remove_style(index))
     };
 
+    let subtitle = style_subtitle(style.style_id, &style.label)
+        .unwrap_or_else(|| format!("#{}", style.style_id));
+    let is_expanded = *expanded.read() == Some(style.style_id);
+
     rect()
-        .horizontal()
+        .vertical()
         .width(Size::fill())
-        .spacing(10.)
-        .content(Content::Flex)
-        .padding(Gaps::new_symmetric(6., 10.))
         .background(theme::SURFACE)
         .corner_radius(8.)
         .child(
             rect()
-                .vertical()
-                .spacing(1.)
-                .width(Size::flex(1.0))
+                .horizontal()
+                .width(Size::fill())
+                .spacing(10.)
+                .content(Content::Flex)
+                .padding(Gaps::new_symmetric(4., 6.))
+                .child(widgets::expanding_name(
+                    style.style_id,
+                    style.name.clone(),
+                    subtitle,
+                    expanded,
+                    13.,
+                ))
+                .child(widgets::badge(
+                    style.kind,
+                    theme::SURFACE_ACTIVE,
+                    style_badge_color(style.kind),
+                ))
+                .child(Button::new().compact().flat().child("−").on_press(lower))
                 .child(
                     label()
-                        .text(style.name.clone())
-                        .font_size(13.)
-                        .max_lines(1)
-                        .color(theme::TEXT),
+                        .text(format!("Lv {level}"))
+                        .font_size(12.)
+                        .width(Size::px(46.))
+                        .text_align(TextAlign::Center)
+                        .color(theme::ACCENT),
                 )
-                .maybe_child(
-                    style_subtitle(style.style_id, &style.label).map(|subtitle| {
-                        label()
-                            .text(subtitle)
-                            .font_size(10.)
-                            .color(theme::DIM)
-                            .into_element()
-                    }),
-                )
-                .into_element(),
+                .child(Button::new().compact().flat().child("+").on_press(raise))
+                .child(
+                    Button::new()
+                        .compact()
+                        .flat()
+                        .child("Remove")
+                        .on_press(remove),
+                ),
         )
-        .child(widgets::badge(
-            style.kind,
-            theme::SURFACE_ACTIVE,
-            style_badge_color(style.kind),
-        ))
-        .child(Button::new().compact().flat().child("−").on_press(lower))
-        .child(
-            label()
-                .text(format!("Lv {level}"))
-                .font_size(12.)
-                .width(Size::px(46.))
-                .text_align(TextAlign::Center)
-                .color(theme::ACCENT),
-        )
-        .child(Button::new().compact().flat().child("+").on_press(raise))
-        .child(
-            Button::new()
-                .compact()
-                .flat()
-                .child("Remove")
-                .on_press(remove),
-        )
+        .maybe_child(if is_expanded {
+            widgets::details(style.description.as_deref())
+        } else {
+            None
+        })
         .into_element()
 }
 
@@ -215,55 +214,52 @@ fn style_badge_color(kind: &str) -> Color {
     }
 }
 
-fn learn_row(ctx: &Ctx, suggestion: &StyleSuggestion) -> Element {
+fn learn_row(ctx: &Ctx, suggestion: &StyleSuggestion, expanded: State<Option<u16>>) -> Element {
     let learn = {
         let ctx = ctx.clone();
         let style_id = suggestion.style_id;
         move |_| ctx.run(|session| session.add_style(style_id))
     };
+    let subtitle = style_subtitle(suggestion.style_id, &suggestion.label)
+        .unwrap_or_else(|| format!("#{}", suggestion.style_id));
+    let is_expanded = *expanded.read() == Some(suggestion.style_id);
+
     rect()
-        .horizontal()
+        .vertical()
         .width(Size::fill())
-        .spacing(10.)
-        .content(Content::Flex)
-        .padding(Gaps::new_symmetric(5., 8.))
         .background(theme::PANEL)
         .corner_radius(6.)
         .child(
             rect()
-                .vertical()
-                .spacing(1.)
-                .width(Size::flex(1.0))
-                .child(
-                    label()
-                        .text(suggestion.name.clone())
-                        .font_size(12.)
-                        .max_lines(1)
-                        .color(theme::TEXT),
-                )
-                .maybe_child(style_subtitle(suggestion.style_id, &suggestion.label).map(
-                    |subtitle| {
-                        label()
-                            .text(subtitle)
-                            .font_size(10.)
-                            .max_lines(1)
-                            .color(theme::DIM)
-                            .into_element()
-                    },
+                .horizontal()
+                .width(Size::fill())
+                .spacing(10.)
+                .content(Content::Flex)
+                .padding(Gaps::new_symmetric(3., 4.))
+                .child(widgets::expanding_name(
+                    suggestion.style_id,
+                    suggestion.name.clone(),
+                    subtitle,
+                    expanded,
+                    12.,
                 ))
-                .into_element(),
+                .child(widgets::badge(
+                    suggestion.kind,
+                    theme::SURFACE_ACTIVE,
+                    style_badge_color(suggestion.kind),
+                ))
+                .child(
+                    Button::new()
+                        .compact()
+                        .outline()
+                        .child("Learn")
+                        .on_press(learn),
+                ),
         )
-        .child(widgets::badge(
-            suggestion.kind,
-            theme::SURFACE_ACTIVE,
-            style_badge_color(suggestion.kind),
-        ))
-        .child(
-            Button::new()
-                .compact()
-                .outline()
-                .child("Learn")
-                .on_press(learn),
-        )
+        .maybe_child(if is_expanded {
+            widgets::details(suggestion.description.as_deref())
+        } else {
+            None
+        })
         .into_element()
 }
