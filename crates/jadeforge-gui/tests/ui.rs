@@ -675,6 +675,65 @@ fn form_edits_apply_in_memory_without_a_message() {
     assert_eq!(session.message.text, before, "auto-apply must stay silent");
 }
 
+fn changed_pixels(left: &[u8], right: &[u8]) -> usize {
+    left.chunks_exact(4)
+        .zip(right.chunks_exact(4))
+        .filter(|(a, b)| a != b)
+        .count()
+}
+
+#[test]
+fn tabs_keep_their_own_scroll_position() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 700.0);
+    assert!(click_text(&mut test, "Styles"));
+    test.move_cursor(CursorPoint::new(5.0, 5.0));
+    test.sync_and_update();
+    let styles_top = test.render();
+
+    assert!(click_text(&mut test, "Inventory"));
+    test.move_cursor(CursorPoint::new(5.0, 5.0));
+    test.sync_and_update();
+    let inventory_top = test.render();
+    test.scroll(
+        CursorPoint::new(600.0, 450.0),
+        CursorPoint::new(0.0, -600.0),
+    );
+    test.sync_and_update();
+    test.move_cursor(CursorPoint::new(5.0, 5.0));
+    test.sync_and_update();
+    let inventory_scrolled = test.render();
+    assert!(
+        changed_pixels(&inventory_top, &inventory_scrolled) > inventory_top.len() / 4 / 20,
+        "the test could not scroll the inventory"
+    );
+
+    // Styles must still be at the top, not at Inventory's scroll position.
+    assert!(click_text(&mut test, "Styles"));
+    test.move_cursor(CursorPoint::new(5.0, 5.0));
+    test.sync_and_update();
+    let styles_back = test.render();
+    let styles_changed = changed_pixels(&styles_top, &styles_back);
+    assert!(
+        styles_changed < styles_top.len() / 4 / 20,
+        "Styles scrolled along with Inventory ({styles_changed} pixels changed)"
+    );
+
+    // And Inventory must still be where it was left.
+    assert!(click_text(&mut test, "Inventory"));
+    test.move_cursor(CursorPoint::new(5.0, 5.0));
+    test.sync_and_update();
+    let inventory_back = test.render();
+    let inventory_changed = changed_pixels(&inventory_scrolled, &inventory_back);
+    assert!(
+        inventory_changed < inventory_scrolled.len() / 4 / 20,
+        "Inventory lost its scroll position ({inventory_changed} pixels changed)"
+    );
+}
+
 #[test]
 fn savegames_can_be_filtered_and_sorted() {
     let Some(fixture) = Fixture::create() else {
