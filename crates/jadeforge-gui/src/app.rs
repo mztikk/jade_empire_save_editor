@@ -233,7 +233,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         }
         (Tab::Gems, _) => {
             let available = session.borrow().available_gems();
-            views::gems::view(&ctx, &session.borrow().gems, gem_query, &available)
+            let amulet = session.borrow().amulet;
+            views::gems::view(&ctx, &session.borrow().gems, gem_query, &available, amulet)
         }
         (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen),
         (_, None) => empty_state(entries.len()),

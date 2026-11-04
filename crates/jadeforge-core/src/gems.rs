@@ -43,7 +43,50 @@ pub struct Gem {
     pub effects: Vec<GemEffect>,
 }
 
+/// The amulet and its unlocked sockets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AmuletInfo {
+    /// Amulet upgrade tier stored in `Amulet.Type` (1 when the field is absent).
+    pub tier: u8,
+    /// Number of sockets the tier unlocks (3, 5 or 7, capped at the seven
+    /// entries the game keeps in `OpenGemsList`).
+    pub sockets: u8,
+}
+
+/// Sockets unlocked by an amulet tier.
+///
+/// Evidence from real savegames: tier 1 has three sockets, tier 2 has five and
+/// tier 4 has seven; the list never holds more than seven entries.
+#[must_use]
+pub fn sockets_for_tier(tier: u8) -> u8 {
+    match tier {
+        0 | 1 => 3,
+        2 => 5,
+        _ => 7,
+    }
+}
+
 impl SaveGame {
+    /// Reads the amulet tier and the number of sockets it unlocks.
+    pub fn amulet(&self) -> Result<AmuletInfo> {
+        let location = self.player_location()?;
+        let block = self
+            .block(location.block)
+            .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
+        let tier = block
+            .gff()
+            .get(format!("{}Amulet.Type", location.prefix))
+            .ok()
+            .and_then(|field| field.value.as_u64())
+            .and_then(|value| u8::try_from(value).ok())
+            .unwrap_or(1)
+            .clamp(1, 4);
+        Ok(AmuletInfo {
+            tier,
+            sockets: sockets_for_tier(tier),
+        })
+    }
+
     /// Reads the gems of the player.
     pub fn gems(&self) -> Result<Vec<Gem>> {
         let location = self.player_location()?;
@@ -280,4 +323,18 @@ fn label_number(gff: &crate::gff::Gff, structure: &crate::gff::Struct, label: &s
 
 fn float(gff: &crate::gff::Gff, structure: &crate::gff::Struct, label: &str) -> Option<f32> {
     label_field(gff, structure, label).and_then(crate::gff::Value::as_f32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sockets_for_tier;
+
+    #[test]
+    fn sockets_follow_the_amulet_tier() {
+        assert_eq!(sockets_for_tier(1), 3);
+        assert_eq!(sockets_for_tier(2), 5);
+        assert_eq!(sockets_for_tier(3), 7);
+        assert_eq!(sockets_for_tier(4), 7);
+        assert_eq!(sockets_for_tier(0), 3);
+    }
 }

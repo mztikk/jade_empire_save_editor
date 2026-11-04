@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use jadeforge_core::{
-    Character, GemLocation, Henchman, Item, SaveGame, SaveImage, SaveOptions, Style,
+    AmuletInfo, Character, GemLocation, Henchman, Item, SaveGame, SaveImage, SaveOptions, Style,
 };
 use jadeforge_gamedata::GameData;
 
@@ -590,6 +590,8 @@ pub struct Session {
     pub henchmen: Vec<HenchRow>,
     /// Gems of the opened savegame.
     pub gems: Vec<GemRow>,
+    /// Amulet tier and unlocked sockets.
+    pub amulet: AmuletInfo,
     /// Game data used for names.
     pub game: Option<Rc<GameData>>,
     /// Human readable state of the game data.
@@ -627,6 +629,10 @@ impl Session {
             styles: Vec::new(),
             henchmen: Vec::new(),
             gems: Vec::new(),
+            amulet: AmuletInfo {
+                tier: 1,
+                sockets: 3,
+            },
             game: None,
             game_status: GameStatus::Missing,
             preview: None,
@@ -1162,14 +1168,28 @@ impl Session {
         changed > 0
     }
 
-    fn build_gem_rows(&self) -> Vec<GemRow> {
+    fn build_gem_rows(&mut self) -> Vec<GemRow> {
         let Some(save) = self.save.as_ref() else {
             return Vec::new();
         };
         let Ok(gems) = save.gems() else {
             return Vec::new();
         };
+        let amulet = save.amulet().unwrap_or(AmuletInfo {
+            tier: 1,
+            sockets: 3,
+        });
+        self.amulet = amulet;
+        let mut seen_amulet = 0_usize;
         gems.into_iter()
+            .filter(|gem| {
+                if gem.location == GemLocation::Amulet {
+                    seen_amulet += 1;
+                    seen_amulet <= usize::from(amulet.sockets)
+                } else {
+                    true
+                }
+            })
             .map(|gem| {
                 let info = self.game.as_ref().and_then(|game| game.item(gem.item_id));
                 let empty = info.is_none() && gem.effects.is_empty();

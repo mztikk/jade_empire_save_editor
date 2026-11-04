@@ -9,7 +9,7 @@ use crate::app::Ctx;
 use crate::session::GemRow;
 use crate::theme;
 use crate::widgets;
-use jadeforge_core::GemLocation;
+use jadeforge_core::{AmuletInfo, GemLocation};
 
 /// Renders the gems tab.
 #[allow(clippy::too_many_lines)] // one declarative layout is easier to follow
@@ -18,8 +18,9 @@ pub fn view(
     gems: &[GemRow],
     query: State<String>,
     available: &[(u16, String, usize)],
+    amulet: AmuletInfo,
 ) -> Element {
-    let amulet: Vec<&GemRow> = gems
+    let amulet_gems: Vec<&GemRow> = gems
         .iter()
         .filter(|gem| gem.location == GemLocation::Amulet)
         .collect();
@@ -28,10 +29,14 @@ pub fn view(
         .filter(|gem| gem.location == GemLocation::Inventory)
         .collect();
 
-    let amulet_rows: Vec<Element> = if amulet.is_empty() {
+    let socketed = gems
+        .iter()
+        .filter(|gem| gem.location == GemLocation::Amulet && !gem.empty)
+        .count();
+    let amulet_rows: Vec<Element> = if amulet_gems.is_empty() {
         vec![widgets::hint("No gems socketed into the amulet.")]
     } else {
-        amulet
+        amulet_gems
             .into_iter()
             .map(|gem| gem_row(ctx, gem, true))
             .collect()
@@ -117,13 +122,23 @@ pub fn view(
         .spacing(16.)
         .child(widgets::card(
             "Amulet",
-            Some(format!("{} socketed", amulet_rows.len().saturating_sub(0))),
-            vec![rect()
-                .vertical()
-                .width(Size::fill())
-                .spacing(4.)
-                .children(amulet_rows)
-                .into_element()],
+            Some(format!(
+                "{socketed} socketed · tier {} ({} sockets)",
+                amulet.tier, amulet.sockets
+            )),
+            vec![
+                rect()
+                    .vertical()
+                    .width(Size::fill())
+                    .spacing(4.)
+                    .children(amulet_rows)
+                    .into_element(),
+                widgets::hint(if amulet.sockets >= 7 {
+                    "All seven sockets are unlocked."
+                } else {
+                    "More sockets unlock as the story progresses."
+                }),
+            ],
         ))
         .child(add_card)
         .child(widgets::card(

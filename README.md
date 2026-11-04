@@ -37,9 +37,10 @@ the game does, verifies the result and keeps a backup of the original.
 - **Companions** – all party members with their level and availability, editable.
 - **Gems** – amulet sockets and carried gems with their actual effect lines
   (for example `+4 Body · +4 Spirit`). A gem can be moved between the two lists
-  or removed without touching its effects, empty amulet sockets are shown as
-  such, and the predefined gems from `gems.2da` can be added to the inventory
-  through a searchable list.
+  or removed without touching its effects. The amulet's tier and socket count
+  are shown (`Amulet.Type`: 3, 5 or 7 sockets), locked sockets are hidden, empty
+  unlocked sockets are shown as such, and the predefined gems from `gems.2da`
+  can be added to the inventory through a searchable list.
 - **Savegame browser** – scans the save folder and shows the game's own
   screenshot, character name, level and play time for every savegame. The list
   can be filtered by name and sorted by name, level or play time, with natural
