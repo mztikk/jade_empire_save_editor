@@ -1949,12 +1949,20 @@ dependencies = [
 name = "jadeforge-core"
 version = "0.1.0"
 dependencies = [
+ "jadeforge-gff",
  "serde_json",
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "jadeforge-gamedata"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "jadeforge-gff"
 version = "0.1.0"
 dependencies = [
  "thiserror 2.0.21",

@@ -319,9 +319,9 @@ fn dump(path: &Path, block_name: &str, field_path: Option<&str>) -> Result<(), E
     let value = match field_path {
         Some(field_path) => {
             let field = gff.get(field_path)?;
-            gff.value_json(&field.value)
+            jadeforge_core::json::value_json(gff, &field.value)
         }
-        None => gff.to_json(),
+        None => jadeforge_core::json::to_json(gff),
     };
     let text = serde_json::to_string_pretty(&value)
         .map_err(|error| Error::Corrupt(format!("cannot render JSON: {error}")))?;

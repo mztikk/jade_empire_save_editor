@@ -1,26 +1,51 @@
 # Architecture
 
-JadeForge is a Cargo workspace with five crates. The split keeps all savegame
-knowledge in one place so that both front ends stay thin and the interesting
-logic can be tested without a window or a terminal.
+JadeForge is a Cargo workspace with six crates. The split keeps the savegame
+knowledge in the lower crates so that both front ends stay thin and the
+interesting logic can be tested without a window or a terminal.
 
 ```
 crates/
-  jadeforge-core/     format reader/writer, editing model, verification
+  jadeforge-gff/      GFF block reader/writer
+  jadeforge-core/     savegame container, editing model, verification
   jadeforge-session/  UI independent session state and settings
   jadeforge-gamedata/ talk table and 2DA readers for names
   jadeforge-cli/      `jadeforge` command line tool
   jadeforge-gui/      `jadeforge-gui` desktop application (Freya)
 ```
 
-## `jadeforge-core`
+## `jadeforge-gff`
 
 | module | responsibility |
 | --- | --- |
-| `gff::mod` | block header, tables, parsing into `Gff`/`Struct`/`Field` |
-| `gff::value` | the `Value` enum, encoding and decoding of every field type |
-| `gff::write` | deterministic serializer for a block |
-| `gff::path` | dotted paths such as `Stats.Focus.STAT_CUR` or `ItemList[3].Count` |
+| `lib` | block header, tables, parsing into `Gff`/`Struct`/`Field` |
+| `value` | the `Value` enum, encoding and decoding of every field type |
+| `write` | deterministic serializer for a block |
+| `path` | dotted paths such as `Stats.Focus.STAT_CUR` or `ItemList[3].Count` |
+
+The crate is deliberately dependency free apart from `thiserror`: it knows
+nothing about characters, items or the savegame container, and it is the only
+place that touches the byte layout of a block.
+
+### Writer invariants
+
+The writer emits a canonical layout:
+
+* structs keep their indices and order,
+* every struct's fields stay in order,
+* the field table is the concatenation of all structs' fields,
+* single-field structs use the inline field-index encoding,
+* multi-field structs get contiguous ranges in the field-index section,
+* field data and list data are de-duplicated by payload,
+* labels keep their original order, new labels are appended.
+
+## `jadeforge-core`
+
+The GFF blocks themselves are handled by `jadeforge-gff`; this crate adds the
+savegame container and the typed editing model.
+
+| module | responsibility |
+| --- | --- |
 | `save` | the container: parsing, block access, locking in byte ranges, atomic save |
 | `character` | typed view of the player: read, validate, write, report changes |
 | `inventory` | item list: list, count changes, add, remove |
@@ -28,7 +53,7 @@ crates/
 | `henchmen` | companions: level and availability |
 | `screenshot` | `SaveImage.tga` decoder (TGA 24/32 bit, RLE and raw) |
 | `json` | JSON export used by `jadeforge dump` and debugging |
-| `error` | one error enum with context for every failure |
+| `error` | one error enum with context, wrapping the GFF layer's error |
 
 ### Data flow
 
@@ -48,18 +73,6 @@ Blocks keep the byte range they occupy in the original file. `SaveGame::to_bytes
 copies untouched blocks verbatim and only serializes blocks that were actually
 edited, which is what makes "open and save" byte identical and keeps diffs
 minimal.
-
-### Writer invariants
-
-The writer emits a canonical layout:
-
-* structs keep their indices and order,
-* every struct's fields stay in order,
-* the field table is the concatenation of all structs' fields,
-* single-field structs use the inline field-index encoding,
-* multi-field structs get contiguous ranges in the field-index section,
-* field data and list data are de-duplicated by payload,
-* labels keep their original order, new labels are appended.
 
 Before anything is written, `SaveGame::verify` re-parses the produced bytes and
 compares every struct and label. A mismatch aborts the save.
@@ -161,7 +174,7 @@ documentation.
 
 | layer | file | needs the game? |
 | --- | --- | --- |
-| format unit tests | `gff::path`, `gff::value`, `character` | no |
+| GFF unit tests | `crates/jadeforge-gff/src/path.rs` | no |
 | session unit tests | `crates/jadeforge-session/src/session.rs`, `config.rs` | no |
 | synthetic savegames | `crates/jadeforge-core/tests/synthetic.rs` | no |
 | real savegames | `tests/roundtrip.rs`, `tests/rewrite.rs`, `tests/editing.rs` | yes, skipped otherwise |
