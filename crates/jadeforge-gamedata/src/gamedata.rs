@@ -267,6 +267,21 @@ pub fn family_and_tier(label: &str) -> (String, u8) {
     }
 }
 
+thread_local! {
+    /// Game root installed by the test harness for the current thread.
+    static TEST_ROOT: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Installs a game root for the current thread (tests only).
+///
+/// This lets the UI tests use the real installation without mutating the
+/// process environment (which is unsafe and racy with parallel tests).
+#[doc(hidden)]
+pub fn set_test_game_root(root: Option<PathBuf>) {
+    TEST_ROOT.with(|cell| *cell.borrow_mut() = root);
+}
+
 impl GameData {
     /// Tries to find the game installation that a savegame belongs to.
     ///
@@ -274,6 +289,11 @@ impl GameData {
     /// `JADEFORGE_GAME_DIR` wins over the discovery.
     #[must_use]
     pub fn discover(save_path: &Path) -> Option<Self> {
+        if let Some(root) = TEST_ROOT.with(|cell| cell.borrow().clone()) {
+            if let Ok(game) = Self::open(root) {
+                return Some(game);
+            }
+        }
         if let Some(directory) = std::env::var_os("JADEFORGE_GAME_DIR") {
             if let Ok(game) = Self::open(PathBuf::from(directory)) {
                 return Some(game);
@@ -834,6 +854,24 @@ impl TableSource {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_game_root_override_is_used_before_the_environment() {
+        let root = std::env::temp_dir().join(format!(
+            "jadeforge-test-root-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_nanos())
+        ));
+        std::fs::create_dir_all(root.join("override")).expect("create game layout");
+        set_test_game_root(Some(root.clone()));
+        let game = GameData::discover(Path::new("/definitely/not/a/save"))
+            .expect("the test override supplies the game root");
+        assert_eq!(game.root(), root.as_path());
+        set_test_game_root(None);
+        let _ = std::fs::remove_dir_all(root);
+    }
 
     #[test]
     fn discovery_finds_the_game_root_above_the_save_folder() {

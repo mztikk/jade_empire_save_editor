@@ -47,7 +47,8 @@ struct Fixture {
 
 impl Fixture {
     fn create() -> Option<Self> {
-        let save = smallest_save(&save_dir()?)?;
+        let source_saves = save_dir()?;
+        let save = smallest_save(&source_saves)?;
         let root = std::env::temp_dir().join(format!(
             "jadeforge-ui-{}-{}",
             std::process::id(),
@@ -60,27 +61,17 @@ impl Fixture {
         let folder = save_dir.join("Test Save");
         std::fs::create_dir_all(&folder).expect("create fixture");
 
-        let mut game_data = false;
-        if let Some(source) = game_dir() {
-            let override_dir = game.join("override");
-            std::fs::create_dir_all(&override_dir).expect("create override");
-            let mut copied = 0;
-            for (from, to) in [
-                (source.join("dialog.tlk"), game.join("dialog.tlk")),
-                (
-                    source.join("override").join("items.2da"),
-                    override_dir.join("items.2da"),
-                ),
-                (
-                    source.join("override").join("stylesuperlist.2da"),
-                    override_dir.join("stylesuperlist.2da"),
-                ),
-            ] {
-                if from.is_file() && std::fs::copy(&from, &to).is_ok() {
-                    copied += 1;
-                }
-            }
-            game_data = copied == 3;
+        // The real installation is discovered from the source save folder, so
+        // the UI tests work with just JADEFORGE_SAVE_DIR set. No game data is
+        // copied: the thread-local test root points the session at the real
+        // installation.
+        let source = game_dir().or_else(|| {
+            jadeforge_gamedata::GameData::discover(&source_saves)
+                .map(|game| game.root().to_path_buf())
+        });
+        let game_data = source.is_some();
+        if let Some(source) = source {
+            jadeforge_gamedata::set_test_game_root(Some(source));
         }
 
         std::fs::copy(&save, folder.join("save.sac")).expect("copy savegame");
@@ -94,6 +85,7 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        jadeforge_gamedata::set_test_game_root(None);
         let _ = std::fs::remove_dir_all(&self.root);
     }
 }
@@ -444,16 +436,11 @@ fn every_saved_style_mask_fits_its_slot_table() {
         eprintln!("skipping: no savegames found");
         return;
     };
-    let Some(game_root) = game_dir() else {
-        eprintln!("skipping: no game data");
-        return;
-    };
     let mut session = jadeforge_gui::Session::with_directory(&dir);
     if session.entries.is_empty() {
         eprintln!("skipping: no savegames");
         return;
     }
-    let _ = game_root;
     let mut checked = 0_usize;
     for index in 0..session.entries.len() {
         if !session.open(index) {
