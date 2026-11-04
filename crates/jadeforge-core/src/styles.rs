@@ -170,7 +170,9 @@ impl SaveGame {
         if let Some(position) = position(gff) {
             let field = &mut gff
                 .struct_at_mut(struct_index)
-                .expect("checked above")
+                .ok_or_else(|| {
+                    Error::Corrupt(format!("style struct {struct_index} does not exist"))
+                })?
                 .fields[position];
             field.value = Value::DWord64(mask);
         } else {
@@ -180,13 +182,15 @@ impl SaveGame {
         // `StyleLevel` is a byte and has to follow the mask.
         let level_index = gff
             .struct_at(struct_index)
-            .expect("checked above")
+            .ok_or_else(|| Error::Corrupt(format!("style struct {struct_index} does not exist")))?
             .fields
             .iter()
             .position(|field| gff.label_name(field.label) == Some("StyleLevel"));
         if let Some(position) = level_index {
             gff.struct_at_mut(struct_index)
-                .expect("checked above")
+                .ok_or_else(|| {
+                    Error::Corrupt(format!("style struct {struct_index} does not exist"))
+                })?
                 .fields[position]
                 .value = Value::Byte(level);
         } else {
@@ -328,7 +332,7 @@ fn write_style_level(gff: &mut Gff, struct_index: usize, mask: u64, level: u8) -
     });
     if let Some(position) = mask_position {
         gff.struct_at_mut(struct_index)
-            .expect("struct checked by the caller")
+            .ok_or_else(|| Error::Corrupt(format!("style struct {struct_index} does not exist")))?
             .fields[position]
             .value = Value::DWord64(mask);
     } else {
@@ -342,7 +346,7 @@ fn write_style_level(gff: &mut Gff, struct_index: usize, mask: u64, level: u8) -
     });
     if let Some(position) = level_position {
         gff.struct_at_mut(struct_index)
-            .expect("struct checked by the caller")
+            .ok_or_else(|| Error::Corrupt(format!("style struct {struct_index} does not exist")))?
             .fields[position]
             .value = Value::Byte(level);
     } else {

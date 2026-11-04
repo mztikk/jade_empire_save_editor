@@ -380,7 +380,10 @@ struct Reader<'a> {
 impl<'a> Reader<'a> {
     fn u32(&mut self, what: &str) -> Result<u32> {
         let bytes = self.bytes(4, what)?;
-        Ok(u32::from_le_bytes(bytes.try_into().expect("4 bytes")))
+        bytes
+            .try_into()
+            .map(u32::from_le_bytes)
+            .map_err(|_| Error::Corrupt(format!("{what} is not four bytes")))
     }
 
     fn bytes(&mut self, count: usize, what: &str) -> Result<&'a [u8]> {

@@ -6,6 +6,8 @@
 //! tool and the desktop application are thin layers on top of it, and the test
 //! suite exercises this crate directly against real savegames.
 
+#![deny(clippy::expect_used)]
+
 pub mod character;
 pub mod error;
 pub mod gems;

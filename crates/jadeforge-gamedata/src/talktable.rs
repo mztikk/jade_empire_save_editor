@@ -60,13 +60,18 @@ impl TalkTable {
                 String::from_utf8_lossy(&data[4..8])
             )));
         }
-        let word = |offset: usize| -> u32 {
-            u32::from_le_bytes(data[offset..offset + 4].try_into().expect("in bounds"))
+        let word = |offset: usize| -> Result<u32> {
+            data.get(offset..offset + 4)
+                .and_then(|slice| slice.try_into().ok())
+                .map(u32::from_le_bytes)
+                .ok_or_else(|| {
+                    Error::TalkTable(format!("header word at offset {offset} is truncated"))
+                })
         };
-        let _languages = word(8);
-        let count = word(12) as usize;
-        let table_offset = word(16) as usize;
-        let data_offset = word(20) as usize;
+        let _languages = word(8)?;
+        let count = word(12)? as usize;
+        let table_offset = word(16)? as usize;
+        let data_offset = word(20)? as usize;
 
         let table_end = table_offset
             .checked_add(count * ENTRY_SIZE)
@@ -80,10 +85,12 @@ impl TalkTable {
         let mut entries = Vec::with_capacity(count);
         for index in 0..count {
             let start = table_offset + index * ENTRY_SIZE;
-            let offset =
-                u32::from_le_bytes(data[start + 4..start + 8].try_into().expect("4 bytes"));
-            let length =
-                u16::from_le_bytes(data[start + 8..start + 10].try_into().expect("2 bytes"));
+            let offset = word(start + 4)?;
+            let length = data
+                .get(start + 8..start + 10)
+                .and_then(|slice| slice.try_into().ok())
+                .map(u16::from_le_bytes)
+                .ok_or_else(|| Error::TalkTable("entry table is truncated".to_owned()))?;
             entries.push((offset, length));
         }
         Ok(Self {

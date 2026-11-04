@@ -95,7 +95,7 @@ impl SaveGame {
             })?;
         let field = &mut gff
             .struct_at_mut(struct_index)
-            .expect("checked above")
+            .ok_or_else(|| Error::Corrupt(format!("struct {struct_index} does not exist")))?
             .fields[position];
         match field.value {
             Value::Byte(_) => field.value = Value::Byte(count),
