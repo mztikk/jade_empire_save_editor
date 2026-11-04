@@ -258,8 +258,8 @@ confirm this: a level 11 style carries ten bits, for example `[0-4, 10-14]`
 (five damage tiers plus five speed tiers), and every style satisfies
 `level == 1 + popcount`.
 
-The editor shows those bits as one golden orb per tier and family inside the
-expanded style row.
+The editor shows those bits as one plain golden orb per tier and family inside the
+expanded style row (left to right is tier 1-5).
 Clicking an orb sets the family to that tier: missing tiers up to it
 are bought, clicking an owned orb removes it and everything above it. That is a
 gap-free prefix per family, because the game's own level-up screen never creates

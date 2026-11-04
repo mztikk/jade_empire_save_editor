@@ -417,11 +417,11 @@ fn clicking_an_upgrade_orb_changes_the_style() {
     let subtitle = find_node_with_text(&test, " · #").expect("style subtitle");
     click_node(&mut test, &subtitle);
     assert!(find_label_text(&test, "UPGRADES").is_some());
-    // The first orb is tier 1 of the first family.
+    // Orbs are plain circles without text: find the first 26x26 node.
     let orb = test
-        .find(|node, element| {
-            let label = Label::try_downcast(element)?;
-            (label.text == "1").then_some(node)
+        .find(|node, _| {
+            let size = node.layout().area.size;
+            ((size.width - 26.0).abs() < 0.5 && (size.height - 26.0).abs() < 0.5).then_some(node)
         })
         .expect("no upgrade orb");
     click_node(&mut test, &orb);
