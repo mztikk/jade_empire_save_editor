@@ -200,6 +200,32 @@ The inventory holds structs with `Count` (byte), `ItemId` (word) and `Type`
 root of the block (`FirstName`, `Stats`, ...). JadeForge only falls back to it
 when `save.sav` has no player creature, because it can be stale.
 
+## Where names come from
+
+Savegames only store numeric ids and talk table references. The names shown by
+JadeForge come from the game installation:
+
+| data | lookup |
+| --- | --- |
+| item name | `items.2da` row = `ItemId`, `STRREF_NAME` → `dialog.tlk` |
+| item category | `items.2da` `TYPE` column (`weapons`, `gems`, `improve`, ...) |
+| item category → savegame type | gems 1, powerups 4, weapons 5, plot_items 6, mgweapons 7, improve 8 |
+| style name | `stylesuperlist.2da` row = `StyleId`, `NameRef` → `dialog.tlk` |
+| style is a weapon style | `stylesuperlist.2da` `WeaponCount` > 0 |
+
+The category mapping was measured over every item struct of the 88 test
+savegames (inventories and store inventories); the six pairs above are the only
+ones that occur.
+
+## Style levels
+
+A style struct stores `StyleLevel` (byte) and `StyleLevelInfo` (64 bit upgrade
+mask). `StyleLevel` is `1 + number of set bits`; a freshly learned style has
+level 1 and no mask. Raising a level therefore means setting the next free bit,
+which is what JadeForge does (and the reverse when lowering). The game derives
+the unspent style points from the levels of all owned styles, so editing a level
+also changes the style points shown in game.
+
 ## Unknowns
 
 * Some fields that look numeric are stored as opaque blobs (for example
