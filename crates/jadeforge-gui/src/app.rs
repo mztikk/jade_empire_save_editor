@@ -103,8 +103,6 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let style_limit = use_state(|| 20_usize);
     let expanded_item = use_state(|| None::<u16>);
     let expanded_style = use_state(|| None::<u16>);
-    let picker_open = use_state(|| false);
-    let picker_path = use_state(String::new);
     let save_query = use_state(String::new);
     let save_sort = use_state(|| (crate::session::SaveSort::Name, false));
     let preview_cache: Rc<RefCell<Option<(u64, ImageHandle)>>> =
@@ -219,8 +217,6 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let header = header(
         &ctx,
         directory_state,
-        picker_open,
-        picker_path,
         &message,
         &game_status,
         dirty,
@@ -286,11 +282,6 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 ),
         )
         .child(footer)
-        .maybe_child(
-            picker_open.read().then(|| {
-                crate::views::picker::view(&ctx, picker_path, picker_open, directory_state)
-            }),
-        )
 }
 
 /// Builds an [`ImageHandle`] for the preview, cached by generation.
@@ -323,8 +314,6 @@ fn cached_preview(
 fn header(
     ctx: &Ctx,
     directory: State<String>,
-    picker_open: State<bool>,
-    picker_path: State<String>,
     message: &crate::session::Message,
     game_status: &GameStatus,
     dirty: bool,
@@ -344,6 +333,7 @@ fn header(
 
     let scan = {
         let ctx = ctx.clone();
+        let sync = sync.clone();
         move |_| {
             if form_differs {
                 ctx.run(|session| {
@@ -411,14 +401,25 @@ fn header(
                         .width(Size::flex(1.0)),
                 )
                 .child(Button::new().outline().child("Browse…").on_press({
-                    let mut picker_open = picker_open;
-                    let mut picker_path = picker_path;
+                    let ctx = ctx.clone();
+                    let sync = sync.clone();
+                    let mut directory = directory;
                     move |_| {
-                        if !picker_open() {
-                            *picker_path.write() =
-                                crate::views::picker::start_directory(&directory.read());
-                            *picker_open.write() = true;
+                        if form_differs {
+                            ctx.run(|session| {
+                                session.set_error(
+                                    "Apply or discard the character changes before choosing a folder.",
+                                );
+                            });
+                            return;
                         }
+                        let start = crate::dialog::start_directory(directory.read().as_str());
+                        let Some(folder) = crate::dialog::pick_folder(start.as_deref()) else {
+                            return;
+                        };
+                        *directory.write() = folder.display().to_string();
+                        ctx.run(|session| session.set_directory(folder));
+                        sync();
                     }
                 }))
                 .child(Button::new().outline().child("Scan").on_press(scan)),
@@ -433,8 +434,11 @@ fn header(
         .into_element()
 }
 
-#[allow(clippy::too_many_lines, clippy::needless_pass_by_value)]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_lines,
+    clippy::needless_pass_by_value,
+    clippy::too_many_arguments
+)]
 fn sidebar(
     ctx: &Ctx,
     entries: &[crate::session::SaveEntry],

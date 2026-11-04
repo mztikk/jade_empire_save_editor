@@ -4,5 +4,4 @@ pub mod character;
 pub mod henchmen;
 pub mod inventory;
 pub mod overview;
-pub mod picker;
 pub mod styles;

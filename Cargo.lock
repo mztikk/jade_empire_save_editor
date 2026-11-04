@@ -1968,6 +1968,7 @@ dependencies = [
  "freya-testing",
  "jadeforge-core",
  "jadeforge-gamedata",
+ "rfd",
  "tracing",
  "tracing-subscriber",
 ]

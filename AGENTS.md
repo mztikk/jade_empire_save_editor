@@ -50,7 +50,7 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 7. **No game data in the repository.** Test savegames are never committed;
    tests that need them look for `JADEFORGE_SAVE_DIR` and skip otherwise.
 8. **Never hardcode a machine path.** No default game or save directory may be
-   baked into the source: users are asked once (the picker), the choice is
+   baked into the source: users are asked once (the native folder dialog), the choice is
    stored in the config file, and `JADEFORGE_SAVE_DIR`/`JADEFORGE_GAME_DIR`
    override it. Tests use the variables only and skip when they are unset.
 9. **Treat the game installation as read only.** `jadeforge-gamedata` only
