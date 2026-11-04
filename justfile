@@ -96,6 +96,8 @@ publish: (publish-target "aarch64-apple-darwin") (publish-target "x86_64-apple-d
 publish: (publish-target host)
     @echo "publish: skipped macOS: it needs the Apple SDK on a macOS host"
 
-# Remove build artifacts.
+# Remove all build artifacts: the cargo target directory and the staged
+# distribution binaries in dist/.
 clean:
     cargo clean
+    rm -rf dist
