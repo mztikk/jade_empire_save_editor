@@ -102,12 +102,21 @@ Freya 0.4 application with a small, explicit structure:
 | --- | --- |
 | `session` | all behaviour (no Freya types): loading, editing, search, save/revert |
 | `app` | the shell: header, save list with screenshot, tabs, action bar |
+| `config` | the small settings file that remembers the save folder |
 | `theme` | palette and the Freya component theme (dark surfaces, gold accents) |
 | `widgets` | cards, fields, badges, dividers |
-| `views` | one module per tab: overview, character, styles, inventory, companions |
+| `views` | one module per tab (overview, character, styles, inventory, companions) plus the folder picker overlay |
 | `form` | the text input states of the character sheet |
 
-The shell renders the session and forwards input:
+The shell renders the session and forwards input. The savegame list has its own
+filter and sort (`session::visible_entries`, natural ordering so `Auto 2` comes
+before `Auto 10`); the folder picker is a regular view instead of a native dialog
+so it can be themed and tested. The layout is fluid: the sidebar uses a
+percentage width with a minimum, tab labels never wrap, and wide rows wrap
+instead of clipping.
+
+There are no hardcoded installation paths anywhere. The folder comes from
+`JADEFORGE_SAVE_DIR`, the settings file or the picker, in that order.
 
 * scan a save folder, list savegames with level, name and play time,
 * edit name, level, experience, gold, unspent points, vitals, attributes and

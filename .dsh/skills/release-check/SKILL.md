@@ -20,7 +20,8 @@ With real savegames available, run the full suite as well. It is the only test
 that proves the format handling still works against retail data:
 
 ```sh
-JADEFORGE_SAVE_DIR="/media/Games/Heroic/Jade Empire/Save" cargo test --workspace
+JADEFORGE_SAVE_DIR="/path/to/Jade Empire/Save" \
+JADEFORGE_GAME_DIR="/path/to/Jade Empire" cargo test --workspace
 ```
 
 Expect `round tripped 88 savegames` and `rewrote 943 blocks` from the core

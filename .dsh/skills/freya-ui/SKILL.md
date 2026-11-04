@@ -43,6 +43,15 @@ component looks wrong, the fix belongs in `theme.rs`, not in a one-off
   child grows them.
 - Form fields wrap with `.content(Content::wrap_spacing(14.0))`.
 - Scroll views need a constrained parent (`Size::flex(1.0)` in a flex column).
+- Responsive sizes come from the layout, not from measuring the window: the
+  sidebar is `Size::percent(24.)` with `min_width`/`max_width`, and rows that
+  must wrap use `Content::wrap_spacing`. Labels that should never break are
+  `max_lines(1)` — without it a squeezed tab renders `Comp\nanions`.
+- Overlays (the folder picker) are `Position::new_absolute()` +
+  `Layer::Overlay` + `Size::percent(100.)`; no native dialog is needed.
+- Buttons are hover-coloured by the theme; a row whose child paints its own
+  background will not show `flat_button` hover. Do not paint over it if hover
+  feedback matters.
 
 ## Feedback loop
 
@@ -52,6 +61,7 @@ cargo test -p jadeforge-gui                 # headless UI tests
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/ui.png all
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/inv.png Inventory --height 1900 --query "Drachen"
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/small.png Overview --width 900 --height 600
+cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/browse.png --browse
 ```
 
 Check narrow windows too: rows with `spacing` overflow silently at 900 px unless
