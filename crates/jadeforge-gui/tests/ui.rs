@@ -239,6 +239,10 @@ fn every_list_is_browsable_and_labelled_the_same_way() {
         eprintln!("skipping: no savegames found");
         return;
     };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data to browse");
+        return;
+    }
     let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
 
     assert!(click_text(&mut test, "Styles"));
@@ -409,6 +413,10 @@ fn clicking_an_upgrade_orb_changes_the_style() {
         eprintln!("skipping: no savegames found");
         return;
     };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data to resolve upgrades");
+        return;
+    }
     let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
     assert!(click_text(&mut test, "Styles"));
     let subtitle = find_node_with_text(&test, " · #").expect("style subtitle");
@@ -482,8 +490,21 @@ fn gems_can_be_moved_and_removed() {
     };
     let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
     assert!(session.open(0));
-    let Some(gem) = session.gems.first().cloned() else {
-        eprintln!("skipping: the test savegame has no gems");
+    let socketed = session
+        .gems
+        .iter()
+        .filter(|gem| gem.location == jadeforge_core::GemLocation::Amulet)
+        .count();
+    let sockets = session
+        .amulet
+        .map_or(0, |amulet| usize::from(amulet.sockets));
+    let Some(gem) = session
+        .gems
+        .iter()
+        .find(|gem| gem.location == jadeforge_core::GemLocation::Amulet || socketed < sockets)
+        .cloned()
+    else {
+        eprintln!("skipping: no gem can be moved to a visible slot");
         return;
     };
     let before = gem.location;
