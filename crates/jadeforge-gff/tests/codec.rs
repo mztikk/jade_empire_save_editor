@@ -129,6 +129,28 @@ fn empty_and_maximal_payloads_round_trip() {
 }
 
 #[test]
+fn structural_edge_cases_round_trip() {
+    let mut gff = empty_block();
+    let child = gff.push_struct(0);
+    gff.add_field(child, "Only", Value::Byte(1))
+        .expect("single field child");
+    gff.add_field(0, "EmptyList", Value::List(Vec::new()))
+        .expect("empty list");
+    gff.add_field(0, "Repeated", Value::List(vec![child, child]))
+        .expect("repeated reference");
+    gff.add_field(0, "Single", Value::Struct(child))
+        .expect("struct");
+    // Exactly sixteen bytes: the label is not NUL terminated on disk.
+    gff.add_field(0, "ABCDEFGHIJKLMNOP", Value::DWord(3))
+        .expect("max label");
+    let bytes = gff.to_bytes().expect("serialize");
+    let parsed = Gff::parse("structure", &bytes).expect("parse");
+    assert_eq!(parsed, gff);
+    // A one-field struct is stored inline; the parser must handle that.
+    assert_eq!(parsed.struct_at(child).expect("child").fields.len(), 1);
+}
+
+#[test]
 fn legacy_locstring_type_is_read() {
     let gff = single_field(
         "Text",
