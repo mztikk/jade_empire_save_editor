@@ -433,24 +433,43 @@ fn sidebar(
                 })
                 .child(
                     rect()
-                        .vertical()
+                        .horizontal()
                         .width(Size::fill())
-                        .spacing(2.)
-                        .padding(Gaps::new_symmetric(7., 10.))
+                        .height(Size::px(46.))
                         .corner_radius(8.)
                         .background(if is_selected {
                             theme::SURFACE_ACTIVE
                         } else {
                             theme::SURFACE
                         })
+                        .maybe_child(is_selected.then(|| {
+                            rect()
+                                .width(Size::px(3.))
+                                .height(Size::fill())
+                                .background(theme::ACCENT)
+                                .into_element()
+                        }))
                         .child(
-                            label()
-                                .text(title)
-                                .font_size(12.)
-                                .max_lines(1)
-                                .color(if broken { theme::DANGER } else { theme::TEXT }),
+                            rect()
+                                .vertical()
+                                .width(Size::flex(1.0))
+                                .spacing(2.)
+                                .padding(Gaps::new_symmetric(7., 10.))
+                                .child(
+                                    label()
+                                        .text(title)
+                                        .font_size(12.)
+                                        .max_lines(1)
+                                        .color(if broken { theme::DANGER } else { theme::TEXT }),
+                                )
+                                .child(
+                                    label()
+                                        .text(summary)
+                                        .font_size(10.)
+                                        .color(theme::DIM),
+                                ),
                         )
-                        .child(label().text(summary).font_size(10.).color(theme::DIM)),
+                        .into_element(),
                 )
                 .into_element(),
         );
