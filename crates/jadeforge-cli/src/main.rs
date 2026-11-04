@@ -211,18 +211,22 @@ fn items(path: &Path) -> Result<(), Error> {
     let save = SaveGame::open(path)?;
     let game = GameData::discover(path);
     let items = save.items()?;
-    println!("{:<32} {:>6} {:>6} {:>5}", "name", "id", "type", "count");
+    println!(
+        "{:<32} {:>6} {:<12} {:>5}",
+        "name", "id", "category", "count"
+    );
     for item in items {
-        let name = game
-            .as_ref()
-            .and_then(|game| game.item(item.item_id))
-            .map_or_else(
-                || format!("<item {}>", item.item_id),
-                |info| info.name.clone(),
-            );
+        let info = game.as_ref().and_then(|game| game.item(item.item_id));
+        let name = info.map_or_else(
+            || format!("<item {}>", item.item_id),
+            |info| info.name.clone(),
+        );
+        let category = info
+            .and_then(|info| info.category.clone())
+            .unwrap_or_else(|| format!("type {}", item.kind));
         println!(
-            "{:<32} {:>6} {:>6} {:>5}",
-            name, item.item_id, item.kind, item.count
+            "{:<32} {:>6} {:<12} {:>5}",
+            name, item.item_id, category, item.count
         );
     }
     Ok(())
