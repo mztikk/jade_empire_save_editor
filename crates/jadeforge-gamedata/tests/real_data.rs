@@ -181,3 +181,23 @@ fn predefined_gems_are_resolved() {
     assert!(game.gem(gem.item_id).is_some());
     assert_eq!(gem.effects, game.gem(gem.item_id).expect("gem").effects);
 }
+
+#[test]
+fn effect_names_are_readable() {
+    let Some(root) = game_dir() else {
+        eprintln!("skipping: no game installation found");
+        return;
+    };
+    let game = match GameData::open(&root) {
+        Ok(game) => game,
+        Err(error) => {
+            eprintln!("skipping: cannot load game data: {error}");
+            return;
+        }
+    };
+    assert_eq!(game.effect_name(62), Some("Body"));
+    assert_eq!(game.effect_name(64), Some("Mind"));
+    assert_eq!(game.effect_name(65), Some("Spirit"));
+    assert_eq!(game.effect_name(19), Some("Charm"));
+    assert_eq!(game.effect_name(9999), None);
+}

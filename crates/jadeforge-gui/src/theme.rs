@@ -103,7 +103,7 @@ pub fn theme() -> Theme {
         "outline_button",
         ButtonColorsThemePreference {
             background: Preference::Specific(Color::TRANSPARENT),
-            hover_background: Preference::Specific(SURFACE),
+            hover_background: Preference::Specific(SURFACE_ACTIVE),
             border_fill: Preference::Specific(BORDER),
             focus_border_fill: Preference::Specific(ACCENT),
             color: Preference::Specific(TEXT),
@@ -113,7 +113,7 @@ pub fn theme() -> Theme {
         "flat_button",
         ButtonColorsThemePreference {
             background: Preference::Specific(Color::TRANSPARENT),
-            hover_background: Preference::Specific(SURFACE),
+            hover_background: Preference::Specific(SURFACE_ACTIVE),
             border_fill: Preference::Specific(Color::TRANSPARENT),
             focus_border_fill: Preference::Specific(ACCENT),
             color: Preference::Specific(TEXT),

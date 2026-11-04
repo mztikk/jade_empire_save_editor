@@ -6,7 +6,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::session::{GemRow, format};
+use crate::session::GemRow;
 use crate::theme;
 use crate::widgets;
 use jadeforge_core::GemLocation;
@@ -147,13 +147,12 @@ pub fn view(
 fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool) -> Element {
     let ctx = ctx.clone();
     let index = gem.struct_index;
-    let effects = gem.effects;
     let action = if socketed {
         "Move to inventory"
     } else {
         "Move to amulet"
     };
-    rect()
+    let mut row = rect()
         .horizontal()
         .width(Size::fill())
         .spacing(10.)
@@ -171,29 +170,38 @@ fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool) -> Element {
                         .text(gem.name.clone())
                         .font_size(13.)
                         .max_lines(1)
-                        .color(theme::TEXT),
+                        .color(if gem.empty { theme::DIM } else { theme::TEXT }),
                 )
                 .child(
                     label()
-                        .text(format!(
-                            "{} effect{}",
-                            format::number(effects as f32),
-                            if effects == 1 { "" } else { "s" }
-                        ))
+                        .text(if gem.effects.is_empty() {
+                            "no effects".to_owned()
+                        } else {
+                            gem.effects.join(" · ")
+                        })
                         .font_size(10.)
+                        .max_lines(2)
                         .color(theme::DIM),
                 ),
-        )
-        .child(Button::new().compact().outline().child(action).on_press({
-            let ctx = ctx.clone();
-            move |_| ctx.run(|session| session.move_gem(index))
-        }))
-        .child(
-            Button::new()
-                .compact()
-                .flat()
-                .child("Remove")
-                .on_press(move |_| ctx.run(|session| session.remove_gem(index))),
-        )
-        .into_element()
+        );
+    if !gem.empty {
+        let move_ctx = ctx.clone();
+        let remove_ctx = ctx.clone();
+        row = row
+            .child(
+                Button::new()
+                    .compact()
+                    .flat()
+                    .child(action)
+                    .on_press(move |_| move_ctx.run(|session| session.move_gem(index))),
+            )
+            .child(
+                Button::new()
+                    .compact()
+                    .flat()
+                    .child("Remove")
+                    .on_press(move |_| remove_ctx.run(|session| session.remove_gem(index))),
+            );
+    }
+    row.into_element()
 }
