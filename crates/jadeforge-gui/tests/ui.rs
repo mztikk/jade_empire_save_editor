@@ -590,6 +590,32 @@ fn expanded_styles_show_upgrade_choices() {
 }
 
 #[test]
+fn pickers_share_the_same_page_size() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    assert!(click_text(&mut test, "Styles"));
+    assert!(
+        find_label_text(&test, "30 of ").is_some(),
+        "styles do not render the shared page size of 30"
+    );
+
+    assert!(click_text(&mut test, "Gems"));
+    assert!(
+        find_label_text(&test, "30 of ").is_some(),
+        "gems do not render the shared page size of 30"
+    );
+    assert!(click_text(&mut test, "Show more"));
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "60 of ").is_some(),
+        "the page step is not the shared page size"
+    );
+}
+
+#[test]
 fn show_more_pages_through_the_item_database() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
