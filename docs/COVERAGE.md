@@ -22,16 +22,16 @@ just coverage
 
 | metric | covered |
 | --- | --- |
-| lines | **6 626 / 8 076 = 82.0 %** |
-| functions | **639 / 926 = 69.0 %** |
+| lines | **6 655 / 8 076 = 82.4 %** |
+| functions | **643 / 926 = 69.4 %** |
 
 | crate | lines | functions |
 | --- | --- | --- |
 | `jadeforge-gamedata` | 89.6 % | 83.8 % |
 | `jadeforge-gui` | 87.8 % | 65.5 % |
-| `jadeforge-core` | 77.4 % | 63.9 % |
+| `jadeforge-core` | 78.7 % | 65.5 % |
 | `jadeforge-session` | 77.2 % | 78.1 % |
-| `jadeforge-gff` | 79.8 % | 58.6 % |
+| `jadeforge-gff` | 80.2 % | 58.6 % |
 | `jadeforge-cli` | 68.3 % | 55.3 % |
 
 Notes:
@@ -46,7 +46,7 @@ Notes:
 
 | phase | overall lines | gff | cli | core | session | gui | gamedata |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| baseline | 82.0 % | 80 % | 68 % | 77 % | 77 % | 88 % | 90 % |
+| baseline | 82.4 % | 80 % | 68 % | 79 % | 77 % | 88 % | 90 % |
 | phase 1 | ≥ 84 % | ≥ 80 % | ≥ 60 % | ≥ 82 % | ≥ 79 % | ≥ 88 % | ≥ 90 % |
 | phase 2 | ≥ 88 % | ≥ 85 % | ≥ 80 % | ≥ 86 % | ≥ 85 % | ≥ 89 % | ≥ 92 % |
 
@@ -67,7 +67,7 @@ from 72.1 % to **79.8 %** and the overall project from 79.9 % to **81.3 %**.
 
 The remaining decode branches are covered too: empty string, empty and maximal
 (255 byte) resrefs, zero-length void, and locstrings without strref/text.
-`gff` is now at **79.8 %**, just below the phase-1 target of 80 %.
+`gff` is now at **80.2 %**, meeting the phase-1 target.
 
 - Add `crates/jadeforge-gff/tests/codec.rs` with a synthetic GFF block that
   contains **every** field type: inline byte/char/word/short/dword/int/float,
@@ -96,20 +96,21 @@ paths and values, a missing save, and the folder-argument resolution.
 at **82.0 %**. Remaining: error formatting branches inside `main.rs` and a few
 `add_item` options.
 
-### 3. `jadeforge-core`: error and boundary paths (next)
+### 3. `jadeforge-core`: error and boundary paths (in progress)
 
-Targets: `inventory.rs` 57.5 %, `save.rs` 68.8 %, `henchmen.rs` 69.7 %.
+`crates/jadeforge-core/tests/errors.rs` now covers:
 
-- Inventory: count 0, count 255, adding/removing a missing item, removing the
-  last stack, `Count` overflow, unknown item id.
-- Save: missing backup directory, backup naming, verification failure (inject a
-  serializer that corrupts a block), read-only destination, round-trip
-  preservation of untouched blocks.
-- Henchmen: level/availability bounds, missing list, duplicate entries.
-- Character: absent optional fields (`Alignment`, `UnassignedPts`, `Gold`) and
-  their creation on write.
+- inventory: count 255, zero count, missing struct, zero stack, add/remove and
+  removing twice,
+- optional character fields: existing `Gold` update, absent `UnassignedPts`
+  creation, and the documented rule that a missing `Alignment` stays unwritten,
+- container errors: empty/zero blocks, truncated names, block sizes beyond the
+  file, bad block magic/version, a non-GFF payload and a missing file,
+- save options: backup file created exactly once, `backup: false`, and a
+  directory as an unwritable target.
 
-Expected: +80–120 covered lines, `core` to ≥ 82 %.
+`core` moved from 77.4 % to **78.7 %**; the project is at **82.4 %**. Remaining:
+save verification failures, style/henchman list errors and screenshot paths.
 
 ### 4. `jadeforge-session`: failure paths
 
@@ -138,19 +139,14 @@ rendering executes them.
 Expected: +40–60 covered lines, but the goal is tested behaviour, not the
 percentage.
 
-### 6. Malformed-save corpus
+### 6. Malformed-save corpus (done)
 
-Build a small set of synthetic broken saves in `crates/jadeforge-gff/tests` and
-`crates/jadeforge-core/tests`:
-
-- truncated container, missing `SAV ` magic, wrong version,
-- struct/field/list offsets beyond the block,
-- label index out of range,
-- unknown field type,
-- a block that parses but fails to round trip.
-
-This corpus feeds the parser and save-writer error paths from items 1–3 and
-keeps them covered without game data.
+`crates/jadeforge-gff/tests/codec.rs` covers the field-level corruptions (label
+index, unknown type, list index, string length, truncated locstring), and
+`crates/jadeforge-core/tests/errors.rs` covers the container level (truncated
+names, block size beyond EOF, bad magic/version, a zero-filled block that is not
+a GFF tree). Both run without game data and keep the parser/writer error paths
+covered.
 
 ## Guardrails
 
