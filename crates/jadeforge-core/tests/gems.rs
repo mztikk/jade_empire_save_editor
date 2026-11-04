@@ -85,3 +85,42 @@ fn gems_move_between_amulet_and_inventory() {
     save.save(SaveOptions::default()).expect("save");
     let _ = std::fs::remove_dir_all(temp);
 }
+
+#[test]
+fn amulet_sockets_cover_every_socketed_gem() {
+    let Some(dir) = save_dir() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut checked = 0;
+    for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+        let path = entry.path().join("save.sac");
+        if !path.is_file() {
+            continue;
+        }
+        let save = SaveGame::open(&path).expect("open");
+        let amulet = save.amulet().expect("amulet");
+        assert!(
+            matches!(amulet.sockets, 3 | 5 | 7),
+            "{}: unexpected socket count {}",
+            path.display(),
+            amulet.sockets
+        );
+        let gems = save.gems().expect("gems");
+        let socketed = gems
+            .iter()
+            .filter(|gem| {
+                gem.location == jadeforge_core::GemLocation::Amulet
+                    && (gem.item_id != 0 || !gem.effects.is_empty())
+            })
+            .count();
+        assert!(
+            socketed <= usize::from(amulet.sockets),
+            "{}: {socketed} gems in {} sockets",
+            path.display(),
+            amulet.sockets
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "no savegames were checked");
+}

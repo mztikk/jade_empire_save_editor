@@ -205,6 +205,13 @@ when `save.sav` has no player creature, because it can be stale.
 `PlayerCreature.Gems` and `PlayerCreature.Amulet.OpenGemsList` are lists of
 structs shaped `{ Gem: { ItemID, GemsEffectList[] } }`; effects carry
 `GemsEffectType`, `GemsEffectValue`, `GemsEffectCurVal` and `GemsEffectDuration`.
+`OpenGemsList` always holds seven entries. Which of them are *unlocked sockets* is
+decided by `PlayerCreature.Amulet.Type` (a byte): tier 1 has three sockets, tier
+2 has five, tier 3 and 4 have seven (the cap). Savegames that do not have the
+field yet behave like tier 1. The trailing entries beyond the unlocked sockets
+are unused and are hidden by the editor, which shows the amulet tier and socket
+count above the list.
+
 Moving a gem only moves its struct index from one list to the other, so the gem
 data is never rewritten. Some savegames point at the gem struct directly instead
 of wrapping it in an entry with a `Gem` field; both shapes are read.

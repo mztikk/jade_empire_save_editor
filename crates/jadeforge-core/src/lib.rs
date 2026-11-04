@@ -19,7 +19,7 @@ pub mod styles;
 
 pub use character::{Change, Character, DEFAULT_ALIGNMENT, PlayerLocation, locate_player};
 pub use error::{Error, Result};
-pub use gems::{Gem, GemEffect, GemLocation};
+pub use gems::{AmuletInfo, Gem, GemEffect, GemLocation, sockets_for_tier};
 pub use gff::{Field, FieldPath, Gff, LocString, Struct, Value};
 pub use henchmen::Henchman;
 pub use inventory::Item;
