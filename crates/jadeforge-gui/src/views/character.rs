@@ -28,7 +28,7 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
 
     let identity = widgets::card(
         "Identity",
-        Some("Staged changes are applied with Apply or Save to disk".to_owned()),
+        Some("Every valid change is applied in memory immediately".to_owned()),
         vec![
             widgets::field_grid(vec![
                 widgets::field("NAME", Input::new(form.name).width(Size::fill()), 220.),

@@ -174,7 +174,6 @@ fn savegames_are_listed_and_can_be_opened() {
     );
     assert!(find_label_text(&test, "Level ").is_some());
     // The overview shows the character and the action bar.
-    assert!(find_label_text(&test, "Apply changes").is_some());
     assert!(find_label_text(&test, "Save to disk").is_some());
     let image = test.render();
     assert!(
@@ -612,26 +611,47 @@ fn clicking_around_does_not_panic() {
 }
 
 #[test]
-fn staged_edits_block_scanning() {
+fn character_edits_apply_immediately() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
         return;
     };
     let mut test = launch(fixture.save_dir.clone());
     assert!(click_text(&mut test, "Character"));
-    // "+1 point" stages an unspent attribute point in the form without touching
-    // the savegame.
+    // "+1 point" edits the form; the value has to reach the in-memory savegame
+    // immediately, exactly like an item or style edit.
     assert!(click_text(&mut test, "+1 point"), "no quick add button");
+    for _ in 0..3 {
+        test.sync_and_update();
+    }
     assert!(
-        find_label_text(&test, "unapplied input").is_some(),
-        "the unapplied changes badge is missing"
+        find_label_text(&test, "unsaved changes").is_some()
+            || find_label_text(&test, "in memory").is_some(),
+        "the point was not applied in memory"
     );
 
     assert!(click_text(&mut test, "Scan"));
     assert!(
-        find_label_text(&test, "Apply or discard").is_some(),
+        find_label_text(&test, "unsaved changes").is_some(),
         "scanning was not blocked"
     );
+}
+
+#[test]
+fn form_edits_apply_in_memory_without_a_message() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
+    assert!(session.open(0));
+    let character = session.character.clone().expect("character");
+    let mut form = jadeforge_gui::CharacterForm::from_character(&character);
+    form.level = "9".to_owned();
+    let before = session.message.text.clone();
+    assert!(session.apply_form_silently(&form));
+    assert!(session.is_dirty());
+    assert_eq!(session.message.text, before, "auto-apply must stay silent");
 }
 
 #[test]

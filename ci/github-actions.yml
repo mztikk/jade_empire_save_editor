@@ -5,6 +5,7 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -71,13 +72,58 @@ jobs:
         run: cargo test -p jadeforge-gui
       - name: Clippy
         run: cargo clippy -p jadeforge-gui --all-targets -- -D warnings
-      - name: Build release binaries
-        run: cargo build --release -p jadeforge-gui -p jadeforge-cli
+
+  publish:
+    name: publish (${{ matrix.os }})
+    # The three fat-LTO builds are expensive; pull requests are covered by the
+    # jobs above. Push to main, tag, or use the manual dispatch to get binaries.
+    if: github.event_name != 'pull_request'
+    needs: [formatting, core, gui]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      # Skia statically links ICU, while accesskit_windows imports the system
+      # icuuc.dll through the windows crate; the symbols collide. Remove this
+      # once the dependency no longer pulls in Win32_Globalization.
+      RUSTFLAGS: ${{ startsWith(matrix.os, 'windows') && '-C link-arg=/FORCE:MULTIPLE' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Put Git Bash on PATH
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:ProgramFiles\Git\bin"
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:ProgramFiles\Git\usr\bin"
+      - name: Install GUI system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libx11-dev \
+            libxkbcommon-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxi-dev \
+            libwayland-dev \
+            libegl1-mesa-dev \
+            libgl1-mesa-dev \
+            libfontconfig1-dev \
+            libdbus-1-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: extractions/setup-just@v4
+      - name: Build fat-LTO binaries
+        run: just publish
+      - name: Headless UI tests
+        if: runner.os != 'Linux'
+        run: cargo test -p jadeforge-gui
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: jadeforge-linux-x86_64
-          path: |
-            target/release/jadeforge
-            target/release/jadeforge-gui
+          name: jadeforge-${{ runner.os }}
+          path: dist/
           if-no-files-found: error

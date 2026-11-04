@@ -94,6 +94,32 @@ or start the CLI against a save folder:
 ./target/release/jadeforge info "/path/to/Jade Empire/Save/Auto 56 - 16h 22min - level 15"
 ```
 
+### Distribution builds
+
+`just publish` builds both binaries with the `dist` profile — release
+optimisation with fat LTO — and stages them in
+`dist/jadeforge-<version>-<target>/` with the licence and README. Run it on
+each platform you want to ship:
+
+| host | targets |
+| --- | --- |
+| Linux | the native target |
+| macOS | `aarch64-apple-darwin` and `x86_64-apple-darwin` |
+| Windows | the native MSVC target |
+
+Windows and macOS binaries have to be built on their own OS: the Freya GUI links
+prebuilt Skia libraries, and Windows additionally needs Visual C++ while macOS
+needs the Apple SDK. The command skips those targets elsewhere with a notice.
+`just publish-target <triple>` builds and stages a single target, for example
+`aarch64-unknown-linux-gnu` when an ARM64 cross compiler is installed.
+
+The [CI workflow](ci/github-actions.yml) runs `just publish` on Linux, Windows
+and macOS and uploads the staged folders as per-OS artifacts; pull requests skip
+that job.
+
+The `just` shortcuts are optional; the cargo commands above remain the
+canonical ones. `just check` runs the formatting, clippy and test gate.
+
 ## Using the desktop application
 
 1. Start `jadeforge-gui`.
@@ -108,10 +134,11 @@ or start the CLI against a save folder:
    settings file (useful for portable installs).
 3. Pick a savegame on the left; the game's own screenshot and character summary
    appear above the list.
-4. Edit the values on the tabs. Text fields are staged until you press **Apply
-   changes** or **Save to disk**; items, styles and companions are changed in
-   memory immediately (the header shows "unsaved changes" and switching away is
-   blocked until you save or revert).
+4. Edit the values on the tabs. Every change — text fields, items, styles,
+   gems and companions — is applied to the in-memory savegame immediately; the
+   header shows "unsaved changes" and switching away is blocked until you save
+   or revert. A field with invalid text is reported and not applied until it is
+   fixed.
 5. Press **Save to disk**. A backup called
    `save.sac.jadeforge-backup-<unix timestamp>` is created next to the savegame;
    copy it back over `save.sac` to undo a change.

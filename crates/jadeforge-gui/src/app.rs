@@ -136,6 +136,23 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         form,
     };
 
+    // Apply valid character edits as they happen, so the form behaves exactly
+    // like the item, style and gem edits: everything lives in memory until the
+    // user saves. Invalid input stays in the fields for the user to fix.
+    let form_snapshot = form.snapshot();
+    {
+        let mut ctx = ctx.clone();
+        use_side_effect_with_deps(&form_snapshot, move |_| {
+            if ctx
+                .session
+                .borrow_mut()
+                .apply_form_silently(&ctx.form.read())
+            {
+                *ctx.revision.write() += 1;
+            }
+        });
+    }
+
     // Snapshot everything the shell needs so the borrow stays short.
     let entries = session.borrow().entries.clone();
     let selected = session.borrow().selected;
@@ -266,7 +283,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         sync.clone(),
     );
     let tabs = tab_bar(tab, active_tab);
-    let footer = footer(&ctx, form, dirty || form_differs, form_differs, sync);
+    let footer = footer(&ctx, form, dirty, form_differs, sync);
 
     rect()
         .vertical()
@@ -364,7 +381,7 @@ fn header(
         move |_| {
             if form_differs {
                 ctx.run(|session| {
-                    session.set_error("Apply or discard the character changes before scanning.");
+                    session.set_error("Fix the invalid character fields before scanning.");
                 });
                 return;
             }
@@ -403,7 +420,11 @@ fn header(
                 .child(if dirty {
                     crate::widgets::badge("unsaved changes", theme::SURFACE_ACTIVE, theme::ACCENT)
                 } else if form_differs {
-                    crate::widgets::badge("unapplied input", theme::SURFACE_ACTIVE, theme::ACCENT)
+                    crate::widgets::badge(
+                        "invalid character input",
+                        theme::SURFACE_ACTIVE,
+                        theme::ACCENT,
+                    )
                 } else {
                     crate::widgets::badge("all changes saved", theme::SURFACE, theme::DIM)
                 })
@@ -435,7 +456,7 @@ fn header(
                         if form_differs {
                             ctx.run(|session| {
                                 session.set_error(
-                                    "Apply or discard the character changes before choosing a folder.",
+                                    "Fix the invalid character fields before choosing a folder.",
                                 );
                             });
                             return;
@@ -803,14 +824,6 @@ fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
 
 #[allow(clippy::large_types_passed_by_value, clippy::needless_pass_by_value)] // `Form` is a bundle of cheap `Copy` handles
 fn footer(ctx: &Ctx, form: Form, dirty: bool, form_differs: bool, sync: Rc<dyn Fn()>) -> Element {
-    let apply = {
-        let ctx = ctx.clone();
-        move |_| {
-            ctx.run(|session| {
-                let _ = session.apply(&form.read());
-            });
-        }
-    };
     let save = {
         let ctx = ctx.clone();
         let sync = sync.clone();
@@ -841,19 +854,13 @@ fn footer(ctx: &Ctx, form: Form, dirty: bool, form_differs: bool, sync: Rc<dyn F
         .content(Content::Flex)
         .padding(Gaps::new(10., 18., 12., 18.))
         .background(theme::PANEL)
-        .child(
-            Button::new()
-                .outline()
-                .child("Apply changes")
-                .on_press(apply),
-        )
         .child(Button::new().filled().child("Save to disk").on_press(save))
         .child(Button::new().flat().child("Revert").on_press(revert))
         .child(rect().width(Size::flex(1.0)))
         .child(
             label()
                 .text(if form_differs {
-                    "Character fields are not applied yet."
+                    "Character fields contain invalid values, they are not applied."
                 } else if dirty {
                     "Changes are only in memory until you save."
                 } else {
