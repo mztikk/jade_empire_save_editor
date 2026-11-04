@@ -42,121 +42,114 @@ Notes:
 - The CLI numbers are low because the integration tests call the libraries
   directly, not the `jadeforge` binary.
 
+## Where the gaps are
+
+| file | lines | why it matters |
+| --- | --- | --- |
+| `gui/src/views/gems.rs` | 61.2 % | gem actions and empty/error states are untested |
+| `core/src/inventory.rs` | 64.6 % | remaining type/count error branches |
+| `gamedata/src/rim.rs` | 67.5 % | malformed archive handling |
+| `cli/src/main.rs` | 68.3 % | `add_item`, `verify` failure and argument errors |
+| `core/src/henchmen.rs` | 69.7 % | list/field error paths |
+| `core/src/save.rs` | 70.7 % | verification and write-failure paths |
+| `gff/src/value.rs` | 72.8 % | uncommon decode branches |
+| `gamedata/src/talktable.rs` | 74.6 % | malformed TLK handling |
+| `session/src/session.rs` | 75.3 % | failure paths (config, form, save/revert) |
+
 ## Target
 
-| phase | overall lines | gff | cli | core | session | gui | gamedata |
+| milestone | overall lines | core | session | gff | cli | gui | gamedata |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| baseline | 82.4 % | 80 % | 68 % | 79 % | 77 % | 88 % | 90 % |
-| phase 1 | ≥ 84 % | ≥ 80 % | ≥ 60 % | ≥ 82 % | ≥ 79 % | ≥ 88 % | ≥ 90 % |
-| phase 2 | ≥ 88 % | ≥ 85 % | ≥ 80 % | ≥ 86 % | ≥ 85 % | ≥ 89 % | ≥ 92 % |
+| now | 82.4 % | 78.7 % | 77.2 % | 80.2 % | 68.3 % | 87.8 % | 89.6 % |
+| phase 1 | **85 %** | 82 % | 82 % | 82 % | 78 % | 89 % | 92 % |
+| phase 2 | **88 %** | 86 % | 86 % | 86 % | 84 % | 90 % | 94 % |
 
-The overall numbers matter less than the shape: the parser (`gff`), the save
-writer (`core`) and the CLI are where a missed line means a corrupt or
-misreported savegame. View code is worth covering only where it contains logic.
+Functions are tracked alongside but not gated until the line target is stable;
+the GUI number is a regression signal, not a target (declarative view code runs
+on every render).
 
 ## Plan
 
-### 1. `jadeforge-gff`: field codec matrix (done)
+### 1. GUI gem flows (`views/gems.rs`, 61.2 %)
 
-`crates/jadeforge-gff/tests/codec.rs` now builds a block with every field type,
-round trips it, mutates a locstring back to the legacy type 12, and exercises
-the parser/writer error paths (short header, bad magic/version, bad label index,
-unknown type, list index out of range, oversized string length, truncated
-locstring, duplicate labels, type mismatches, dangling structs). `gff` moved
-from 72.1 % to **79.8 %** and the overall project from 79.9 % to **81.3 %**.
+- headless interactions: add a predefined gem, move both directions, remove,
+  empty amulet, no game data, filter with no match, Show more;
+- assert the visible row/effect text, not just the rendered frame.
 
-The remaining decode branches are covered too: empty string, empty and maximal
-(255 byte) resrefs, zero-length void, and locstrings without strref/text.
-`gff` is now at **80.2 %**, meeting the phase-1 target.
+Expected: +60–80 covered lines, gui ≥ 89 %. This is the cheapest visible win
+and covers user-facing behaviour the other tests skip.
 
-- Add `crates/jadeforge-gff/tests/codec.rs` with a synthetic GFF block that
-  contains **every** field type: inline byte/char/word/short/dword/int/float,
-  offset dword64/int64/double/string/resref/void/struct/list, both locstring
-  types (talk-table-only and inline text), quaternion and vector3.
-- Round trip each value through `Gff::to_bytes` → `Gff::parse` and assert both
-  the decoded value and the re-encoded bytes.
-- Add error cases: truncated field data, string length beyond the section,
-  locstring with `totalSize <= 4`, list index out of range, struct index out of
-  range, unknown type id, field count that overflows the field-index section.
-- Cover `Value` accessors per variant (`as_u64`, `as_i64`, `as_f32`, …) so the
-  function coverage stops being dominated by never-called helpers.
+### 2. Core inventory branches (`inventory.rs`, 64.6 %)
 
-Expected: +120–180 covered lines, `gff` to ≥ 80 %.
+- `Count` stored as word vs byte, non-numeric count field, missing `Count`
+  field, missing `ItemList`, `ItemList` that is not a list;
+- add/remove with a missing player block and with an item id of 0;
+- count boundaries around the error paths added in `errors.rs`.
 
-### 2. `jadeforge-cli`: end-to-end tests (done)
+Expected: +40–60 lines, core ≥ 80 %.
 
-`crates/jadeforge-cli/tests/cli.rs` builds a synthetic savegame and runs the
-real binary, so clap parsing, dispatch and every read handler are exercised:
-`blocks`, `info`, `character`, `get`, `dump` (whole block and `--path`),
-`verify`, `items`, `styles` and `companions`. It also covers `set` with
-`--dry-run` (file untouched), the real write plus backup creation, bad field
-paths and values, a missing save, and the folder-argument resolution.
+### 3. Core save and henchmen (`save.rs` 70.7 %, `henchmen.rs` 69.7 %)
 
-`cli` moved from 48.6 % to **68.3 %** lines (55.3 % functions); the project is
-at **82.0 %**. Remaining: error formatting branches inside `main.rs` and a few
-`add_item` options.
+- save: verification failure on a block that cannot be rewritten, temporary
+  file failure (read-only directory), target without an existing file and
+  backup naming;
+- henchmen: missing `HenchList`, list that is not a list, missing fields
+  (defaults), level 0/61 rejected, availability flags.
 
-### 3. `jadeforge-core`: error and boundary paths (in progress)
+Expected: +40–60 lines, core ≥ 82 % together with item 2.
 
-`crates/jadeforge-core/tests/errors.rs` now covers:
+### 4. Session failure paths (`session.rs`, 75.3 %)
 
-- inventory: count 255, zero count, missing struct, zero stack, add/remove and
-  removing twice,
-- optional character fields: existing `Gold` update, absent `UnassignedPts`
-  creation, and the documented rule that a missing `Alignment` stays unwritten,
-- container errors: empty/zero blocks, truncated names, block sizes beyond the
-  file, bad block magic/version, a non-GFF payload and a missing file,
-- save options: backup file created exactly once, `backup: false`, and a
-  directory as an unwritable target.
+- config: invalid TOML, legacy fallback, failed store, missing directory;
+- form: every invalid field, applying an unchanged form, applying after an
+  error;
+- staging: scan/switch while dirty, revert with and without changes, save with
+  nothing to save;
+- gems/styles/items without game data and open failures.
 
-`core` moved from 77.4 % to **78.7 %**; the project is at **82.4 %**. Remaining:
-save verification failures, style/henchman list errors and screenshot paths.
+Expected: +50–70 lines, session ≥ 82 %.
 
-### 4. `jadeforge-session`: failure paths
+### 5. gff decode leftovers (`value.rs` 72.8 %, `lib.rs` 79.6 %)
 
-`session.rs` is 75.3 %.
+- type-tag/value mismatches (byte field holding a struct, etc.);
+- label table edge cases (16-byte label, duplicate labels, missing label);
+- offset/length overflow and the `fieldCount == 1` inline encoding;
+- list section with zero-count and repeated indices.
 
-- Config: invalid TOML, legacy fallback, failed store, missing config directory.
-- Form: each invalid field and the resulting message, applying an unchanged
-  form, applying after a validation error.
-- Staging: scanning/opening another save while dirty, revert with and without
-  changes, save with nothing to save.
-- Gems/items/styles: empty savegame, no game data, missing level table, style
-  without a level.
+Expected: +30–50 lines, gff ≥ 82 %.
 
-Expected: +50–70 covered lines, `session` to ≥ 79 % (phase 2 ≥ 85 %).
+### 6. CLI leftovers (`main.rs`, 68.3 %)
 
-### 5. `jadeforge-gui`: behaviour, not layout
+- `add_item` with `--dry-run`, real write + backup, zero count and a missing
+  item list;
+- `verify` on a corrupt savegame, unknown subcommand/help exit codes;
+- `set --no-backup`.
 
-`views/gems.rs` is 61.2 %; most other view files are already high simply because
-rendering executes them.
+Expected: +30–50 lines, cli ≥ 78 %.
 
-- Gem flows: add via the picker, move both ways, remove, empty amulet, no game
-  data, filter with no match, Show more.
-- Page-size consistency (already tested) and per-tab scroll (already tested).
-- Error banners: invalid character input, save failure, broken savegame.
+### 7. Game data error paths (`rim.rs` 67.5 %, `talktable.rs` 74.6 %)
 
-Expected: +40–60 covered lines, but the goal is tested behaviour, not the
-percentage.
+- truncated RIM header/entry table, entry pointing beyond the archive, 2DA
+  payload with a bad signature;
+- truncated TLK header, entry offset beyond the data, zero-length strings;
+- these are synthetic files in `jadeforge-gamedata/tests` and need no game.
 
-### 6. Malformed-save corpus (done)
+Expected: +40–60 lines, gamedata ≥ 92 %.
 
-`crates/jadeforge-gff/tests/codec.rs` covers the field-level corruptions (label
-index, unknown type, list index, string length, truncated locstring), and
-`crates/jadeforge-core/tests/errors.rs` covers the container level (truncated
-names, block size beyond EOF, bad magic/version, a zero-filled block that is not
-a GFF tree). Both run without game data and keep the parser/writer error paths
-covered.
+## Gating
+
+- Run `just coverage` twice above a milestone before making it blocking.
+- At 82.4 % now, add `--fail-under-lines 82` first; when phase 1 is reached,
+  replace it with `--fail-under-lines 85` and add per-crate checks in the CI
+  matrix (core/gff/session/cli) using the lcov file.
+- The HTML report and lcov are artifacts, not committed.
 
 ## Guardrails
 
-- Coverage is a signal, not a goal: do not add tests that execute code without
-  asserting behaviour just to move the number.
-- Prefer synthetic fixtures for the gate so coverage works without the game
-  installation; keep the real-savegame tests for the format guarantees.
-- Do not use `#[coverage(off)]` for hand-written code. The only acceptable
+- Coverage is a signal, not a goal: every new test asserts behaviour or an
+  error, not merely execution.
+- Synthetic fixtures first; real savegames remain the format guarantee and are
+  skipped when the environment is missing.
+- Do not add `#[coverage(off)]` to hand-written code. The only acceptable
   exclusions are generated glue with a comment explaining why.
-- Add `--fail-under-lines` only after two consecutive runs above the target:
-  phase 1 `80`, phase 2 `85` for the overall project (see the table above for
-  per-crate goals). Raise it in the same PR that documents the new baseline.
 - Update this document in every PR that materially changes coverage.
