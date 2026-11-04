@@ -476,6 +476,47 @@ fn every_saved_style_mask_fits_its_slot_table() {
 }
 
 #[test]
+fn gems_can_be_moved_and_removed() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
+    assert!(session.open(0));
+    let Some(gem) = session.gems.first().cloned() else {
+        eprintln!("skipping: the test savegame has no gems");
+        return;
+    };
+    let before = gem.location;
+    session.move_gem(gem.struct_index);
+    let moved = session
+        .gems
+        .iter()
+        .find(|candidate| candidate.struct_index == gem.struct_index)
+        .expect("gem");
+    assert_ne!(moved.location, before);
+    session.remove_gem(gem.struct_index);
+    assert!(
+        session
+            .gems
+            .iter()
+            .all(|candidate| candidate.struct_index != gem.struct_index)
+    );
+}
+
+#[test]
+fn the_gems_tab_lists_amulet_and_inventory() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    assert!(click_text(&mut test, "Gems"));
+    assert!(find_label_text(&test, "Amulet").is_some());
+    assert!(find_label_text(&test, "socketed").is_some());
+}
+
+#[test]
 fn expanded_styles_show_upgrade_choices() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");

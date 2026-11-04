@@ -8,6 +8,7 @@
 
 pub mod character;
 pub mod error;
+pub mod gems;
 pub mod gff;
 pub mod henchmen;
 pub mod inventory;
@@ -18,6 +19,7 @@ pub mod styles;
 
 pub use character::{Change, Character, DEFAULT_ALIGNMENT, PlayerLocation, locate_player};
 pub use error::{Error, Result};
+pub use gems::{Gem, GemEffect, GemLocation};
 pub use gff::{Field, FieldPath, Gff, LocString, Struct, Value};
 pub use henchmen::Henchman;
 pub use inventory::Item;
