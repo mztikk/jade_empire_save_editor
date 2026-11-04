@@ -101,6 +101,9 @@ impl SaveEntry {
     /// One line summary of the savegame.
     #[must_use]
     pub fn summary(&self) -> String {
+        if self.error.is_some() {
+            return "Cannot be read".to_owned();
+        }
         let level = self
             .level
             .map_or_else(|| "?".to_owned(), |level| level.to_string());
@@ -496,16 +499,26 @@ impl Session {
 
         self.load_game_data();
 
-        if self.entries.is_empty() {
-            self.message = Message::info(format!(
-                "No savegames found in {}.",
-                self.directory.display()
+        let total = self.entries.len();
+        let broken = self
+            .entries
+            .iter()
+            .filter(|entry| entry.error.is_some())
+            .count();
+        let plural = if total == 1 { "" } else { "s" };
+        let directory = self.directory.display();
+        if total == 0 {
+            self.message = Message::info(format!("No savegames found in {directory}."));
+        } else if broken == 0 {
+            self.message =
+                Message::success(format!("Found {total} savegame{plural} in {directory}."));
+        } else if broken == total {
+            self.message = Message::error(format!(
+                "Found {total} savegame{plural} in {directory}, but none of them can be read."
             ));
         } else {
-            self.message = Message::info(format!(
-                "Found {} savegame(s) in {}.",
-                self.entries.len(),
-                self.directory.display()
+            self.message = Message::error(format!(
+                "Found {total} savegame{plural} in {directory}, {broken} of them cannot be read."
             ));
         }
     }

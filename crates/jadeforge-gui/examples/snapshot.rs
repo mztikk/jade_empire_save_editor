@@ -31,10 +31,17 @@ fn main() {
             .expect("usage: snapshot <SAVE_DIR> <OUT.png> [TAB|all]"),
     );
     let mut wanted = None;
+    let mut width = 1280.0_f32;
     let mut height = 800.0_f32;
     let mut query = None;
     while let Some(argument) = arguments.next() {
         match argument.as_str() {
+            "--width" => {
+                width = arguments
+                    .next()
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or(1280.0);
+            }
             "--height" => {
                 height = arguments
                     .next()
@@ -49,7 +56,7 @@ fn main() {
     let start = directory.clone();
     let (mut test, ()) = TestingRunner::new(
         move || app_with_directory(start.clone()),
-        (1280.0_f32, height).into(),
+        (width, height).into(),
         |_| {},
         1.0,
     );

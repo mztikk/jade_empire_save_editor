@@ -15,7 +15,7 @@ pub fn view(
     query: State<String>,
     matches: &[StyleSuggestion],
     game_ready: bool,
-    learnable: usize,
+    learnable: Option<usize>,
     matching: usize,
     show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
@@ -112,11 +112,10 @@ pub fn view(
 
     widgets::card(
         "Fighting styles",
-        Some(format!(
-            "{} learned · {} learnable",
-            styles.len(),
-            learnable
-        )),
+        Some(match learnable {
+            Some(learnable) => format!("{} learned · {learnable} learnable", styles.len()),
+            None => format!("{} learned", styles.len()),
+        }),
         children,
     )
 }
@@ -162,11 +161,14 @@ fn style_row(ctx: &Ctx, style: &StyleRow) -> Element {
                         .max_lines(1)
                         .color(theme::TEXT),
                 )
-                .child(
-                    label()
-                        .text(style_subtitle(style.style_id, &style.label))
-                        .font_size(10.)
-                        .color(theme::DIM),
+                .maybe_child(
+                    style_subtitle(style.style_id, &style.label).map(|subtitle| {
+                        label()
+                            .text(subtitle)
+                            .font_size(10.)
+                            .color(theme::DIM)
+                            .into_element()
+                    }),
                 )
                 .into_element(),
         )
@@ -196,13 +198,12 @@ fn style_row(ctx: &Ctx, style: &StyleRow) -> Element {
 }
 
 /// Secondary line shown for a style, owned or not.
+///
+/// `None` when the game data is missing: the name is then just `Style <id>`
+/// and repeating the id in a subtitle would be noise.
 #[must_use]
-pub fn style_subtitle(style_id: u16, label: &str) -> String {
-    if label.is_empty() {
-        format!("#{style_id}")
-    } else {
-        format!("{label} · #{style_id}")
-    }
+pub fn style_subtitle(style_id: u16, label: &str) -> Option<String> {
+    (!label.is_empty()).then(|| format!("{label} · #{style_id}"))
 }
 
 /// Badge colour for a style kind.
@@ -240,13 +241,16 @@ fn learn_row(ctx: &Ctx, suggestion: &StyleSuggestion) -> Element {
                         .max_lines(1)
                         .color(theme::TEXT),
                 )
-                .child(
-                    label()
-                        .text(style_subtitle(suggestion.style_id, &suggestion.label))
-                        .font_size(10.)
-                        .max_lines(1)
-                        .color(theme::DIM),
-                )
+                .maybe_child(style_subtitle(suggestion.style_id, &suggestion.label).map(
+                    |subtitle| {
+                        label()
+                            .text(subtitle)
+                            .font_size(10.)
+                            .max_lines(1)
+                            .color(theme::DIM)
+                            .into_element()
+                    },
+                ))
                 .into_element(),
         )
         .child(widgets::badge(
