@@ -258,7 +258,7 @@ fn upgrade_panel(ctx: &Ctx, style: &StyleRow) -> Element {
         rows.push(upgrade_row(family, chips));
     }
     rows.push(widgets::hint(
-        "One orb per upgrade tier; the level follows the number of owned upgrades.",
+        "Orbs are tiers 1-5 from left to right (costs 1/2/4/6/10); gold means owned.",
     ));
     rect()
         .vertical()
@@ -292,8 +292,9 @@ fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Eleme
     let taken = upgrade.taken;
     let row = upgrade.row;
     let ctx = ctx.clone();
-    // The game shows upgrade choices as golden circles: filled when owned,
-    // an empty ring when the tier can still be bought.
+    // The game shows upgrade choices as plain golden circles: filled when
+    // owned, an empty ring when the tier can still be bought. The order is the
+    // tier, so no number is drawn on them.
     let background = if taken {
         theme::ACCENT
     } else {
@@ -304,11 +305,6 @@ fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Eleme
     } else {
         theme::ACCENT
     };
-    let color = if taken {
-        theme::ON_ACCENT
-    } else {
-        theme::ACCENT
-    };
     rect()
         .center()
         .width(Size::px(26.))
@@ -316,18 +312,12 @@ fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Eleme
         .corner_radius(13.)
         .background(background)
         .border(Border::new().fill(border).width(1.5))
+        .a11y_alt(format!("tier {}", upgrade.tier))
         .on_pointer_enter(move |_| Cursor::set(CursorIcon::Pointer))
         .on_pointer_leave(move |_| Cursor::set(CursorIcon::default()))
         .on_all_press(move |_| {
             ctx.run(|session| session.change_upgrade(struct_index, row));
         })
-        .child(
-            label()
-                .text(upgrade.tier.to_string())
-                .font_size(12.)
-                .font_weight(FontWeight::BOLD)
-                .color(color),
-        )
         .into_element()
 }
 

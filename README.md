@@ -18,7 +18,7 @@ the game does, verifies the result and keeps a backup of the original.
 - **Fighting styles** – every learned style with its localized name, kind
   (martial, weapon, magic, support, transformation, improvised, unique) and
   level. Expanding a style shows its description and the actual upgrades behind
-  the level: one golden orb per tier and family (damage, chi strike, speed, chi cost,
+  the level: one plain golden orb per tier and family (no numbers: the left-to-right order is the tier) (damage, chi strike, speed, chi cost,
   duration, ...), each one a row of `StyleAdvance.2da` with its own cost. The
   level is read-only and follows `1 + number of owned upgrades`, exactly like the
   game stores it. Clicking an orb buys every missing tier up to it, clicking an

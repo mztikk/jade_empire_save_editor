@@ -166,8 +166,10 @@ documentation, not ground truth — verify against the game files where possible
   shows its full contents and *additionally* offers a filter.
 - The same value is spelled the same way everywhere. Item rows and style rows
   use `category · #id` / `template · #id` in both the owned list and the picker.
-- Upgrade tiers are golden circles like in the game: filled when owned, an
-  empty ring when buyable. Do not turn them back into rectangular buttons.
+- Upgrade tiers are plain golden circles like in the game: filled when owned, an
+  empty ring when buyable, no numerals (left-to-right order is the tier, the
+  a11y label carries it). Do not turn them back into rectangular buttons or add
+  text to them.
 - A change is not done until `cargo test --workspace`, `cargo clippy
   --workspace --all-targets -- -D warnings` and `cargo fmt --all --check` pass.
 
