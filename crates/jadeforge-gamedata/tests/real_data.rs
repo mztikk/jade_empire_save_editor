@@ -41,3 +41,49 @@ fn resolves_items_and_styles() {
     let found = game.search_items("viper", 10);
     assert_ne!(found.len(), 0, "search returned nothing");
 }
+
+#[test]
+fn hides_development_items_from_the_picker() {
+    let Some(root) = game_dir() else {
+        eprintln!("skipping: no game installation found");
+        return;
+    };
+    let game = match GameData::open(&root) {
+        Ok(game) => game,
+        Err(error) => {
+            eprintln!("skipping: cannot load game data: {error}");
+            return;
+        }
+    };
+    assert!(game.playable_item_count() > 100);
+    assert!(game.playable_item_count() <= game.item_count());
+    for item in game.search_items("quicksilver", 20) {
+        assert!(
+            !item.name.starts_with("[TEMP]"),
+            "{} is a development placeholder",
+            item.name
+        );
+        assert!(!item.label.starts_with("temp"), "{}", item.label);
+    }
+}
+
+#[test]
+fn style_kinds_are_resolved_for_known_styles() {
+    let Some(root) = game_dir() else {
+        eprintln!("skipping: no game installation found");
+        return;
+    };
+    let game = match GameData::open(&root) {
+        Ok(game) => game,
+        Err(error) => {
+            eprintln!("skipping: cannot load game data: {error}");
+            return;
+        }
+    };
+    let martial = game.style(52).expect("legendary strike");
+    assert_eq!(martial.kind, jadeforge_gamedata::StyleKind::Martial);
+    let support = game.style(13).expect("storm dragon");
+    assert_eq!(support.kind, jadeforge_gamedata::StyleKind::Support);
+    let magic = game.style(5).expect("magic fire");
+    assert_eq!(magic.kind, jadeforge_gamedata::StyleKind::Magic);
+}
