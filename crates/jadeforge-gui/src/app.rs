@@ -101,6 +101,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let style_query = use_state(String::new);
     let item_limit = use_state(|| 30_usize);
     let style_limit = use_state(|| 20_usize);
+    let picker_open = use_state(|| false);
+    let picker_path = use_state(String::new);
+    let save_query = use_state(String::new);
+    let save_sort = use_state(|| (crate::session::SaveSort::Name, false));
     let preview_cache: Rc<RefCell<Option<(u64, ImageHandle)>>> =
         use_hook(|| Rc::new(RefCell::new(None)));
 
@@ -211,19 +215,27 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let header = header(
         &ctx,
         directory_state,
+        picker_open,
+        picker_path,
         &message,
         &game_status,
         dirty,
         form_differs,
         sync.clone(),
     );
+    let (sort_key, sort_descending) = *save_sort.read();
+    let visible =
+        crate::session::visible_entries(&entries, &save_query.read(), sort_key, sort_descending);
     let sidebar = sidebar(
         &ctx,
         &entries,
+        &visible,
         selected,
         preview_handle,
         character.as_ref(),
         form_differs,
+        save_query,
+        save_sort,
         sync.clone(),
     );
     let tabs = tab_bar(tab, active_tab);
@@ -270,6 +282,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 ),
         )
         .child(footer)
+        .maybe_child(
+            picker_open.read().then(|| {
+                crate::views::picker::view(&ctx, picker_path, picker_open, directory_state)
+            }),
+        )
 }
 
 /// Builds an [`ImageHandle`] for the preview, cached by generation.
@@ -294,10 +311,16 @@ fn cached_preview(
     Some(handle)
 }
 
-#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+#[allow(
+    clippy::too_many_arguments,
+    clippy::needless_pass_by_value,
+    clippy::too_many_lines
+)]
 fn header(
     ctx: &Ctx,
     directory: State<String>,
+    picker_open: State<bool>,
+    picker_path: State<String>,
     message: &crate::session::Message,
     game_status: &GameStatus,
     dirty: bool,
@@ -383,6 +406,17 @@ fn header(
                         .placeholder("Path to the Jade Empire Save folder")
                         .width(Size::flex(1.0)),
                 )
+                .child(Button::new().outline().child("Browse…").on_press({
+                    let mut picker_open = picker_open;
+                    let mut picker_path = picker_path;
+                    move |_| {
+                        if !picker_open() {
+                            *picker_path.write() =
+                                crate::views::picker::start_directory(&directory.read());
+                            *picker_open.write() = true;
+                        }
+                    }
+                }))
                 .child(Button::new().outline().child("Scan").on_press(scan)),
         )
         .child(
@@ -400,14 +434,18 @@ fn header(
 fn sidebar(
     ctx: &Ctx,
     entries: &[crate::session::SaveEntry],
+    visible: &[usize],
     selected: Option<usize>,
     preview: Option<ImageHandle>,
     character: Option<&Character>,
     form_differs: bool,
+    query: State<String>,
+    sort: State<(crate::session::SaveSort, bool)>,
     sync: Rc<dyn Fn()>,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
-    for (index, entry) in entries.iter().enumerate() {
+    for &index in visible {
+        let entry = &entries[index];
         let ctx = ctx.clone();
         let sync = sync.clone();
         let is_selected = selected == Some(index);
@@ -480,7 +518,11 @@ fn sidebar(
                 .padding(Gaps::new_all(12.))
                 .child(
                     label()
-                        .text("No savegames in this folder.")
+                        .text(if entries.is_empty() {
+                            "No savegames in this folder."
+                        } else {
+                            "No savegame matches this filter."
+                        })
                         .font_size(11.)
                         .color(theme::DIM),
                 )
@@ -532,7 +574,9 @@ fn sidebar(
 
     rect()
         .vertical()
-        .width(Size::px(310.))
+        .width(Size::percent(24.))
+        .min_width(Size::px(230.))
+        .max_width(Size::px(320.))
         .height(Size::fill())
         .content(Content::Flex)
         .padding(Gaps::new(14., 12., 14., 12.))
@@ -555,11 +599,21 @@ fn sidebar(
         )
         .child(
             label()
-                .text(format!("SAVEGAMES ({})", entries.len()))
+                .text(if visible.len() == entries.len() {
+                    format!("SAVEGAMES ({})", entries.len())
+                } else {
+                    format!("SAVEGAMES ({} of {})", visible.len(), entries.len())
+                })
                 .font_size(10.)
                 .font_weight(FontWeight::BOLD)
                 .color(theme::DIM),
         )
+        .child(
+            Input::new(query)
+                .placeholder("Filter by name")
+                .width(Size::fill()),
+        )
+        .child(sort_bar(sort, *sort.read()))
         .child(
             ScrollView::new()
                 .show_scrollbar(true)
@@ -573,6 +627,62 @@ fn sidebar(
                         .children(rows),
                 ),
         )
+        .into_element()
+}
+
+/// Sort buttons for the savegame list; pressing the active one flips the order.
+fn sort_bar(
+    state: State<(crate::session::SaveSort, bool)>,
+    active: (crate::session::SaveSort, bool),
+) -> Element {
+    let mut buttons: Vec<Element> = Vec::new();
+    for key in [
+        crate::session::SaveSort::Name,
+        crate::session::SaveSort::Level,
+        crate::session::SaveSort::Played,
+    ] {
+        let mut state = state;
+        let (current, descending) = active;
+        let is_active = key == current;
+        let arrow = if descending { " ↓" } else { " ↑" };
+        let text = if is_active {
+            format!("{}{arrow}", key.label())
+        } else {
+            key.label().to_owned()
+        };
+        buttons.push(
+            Button::new()
+                .flat()
+                .compact()
+                .on_press(move |_| {
+                    let (current, descending) = *state.read();
+                    if current == key {
+                        *state.write() = (key, !descending);
+                    } else {
+                        *state.write() = (key, false);
+                    }
+                })
+                .child(label().text(text).font_size(10.).color(if is_active {
+                    theme::ACCENT
+                } else {
+                    theme::DIM
+                }))
+                .into_element(),
+        );
+    }
+    rect()
+        .horizontal()
+        .width(Size::fill())
+        .spacing(10.)
+        .content(Content::Flex)
+        .child(
+            label()
+                .text("SORT")
+                .font_size(10.)
+                .font_weight(FontWeight::BOLD)
+                .color(theme::DIM),
+        )
+        .children(buttons)
         .into_element()
 }
 
@@ -599,6 +709,7 @@ fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
                             label()
                                 .text(candidate.label())
                                 .font_size(12.)
+                                .max_lines(1)
                                 .font_weight(if is_active {
                                     FontWeight::BOLD
                                 } else {
@@ -624,6 +735,7 @@ fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
                 .horizontal()
                 .width(Size::fill())
                 .spacing(4.)
+                .content(Content::wrap_spacing(4.))
                 .padding(Gaps::new(10., 18., 8., 18.))
                 .children(buttons)
                 .into_element(),

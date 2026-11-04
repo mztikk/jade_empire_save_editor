@@ -13,18 +13,12 @@ use freya_testing::TestingRunner;
 use jadeforge_gui::app_with_directory;
 
 fn game_dir() -> Option<PathBuf> {
-    let dir = std::env::var_os("JADEFORGE_SAVE_DIR")
-        .map(PathBuf::from)
-        .and_then(|dir| dir.parent().map(Path::to_path_buf))
-        .unwrap_or_else(|| PathBuf::from("/media/Games/Heroic/Jade Empire"));
+    let dir = std::env::var_os("JADEFORGE_GAME_DIR").map(PathBuf::from)?;
     dir.join("dialog.tlk").is_file().then_some(dir)
 }
 
 fn save_dir() -> Option<PathBuf> {
-    let dir = std::env::var_os("JADEFORGE_SAVE_DIR").map_or_else(
-        || PathBuf::from("/media/Games/Heroic/Jade Empire/Save"),
-        PathBuf::from,
-    );
+    let dir = std::env::var_os("JADEFORGE_SAVE_DIR").map(PathBuf::from)?;
     dir.is_dir().then_some(dir)
 }
 
@@ -343,15 +337,9 @@ fn staged_edits_block_scanning() {
     };
     let mut test = launch(fixture.save_dir.clone());
     assert!(click_text(&mut test, "Character"));
-    // The first paragraph is the save folder input, the second one is the name.
-    let paragraphs = test.find_many(|node, element| {
-        let paragraph = Paragraph::try_downcast(element)?;
-        (!paragraph.to_string().trim().is_empty()).then_some(node)
-    });
-    let field = paragraphs.get(1).expect("no character input found");
-    click_node(&mut test, field);
-    test.write_text("X");
-    test.sync_and_update();
+    // "+1 point" stages an unspent attribute point in the form without touching
+    // the savegame.
+    assert!(click_text(&mut test, "+1 point"), "no quick add button");
     assert!(
         find_label_text(&test, "unapplied input").is_some(),
         "the unapplied changes badge is missing"
@@ -362,6 +350,62 @@ fn staged_edits_block_scanning() {
         find_label_text(&test, "Apply or discard").is_some(),
         "scanning was not blocked"
     );
+}
+
+#[test]
+fn savegames_can_be_filtered_and_sorted() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    // A second savegame so filtering has something to hide.
+    let second = fixture.save_dir.join("Other Save");
+    std::fs::create_dir_all(&second).expect("create second save");
+    std::fs::copy(
+        fixture.save_dir.join("Test Save").join("save.sac"),
+        second.join("save.sac"),
+    )
+    .expect("copy savegame");
+
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    assert!(find_label_text(&test, "SAVEGAMES (2)").is_some());
+
+    // Filter by name.
+    let filter = find_paragraph(&test, "Filter by name").expect("filter input");
+    click_node(&mut test, &filter);
+    test.write_text("Other");
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "SAVEGAMES (1 of 2)").is_some(),
+        "the list was not filtered"
+    );
+
+    // Clear the filter again by selecting everything and deleting it.
+    test.write_text("\u{8}".repeat(5));
+    test.sync_and_update();
+
+    // Sorting: the active key shows a direction arrow, clicking it flips.
+    assert!(find_label_text(&test, "Played").is_some());
+    assert!(click_text(&mut test, "Played"));
+    assert!(find_label_text(&test, "Played ↑").is_some());
+    assert!(click_text(&mut test, "Played ↑"));
+    assert!(find_label_text(&test, "Played ↓").is_some());
+}
+
+#[test]
+fn the_folder_picker_can_choose_a_folder() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    assert!(click_text(&mut test, "Browse"), "no browse button");
+    assert!(find_label_text(&test, "Choose the save folder").is_some());
+    assert!(find_label_text(&test, "Use this folder").is_some());
+    // The picker starts in the current folder, so using it rescans it.
+    assert!(click_text(&mut test, "Use this folder"));
+    assert!(find_label_text(&test, "Choose the save folder").is_none());
+    assert!(find_label_text(&test, "Found 1 savegame").is_some());
 }
 
 #[test]
