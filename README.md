@@ -240,7 +240,9 @@ result and writes it back.
 ## Development
 
 ```sh
-cargo test --workspace        # unit, synthetic, real savegame and UI tests
+cargo install cargo-nextest --locked   # once; the test runner
+cargo nextest run --workspace          # unit, synthetic, real savegame and UI tests
+cargo test --workspace --doc           # doctests, which nextest does not run
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
@@ -249,7 +251,7 @@ Tests that need real savegames or the game data are skipped unless the files are
 available:
 
 ```sh
-JADEFORGE_SAVE_DIR="/path/to/Jade Empire/Save" cargo test --workspace
+JADEFORGE_SAVE_DIR="/path/to/Jade Empire/Save" cargo nextest run --workspace
 ```
 
 The headless UI tests render the real component tree with `freya-testing`, so

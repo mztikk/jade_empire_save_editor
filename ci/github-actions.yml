@@ -39,8 +39,11 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@nextest
       - name: Test
-        run: cargo test -p jadeforge-gff -p jadeforge-core -p jadeforge-session -p jadeforge-cli --all-targets
+        run: cargo nextest run -p jadeforge-gff -p jadeforge-core -p jadeforge-session -p jadeforge-cli
+      - name: Doctests
+        run: cargo test -p jadeforge-gff -p jadeforge-core -p jadeforge-session -p jadeforge-gamedata -p jadeforge-cli --doc
       - name: Clippy
         run: cargo clippy -p jadeforge-gff -p jadeforge-core -p jadeforge-session -p jadeforge-cli --all-targets -- -D warnings
 
@@ -68,8 +71,11 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@nextest
       - name: Headless UI tests
-        run: cargo test -p jadeforge-gui
+        run: cargo nextest run -p jadeforge-gui
+      - name: GUI doctests
+        run: cargo test -p jadeforge-gui --doc
       - name: Clippy
         run: cargo clippy -p jadeforge-gui --all-targets -- -D warnings
 
@@ -116,11 +122,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: extractions/setup-just@v4
+      - uses: taiki-e/install-action@nextest
       - name: Build fat-LTO binaries
         run: just publish
       - name: Headless UI tests
         if: runner.os != 'Linux'
-        run: cargo test -p jadeforge-gui
+        run: cargo nextest run -p jadeforge-gui
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:

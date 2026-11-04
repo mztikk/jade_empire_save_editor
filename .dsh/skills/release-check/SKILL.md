@@ -13,7 +13,7 @@ warnings and failures.
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo nextest run --workspace
 ```
 
 With real savegames available, run the full suite as well. It is the only test
@@ -22,12 +22,14 @@ that proves the format handling still works against retail data:
 ```sh
 JADEFORGE_SAVE_DIR="/path/to/Jade Empire/Save" \
 JADEFORGE_GAME_DIR="/path/to/Jade Empire" \
-JADEFORGE_CONFIG_DIR="$(mktemp -d)" cargo test --workspace
+JADEFORGE_CONFIG_DIR="$(mktemp -d)" cargo nextest run --workspace
 ```
 
-Expect `round tripped 89 savegames` and `rewrote 962 blocks` from the core
-tests, resolved item and style names from `jadeforge-gamedata`, and seven passing
-headless UI tests. A different count is fine on another machine, "skipping" is
+Expect nextest's `Summary ... 122 tests run: 122 passed, 0 skipped` (the number
+grows over time; skips are fine when the game or savegames are absent). Nextest
+captures stdout, so the `round tripped 89 savegames` / `rewrote 962 blocks` lines
+are only printed with `--no-capture` or on failure. The UI suite is the 24
+headless `jadeforge-gui` tests. A different count is fine on another machine, "skipping" is
 not (it means the variables did not reach the tests).
 
 ## Manual checks
