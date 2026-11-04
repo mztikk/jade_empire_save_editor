@@ -18,11 +18,12 @@ pub fn view(
     learnable: Option<usize>,
     matching: usize,
     expanded: State<Option<u16>>,
+    hovered: State<Option<crate::app::HoverKey>>,
     show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for style in styles {
-        rows.push(style_row(ctx, style, expanded));
+        rows.push(style_row(ctx, style, expanded, hovered));
     }
     if rows.is_empty() {
         rows.push(widgets::hint(
@@ -94,7 +95,7 @@ pub fn view(
             children.push(heading.into_element());
             let mut result_rows: Vec<Element> = Vec::new();
             for suggestion in matches {
-                result_rows.push(learn_row(ctx, suggestion, expanded));
+                result_rows.push(learn_row(ctx, suggestion, expanded, hovered));
             }
             children.push(
                 rect()
@@ -121,7 +122,14 @@ pub fn view(
     )
 }
 
-fn style_row(ctx: &Ctx, style: &StyleRow, expanded: State<Option<u16>>) -> Element {
+fn style_row(
+    ctx: &Ctx,
+    style: &StyleRow,
+    expanded: State<Option<u16>>,
+    mut hovered: State<Option<crate::app::HoverKey>>,
+) -> Element {
+    let key = crate::app::HoverKey::Style(style.struct_index);
+    let is_hovered = *hovered.read() == Some(key);
     let index = style.struct_index;
     let level = style.level;
     let remove = {
@@ -136,8 +144,18 @@ fn style_row(ctx: &Ctx, style: &StyleRow, expanded: State<Option<u16>>) -> Eleme
     rect()
         .vertical()
         .width(Size::fill())
-        .background(theme::SURFACE)
+        .background(if is_hovered {
+            theme::SURFACE_HOVER
+        } else {
+            theme::SURFACE
+        })
         .corner_radius(8.)
+        .on_pointer_enter(move |_| *hovered.write() = Some(key))
+        .on_pointer_leave(move |_| {
+            if *hovered.read() == Some(key) {
+                *hovered.write() = None;
+            }
+        })
         .child(
             rect()
                 .horizontal()
@@ -174,7 +192,7 @@ fn style_row(ctx: &Ctx, style: &StyleRow, expanded: State<Option<u16>>) -> Eleme
                 ),
         )
         .maybe_child(if is_expanded {
-            Some(upgrade_panel(ctx, style))
+            Some(upgrade_panel(ctx, style, hovered))
         } else {
             None
         })
@@ -182,7 +200,11 @@ fn style_row(ctx: &Ctx, style: &StyleRow, expanded: State<Option<u16>>) -> Eleme
 }
 
 /// Expanded panel: description plus the upgrade choices of the style.
-fn upgrade_panel(ctx: &Ctx, style: &StyleRow) -> Element {
+fn upgrade_panel(
+    ctx: &Ctx,
+    style: &StyleRow,
+    hovered: State<Option<crate::app::HoverKey>>,
+) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     if let Some(details) = widgets::details(style.description.as_deref()) {
         rows.push(details);
@@ -215,7 +237,7 @@ fn upgrade_panel(ctx: &Ctx, style: &StyleRow) -> Element {
         if family != Some(upgrade.family.as_str()) {
             family = Some(upgrade.family.as_str());
         }
-        chips.push(upgrade_chip(ctx, style.struct_index, upgrade));
+        chips.push(upgrade_chip(ctx, style.struct_index, upgrade, hovered));
     }
     if let Some(family) = family {
         rows.push(upgrade_row(family, chips));
@@ -251,7 +273,14 @@ fn upgrade_row(family: &str, chips: Vec<Element>) -> Element {
 }
 
 /// One toggleable upgrade tier.
-fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Element {
+fn upgrade_chip(
+    ctx: &Ctx,
+    struct_index: usize,
+    upgrade: &StyleUpgrade,
+    mut hovered: State<Option<crate::app::HoverKey>>,
+) -> Element {
+    let key = crate::app::HoverKey::Orb(struct_index, upgrade.slot);
+    let is_hovered = *hovered.read() == Some(key);
     let taken = upgrade.taken;
     let slot = upgrade.slot;
     let ctx = ctx.clone();
@@ -259,11 +288,17 @@ fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Eleme
     // owned, an empty ring when the tier can still be bought. The order is the
     // tier, so no number is drawn on them.
     let background = if taken {
-        theme::ACCENT
+        if is_hovered {
+            theme::ACCENT_HOVER
+        } else {
+            theme::ACCENT
+        }
+    } else if is_hovered {
+        theme::SURFACE_ACTIVE
     } else {
         theme::BACKGROUND
     };
-    let border = if taken {
+    let border = if taken || is_hovered {
         theme::ACCENT_HOVER
     } else {
         theme::ACCENT
@@ -276,8 +311,16 @@ fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Eleme
         .background(background)
         .border(Border::new().fill(border).width(1.5))
         .a11y_alt(format!("tier {}", upgrade.tier))
-        .on_pointer_enter(move |_| Cursor::set(CursorIcon::Pointer))
-        .on_pointer_leave(move |_| Cursor::set(CursorIcon::default()))
+        .on_pointer_enter(move |_| {
+            Cursor::set(CursorIcon::Pointer);
+            *hovered.write() = Some(key);
+        })
+        .on_pointer_leave(move |_| {
+            Cursor::set(CursorIcon::default());
+            if *hovered.read() == Some(key) {
+                *hovered.write() = None;
+            }
+        })
         .on_all_press(move |_| {
             ctx.run(|session| session.change_upgrade(struct_index, slot));
         })
@@ -312,7 +355,14 @@ fn style_badge_color(kind: &str) -> Color {
     }
 }
 
-fn learn_row(ctx: &Ctx, suggestion: &StyleSuggestion, expanded: State<Option<u16>>) -> Element {
+fn learn_row(
+    ctx: &Ctx,
+    suggestion: &StyleSuggestion,
+    expanded: State<Option<u16>>,
+    mut hovered: State<Option<crate::app::HoverKey>>,
+) -> Element {
+    let key = crate::app::HoverKey::Orb(suggestion.style_id.into(), 0);
+    let is_hovered = *hovered.read() == Some(key);
     let learn = {
         let ctx = ctx.clone();
         let style_id = suggestion.style_id;
@@ -325,8 +375,18 @@ fn learn_row(ctx: &Ctx, suggestion: &StyleSuggestion, expanded: State<Option<u16
     rect()
         .vertical()
         .width(Size::fill())
-        .background(theme::PANEL)
+        .background(if is_hovered {
+            theme::SURFACE
+        } else {
+            theme::PANEL
+        })
         .corner_radius(6.)
+        .on_pointer_enter(move |_| *hovered.write() = Some(key))
+        .on_pointer_leave(move |_| {
+            if *hovered.read() == Some(key) {
+                *hovered.write() = None;
+            }
+        })
         .child(
             rect()
                 .horizontal()

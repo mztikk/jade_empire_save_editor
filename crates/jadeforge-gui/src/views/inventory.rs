@@ -18,11 +18,12 @@ pub fn view(
     matching: usize,
     total_items: usize,
     expanded: State<Option<u16>>,
+    hovered: State<Option<crate::app::HoverKey>>,
     show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for item in items {
-        rows.push(item_row(ctx, item, expanded));
+        rows.push(item_row(ctx, item, expanded, hovered));
     }
     if rows.is_empty() {
         rows.push(widgets::hint("The inventory is empty."));
@@ -89,7 +90,7 @@ pub fn view(
             children.push(heading.into_element());
             let mut result_rows: Vec<Element> = Vec::new();
             for suggestion in results {
-                result_rows.push(suggestion_row(ctx, suggestion, expanded));
+                result_rows.push(suggestion_row(ctx, suggestion, expanded, hovered));
             }
             children.push(
                 rect()
@@ -125,7 +126,14 @@ pub fn item_subtitle(item_id: u16, category: Option<&str>, kind: u8) -> String {
     }
 }
 
-fn item_row(ctx: &Ctx, item: &ItemRow, expanded: State<Option<u16>>) -> Element {
+fn item_row(
+    ctx: &Ctx,
+    item: &ItemRow,
+    expanded: State<Option<u16>>,
+    mut hovered: State<Option<crate::app::HoverKey>>,
+) -> Element {
+    let key = crate::app::HoverKey::Item(item.item_id);
+    let is_hovered = *hovered.read() == Some(key);
     let minus = {
         let ctx = ctx.clone();
         let index = item.struct_index;
@@ -146,8 +154,18 @@ fn item_row(ctx: &Ctx, item: &ItemRow, expanded: State<Option<u16>>) -> Element 
     rect()
         .vertical()
         .width(Size::fill())
-        .background(theme::SURFACE)
+        .background(if is_hovered {
+            theme::SURFACE_HOVER
+        } else {
+            theme::SURFACE
+        })
         .corner_radius(8.)
+        .on_pointer_enter(move |_| *hovered.write() = Some(key))
+        .on_pointer_leave(move |_| {
+            if *hovered.read() == Some(key) {
+                *hovered.write() = None;
+            }
+        })
         .child(
             rect()
                 .horizontal()
@@ -187,7 +205,14 @@ fn item_row(ctx: &Ctx, item: &ItemRow, expanded: State<Option<u16>>) -> Element 
         .into_element()
 }
 
-fn suggestion_row(ctx: &Ctx, suggestion: &ItemSuggestion, expanded: State<Option<u16>>) -> Element {
+fn suggestion_row(
+    ctx: &Ctx,
+    suggestion: &ItemSuggestion,
+    expanded: State<Option<u16>>,
+    mut hovered: State<Option<crate::app::HoverKey>>,
+) -> Element {
+    let key = crate::app::HoverKey::Item(suggestion.item_id);
+    let is_hovered = *hovered.read() == Some(key);
     let add = {
         let ctx = ctx.clone();
         let item_id = suggestion.item_id;
@@ -201,8 +226,18 @@ fn suggestion_row(ctx: &Ctx, suggestion: &ItemSuggestion, expanded: State<Option
     rect()
         .vertical()
         .width(Size::fill())
-        .background(theme::PANEL)
+        .background(if is_hovered {
+            theme::SURFACE
+        } else {
+            theme::PANEL
+        })
         .corner_radius(6.)
+        .on_pointer_enter(move |_| *hovered.write() = Some(key))
+        .on_pointer_leave(move |_| {
+            if *hovered.read() == Some(key) {
+                *hovered.write() = None;
+            }
+        })
         .child(
             rect()
                 .horizontal()
