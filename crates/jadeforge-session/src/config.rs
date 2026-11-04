@@ -5,9 +5,44 @@
 //! versions used a plain `key=value` format; those are still read and are
 //! rewritten as TOML on the next save.
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde::{Deserialize, Serialize};
+
+/// Distinguishes the temporary settings directories created by tests.
+static TEST_PATH_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+thread_local! {
+    /// Settings path used by the UI test harness. Thread local so parallel tests
+    /// never share (or clobber) each other's settings.
+    static TEST_PATH: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+/// Returns a fresh, empty settings path for the current test thread.
+///
+/// The first call per thread creates the directory and remembers the path; later
+/// calls return the same one, so a test can relaunch the app and still see the
+/// settings it wrote. While an override exists, `JADEFORGE_CONFIG_DIR` and the
+/// user's real settings file are ignored, which keeps a developer's saved sort
+/// order out of the tests.
+#[doc(hidden)]
+pub fn ensure_test_path() -> PathBuf {
+    TEST_PATH.with(|cell| {
+        let mut slot = cell.borrow_mut();
+        if let Some(path) = slot.as_ref() {
+            return path.clone();
+        }
+        let id = TEST_PATH_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let directory =
+            std::env::temp_dir().join(format!("jadeforge-config-test-{}-{id}", std::process::id()));
+        let path = directory.join("config");
+        let _ = std::fs::create_dir_all(&directory);
+        *slot = Some(path.clone());
+        path
+    })
+}
 
 /// Settings persisted between runs.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,6 +149,9 @@ impl Config {
     /// configuration.
     #[must_use]
     pub fn path() -> Option<PathBuf> {
+        if let Some(path) = TEST_PATH.with(|cell| cell.borrow().clone()) {
+            return Some(path);
+        }
         if let Some(dir) =
             std::env::var_os("JADEFORGE_CONFIG_DIR").filter(|value| !value.is_empty())
         {
@@ -221,6 +259,19 @@ mod tests {
             Config::load_from(&Some(PathBuf::from("/definitely/not/here"))),
             Config::default()
         );
+    }
+
+    #[test]
+    fn test_override_wins_over_the_environment() {
+        let path = ensure_test_path();
+        assert_eq!(Config::path(), Some(path));
+        let config = Config {
+            save_dir: Some(PathBuf::from("/games/Jade Empire/Save")),
+            sort: Some("played".to_owned()),
+            sort_descending: true,
+        };
+        config.store().expect("store settings");
+        assert_eq!(Config::load(), config);
     }
 
     #[test]

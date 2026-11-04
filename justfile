@@ -21,7 +21,7 @@ default:
 build:
     cargo build --workspace
 
-# Run every test, including the ones that need real savegames.
+# Run every test. Tests that need savegames run when JADEFORGE_SAVE_DIR is set.
 test:
     cargo test --workspace
 
