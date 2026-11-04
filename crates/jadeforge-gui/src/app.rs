@@ -517,7 +517,7 @@ fn sidebar(
                     if form_differs && selected != Some(index) {
                         ctx.run(|session| {
                             session.set_error(
-                                "Apply or discard the character changes before switching savegames.",
+                                "Fix the invalid character fields before switching savegames.",
                             );
                         });
                         return;
@@ -572,12 +572,7 @@ fn sidebar(
                                         .max_lines(1)
                                         .color(if broken { theme::DANGER } else { theme::TEXT }),
                                 )
-                                .child(
-                                    label()
-                                        .text(summary)
-                                        .font_size(10.)
-                                        .color(theme::DIM),
-                                ),
+                                .child(label().text(summary).font_size(10.).color(theme::DIM)),
                         )
                         .into_element(),
                 )
