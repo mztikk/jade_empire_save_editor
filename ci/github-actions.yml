@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  formatting:
+    name: formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  core:
+    name: core and cli (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test -p jadeforge-core -p jadeforge-cli --all-targets
+      - name: Clippy
+        run: cargo clippy -p jadeforge-core -p jadeforge-cli --all-targets -- -D warnings
+
+  gui:
+    name: gui (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GUI system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libx11-dev \
+            libxkbcommon-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxi-dev \
+            libwayland-dev \
+            libegl1-mesa-dev \
+            libgl1-mesa-dev \
+            libfontconfig1-dev \
+            libdbus-1-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Headless UI tests
+        run: cargo test -p jadeforge-gui
+      - name: Clippy
+        run: cargo clippy -p jadeforge-gui --all-targets -- -D warnings
+      - name: Build release binaries
+        run: cargo build --release -p jadeforge-gui -p jadeforge-cli
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: jadeforge-linux-x86_64
+          path: |
+            target/release/jadeforge
+            target/release/jadeforge-gui
+          if-no-files-found: error
