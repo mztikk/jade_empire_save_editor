@@ -70,16 +70,19 @@ pub enum Tab {
     Styles,
     /// Inventory.
     Inventory,
+    /// Gems in the amulet and the inventory.
+    Gems,
     /// Companions.
     Companions,
 }
 
 impl Tab {
-    const ALL: [Self; 5] = [
+    const ALL: [Self; 6] = [
         Self::Overview,
         Self::Character,
         Self::Styles,
         Self::Inventory,
+        Self::Gems,
         Self::Companions,
     ];
 
@@ -89,6 +92,7 @@ impl Tab {
             Self::Character => "Character",
             Self::Styles => "Styles",
             Self::Inventory => "Inventory",
+            Self::Gems => "Gems",
             Self::Companions => "Companions",
         }
     }
@@ -226,6 +230,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 move |_| *item_limit.write() += 50,
             )
         }
+        (Tab::Gems, _) => views::gems::view(&ctx, &session.borrow().gems),
         (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen),
         (_, None) => empty_state(entries.len()),
     };

@@ -7,7 +7,9 @@
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use jadeforge_core::{Character, Henchman, Item, SaveGame, SaveImage, SaveOptions, Style};
+use jadeforge_core::{
+    Character, GemLocation, Henchman, Item, SaveGame, SaveImage, SaveOptions, Style,
+};
 use jadeforge_gamedata::GameData;
 
 /// Folder to start with: the environment override, the last folder used, or
@@ -388,6 +390,19 @@ pub struct StyleSuggestion {
     pub description: Option<String>,
 }
 
+/// A gem together with display data.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GemRow {
+    /// Index of the struct that stores the gem.
+    pub struct_index: usize,
+    /// Display name from the item table.
+    pub name: String,
+    /// Number of effects on the gem.
+    pub effects: usize,
+    /// Whether the gem is socketed or carried.
+    pub location: GemLocation,
+}
+
 /// A companion together with display data.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HenchRow {
@@ -571,6 +586,8 @@ pub struct Session {
     pub styles: Vec<StyleRow>,
     /// Companions of the opened savegame.
     pub henchmen: Vec<HenchRow>,
+    /// Gems of the opened savegame.
+    pub gems: Vec<GemRow>,
     /// Game data used for names.
     pub game: Option<Rc<GameData>>,
     /// Human readable state of the game data.
@@ -607,6 +624,7 @@ impl Session {
             items: Vec::new(),
             styles: Vec::new(),
             henchmen: Vec::new(),
+            gems: Vec::new(),
             game: None,
             game_status: GameStatus::Missing,
             preview: None,
@@ -766,6 +784,7 @@ impl Session {
             self.styles = rows.1;
             self.henchmen = rows.2;
         }
+        self.gems = self.build_gem_rows();
     }
 
     fn build_rows(&self) -> Option<(Vec<ItemRow>, Vec<StyleRow>, Vec<HenchRow>)> {
@@ -1139,6 +1158,62 @@ impl Session {
             }
         };
         changed > 0
+    }
+
+    fn build_gem_rows(&self) -> Vec<GemRow> {
+        let Some(save) = self.save.as_ref() else {
+            return Vec::new();
+        };
+        let Ok(gems) = save.gems() else {
+            return Vec::new();
+        };
+        gems.into_iter()
+            .map(|gem| GemRow {
+                struct_index: gem.struct_index,
+                name: self
+                    .game
+                    .as_ref()
+                    .and_then(|game| game.item(gem.item_id))
+                    .map_or_else(|| format!("Gem {}", gem.item_id), |item| item.name.clone()),
+                effects: gem.effects.len(),
+                location: gem.location,
+            })
+            .collect()
+    }
+
+    /// Moves a gem between the amulet and the inventory.
+    pub fn move_gem(&mut self, struct_index: usize) {
+        let Some(save) = self.save.as_mut() else {
+            return;
+        };
+        match save.move_gem(struct_index) {
+            Ok(location) => {
+                self.gems = self.build_gem_rows();
+                self.message = Message::success(match location {
+                    GemLocation::Amulet => "Gem socketed into the amulet.",
+                    GemLocation::Inventory => "Gem moved to the inventory.",
+                });
+            }
+            Err(error) => {
+                self.message = Message::error(format!("Cannot move the gem: {error}"));
+            }
+        }
+    }
+
+    /// Removes a gem from the inventory or the amulet.
+    pub fn remove_gem(&mut self, struct_index: usize) {
+        let Some(save) = self.save.as_mut() else {
+            return;
+        };
+        match save.remove_gem(struct_index) {
+            Ok(()) => {
+                self.gems = self.build_gem_rows();
+                self.message = Message::success("Gem removed.");
+            }
+            Err(error) => {
+                self.message = Message::error(format!("Cannot remove the gem: {error}"));
+            }
+        }
     }
 
     /// All styles from the game data that the player does not own yet.

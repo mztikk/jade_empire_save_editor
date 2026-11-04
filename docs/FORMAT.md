@@ -200,6 +200,20 @@ The inventory holds structs with `Count` (byte), `ItemId` (word) and `Type`
 root of the block (`FirstName`, `Stats`, ...). JadeForge only falls back to it
 when `save.sav` has no player creature, because it can be stale.
 
+## Gems
+
+`PlayerCreature.Gems` and `PlayerCreature.Amulet.OpenGemsList` are lists of
+structs shaped `{ Gem: { ItemID, GemsEffectList[] } }`; effects carry
+`GemsEffectType`, `GemsEffectValue`, `GemsEffectCurVal` and `GemsEffectDuration`.
+Moving a gem only moves its struct index from one list to the other, so the gem
+data is never rewritten. Some savegames point at the gem struct directly instead
+of wrapping it in an entry with a `Gem` field; both shapes are read.
+
+The global story variables live in `Campaign.VarTable` (`ID`, `Type`, `Value`,
+sometimes `Number`). The IDs are hashes without a name table in the savegame, and
+journal entries were not found in `save.sav`; both need more mapping work before
+they are exposed in the editor.
+
 ## Where names come from
 
 Savegames only store numeric ids and talk table references. The names shown by
