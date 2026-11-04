@@ -150,7 +150,9 @@ canonical ones. `just check` runs the formatting, clippy and test gate and
 
 Names are not stored in savegames, they are talk table references in 2DA tables.
 JadeForge looks for the game installation next to the save folder (the parent of
-`Save/`) and reads only:
+`Save/`, or `Save/<savegame>` when a savegame folder is selected). The
+`JADEFORGE_GAME_DIR` override wins; if it is unset or does not point at an
+installation, the normal layout is used. It reads only:
 
 | file | used for |
 | --- | --- |
