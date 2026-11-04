@@ -17,7 +17,7 @@ pub mod twoda;
 
 pub use error::{Error, Result};
 pub use gamedata::{
-    GameData, ItemInfo, StyleInfo, StyleKind, is_game_root, is_playable_item,
+    Advance, GameData, ItemInfo, StyleChoice, StyleInfo, StyleKind, is_game_root, is_playable_item,
     save_type_for_category, style_kind,
 };
 pub use rim::RimArchive;

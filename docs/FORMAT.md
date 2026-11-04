@@ -238,6 +238,54 @@ level 1 and no bits set. The game derives the unspent style points from the
 levels of all owned styles, so editing a level also changes the style points
 shown in game.
 
+The mask indexes the **slots of the style's own level-up table**, not rows of
+`StyleAdvance.2da`: bit `i` is the `i + 1`-th purchasable entry of the
+`<Style>LV.2da` table, flattened row by row. Each slot points at a
+`StyleAdvance` row that supplies the effect, the style point cost and the
+description. The tables live as binary `2DA V2.b` resources inside
+`data/miniglobal-a.rim`; `stylesuperlist.StyleData` selects a row of
+`styledata.2da` whose `levelup2da` column names the table. Override files win
+over the archive, so modded styles work.
+
+Verification: Storm Dragon's table offers advance rows 6-10, 21-25 and 11-15
+(slots 1-15). A savegame with Storm Dragon at level 8 carries bits
+`{1,2,6,7,11,12,13}` (1-based slots), i.e. chi strike 1-2, duration 1-2 and
+speed 1-3. Under the old "bit = advance row" assumption bits 1 and 2 would be
+damage tiers, which the style does not even offer. Every upgrade bit in all 88
+test savegames is inside its style's slot range, and `level == 1 + popcount`
+holds for every style; a test enforces both.
+
+The families visible in the level-up screen come from the level-up table rows
+(their `Label` is a talk table reference). Tier costs are 1, 2, 4, 6 and 10
+style points.
+
+The editor shows the slots as plain golden orbs per family. Clicking an orb
+buys every missing slot up to it, clicking an owned orb removes it and
+everything above it, so a family is always a gap-free prefix. Styles whose
+level-up table is missing are read-only: guessing slot semantics would write
+the wrong upgrade.
+
+## Alignment
+
+`PlayerCreature.Stats.Alignment` is a signed integer that the engine only writes
+once the player's decisions move it: the earliest savegames of a playthrough do
+not contain the field at all. In the 76 savegames that have it, the values run
+from 131 to 255 and rise with play time, and one savegame sits exactly at 255.
+
+That matches an unsigned 0..255 scale whose neutral value is **128**: below is
+the Way of the Closed Fist, above is the Way of the Open Palm. The editor uses
+that reference (`DEFAULT_ALIGNMENT`) for its label and shows "Balanced" at 128.
+The raw number stays editable, so a value can always be checked against the
+in-game meter; no other alignment field exists in the player block.
+
+## Style levels and upgrades
+
+A style struct stores `StyleLevel` (byte) and `StyleLevelInfo` (64 bit mask).
+`StyleLevel` is `1 + population count of the mask`; a freshly learned style has
+level 1 and no bits set. The game derives the unspent style points from the
+levels of all owned styles, so editing a level also changes the style points
+shown in game.
+
 The mask is **not** a plain "how many upgrades" counter: bit *i* selects row
 *i + 1* of `StyleAdvance.2da`, which is one concrete upgrade with its own effect
 and style point cost. The table groups five tiers per family, with costs

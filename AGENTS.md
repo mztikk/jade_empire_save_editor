@@ -86,19 +86,25 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 - Style kinds come from the template label prefix (`StyleKind`), not from the
   `Type` column: the table stores dual weapon styles as `MONSTER` and the
   Spirit Thief style as `SpiritThief`, so `Type` is not a usable description.
-- A style's upgrade mask is not a counter: bit *i* selects row *i+1* of
-  `StyleAdvance.2da` and the level is `1 + popcount`. `set_style_upgrade` must
-  keep mask and level in sync; never write one without the other.
+- A style's upgrade mask is not a counter and not row indexed: bit *i* is the
+  *slot* `i + 1` of the style's `<Style>LV.2da` table, and each slot points at a
+  `StyleAdvance` row for effect, cost and name. The level is `1 + popcount`.
+  `set_style_slot` must keep mask and level in sync; never write one without the
+  other. Do not go back to "bit = advance row - 1": it contradicts real saves.
 - Upgrades are changed per family: clicking the tier *n* orb buys every missing
   tier up to *n*, clicking an owned orb removes it and everything above it. The
   mask of a family is therefore always a gap-free prefix; do not add a
   free-selection path that can create gaps, and do not edit the level directly
-  (it is derived from the mask and has no UI control).
-- `<Style>LV.2da` tables limit what the game's level-up screen offers. They ship
-  as binary `2DA V2.b` resources inside `data/miniglobal-a.rim`; the mapping is
+  (it is derived from the mask and has no UI control). There is no "game rules"
+  toggle any more: only the style's real slots exist, so there is nothing to
+  switch off.
+- `<Style>LV.2da` tables define the purchasable slots. They ship as binary
+  `2DA V2.b` resources inside `data/miniglobal-a.rim`; the mapping is
   `stylesuperlist.StyleData` -> `styledata.2da` row -> `levelup2da` column.
-  `override/` text tables take precedence over the archive (mods). When a style
-  has no table the editor offers the full table instead of guessing.
+  `override/` text tables take precedence (mods). A style without a table is
+  read-only in the editor: do not guess slots, it would write wrong upgrades.
+- A test walks every savegame and asserts each mask bit is inside its style's
+  slot range; keep that test green.
 - Development placeholders (`[TEMP] ...`, `temp_*`, `zzz*`, `cut_*`) are hidden
   from the item picker (`is_playable_item`) but stay resolvable by id.
 

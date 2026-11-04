@@ -329,12 +329,14 @@ pub struct ItemRow {
     pub description: Option<String>,
 }
 
-/// One upgrade a style can own (a row of `StyleAdvance.2da`).
+/// One purchasable slot of a style's level-up table.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StyleUpgrade {
-    /// Row in `StyleAdvance.2da`; the toggle sets bit `row - 1`.
-    pub row: u16,
-    /// Family the upgrade belongs to, for grouping.
+    /// 1-based slot in the style's level-up table; the toggle sets bit `slot - 1`.
+    pub slot: u16,
+    /// Row in `StyleAdvance.2da` the slot grants.
+    pub advance: u16,
+    /// Localized family name.
     pub family: String,
     /// Tier inside the family (1 based).
     pub tier: u8,
@@ -344,8 +346,6 @@ pub struct StyleUpgrade {
     pub effect: String,
     /// Style points the upgrade costs.
     pub cost: u8,
-    /// Whether the game offers this upgrade for the style.
-    pub available: bool,
     /// Whether the player already owns it.
     pub taken: bool,
 }
@@ -573,8 +573,6 @@ pub struct Session {
     pub henchmen: Vec<HenchRow>,
     /// Game data used for names.
     pub game: Option<Rc<GameData>>,
-    /// Restrict upgrades to the rows the game offers for the style.
-    pub strict_upgrades: bool,
     /// Human readable state of the game data.
     pub game_status: GameStatus,
     /// Screenshot of the opened savegame.
@@ -610,7 +608,6 @@ impl Session {
             styles: Vec::new(),
             henchmen: Vec::new(),
             game: None,
-            strict_upgrades: true,
             game_status: GameStatus::Missing,
             preview: None,
             message: Message::info("Select a savegame to start editing."),
@@ -1046,66 +1043,44 @@ impl Session {
         (rows, total)
     }
 
-    /// Builds the upgrade choices a style offers, marked with what is owned.
+    /// Builds the upgrade slots a style offers, marked with what is owned.
     fn upgrade_choices(&self, style_id: u16, mask: u64) -> Vec<StyleUpgrade> {
         let Some(game) = self.game.as_ref() else {
             return Vec::new();
         };
-        let allowed = game.allowed_advances(style_id);
-        game.advances()
-            // The savegame mask is 64 bits wide; the table is longer.
-            .filter(|advance| (1..=64).contains(&advance.row))
-            .filter(|advance| advance.tier > 0 && advance.cost > 0)
-            .filter(|advance| !advance.family.to_lowercase().contains("test"))
-            .map(|advance| StyleUpgrade {
-                row: advance.row,
-                family: advance.family.clone(),
-                tier: advance.tier,
-                name: advance.name.clone(),
-                effect: advance.effect_text(),
-                cost: advance.cost,
-                available: allowed.is_none_or(|allowed| allowed.contains(&advance.row)),
-                taken: mask & (1_u64 << (advance.row - 1)) != 0,
+        let Some(choices) = game.style_choices(style_id) else {
+            return Vec::new();
+        };
+        choices
+            .iter()
+            .map(|choice| {
+                let advance = game.advance(choice.advance);
+                StyleUpgrade {
+                    slot: choice.slot,
+                    advance: choice.advance,
+                    family: choice.family.clone(),
+                    tier: choice.tier,
+                    name: advance.map_or_else(
+                        || format!("Upgrade {}", choice.advance),
+                        |advance| advance.name.clone(),
+                    ),
+                    effect: advance
+                        .map_or_else(String::new, jadeforge_gamedata::Advance::effect_text),
+                    cost: advance.map_or(0, |advance| advance.cost),
+                    taken: mask & (1_u64 << (choice.slot - 1)) != 0,
+                }
             })
             .collect()
     }
 
-    /// Whether upgrades are limited to the rows the game offers for the style.
-    #[must_use]
-    pub fn strict_upgrades_enabled(&self) -> bool {
-        self.strict_upgrades
-    }
-
-    /// Switches between the game's own upgrade list and the full table.
-    pub fn set_strict_upgrades(&mut self, strict: bool) {
-        self.strict_upgrades = strict;
-        self.message = Message::info(if strict {
-            "Game rules on: only upgrades the style offers, bought in order."
-        } else {
-            "Free selection: any upgrade row can be added, still bought in order."
-        });
-    }
-
-    /// Upgrades of one family, ordered by tier and filtered by the mode.
-    fn family_upgrades<'a>(&self, style: &'a StyleRow, family: &str) -> Vec<&'a StyleUpgrade> {
-        let mut rows: Vec<&StyleUpgrade> = style
-            .upgrades
-            .iter()
-            .filter(|upgrade| upgrade.family == family)
-            .filter(|upgrade| !self.strict_upgrades || upgrade.available || upgrade.taken)
-            .collect();
-        rows.sort_by_key(|upgrade| upgrade.tier);
-        rows
-    }
-
-    /// Changes a whole family at once: owning the clicked tier means every
-    /// missing tier up to it is bought, an owned tier is removed together with
+    /// Changes a whole family at once: owning the clicked slot means every
+    /// missing slot up to it is bought, an owned slot is removed together with
     /// everything above it.
     ///
-    /// This is how the game's own level-up screen behaves (one pick per level,
-    /// never a gap), so `1 -> 4` buys tiers 2, 3 and 4 and clicking tier 1 of a
-    /// maxed family drops it back to zero.
-    pub fn change_upgrade(&mut self, struct_index: usize, row: u16) -> bool {
+    /// This mirrors the game's level-up screen (one pick per level, never a
+    /// gap), so `1 -> 4` buys slots 2, 3 and 4 and clicking slot 1 of a maxed
+    /// family drops it back to zero.
+    pub fn change_upgrade(&mut self, struct_index: usize, slot: u16) -> bool {
         let Some(style) = self
             .styles
             .iter()
@@ -1114,34 +1089,29 @@ impl Session {
         else {
             return false;
         };
-        let Some(clicked) = style.upgrades.iter().find(|upgrade| upgrade.row == row) else {
+        let Some(clicked) = style.upgrades.iter().find(|upgrade| upgrade.slot == slot) else {
             return false;
-        };
-        if self.strict_upgrades && !clicked.available && !clicked.taken {
-            self.message =
-                Message::info("Game rules are on: this style does not offer that upgrade.");
-            return false;
-        }
-        let family = self.family_upgrades(&style, &clicked.family);
-        let targets: Vec<u16> = if clicked.taken {
-            family
-                .iter()
-                .filter(|candidate| candidate.tier >= clicked.tier)
-                .map(|candidate| candidate.row)
-                .collect()
-        } else {
-            family
-                .iter()
-                .filter(|candidate| candidate.tier <= clicked.tier)
-                .map(|candidate| candidate.row)
-                .collect()
         };
         let taken = !clicked.taken;
+        let mut targets: Vec<u16> = style
+            .upgrades
+            .iter()
+            .filter(|candidate| candidate.family == clicked.family)
+            .filter(|candidate| {
+                if taken {
+                    candidate.slot <= clicked.slot
+                } else {
+                    candidate.slot >= clicked.slot
+                }
+            })
+            .map(|candidate| candidate.slot)
+            .collect();
+        targets.sort_unstable();
         let mut changed = 0_usize;
         let mut error = None;
         if let Some(save) = self.save.as_mut() {
             for target in &targets {
-                match save.set_style_upgrade(struct_index, *target, taken) {
+                match save.set_style_slot(struct_index, *target, taken) {
                     Ok(_) => changed += 1,
                     Err(failure) => {
                         error = Some(failure);

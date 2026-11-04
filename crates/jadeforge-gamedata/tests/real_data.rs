@@ -124,16 +124,20 @@ fn per_style_upgrade_tables_are_matched() {
             return;
         }
     };
-    // Legendary Strike offers damage, chi strike and speed tiers (rows 1-15).
-    let allowed = game
-        .allowed_advances(52)
-        .expect("Legendary Strike should have a level table");
-    assert!(allowed.contains(&1) && allowed.contains(&15));
+    // Storm Dragon: the mask indexes slots, not advance rows. Its table offers
+    // rows 6-10, 21-25 and 11-15, in that order.
+    let choices = game
+        .style_choices(13)
+        .expect("Storm Dragon should have a level table");
+    assert_eq!(choices.len(), 15);
+    assert_eq!((choices[0].slot, choices[0].advance), (1, 6));
+    assert_eq!((choices[5].slot, choices[5].advance), (6, 21));
+    assert_eq!((choices[10].slot, choices[10].advance), (11, 11));
     // Most player styles have a table in a complete installation.
     let total = game.styles().count();
     let with_table = game
         .styles()
-        .filter(|style| game.allowed_advances(style.id).is_some())
+        .filter(|style| game.style_choices(style.id).is_some())
         .count();
     assert!(
         with_table * 2 > total,

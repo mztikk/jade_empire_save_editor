@@ -30,9 +30,7 @@ pub fn view(
         ));
     }
 
-    let strict = ctx.session.borrow().strict_upgrades_enabled();
     let mut children = vec![
-        rules_row(ctx, strict),
         rect()
             .vertical()
             .width(Size::fill())
@@ -183,36 +181,6 @@ fn style_row(ctx: &Ctx, style: &StyleRow, expanded: State<Option<u16>>) -> Eleme
         .into_element()
 }
 
-/// Game rules toggle: restrict upgrades to what the style offers.
-fn rules_row(ctx: &Ctx, strict: bool) -> Element {
-    let ctx = ctx.clone();
-    rect()
-        .horizontal()
-        .width(Size::fill())
-        .spacing(10.)
-        .content(Content::Flex)
-        .child(
-            Button::new()
-                .compact()
-                .outline()
-                .child(if strict {
-                    "Game rules: on"
-                } else {
-                    "Game rules: off"
-                })
-                .on_press(move |_| {
-                    let current = ctx.session.borrow().strict_upgrades_enabled();
-                    ctx.run(|session| session.set_strict_upgrades(!current));
-                }),
-        )
-        .child(widgets::hint(if strict {
-            "Only upgrades the style offers, bought in order."
-        } else {
-            "Any upgrade row, still bought in order."
-        }))
-        .into_element()
-}
-
 /// Expanded panel: description plus the upgrade choices of the style.
 fn upgrade_panel(ctx: &Ctx, style: &StyleRow) -> Element {
     let mut rows: Vec<Element> = Vec::new();
@@ -235,14 +203,9 @@ fn upgrade_panel(ctx: &Ctx, style: &StyleRow) -> Element {
     }
 
     rows.push(widgets::section_label("UPGRADES"));
-    let strict = ctx.session.borrow().strict_upgrades_enabled();
     let mut family: Option<&str> = None;
     let mut chips: Vec<Element> = Vec::new();
-    for upgrade in style
-        .upgrades
-        .iter()
-        .filter(|upgrade| !strict || upgrade.available || upgrade.taken)
-    {
+    for upgrade in &style.upgrades {
         if family.is_some_and(|family| family != upgrade.family) {
             rows.push(upgrade_row(
                 family.unwrap_or_default(),
@@ -258,7 +221,7 @@ fn upgrade_panel(ctx: &Ctx, style: &StyleRow) -> Element {
         rows.push(upgrade_row(family, chips));
     }
     rows.push(widgets::hint(
-        "Orbs are tiers 1-5 from left to right (costs 1/2/4/6/10); gold means owned.",
+        "Orbs are the level-up options, in order; gold means owned.",
     ));
     rect()
         .vertical()
@@ -290,7 +253,7 @@ fn upgrade_row(family: &str, chips: Vec<Element>) -> Element {
 /// One toggleable upgrade tier.
 fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Element {
     let taken = upgrade.taken;
-    let row = upgrade.row;
+    let slot = upgrade.slot;
     let ctx = ctx.clone();
     // The game shows upgrade choices as plain golden circles: filled when
     // owned, an empty ring when the tier can still be bought. The order is the
@@ -316,7 +279,7 @@ fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Eleme
         .on_pointer_enter(move |_| Cursor::set(CursorIcon::Pointer))
         .on_pointer_leave(move |_| Cursor::set(CursorIcon::default()))
         .on_all_press(move |_| {
-            ctx.run(|session| session.change_upgrade(struct_index, row));
+            ctx.run(|session| session.change_upgrade(struct_index, slot));
         })
         .into_element()
 }
@@ -324,23 +287,10 @@ fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Eleme
 /// Human readable family name for the upgrade rows.
 #[must_use]
 pub fn family_title(family: &str) -> String {
-    let named = match family {
-        "Increase_Damage" => "Damage",
-        "Chi_Strike_Damage" => "Chi strike",
-        "Speed_Increase" => "Speed",
-        "Lower_Chi_Cost" => "Chi cost",
-        "Duration" => "Duration",
-        "Chi_Reduction" => "Chi damage taken",
-        "Focus_Cost_Reduction" => "Focus cost",
-        "Damage_Reduction" => "Damage taken",
-        "Spirit_Thief_Duration" => "Spirit thief",
-        "Gun_Focus_Cost_Reduction" => "Gun focus cost",
-        _ => family,
-    };
-    if std::ptr::eq(named, family) {
-        named.replace('_', " ")
+    if family.contains(' ') {
+        family.to_owned()
     } else {
-        named.to_owned()
+        family.replace('_', " ")
     }
 }
 

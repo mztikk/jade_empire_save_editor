@@ -334,13 +334,11 @@ fn style_upgrades_are_bought_and_removed_in_steps() {
         let mut tiers: Vec<_> = style
             .upgrades
             .iter()
-            .filter(|upgrade| {
-                upgrade.family == candidate.family && !upgrade.taken && upgrade.available
-            })
+            .filter(|upgrade| upgrade.family == candidate.family && !upgrade.taken)
             .collect();
         tiers.sort_by_key(|upgrade| upgrade.tier);
         if tiers.len() >= 3 && tiers[0].tier == 1 {
-            family = Some((tiers[0].row, tiers[2].row, tiers[1].row));
+            family = Some((tiers[0].slot, tiers[2].slot, tiers[1].slot));
             break;
         }
     }
@@ -362,13 +360,13 @@ fn style_upgrades_are_bought_and_removed_in_steps() {
         .find(|candidate| candidate.struct_index == style.struct_index)
         .expect("style");
     assert_eq!(after.level, before + 3);
-    for row in [first, second, third] {
+    for slot in [first, second, third] {
         let taken = after
             .upgrades
             .iter()
-            .find(|upgrade| upgrade.row == row)
+            .find(|upgrade| upgrade.slot == slot)
             .is_some_and(|upgrade| upgrade.taken);
-        assert!(taken, "row {row} should be owned");
+        assert!(taken, "slot {slot} should be owned");
     }
 
     // Clicking the first tier removes the whole family again.
@@ -431,18 +429,50 @@ fn clicking_an_upgrade_orb_changes_the_style() {
 }
 
 #[test]
-fn the_game_rules_toggle_can_be_switched() {
-    let Some(fixture) = Fixture::create() else {
+fn every_saved_style_mask_fits_its_slot_table() {
+    let Some(dir) = save_dir() else {
         eprintln!("skipping: no savegames found");
         return;
     };
-    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
-    assert!(click_text(&mut test, "Styles"));
-    assert!(find_label_text(&test, "Game rules: on").is_some());
-    assert!(click_text(&mut test, "Game rules: on"));
-    assert!(find_label_text(&test, "Game rules: off").is_some());
-    assert!(click_text(&mut test, "Game rules: off"));
-    assert!(find_label_text(&test, "Game rules: on").is_some());
+    let Some(game_root) = game_dir() else {
+        eprintln!("skipping: no game data");
+        return;
+    };
+    let mut session = jadeforge_gui::Session::with_directory(&dir);
+    if session.entries.is_empty() {
+        eprintln!("skipping: no savegames");
+        return;
+    }
+    let _ = game_root;
+    let mut checked = 0_usize;
+    for index in 0..session.entries.len() {
+        if !session.open(index) {
+            continue;
+        }
+        for style in &session.styles {
+            let Some(choices) = session
+                .game
+                .as_ref()
+                .and_then(|game| game.style_choices(style.style_id))
+            else {
+                continue;
+            };
+            let slots = choices.len();
+            for slot in 0..64_u16 {
+                if style.mask & (1_u64 << slot) != 0 {
+                    assert!(
+                        usize::from(slot) < slots,
+                        "{}: bit {} outside {slots} slots",
+                        session.entries[index].label,
+                        slot + 1
+                    );
+                    checked += 1;
+                }
+            }
+            assert_eq!(u32::from(style.level), 1 + style.mask.count_ones());
+        }
+    }
+    assert!(checked > 0, "no upgrade bits were checked");
 }
 
 #[test]
@@ -460,7 +490,10 @@ fn expanded_styles_show_upgrade_choices() {
     let subtitle = find_node_with_text(&test, " · #").expect("style subtitle");
     click_node(&mut test, &subtitle);
     assert!(find_label_text(&test, "UPGRADES").is_some());
-    assert!(find_label_text(&test, "Damage").is_some());
+    assert!(
+        find_label_text(&test, "gold means owned").is_some(),
+        "the upgrade panel did not render"
+    );
 }
 
 #[test]

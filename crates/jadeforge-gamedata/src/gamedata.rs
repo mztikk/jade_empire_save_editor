@@ -130,7 +130,7 @@ pub struct GameData {
     items: Vec<Option<ItemInfo>>,
     styles: Vec<Option<StyleInfo>>,
     advances: Vec<Option<Advance>>,
-    style_advances: Vec<Option<Vec<u16>>>,
+    style_choices: Vec<Option<Vec<StyleChoice>>>,
     search_index: HashMap<u16, String>,
 }
 
@@ -176,6 +176,26 @@ impl Advance {
             _ => format!("Effect {} ({})", self.effect, self.param),
         }
     }
+}
+
+/// One purchasable slot of a style's level-up table.
+///
+/// The savegame mask is indexed by the **slot**, not by the `StyleAdvance` row:
+/// bit `slot - 1` is set when the player bought that entry. The slot points at
+/// an advance row, which supplies the effect, cost and description. This was
+/// verified against real savegames: Storm Dragon's mask uses slots of its own
+/// table whose advance rows (6-10, 21-25, 11-15) would otherwise contradict the
+/// saved bits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StyleChoice {
+    /// 1-based position in the style's flattened level-up table.
+    pub slot: u16,
+    /// Row in `StyleAdvance.2da` this slot grants.
+    pub advance: u16,
+    /// Localized family name (the `Label` of the level-up table row).
+    pub family: String,
+    /// Tier inside the family (1 based).
+    pub tier: u8,
 }
 
 /// Splits `Increase_Damage_3` into `("Increase_Damage", 3)`.
@@ -378,7 +398,7 @@ impl GameData {
 
         // Each style row points at a `styledata.2da` row, which names the
         // `<Style>LV.2da` table with the upgrades the level-up screen offers.
-        let mut style_advances: Vec<Option<Vec<u16>>> = vec![None; style_slots.len()];
+        let mut style_choices: Vec<Option<Vec<StyleChoice>>> = vec![None; style_slots.len()];
         if let (Some(styles), Some(style_data)) = (&styles, &style_data) {
             for (index, style) in style_slots.iter().enumerate() {
                 if style.is_none() {
@@ -398,7 +418,7 @@ impl GameData {
                     continue;
                 }
                 if let Some(table) = source.load(&format!("{table_name}.2da")) {
-                    style_advances[index] = Some(choice_rows(&table));
+                    style_choices[index] = Some(level_up_choices(&table, talktable.as_ref()));
                 }
             }
         }
@@ -408,7 +428,7 @@ impl GameData {
             items: item_slots,
             styles: style_slots,
             advances: advance_slots,
-            style_advances,
+            style_choices,
             search_index,
         })
     }
@@ -439,14 +459,13 @@ impl GameData {
             .filter(|advance| advance.row == row)
     }
 
-    /// Upgrade rows the game offers for a style, from its `<Style>LV.2da` table.
+    /// Purchasable slots of a style, from its `<Style>LV.2da` table.
     ///
-    /// `None` when the installation does not ship a table for the style, which
-    /// is the case for most styles: the editor then offers the whole
-    /// `StyleAdvance.2da` table instead of guessing.
+    /// `None` when the installation ships no table for the style; the editor
+    /// then leaves the style read-only instead of guessing slot semantics.
     #[must_use]
-    pub fn allowed_advances(&self, style_id: u16) -> Option<&[u16]> {
-        self.style_advances
+    pub fn style_choices(&self, style_id: u16) -> Option<&[StyleChoice]> {
+        self.style_choices
             .get(usize::from(style_id))
             .and_then(Option::as_ref)
             .map(Vec::as_slice)
@@ -565,25 +584,50 @@ pub fn is_playable_item(item: &ItemInfo) -> bool {
         || name.starts_with("zzz"))
 }
 
-/// Rows referenced by `Choice_1..5` of a `<Style>LV.2da` table.
-fn choice_rows(table: &TwoDa) -> Vec<u16> {
-    let mut rows: Vec<u16> = Vec::new();
-    for (_, row) in table.iter() {
-        for column in ["Choice_1", "Choice_2", "Choice_3", "Choice_4", "Choice_5"] {
-            let Some(column) = table.column(column) else {
+/// Flattens a `<Style>LV.2da` table into purchasable slots.
+///
+/// Each row of the table is one upgrade family (damage, speed, ...) with up to
+/// five tiers; the row's `Label` names the family. The slot number is the
+/// position in that flattened list and is what the savegame mask indexes.
+fn level_up_choices(table: &TwoDa, talk: Option<&TalkTable>) -> Vec<StyleChoice> {
+    let Some(choice_columns) = ["Choice_1", "Choice_2", "Choice_3", "Choice_4", "Choice_5"]
+        .iter()
+        .map(|name| table.column(name))
+        .collect::<Option<Vec<usize>>>()
+    else {
+        return Vec::new();
+    };
+    let mut choices = Vec::new();
+    for (row_index, row) in table.iter() {
+        let family = table
+            .uint(row_index, "Label")
+            .and_then(|reference| talk.and_then(|talk| talk.get(reference as u32)))
+            .unwrap_or_else(|| format!("Upgrades {}", row_index + 1));
+        let mut tier = 0_u8;
+        for column in &choice_columns {
+            let Some(value) = row.uint(*column) else {
                 continue;
             };
-            if let Some(value) = row.uint(column) {
-                if let Ok(value) = u16::try_from(value) {
-                    if value > 0 && !rows.contains(&value) {
-                        rows.push(value);
-                    }
-                }
+            let Ok(advance) = u16::try_from(value) else {
+                continue;
+            };
+            if advance == 0 {
+                continue;
             }
+            tier = tier.saturating_add(1);
+            let slot = choices.len() + 1;
+            if slot > 64 {
+                return choices;
+            }
+            choices.push(StyleChoice {
+                slot: u16::try_from(slot).unwrap_or(64),
+                advance,
+                family: family.clone(),
+                tier,
+            });
         }
     }
-    rows.sort_unstable();
-    rows
+    choices
 }
 
 /// Where the 2DA tables come from: `override/` first, the RIM archive second.

@@ -97,8 +97,13 @@ fn modded_styles_resolve_their_own_upgrade_tables() {
         Some("Mod Martial Style")
     );
     assert_eq!(game.styles().count(), 2);
-    assert_eq!(game.allowed_advances(0), Some([1_u16, 2].as_slice()));
-    assert_eq!(game.allowed_advances(1), Some([10_u16].as_slice()));
+    let martial = game.style_choices(0).expect("martial choices");
+    assert_eq!(martial.len(), 2);
+    assert_eq!((martial[0].slot, martial[0].advance), (1, 1));
+    assert_eq!((martial[1].slot, martial[1].advance), (2, 2));
+    let weapon = game.style_choices(1).expect("weapon choices");
+    assert_eq!(weapon.len(), 1);
+    assert_eq!((weapon[0].slot, weapon[0].advance), (1, 10));
     let damage = game.advance(1).expect("upgrade row 1");
     assert_eq!(damage.label, "Mod_Upgrade_1");
     assert_eq!(damage.cost, 1);
@@ -113,6 +118,6 @@ fn a_style_without_styledata_falls_back_to_no_restriction() {
     std::fs::remove_file(root.join("override").join("styledata.2da")).expect("remove");
     let game = GameData::open(&root).expect("load");
     assert!(game.styles().count() >= 2);
-    assert!(game.allowed_advances(0).is_none());
+    assert!(game.style_choices(0).is_none());
     let _ = std::fs::remove_dir_all(root);
 }
