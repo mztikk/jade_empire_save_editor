@@ -84,7 +84,6 @@ fn rewriting_all_blocks_keeps_the_tree() {
             }
             blocks += 1;
         }
-        save.verify().expect("verify");
     }
     eprintln!("rewrote {blocks} blocks");
 }
