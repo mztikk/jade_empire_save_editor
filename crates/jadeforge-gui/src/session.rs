@@ -123,6 +123,27 @@ impl SaveSort {
             Self::Played => "Played",
         }
     }
+
+    /// Stable key used in the settings file.
+    #[must_use]
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Name => "name",
+            Self::Level => "level",
+            Self::Played => "played",
+        }
+    }
+
+    /// Parses a key written by [`SaveSort::key`].
+    #[must_use]
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "name" => Some(Self::Name),
+            "level" => Some(Self::Level),
+            "played" => Some(Self::Played),
+            _ => None,
+        }
+    }
 }
 
 /// Compares two strings, treating runs of digits as numbers.
@@ -719,9 +740,16 @@ impl Session {
         if self.directory.as_os_str().is_empty() {
             return;
         }
-        let config = crate::config::Config {
-            save_dir: Some(self.directory.clone()),
-        };
+        let mut config = crate::config::Config::load();
+        config.save_dir = Some(self.directory.clone());
+        let _ = config.store();
+    }
+
+    /// Remembers the savegame list sorting for the next start (best effort).
+    pub fn persist_sort(&self, sort: SaveSort, descending: bool) {
+        let mut config = crate::config::Config::load();
+        config.sort = Some(sort.key().to_owned());
+        config.descending = descending;
         let _ = config.store();
     }
 

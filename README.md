@@ -133,7 +133,8 @@ canonical ones. `just check` runs the formatting, clippy and test gate.
    overrides the folder for one run and `JADEFORGE_CONFIG_DIR` moves the
    settings file (useful for portable installs).
 3. Pick a savegame on the left; the game's own screenshot and character summary
-   appear above the list.
+   appear above the list. The list can be sorted by name, level or play time,
+   and that choice (like the save folder) is remembered for the next start.
 4. Edit the values on the tabs. Every change — text fields, items, styles,
    gems and companions — is applied to the in-memory savegame immediately; the
    header shows "unsaved changes" and switching away is blocked until you save

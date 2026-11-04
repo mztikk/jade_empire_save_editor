@@ -1,7 +1,7 @@
 //! The small settings file `JadeForge` keeps between runs.
 //!
-//! Only the save folder is stored. The file lives in the platform's user
-//! configuration directory (`XDG_CONFIG_HOME`, `%APPDATA%` or
+//! The save folder and the savegame list sorting are stored. The file lives in
+//! the platform's user configuration directory (`XDG_CONFIG_HOME`, `%APPDATA%` or
 //! `~/Library/Application Support`) and is written on a best effort basis: a
 //! failed write never stops the editor from working.
 
@@ -12,6 +12,10 @@ use std::path::{Path, PathBuf};
 pub struct Config {
     /// Folder that was scanned last.
     pub save_dir: Option<PathBuf>,
+    /// Sort key of the savegame list, see `SaveSort::key`.
+    pub sort: Option<String>,
+    /// Whether the savegame list is sorted descending.
+    pub descending: bool,
 }
 
 impl Config {
@@ -46,9 +50,19 @@ impl Config {
             let Some((key, value)) = line.split_once('=') else {
                 continue;
             };
-            if key.trim() == "save_dir" {
-                let value = value.trim();
-                config.save_dir = (!value.is_empty()).then(|| PathBuf::from(value));
+            match key.trim() {
+                "save_dir" => {
+                    let value = value.trim();
+                    config.save_dir = (!value.is_empty()).then(|| PathBuf::from(value));
+                }
+                "sort" => {
+                    let value = value.trim();
+                    config.sort = (!value.is_empty()).then(|| value.to_owned());
+                }
+                "sort_descending" => {
+                    config.descending = matches!(value.trim(), "1" | "true" | "yes");
+                }
+                _ => {}
             }
         }
         config
@@ -62,6 +76,10 @@ impl Config {
         let mut text = String::from("# JadeForge settings\n");
         if let Some(dir) = &self.save_dir {
             let _ = writeln!(text, "save_dir={}", dir.display());
+        }
+        if let Some(sort) = &self.sort {
+            let _ = writeln!(text, "sort={sort}");
+            let _ = writeln!(text, "sort_descending={}", u8::from(self.descending));
         }
         text
     }
@@ -134,16 +152,23 @@ mod tests {
     fn settings_round_trip() {
         let config = Config {
             save_dir: Some(PathBuf::from("/games/Jade Empire/Save")),
+            sort: Some("played".to_owned()),
+            descending: true,
         };
         let text = config.to_text();
         assert!(text.contains("save_dir=/games/Jade Empire/Save"));
+        assert!(text.contains("sort=played"));
         assert_eq!(Config::parse(&text), config);
     }
 
     #[test]
     fn empty_and_broken_lines_are_ignored() {
-        let config = Config::parse("# comment\n\nsave_dir=\nbroken\nsave_dir=/tmp/saves\n");
+        let config = Config::parse(
+            "# comment\n\nsave_dir=\nbroken\nsave_dir=/tmp/saves\nsort=level\nsort_descending=1\n",
+        );
         assert_eq!(config.save_dir.as_deref(), Some(Path::new("/tmp/saves")));
+        assert_eq!(config.sort.as_deref(), Some("level"));
+        assert!(config.descending);
     }
 
     #[test]

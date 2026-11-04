@@ -123,7 +123,15 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let expanded_item = use_state(|| None::<u16>);
     let expanded_style = use_state(|| None::<u16>);
     let save_query = use_state(String::new);
-    let save_sort = use_state(|| (crate::session::SaveSort::Name, false));
+    let save_sort = use_state(|| {
+        let config = crate::config::Config::load();
+        let sort = config
+            .sort
+            .as_deref()
+            .and_then(crate::session::SaveSort::from_key)
+            .unwrap_or(crate::session::SaveSort::Name);
+        (sort, config.descending)
+    });
     let preview_cache: Rc<RefCell<Option<(u64, ImageHandle)>>> =
         use_hook(|| Rc::new(RefCell::new(None)));
 
@@ -680,7 +688,7 @@ fn sidebar(
                 .placeholder("Filter by name")
                 .width(Size::fill()),
         )
-        .child(sort_bar(sort, *sort.read()))
+        .child(sort_bar(ctx, sort, *sort.read()))
         .child(
             ScrollView::new()
                 .show_scrollbar(true)
@@ -699,6 +707,7 @@ fn sidebar(
 
 /// Sort buttons for the savegame list; pressing the active one flips the order.
 fn sort_bar(
+    ctx: &Ctx,
     state: State<(crate::session::SaveSort, bool)>,
     active: (crate::session::SaveSort, bool),
 ) -> Element {
@@ -717,17 +726,21 @@ fn sort_bar(
         } else {
             key.label().to_owned()
         };
+        let ctx = ctx.clone();
         buttons.push(
             Button::new()
                 .flat()
                 .compact()
                 .on_press(move |_| {
                     let (current, descending) = *state.read();
-                    if current == key {
-                        *state.write() = (key, !descending);
+                    let next = if current == key {
+                        (key, !descending)
                     } else {
-                        *state.write() = (key, false);
-                    }
+                        (key, false)
+                    };
+                    *state.write() = next;
+                    let ctx = ctx.clone();
+                    ctx.run(move |session| session.persist_sort(next.0, next.1));
                 })
                 .child(label().text(text).font_size(10.).color(if is_active {
                     theme::ACCENT
