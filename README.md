@@ -127,7 +127,7 @@ canonical ones. `just check` runs the formatting, clippy and test gate.
    type the path) and
    press **Scan**. JadeForge has no built-in guess where the game is installed:
    GOG, Steam, Heroic, Wine and manual installs all differ, so the folder is
-   chosen once and remembered in the user configuration
+   chosen once and remembered in the user configuration, a small TOML file
    (`$XDG_CONFIG_HOME/jadeforge/config`, `%APPDATA%\jadeforge\config` or
    `~/Library/Application Support/jadeforge/config`). `JADEFORGE_SAVE_DIR`
    overrides the folder for one run and `JADEFORGE_CONFIG_DIR` moves the

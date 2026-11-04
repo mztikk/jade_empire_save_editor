@@ -1969,6 +1969,8 @@ dependencies = [
  "jadeforge-core",
  "jadeforge-gamedata",
  "rfd",
+ "serde",
+ "toml",
  "tracing",
  "tracing-subscriber",
 ]

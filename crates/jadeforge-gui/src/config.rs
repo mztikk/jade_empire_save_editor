@@ -1,21 +1,26 @@
 //! The small settings file `JadeForge` keeps between runs.
 //!
-//! The save folder and the savegame list sorting are stored. The file lives in
-//! the platform's user configuration directory (`XDG_CONFIG_HOME`, `%APPDATA%` or
-//! `~/Library/Application Support`) and is written on a best effort basis: a
-//! failed write never stops the editor from working.
+//! It is TOML (`sort = "played"`), written on a best effort basis: a failed
+//! write never stops the editor from working. Settings files written by older
+//! versions used a plain `key=value` format; those are still read and are
+//! rewritten as TOML on the next save.
 
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 /// Settings persisted between runs.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Config {
     /// Folder that was scanned last.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub save_dir: Option<PathBuf>,
     /// Sort key of the savegame list, see `SaveSort::key`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sort: Option<String>,
     /// Whether the savegame list is sorted descending.
-    pub descending: bool,
+    pub sort_descending: bool,
 }
 
 impl Config {
@@ -38,9 +43,20 @@ impl Config {
         Self::parse(&text)
     }
 
-    /// Parses the `key=value` format used by the settings file.
+    /// Parses TOML, with a fallback for the older `key=value` settings file.
     #[must_use]
     pub fn parse(text: &str) -> Self {
+        if let Ok(config) = toml::from_str::<Config>(text) {
+            return config;
+        }
+        if looks_like_legacy_settings(text) {
+            return Self::parse_legacy(text);
+        }
+        Self::default()
+    }
+
+    /// Parses the `key=value` format of older versions.
+    fn parse_legacy(text: &str) -> Self {
         let mut config = Self::default();
         for line in text.lines() {
             let line = line.trim();
@@ -60,7 +76,7 @@ impl Config {
                     config.sort = (!value.is_empty()).then(|| value.to_owned());
                 }
                 "sort_descending" => {
-                    config.descending = matches!(value.trim(), "1" | "true" | "yes");
+                    config.sort_descending = matches!(value.trim(), "1" | "true" | "yes");
                 }
                 _ => {}
             }
@@ -71,17 +87,8 @@ impl Config {
     /// Renders the settings file.
     #[must_use]
     pub fn to_text(&self) -> String {
-        use std::fmt::Write as _;
-
-        let mut text = String::from("# JadeForge settings\n");
-        if let Some(dir) = &self.save_dir {
-            let _ = writeln!(text, "save_dir={}", dir.display());
-        }
-        if let Some(sort) = &self.sort {
-            let _ = writeln!(text, "sort={sort}");
-            let _ = writeln!(text, "sort_descending={}", u8::from(self.descending));
-        }
-        text
+        let body = toml::to_string_pretty(self).unwrap_or_default();
+        format!("# JadeForge settings\n{body}")
     }
 
     /// Writes the settings, creating the configuration directory if needed.
@@ -122,6 +129,24 @@ impl Config {
     }
 }
 
+/// True when at least one line uses the old unquoted `key=value` format.
+///
+/// This is deliberately conservative: a settings file that parses as TOML never
+/// reaches this check, and a TOML file with a syntax error keeps its values only
+/// when it still looks like the legacy format.
+fn looks_like_legacy_settings(text: &str) -> bool {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .any(|line| {
+            let Some((key, value)) = line.split_once('=') else {
+                return false;
+            };
+            matches!(key.trim(), "save_dir" | "sort" | "sort_descending")
+                && !value.trim().starts_with('"')
+        })
+}
+
 /// Picks the configuration directory from the platform variables.
 ///
 /// Split out from [`Config::path`] so it can be tested without touching the
@@ -153,22 +178,40 @@ mod tests {
         let config = Config {
             save_dir: Some(PathBuf::from("/games/Jade Empire/Save")),
             sort: Some("played".to_owned()),
-            descending: true,
+            sort_descending: true,
         };
         let text = config.to_text();
-        assert!(text.contains("save_dir=/games/Jade Empire/Save"));
-        assert!(text.contains("sort=played"));
+        assert!(text.contains("save_dir = \"/games/Jade Empire/Save\""));
+        assert!(text.contains("sort = \"played\""));
+        assert!(text.contains("sort_descending = true"));
         assert_eq!(Config::parse(&text), config);
     }
 
     #[test]
-    fn empty_and_broken_lines_are_ignored() {
-        let config = Config::parse(
-            "# comment\n\nsave_dir=\nbroken\nsave_dir=/tmp/saves\nsort=level\nsort_descending=1\n",
-        );
+    fn legacy_settings_are_still_read() {
+        let config = Config::parse("save_dir=/tmp/saves\nsort=level\nsort_descending=1\n");
         assert_eq!(config.save_dir.as_deref(), Some(Path::new("/tmp/saves")));
         assert_eq!(config.sort.as_deref(), Some("level"));
-        assert!(config.descending);
+        assert!(config.sort_descending);
+    }
+
+    #[test]
+    fn empty_and_broken_lines_are_ignored_in_legacy_files() {
+        let config = Config::parse("# comment\n\nsave_dir=\nbroken\nsave_dir=/tmp/saves\n");
+        assert_eq!(config.save_dir.as_deref(), Some(Path::new("/tmp/saves")));
+    }
+
+    #[test]
+    fn partial_toml_uses_defaults_for_missing_keys() {
+        let config = Config::parse("sort = \"level\"\nsort_descending = true\n");
+        assert_eq!(config.save_dir, None);
+        assert_eq!(config.sort.as_deref(), Some("level"));
+        assert!(config.sort_descending);
+    }
+
+    #[test]
+    fn broken_toml_falls_back_to_defaults() {
+        assert_eq!(Config::parse("sort = \"level\n"), Config::default());
     }
 
     #[test]

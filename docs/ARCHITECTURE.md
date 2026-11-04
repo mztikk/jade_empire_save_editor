@@ -113,7 +113,7 @@ Freya 0.4 application with a small, explicit structure:
 | --- | --- |
 | `session` | all behaviour (no Freya types): loading, editing, search, save/revert |
 | `app` | the shell: header, save list with screenshot, tabs, action bar |
-| `config` | the small settings file that remembers the save folder |
+| `config` | the small TOML settings file (save folder and list sorting; old `key=value` files are still read) |
 | `dialog` | the native folder dialog (`rfd`) with a test seam for the headless suite |
 | `theme` | palette and the Freya component theme (dark surfaces, gold accents) |
 | `app::HoverKey` | one shared hover state for save, item, style rows and upgrade orbs |

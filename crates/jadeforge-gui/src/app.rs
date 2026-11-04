@@ -130,7 +130,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             .as_deref()
             .and_then(crate::session::SaveSort::from_key)
             .unwrap_or(crate::session::SaveSort::Name);
-        (sort, config.descending)
+        (sort, config.sort_descending)
     });
     let preview_cache: Rc<RefCell<Option<(u64, ImageHandle)>>> =
         use_hook(|| Rc::new(RefCell::new(None)));
