@@ -118,7 +118,9 @@ and macOS and uploads the staged folders as per-OS artifacts; pull requests skip
 that job.
 
 The `just` shortcuts are optional; the cargo commands above remain the
-canonical ones. `just check` runs the formatting, clippy and test gate.
+canonical ones. `just check` runs the formatting, clippy and test gate and
+`just coverage` writes a line/function summary plus HTML and lcov reports to
+`coverage/`.
 
 ## Using the desktop application
 

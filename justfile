@@ -51,6 +51,14 @@ strict:
     | sort | uniq -c | sort -rn \
     | awk '{ line[NR] = sprintf("%5d  %s", $1, $2); total += $1 } END { print total " strict diagnostics"; for (i = 1; i <= NR; i++) print line[i] }'
 
+# Code coverage: line/function summary, coverage/lcov.info and coverage/html.
+# Needs cargo-llvm-cov and llvm-tools-preview (or LLVM_COV/LLVM_PROFDATA).
+coverage *args:
+    mkdir -p coverage
+    cargo llvm-cov --workspace --all-targets --summary-only \
+        --lcov --output-path coverage/lcov.info {{ args }}
+    cargo llvm-cov report --html --output-dir coverage
+
 # Render the UI into PNG files without opening a window.
 snapshot save_dir out="docs/screenshot.png" *args:
     cargo run -q -p jadeforge-gui --example snapshot -- "{{ save_dir }}" "{{ out }}" {{ args }}

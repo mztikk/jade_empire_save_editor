@@ -35,8 +35,10 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 
 The same commands are available through `just` (see the `justfile`): `just
 check` runs formatting, clippy and the tests, `just snapshot …` renders the UI,
-and `just publish` builds the fat-LTO distribution binaries. The cargo commands
-above remain canonical.
+and `just publish` builds the fat-LTO distribution binaries. `just coverage` runs
+`cargo llvm-cov` and writes `coverage/lcov.info` and `coverage/html` (see
+[docs/COVERAGE.md](docs/COVERAGE.md) for the current numbers and the plan). The
+cargo commands above remain canonical.
 
 ## Non-negotiable rules
 
@@ -224,7 +226,8 @@ documentation, not ground truth — verify against the game files where possible
 | `docs/ARCHITECTURE.md` | crate layout, data flow, safety model |
 | `.dsh/skills` | task-specific skills for working on this repository |
 | `ci/github-actions.yml` | GitHub Actions workflow (see `ci/README.md`) |
-| `justfile` | `just` shortcuts for the commands above (`just check`, `just publish`) |
+| `justfile` | `just` shortcuts for the commands above (`just check`, `just coverage`, `just publish`) |
+| `docs/COVERAGE.md` | current coverage, the gaps and the plan to close them |
 | `SaveEditorDoc.md` | the original project brief |
 
 ## Skills
