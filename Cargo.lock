@@ -1967,12 +1967,20 @@ dependencies = [
  "freya",
  "freya-testing",
  "jadeforge-core",
- "jadeforge-gamedata",
+ "jadeforge-session",
  "rfd",
- "serde",
- "toml",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "jadeforge-session"
+version = "0.1.0"
+dependencies = [
+ "jadeforge-core",
+ "jadeforge-gamedata",
+ "serde",
+ "toml",
 ]
 
 [[package]]

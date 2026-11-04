@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/jadeforge-core",
+    "crates/jadeforge-session",
     "crates/jadeforge-cli",
     "crates/jadeforge-gui",
     "crates/jadeforge-gamedata",
@@ -19,6 +20,7 @@ readme = "README.md"
 
 [workspace.dependencies]
 jadeforge-core = { path = "crates/jadeforge-core", version = "0.1.0" }
+jadeforge-session = { path = "crates/jadeforge-session", version = "0.1.0" }
 jadeforge-gamedata = { path = "crates/jadeforge-gamedata", version = "0.1.0" }
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive"] }

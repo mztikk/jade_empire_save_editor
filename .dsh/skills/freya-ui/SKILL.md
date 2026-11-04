@@ -7,8 +7,8 @@ description: Use when building or changing the JadeForge desktop UI with Freya 0
 
 ## Structure that must not be broken
 
-- `crates/jadeforge-gui/src/session.rs` owns every behaviour and has **no Freya
-  types**. It is unit tested.
+- `crates/jadeforge-session/src/session.rs` owns every behaviour and has **no
+  Freya types**. It is unit tested and re-exported by the GUI crate.
 - `app.rs` is the shell (header, save list, tabs, action bar); `views/` holds one
   module per tab; `widgets.rs` holds cards/fields/badges; `theme.rs` holds the
   palette.
