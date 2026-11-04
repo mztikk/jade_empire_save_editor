@@ -97,6 +97,38 @@ fn every_field_type_round_trips() {
 }
 
 #[test]
+fn empty_and_maximal_payloads_round_trip() {
+    let mut gff = empty_block();
+    let long_resref = "r".repeat(255);
+    for (label, value) in [
+        ("EmptyString", Value::String(String::new())),
+        ("EmptyResRef", Value::ResRef(String::new())),
+        ("LongResRef", Value::ResRef(long_resref)),
+        ("EmptyVoid", Value::Void(Vec::new())),
+        (
+            "EmptyLoc",
+            Value::LocString(LocString {
+                strref: None,
+                text: None,
+            }),
+        ),
+        ("ZeroStrref", Value::LocString(LocString::from_strref(0))),
+        (
+            "TextOnly",
+            Value::LocString(LocString {
+                strref: None,
+                text: Some("text only".to_owned()),
+            }),
+        ),
+    ] {
+        gff.add_field(0, label, value).expect("edge field");
+    }
+    let bytes = gff.to_bytes().expect("serialize");
+    let parsed = Gff::parse("edges", &bytes).expect("parse");
+    assert_eq!(parsed, gff, "an edge payload changed in the round trip");
+}
+
+#[test]
 fn legacy_locstring_type_is_read() {
     let gff = single_field(
         "Text",

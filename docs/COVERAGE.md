@@ -22,17 +22,17 @@ just coverage
 
 | metric | covered |
 | --- | --- |
-| lines | **6 566 / 8 076 = 81.3 %** |
-| functions | **628 / 926 = 67.8 %** |
+| lines | **6 626 / 8 076 = 82.0 %** |
+| functions | **639 / 926 = 69.0 %** |
 
 | crate | lines | functions |
 | --- | --- | --- |
 | `jadeforge-gamedata` | 89.6 % | 83.8 % |
-| `jadeforge-gui` | 88.0 % | 66.1 % |
+| `jadeforge-gui` | 87.8 % | 65.5 % |
 | `jadeforge-core` | 77.4 % | 63.9 % |
 | `jadeforge-session` | 77.2 % | 78.1 % |
 | `jadeforge-gff` | 79.8 % | 58.6 % |
-| `jadeforge-cli` | 48.6 % | 29.8 % |
+| `jadeforge-cli` | 68.3 % | 55.3 % |
 
 Notes:
 
@@ -46,7 +46,7 @@ Notes:
 
 | phase | overall lines | gff | cli | core | session | gui | gamedata |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| baseline | 81.3 % | 80 % | 49 % | 77 % | 77 % | 88 % | 90 % |
+| baseline | 82.0 % | 80 % | 68 % | 77 % | 77 % | 88 % | 90 % |
 | phase 1 | ≥ 84 % | ≥ 80 % | ≥ 60 % | ≥ 82 % | ≥ 79 % | ≥ 88 % | ≥ 90 % |
 | phase 2 | ≥ 88 % | ≥ 85 % | ≥ 80 % | ≥ 86 % | ≥ 85 % | ≥ 89 % | ≥ 92 % |
 
@@ -65,9 +65,9 @@ unknown type, list index out of range, oversized string length, truncated
 locstring, duplicate labels, type mismatches, dangling structs). `gff` moved
 from 72.1 % to **79.8 %** and the overall project from 79.9 % to **81.3 %**.
 
-Remaining: `value.rs` is at 68.5 % — some decode branches are still only reached
-through unusual payloads (for example an empty locstring or a zero-length void).
-Add those to the same file before promoting the lint thresholds.
+The remaining decode branches are covered too: empty string, empty and maximal
+(255 byte) resrefs, zero-length void, and locstrings without strref/text.
+`gff` is now at **79.8 %**, just below the phase-1 target of 80 %.
 
 - Add `crates/jadeforge-gff/tests/codec.rs` with a synthetic GFF block that
   contains **every** field type: inline byte/char/word/short/dword/int/float,
@@ -83,21 +83,20 @@ Add those to the same file before promoting the lint thresholds.
 
 Expected: +120–180 covered lines, `gff` to ≥ 80 %.
 
-### 2. `jadeforge-cli`: make the commands testable
+### 2. `jadeforge-cli`: end-to-end tests (done)
 
-`main.rs` is 48.6 % / 29.8 % functions.
+`crates/jadeforge-cli/tests/cli.rs` builds a synthetic savegame and runs the
+real binary, so clap parsing, dispatch and every read handler are exercised:
+`blocks`, `info`, `character`, `get`, `dump` (whole block and `--path`),
+`verify`, `items`, `styles` and `companions`. It also covers `set` with
+`--dry-run` (file untouched), the real write plus backup creation, bad field
+paths and values, a missing save, and the folder-argument resolution.
 
-- Move the bodies of `blocks`, `dump`, `get`, `set`, `info` and `players` into
-  `commands.rs` functions that take a `&Path`, a writer and plain arguments.
-- Keep `main.rs` to clap parsing, dispatch and exit codes.
-- Test every command against a temporary savegame copy (the fixture helper that
-  the other tests already use) and against broken inputs, asserting output and
-  exit codes.
-- Add a `--json` test that pins a small JSON shape (the only JSON surface).
+`cli` moved from 48.6 % to **68.3 %** lines (55.3 % functions); the project is
+at **82.0 %**. Remaining: error formatting branches inside `main.rs` and a few
+`add_item` options.
 
-Expected: +100–130 covered lines, `cli` to ≥ 60 % in phase 1 and ≥ 80 % later.
-
-### 3. `jadeforge-core`: error and boundary paths
+### 3. `jadeforge-core`: error and boundary paths (next)
 
 Targets: `inventory.rs` 57.5 %, `save.rs` 68.8 %, `henchmen.rs` 69.7 %.
 
