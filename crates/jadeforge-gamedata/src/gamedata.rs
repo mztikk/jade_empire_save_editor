@@ -275,8 +275,21 @@ impl GameData {
     #[must_use]
     pub fn discover(save_path: &Path) -> Option<Self> {
         if let Some(directory) = std::env::var_os("JADEFORGE_GAME_DIR") {
-            return Self::open(PathBuf::from(directory)).ok();
+            if let Ok(game) = Self::open(PathBuf::from(directory)) {
+                return Some(game);
+            }
+            // A stale or wrong override must not stop the normal layout from
+            // being found.
         }
+        Self::discover_beside(save_path)
+    }
+
+    /// Walks up from the save folder looking for the installation.
+    ///
+    /// A regular installation is `<game>/Save` or `<game>/Save/<savegame>`, so
+    /// the game root is one or two levels above the selected folder. The
+    /// environment override is handled by [`GameData::discover`].
+    fn discover_beside(save_path: &Path) -> Option<Self> {
         let folder = if save_path.is_dir() {
             save_path
         } else {
@@ -821,6 +834,37 @@ impl TableSource {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn discovery_finds_the_game_root_above_the_save_folder() {
+        let root = std::env::temp_dir().join(format!(
+            "jadeforge-discover-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_nanos())
+        ));
+        let game = root.join("Jade Empire");
+        let save = game.join("Save");
+        std::fs::create_dir_all(game.join("override")).expect("create game layout");
+        std::fs::create_dir_all(save.join("Auto 1")).expect("create save folder");
+        std::fs::write(save.join("Auto 1").join("save.sac"), b"").expect("write save");
+
+        let discovered = GameData::discover_beside(&save).expect("game above Save");
+        assert_eq!(discovered.root(), game.as_path());
+        let from_savegame =
+            GameData::discover_beside(&save.join("Auto 1")).expect("game above savegame");
+        assert_eq!(from_savegame.root(), game.as_path());
+        let from_file = GameData::discover_beside(&save.join("Auto 1").join("save.sac"))
+            .expect("game above save file");
+        assert_eq!(from_file.root(), game.as_path());
+
+        let unrelated = root.join("Documents");
+        std::fs::create_dir_all(&unrelated).expect("create unrelated folder");
+        assert!(GameData::discover_beside(&unrelated).is_none());
+
+        let _ = std::fs::remove_dir_all(root);
+    }
 
     #[test]
     fn category_mapping_covers_the_engine_values() {

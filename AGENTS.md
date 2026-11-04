@@ -97,8 +97,9 @@ cargo commands above remain canonical.
 ## Game data (names, item and style tables)
 
 - `crates/jadeforge-gamedata` locates the installation from the save folder
-  (`JADEFORGE_GAME_DIR` wins), parses `dialog.tlk` (TLK V4.0) and the text 2DA
-  tables in `override/`.
+  (`JADEFORGE_GAME_DIR` wins; a broken override falls back to the normal
+  `<game>/Save` layout), parses `dialog.tlk` (TLK V4.0) and the text 2DA tables
+  in `override/`.
 - Every lookup degrades gracefully: when the files are missing the UI falls back
   to numeric ids, it never fails to open a savegame because of missing game data.
 - Names come from the talk table via the 2DA `STRREF_NAME`/`NameRef` columns. Do
