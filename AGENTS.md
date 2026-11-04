@@ -89,11 +89,11 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 - A style's upgrade mask is not a counter: bit *i* selects row *i+1* of
   `StyleAdvance.2da` and the level is `1 + popcount`. `set_style_upgrade` must
   keep mask and level in sync; never write one without the other.
-- Upgrades are changed per family: clicking tier *n* buys every missing tier up
-  to *n*, clicking an owned tier removes it and everything above it. The mask of
-  a family is therefore always a gap-free prefix; do not add a free-selection
-  path that can create gaps, and do not edit the level directly (it is derived
-  from the mask and has no UI control).
+- Upgrades are changed per family: clicking the tier *n* orb buys every missing
+  tier up to *n*, clicking an owned orb removes it and everything above it. The
+  mask of a family is therefore always a gap-free prefix; do not add a
+  free-selection path that can create gaps, and do not edit the level directly
+  (it is derived from the mask and has no UI control).
 - `<Style>LV.2da` tables limit what the game's level-up screen offers. They ship
   as binary `2DA V2.b` resources inside `data/miniglobal-a.rim`; the mapping is
   `stylesuperlist.StyleData` -> `styledata.2da` row -> `levelup2da` column.
@@ -166,6 +166,8 @@ documentation, not ground truth — verify against the game files where possible
   shows its full contents and *additionally* offers a filter.
 - The same value is spelled the same way everywhere. Item rows and style rows
   use `category · #id` / `template · #id` in both the owned list and the picker.
+- Upgrade tiers are golden circles like in the game: filled when owned, an
+  empty ring when buyable. Do not turn them back into rectangular buttons.
 - A change is not done until `cargo test --workspace`, `cargo clippy
   --workspace --all-targets -- -D warnings` and `cargo fmt --all --check` pass.
 

@@ -258,14 +258,15 @@ confirm this: a level 11 style carries ten bits, for example `[0-4, 10-14]`
 (five damage tiers plus five speed tiers), and every style satisfies
 `level == 1 + popcount`.
 
-The editor shows those bits as one chip per tier and family inside the expanded
-style row. Clicking a tier sets the family to that tier: missing tiers up to it
-are bought, clicking an owned tier removes it and everything above it. That is a
+The editor shows those bits as one golden orb per tier and family inside the
+expanded style row.
+Clicking an orb sets the family to that tier: missing tiers up to it
+are bought, clicking an owned orb removes it and everything above it. That is a
 gap-free prefix per family, because the game's own level-up screen never creates
 gaps. The level itself is read-only in the editor; it is derived from the mask.
 
 A **Game rules** toggle (on by default)
-restricts the chips to the rows listed by the style's own `<Style>LV.2da` table
+restricts the orbs to the rows listed by the style's own `<Style>LV.2da` table
 (`IronPalmLV`, `ViperLV`, `Ghost_KingLV` in this installation; most styles do
 not ship one), and falls back to the full `StyleAdvance.2da` table when the
 table is missing so nothing is hidden by guesswork.
