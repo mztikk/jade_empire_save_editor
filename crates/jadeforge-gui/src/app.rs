@@ -1,201 +1,211 @@
-//! The Freya user interface.
+//! The root component and the application shell.
 //!
-//! The view is deliberately thin: all behaviour lives in
-//! [`crate::session::Session`], the component only renders the current state and
-//! forwards user input.
+//! The shell owns the navigation (save list, tabs, actions) and renders the
+//! active tab. All behaviour lives in [`crate::session::Session`].
 
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use freya::elements::image::ImageHandle;
+use freya::engine::prelude::AlphaType;
 use freya::prelude::*;
-use jadeforge_core::{Character, Item};
+use jadeforge_core::Character;
 
-use crate::session::{CharacterForm, MessageKind, Session};
+use crate::form::Form;
+use crate::session::{CharacterForm, GameStatus, MessageKind, Preview, Session, default_save_dir};
+use crate::theme;
+use crate::views;
 
-const BACKGROUND: (u8, u8, u8) = (21, 23, 28);
-const PANEL: (u8, u8, u8) = (30, 33, 40);
-const PANEL_ALT: (u8, u8, u8) = (37, 41, 50);
-const TEXT: (u8, u8, u8) = (228, 231, 237);
-const MUTED: (u8, u8, u8) = (151, 158, 171);
-const ACCENT: (u8, u8, u8) = (223, 181, 87);
-const SUCCESS: (u8, u8, u8) = (127, 199, 148);
-const ERROR: (u8, u8, u8) = (234, 124, 124);
-
-type SharedSession = Rc<RefCell<Session>>;
-
-/// The text inputs of the character form.
-#[derive(Clone, Copy)]
-struct Form {
-    name: State<String>,
-    level: State<String>,
-    experience: State<String>,
-    gold: State<String>,
-    attribute_points: State<String>,
-    health: State<String>,
-    health_max: State<String>,
-    chi: State<String>,
-    chi_max: State<String>,
-    focus: State<String>,
-    focus_max: State<String>,
-    body: State<String>,
-    mind: State<String>,
-    spirit: State<String>,
-    charm: State<String>,
-    intuition: State<String>,
-    intimidate: State<String>,
-    alignment: State<String>,
-    chapter: State<String>,
-    kills: State<String>,
+/// Shared handles that every view needs.
+#[derive(Clone)]
+pub struct Ctx {
+    /// The editing session.
+    pub session: Rc<RefCell<Session>>,
+    /// Bumped after every mutation to trigger a re-render.
+    pub revision: State<u32>,
+    /// The character form state.
+    pub form: Form,
 }
 
-impl Form {
-    fn new() -> Self {
-        Self {
-            name: use_state(String::new),
-            level: use_state(String::new),
-            experience: use_state(String::new),
-            gold: use_state(String::new),
-            attribute_points: use_state(String::new),
-            health: use_state(String::new),
-            health_max: use_state(String::new),
-            chi: use_state(String::new),
-            chi_max: use_state(String::new),
-            focus: use_state(String::new),
-            focus_max: use_state(String::new),
-            body: use_state(String::new),
-            mind: use_state(String::new),
-            spirit: use_state(String::new),
-            charm: use_state(String::new),
-            intuition: use_state(String::new),
-            intimidate: use_state(String::new),
-            alignment: use_state(String::new),
-            chapter: use_state(String::new),
-            kills: use_state(String::new),
-        }
-    }
-
-    fn load(&self, form: &CharacterForm) {
-        let assign = |mut state: State<String>, value: &String| {
-            state.write().clone_from(value);
+impl Ctx {
+    /// Runs an action on the session and re-renders.
+    pub fn run<R>(&self, action: impl FnOnce(&mut Session) -> R) -> R {
+        let result = {
+            let mut session = self.session.borrow_mut();
+            action(&mut session)
         };
-        assign(self.name, &form.name);
-        assign(self.level, &form.level);
-        assign(self.experience, &form.experience);
-        assign(self.gold, &form.gold);
-        assign(self.attribute_points, &form.attribute_points);
-        assign(self.health, &form.health);
-        assign(self.health_max, &form.health_max);
-        assign(self.chi, &form.chi);
-        assign(self.chi_max, &form.chi_max);
-        assign(self.focus, &form.focus);
-        assign(self.focus_max, &form.focus_max);
-        assign(self.body, &form.body);
-        assign(self.mind, &form.mind);
-        assign(self.spirit, &form.spirit);
-        assign(self.charm, &form.charm);
-        assign(self.intuition, &form.intuition);
-        assign(self.intimidate, &form.intimidate);
-        assign(self.alignment, &form.alignment);
-        assign(self.chapter, &form.chapter);
-        assign(self.kills, &form.kills);
+        self.bump();
+        result
     }
 
-    fn read(&self) -> CharacterForm {
-        let value = |state: State<String>| state.read().clone();
-        CharacterForm {
-            name: value(self.name),
-            level: value(self.level),
-            experience: value(self.experience),
-            gold: value(self.gold),
-            attribute_points: value(self.attribute_points),
-            health: value(self.health),
-            health_max: value(self.health_max),
-            chi: value(self.chi),
-            chi_max: value(self.chi_max),
-            focus: value(self.focus),
-            focus_max: value(self.focus_max),
-            body: value(self.body),
-            mind: value(self.mind),
-            spirit: value(self.spirit),
-            charm: value(self.charm),
-            intuition: value(self.intuition),
-            intimidate: value(self.intimidate),
-            alignment: value(self.alignment),
-            chapter: value(self.chapter),
-            kills: value(self.kills),
+    /// Requests a re-render.
+    pub fn bump(&self) {
+        let mut revision = self.revision;
+        *revision.write() += 1;
+    }
+}
+
+/// The tabs of the editor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tab {
+    /// Summary of the savegame.
+    Overview,
+    /// Character sheet.
+    Character,
+    /// Fighting styles.
+    Styles,
+    /// Inventory.
+    Inventory,
+    /// Companions.
+    Companions,
+}
+
+impl Tab {
+    const ALL: [Self; 5] = [
+        Self::Overview,
+        Self::Character,
+        Self::Styles,
+        Self::Inventory,
+        Self::Companions,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Overview => "Overview",
+            Self::Character => "Character",
+            Self::Styles => "Styles",
+            Self::Inventory => "Inventory",
+            Self::Companions => "Companions",
         }
     }
 }
 
 /// Root component of the application.
 pub fn app() -> impl IntoElement {
-    app_with_directory(crate::session::default_save_dir())
+    app_with_directory(default_save_dir())
 }
 
 /// Root component that starts with a specific save folder.
+#[allow(clippy::too_many_lines)] // the shell wires all views in one place
 pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
-    let session: SharedSession =
+    use_init_theme(theme::theme);
+
+    let session: Rc<RefCell<Session>> =
         use_hook(move || Rc::new(RefCell::new(Session::with_directory(directory))));
     let revision = use_state(|| 0_u32);
     let form = Form::new();
-    let directory = use_state(|| session.borrow().directory.display().to_string());
-    let new_item_id = use_state(|| String::from("1000"));
-    let new_item_kind = use_state(|| String::from("6"));
-    let new_item_count = use_state(|| String::from("1"));
+    let directory_state = use_state(|| session.borrow().directory.display().to_string());
+    let tab = use_state(|| Tab::Overview);
+    let item_query = use_state(String::new);
+    let style_query = use_state(String::new);
+    let preview_cache: Rc<RefCell<Option<(u64, ImageHandle)>>> =
+        use_hook(|| Rc::new(RefCell::new(None)));
 
-    // A snapshot of everything the view needs. Cloning keeps the borrow short.
+    // Subscribe to session changes.
+    let _ = *revision.read();
+
+    let ctx = Ctx {
+        session: session.clone(),
+        revision,
+        form,
+    };
+
+    // Snapshot everything the shell needs so the borrow stays short.
     let entries = session.borrow().entries.clone();
     let selected = session.borrow().selected;
     let message = session.borrow().message.clone();
     let character = session.borrow().character.clone();
     let items = session.borrow().items.clone();
-    let has_save = session.borrow().save.is_some();
+    let styles = session.borrow().styles.clone();
+    let henchmen = session.borrow().henchmen.clone();
     let dirty = session.borrow().is_dirty();
-    // Reading the revision subscribes this component to session changes.
-    let revision_value = *revision.read();
-    let _ = revision_value;
+    let preview = session.borrow().preview.clone();
+    let game_status = session.borrow().game_status.clone();
+    let has_save = session.borrow().save.is_some();
 
-    // Loading a save always refreshes the form from the model.
+    let form_differs = character
+        .as_ref()
+        .is_some_and(|character| form.differs_from(character));
+    let preview_handle = cached_preview(&preview_cache, preview.as_ref());
+    let game_ready = matches!(game_status, GameStatus::Loaded { .. });
+    let item_results = {
+        let query = item_query.read().clone();
+        session.borrow().search_items(&query, 8)
+    };
+    let style_matches = {
+        let query = style_query.read().trim().to_lowercase();
+        let missing = session.borrow().missing_styles();
+        if query.is_empty() {
+            Vec::new()
+        } else {
+            missing
+                .into_iter()
+                .filter(|(_, name, label)| {
+                    name.to_lowercase().contains(&query) || label.to_lowercase().contains(&query)
+                })
+                .collect()
+        }
+    };
+
     let sync: Rc<dyn Fn()> = {
         let session = session.clone();
         Rc::new(move || {
-            if let Some(character) = session.borrow().character.clone() {
+            let character = session.borrow().character.clone();
+            if let Some(character) = character {
                 form.load(&CharacterForm::from_character(&character));
             }
         })
     };
 
+    let active_tab = *tab.read();
+    let content = match (active_tab, &character) {
+        (Tab::Overview, Some(character)) => views::overview::view(
+            &ctx,
+            character,
+            preview_handle.clone(),
+            items.len(),
+            styles.len(),
+        ),
+        (Tab::Character, Some(character)) => views::character::view(&ctx, character),
+        (Tab::Styles, _) => {
+            views::styles::view(&ctx, &styles, style_query, &style_matches, game_ready)
+        }
+        (Tab::Inventory, _) => {
+            views::inventory::view(&ctx, &items, item_query, &item_results, game_ready)
+        }
+        (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen),
+        (_, None) => empty_state(entries.len()),
+    };
+
     let header = header(
-        &session,
-        revision,
-        form,
-        directory,
-        sync.clone(),
-        message.clone(),
+        &ctx,
+        directory_state,
+        &message,
+        &game_status,
         dirty,
+        form_differs,
+        sync.clone(),
     );
-    let sidebar = sidebar(&session, revision, sync.clone(), &entries, selected);
-    let main = main_panel(
-        &session,
-        revision,
-        form,
+    let sidebar = sidebar(
+        &ctx,
+        &entries,
+        selected,
+        preview_handle,
         character.as_ref(),
-        &items,
-        new_item_id,
-        new_item_kind,
-        new_item_count,
-        has_save,
+        form_differs,
+        sync.clone(),
     );
+    let tabs = tab_bar(tab, active_tab);
+    let footer = footer(&ctx, form, dirty || form_differs, form_differs, sync);
 
     rect()
         .vertical()
         .width(Size::fill())
         .height(Size::fill())
+        .background(theme::BACKGROUND)
+        .color(theme::TEXT)
         .content(Content::Flex)
-        .background(BACKGROUND)
-        .color(TEXT)
-        .font_size(14.)
         .child(header)
         .child(
             rect()
@@ -208,102 +218,122 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         .vertical()
                         .width(Size::flex(1.0))
                         .height(Size::fill())
-                        .child(main),
+                        .content(Content::Flex)
+                        .child(tabs)
+                        .child(
+                            ScrollView::new()
+                                .show_scrollbar(true)
+                                .width(Size::fill())
+                                .height(Size::flex(1.0))
+                                .child(
+                                    rect()
+                                        .vertical()
+                                        .width(Size::fill())
+                                        .padding(Gaps::new(16., 18., 16., 18.))
+                                        .child(if has_save {
+                                            content
+                                        } else {
+                                            empty_state(entries.len())
+                                        }),
+                                ),
+                        ),
                 ),
         )
+        .child(footer)
 }
 
-#[allow(
-    clippy::too_many_lines,
-    clippy::large_types_passed_by_value,
-    clippy::needless_pass_by_value
-)] // the form is a bundle of cheap `Copy` state handles
+/// Builds an [`ImageHandle`] for the preview, cached by generation.
+fn cached_preview(
+    cache: &Rc<RefCell<Option<(u64, ImageHandle)>>>,
+    preview: Option<&Preview>,
+) -> Option<ImageHandle> {
+    let preview = preview?;
+    let mut cache = cache.borrow_mut();
+    if let Some((generation, handle)) = cache.as_ref() {
+        if *generation == preview.generation {
+            return Some(handle.clone());
+        }
+    }
+    let handle = ImageHandle::from_rgba(
+        preview.width,
+        preview.height,
+        Bytes::copy_from_slice(&preview.rgba),
+        AlphaType::Opaque,
+    )?;
+    *cache = Some((preview.generation, handle.clone()));
+    Some(handle)
+}
+
+#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 fn header(
-    session: &SharedSession,
-    revision: State<u32>,
-    form: Form,
+    ctx: &Ctx,
     directory: State<String>,
-    sync: Rc<dyn Fn()>,
-    message: crate::session::Message,
+    message: &crate::session::Message,
+    game_status: &GameStatus,
     dirty: bool,
+    form_differs: bool,
+    sync: Rc<dyn Fn()>,
 ) -> Element {
     let status_color = match message.kind {
-        MessageKind::Info => MUTED,
-        MessageKind::Success => SUCCESS,
-        MessageKind::Error => ERROR,
+        MessageKind::Info => theme::MUTED,
+        MessageKind::Success => theme::SUCCESS,
+        MessageKind::Error => theme::DANGER,
+    };
+    let (game_text, game_color) = match game_status {
+        GameStatus::Loaded { items, .. } => (format!("{items} items loaded"), theme::JADE),
+        GameStatus::Missing => ("game data not found".to_owned(), theme::DIM),
+        GameStatus::Error(_) => ("game data unreadable".to_owned(), theme::DANGER),
     };
 
     let scan = {
-        let session = session.clone();
-        let mut revision = revision;
-        let sync = sync.clone();
+        let ctx = ctx.clone();
         move |_| {
-            let path = PathBuf::from(directory.read().as_str());
-            session.borrow_mut().set_directory(path);
-            sync();
-            *revision.write() += 1;
-        }
-    };
-
-    let apply = {
-        let session = session.clone();
-        let mut revision = revision;
-        move |_| {
-            let _ = session.borrow_mut().apply(&form.read());
-            *revision.write() += 1;
-        }
-    };
-
-    let save = {
-        let session = session.clone();
-        let mut revision = revision;
-        let sync = sync.clone();
-        move |_| {
-            let mut borrowed = session.borrow_mut();
-            if borrowed.apply(&form.read()).is_ok() {
-                let _ = borrowed.save();
+            if form_differs {
+                ctx.run(|session| {
+                    session.set_error("Apply or discard the character changes before scanning.");
+                });
+                return;
             }
-            drop(borrowed);
+            let path = PathBuf::from(directory.read().as_str());
+            ctx.run(|session| session.set_directory(path));
             sync();
-            *revision.write() += 1;
-        }
-    };
-
-    let revert = {
-        let session = session.clone();
-        let mut revision = revision;
-        let sync = sync.clone();
-        move |_| {
-            let _ = session.borrow_mut().revert();
-            sync();
-            *revision.write() += 1;
         }
     };
 
     rect()
         .vertical()
         .width(Size::fill())
-        .padding(Gaps::new_symmetric(12., 18.))
-        .spacing(8.)
-        .background(PANEL)
+        .padding(Gaps::new(14., 18., 12., 18.))
+        .spacing(12.)
+        .background(theme::PANEL)
         .child(
             rect()
                 .horizontal()
                 .width(Size::fill())
                 .spacing(12.)
+                .content(Content::Flex)
                 .child(
                     label()
                         .text("JadeForge")
-                        .font_size(24.)
+                        .font_size(22.)
                         .font_weight(FontWeight::BOLD)
-                        .color(ACCENT),
+                        .color(theme::ACCENT),
                 )
                 .child(
                     label()
-                        .text("Jade Empire savegame editor")
-                        .font_size(12.)
-                        .color(MUTED),
-                ),
+                        .text("Jade Empire save editor")
+                        .font_size(11.)
+                        .color(theme::DIM),
+                )
+                .child(rect().width(Size::flex(1.0)))
+                .child(if dirty {
+                    crate::widgets::badge("unsaved changes", theme::SURFACE_ACTIVE, theme::ACCENT)
+                } else if form_differs {
+                    crate::widgets::badge("unapplied input", theme::SURFACE_ACTIVE, theme::ACCENT)
+                } else {
+                    crate::widgets::badge("all changes saved", theme::SURFACE, theme::DIM)
+                })
+                .child(crate::widgets::badge(game_text, theme::SURFACE, game_color)),
         )
         .child(
             rect()
@@ -311,7 +341,13 @@ fn header(
                 .width(Size::fill())
                 .spacing(10.)
                 .content(Content::Flex)
-                .child(label().text("Save folder").font_size(12.).color(MUTED))
+                .child(
+                    label()
+                        .text("SAVE FOLDER")
+                        .font_size(10.)
+                        .font_weight(FontWeight::BOLD)
+                        .color(theme::DIM),
+                )
                 .child(
                     Input::new(directory)
                         .placeholder("Path to the Jade Empire Save folder")
@@ -320,417 +356,329 @@ fn header(
                 .child(Button::new().outline().child("Scan").on_press(scan)),
         )
         .child(
-            rect()
-                .horizontal()
-                .width(Size::fill())
-                .spacing(10.)
-                .child(Button::new().flat().child("Apply").on_press(apply))
-                .child(Button::new().filled().child("Save to disk").on_press(save))
-                .child(Button::new().flat().child("Revert").on_press(revert))
-                .child(if dirty {
-                    label().text("unsaved changes").font_size(12.).color(ACCENT)
-                } else {
-                    label()
-                        .text("everything is saved")
-                        .font_size(12.)
-                        .color(MUTED)
-                }),
-        )
-        .child(
             label()
                 .text(message.text.clone())
-                .font_size(12.)
-                .max_lines(3)
+                .font_size(11.)
+                .max_lines(2)
                 .color(status_color),
         )
         .into_element()
 }
 
-#[allow(clippy::needless_pass_by_value)]
+#[allow(clippy::too_many_lines, clippy::needless_pass_by_value)]
+#[allow(clippy::too_many_arguments)]
 fn sidebar(
-    session: &SharedSession,
-    revision: State<u32>,
-    sync: Rc<dyn Fn()>,
+    ctx: &Ctx,
     entries: &[crate::session::SaveEntry],
     selected: Option<usize>,
+    preview: Option<ImageHandle>,
+    character: Option<&Character>,
+    form_differs: bool,
+    sync: Rc<dyn Fn()>,
 ) -> Element {
-    let rows: Vec<Element> = entries
-        .iter()
-        .enumerate()
-        .map(|(index, entry)| {
-            let session = session.clone();
-            let mut revision = revision;
-            let sync = sync.clone();
-            let is_selected = selected == Some(index);
-            let background = if is_selected { PANEL_ALT } else { PANEL };
-            let summary = entry.summary.clone();
-            let title = entry.label.clone();
-            let broken = entry.error.is_some();
+    let mut rows: Vec<Element> = Vec::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let ctx = ctx.clone();
+        let sync = sync.clone();
+        let is_selected = selected == Some(index);
+        let broken = entry.error.is_some();
+        let summary = entry.summary();
+        let title = entry.label.clone();
+        rows.push(
             Button::new()
                 .flat()
                 .on_press(move |_| {
-                    if session.borrow_mut().open(index) {
-                        sync();
+                    if form_differs && selected != Some(index) {
+                        ctx.run(|session| {
+                            session.set_error(
+                                "Apply or discard the character changes before switching savegames.",
+                            );
+                        });
+                        return;
                     }
-                    *revision.write() += 1;
+                    ctx.run(|session| {
+                        session.open(index);
+                    });
+                    sync();
                 })
                 .child(
                     rect()
                         .vertical()
                         .width(Size::fill())
                         .spacing(2.)
-                        .background(background)
-                        .padding(Gaps::new_all(8.))
-                        .corner_radius(6.)
-                        .child(label().text(title).font_size(13.).color(if broken {
-                            ERROR
+                        .padding(Gaps::new_symmetric(7., 10.))
+                        .corner_radius(8.)
+                        .background(if is_selected {
+                            theme::SURFACE_ACTIVE
                         } else {
-                            TEXT
-                        }))
-                        .child(label().text(summary).font_size(11.).color(MUTED)),
+                            theme::SURFACE
+                        })
+                        .child(
+                            label()
+                                .text(title)
+                                .font_size(12.)
+                                .max_lines(1)
+                                .color(if broken { theme::DANGER } else { theme::TEXT }),
+                        )
+                        .child(label().text(summary).font_size(10.).color(theme::DIM)),
+                )
+                .into_element(),
+        );
+    }
+    if rows.is_empty() {
+        rows.push(
+            rect()
+                .padding(Gaps::new_all(12.))
+                .child(
+                    label()
+                        .text("No savegames in this folder.")
+                        .font_size(11.)
+                        .color(theme::DIM),
+                )
+                .into_element(),
+        );
+    }
+
+    let preview_block = preview.map_or_else(
+        || {
+            rect()
+                .width(Size::fill())
+                .height(Size::px(140.))
+                .center()
+                .background(theme::SURFACE)
+                .corner_radius(10.)
+                .child(
+                    label()
+                        .text("select a save")
+                        .font_size(10.)
+                        .color(theme::DIM),
                 )
                 .into_element()
-        })
-        .collect();
+        },
+        |handle| {
+            image(handle)
+                .width(Size::fill())
+                .height(Size::px(160.))
+                .corner_radius(10.)
+                .sampling_mode(SamplingMode::Bilinear)
+                .aspect_ratio(AspectRatio::Max)
+                .into_element()
+        },
+    );
+
+    let title = character.as_ref().map_or_else(
+        || "No savegame".to_owned(),
+        |character| character.name.clone(),
+    );
+    let subtitle = character.as_ref().map_or_else(
+        || "—".to_owned(),
+        |character| {
+            format!(
+                "Level {} · {}",
+                character.level,
+                crate::session::format::duration(character.time_played)
+            )
+        },
+    );
 
     rect()
         .vertical()
-        .width(Size::px(320.))
+        .width(Size::px(310.))
         .height(Size::fill())
-        .padding(Gaps::new_all(10.))
-        .spacing(6.)
-        .background(BACKGROUND)
+        .content(Content::Flex)
+        .padding(Gaps::new(14., 12., 14., 12.))
+        .spacing(10.)
+        .background(theme::BACKGROUND)
+        .child(preview_block)
+        .child(
+            rect()
+                .vertical()
+                .spacing(1.)
+                .child(
+                    label()
+                        .text(title)
+                        .font_size(15.)
+                        .font_weight(FontWeight::BOLD)
+                        .max_lines(1)
+                        .color(theme::TEXT),
+                )
+                .child(label().text(subtitle).font_size(10.).color(theme::DIM)),
+        )
         .child(
             label()
-                .text(format!("{} savegames", entries.len()))
-                .font_size(12.)
-                .color(MUTED),
+                .text(format!("SAVEGAMES ({})", entries.len()))
+                .font_size(10.)
+                .font_weight(FontWeight::BOLD)
+                .color(theme::DIM),
         )
         .child(
             ScrollView::new()
                 .show_scrollbar(true)
-                .drag_scrolling(false)
                 .width(Size::fill())
-                .height(Size::fill())
+                .height(Size::flex(1.0))
                 .child(
                     rect()
                         .vertical()
                         .width(Size::fill())
-                        .spacing(6.)
+                        .spacing(4.)
                         .children(rows),
                 ),
         )
         .into_element()
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    clippy::needless_pass_by_value,
-    clippy::large_types_passed_by_value,
-    clippy::too_many_lines
-)]
-fn main_panel(
-    session: &SharedSession,
-    revision: State<u32>,
-    form: Form,
-    character: Option<&Character>,
-    items: &[Item],
-    new_item_id: State<String>,
-    new_item_kind: State<String>,
-    new_item_count: State<String>,
-    has_save: bool,
-) -> Element {
-    if !has_save {
-        return ScrollView::new()
-            .width(Size::fill())
-            .height(Size::fill())
-            .child(
-                rect()
-                    .vertical()
-                    .width(Size::fill())
-                    .spacing(8.)
-                    .padding(Gaps::new_all(28.))
-                    .child(
-                        label()
-                            .text("No savegame selected")
-                            .font_size(20.)
-                            .color(TEXT),
-                    )
-                    .child(
-                        label()
-                            .text(
-                                "Pick a save folder above and select a savegame on the left. \
-                                 JadeForge writes a backup next to the savegame before it \
-                                 touches the file.",
-                            )
-                            .font_size(13.)
-                            .color(MUTED),
-                    ),
-            )
-            .into_element();
+fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
+    let mut buttons: Vec<Element> = Vec::new();
+    for candidate in Tab::ALL {
+        let mut tab = tab;
+        let is_active = candidate == active;
+        buttons.push(
+            Button::new()
+                .flat()
+                .compact()
+                .on_press(move |_| *tab.write() = candidate)
+                .child(
+                    rect()
+                        .padding(Gaps::new_symmetric(6., 12.))
+                        .corner_radius(8.)
+                        .background(if is_active {
+                            theme::SURFACE_ACTIVE
+                        } else {
+                            Color::TRANSPARENT
+                        })
+                        .child(
+                            label()
+                                .text(candidate.label())
+                                .font_size(12.)
+                                .font_weight(if is_active {
+                                    FontWeight::BOLD
+                                } else {
+                                    FontWeight::NORMAL
+                                })
+                                .color(if is_active {
+                                    theme::ACCENT
+                                } else {
+                                    theme::MUTED
+                                }),
+                        ),
+                )
+                .into_element(),
+        );
     }
 
-    let item_rows: Vec<Element> = items
-        .iter()
-        .map(|item| item_row(item, session.clone(), revision))
-        .collect();
-
-    let add_item = {
-        let session = session.clone();
-        let mut revision = revision;
-        move |_| {
-            let id = new_item_id.read().trim().parse::<u16>();
-            let kind = new_item_kind.read().trim().parse::<u8>();
-            let count = new_item_count.read().trim().parse::<u8>();
-            let mut borrowed = session.borrow_mut();
-            match (id, kind, count) {
-                (Ok(id), Ok(kind), Ok(count)) => {
-                    let _ = borrowed.add_item(id, kind, count);
-                }
-                _ => borrowed.set_error("Item id, type and count have to be numbers."),
-            }
-            drop(borrowed);
-            *revision.write() += 1;
-        }
-    };
-
-    let character_section = section(
-        "Character",
-        vec![
-            field("Name", Input::new(form.name).width(Size::px(200.))),
-            field("Level", Input::new(form.level).width(Size::px(90.))),
-            field(
-                "Experience",
-                Input::new(form.experience).width(Size::px(140.)),
-            ),
-            field("Gold", Input::new(form.gold).width(Size::px(140.))),
-            field(
-                "Unspent points",
-                Input::new(form.attribute_points).width(Size::px(90.)),
-            ),
-            field("Chapter", Input::new(form.chapter).width(Size::px(90.))),
-            field("Kills", Input::new(form.kills).width(Size::px(90.))),
-            field("Alignment", Input::new(form.alignment).width(Size::px(90.))),
-        ],
-    );
-
-    let vitals_section = section(
-        "Vitals",
-        vec![
-            field("Health", Input::new(form.health).width(Size::px(110.))),
-            field(
-                "Health max",
-                Input::new(form.health_max).width(Size::px(110.)),
-            ),
-            field("Chi", Input::new(form.chi).width(Size::px(110.))),
-            field("Chi max", Input::new(form.chi_max).width(Size::px(110.))),
-            field("Focus", Input::new(form.focus).width(Size::px(110.))),
-            field(
-                "Focus max",
-                Input::new(form.focus_max).width(Size::px(110.)),
-            ),
-        ],
-    );
-
-    let attributes_section = section(
-        "Attributes",
-        vec![
-            field("Body", Input::new(form.body).width(Size::px(90.))),
-            field("Mind", Input::new(form.mind).width(Size::px(90.))),
-            field("Spirit", Input::new(form.spirit).width(Size::px(90.))),
-            field("Charm", Input::new(form.charm).width(Size::px(90.))),
-            field("Intuition", Input::new(form.intuition).width(Size::px(90.))),
-            field(
-                "Intimidate",
-                Input::new(form.intimidate).width(Size::px(90.)),
-            ),
-        ],
-    );
-
-    let summary = character.map_or_else(
-        || String::from("No character data"),
-        |character: &Character| {
-            format!(
-                "{} - level {} - {}h {:02}m played - {} kills",
-                character.name,
-                character.level,
-                character.time_played / 3_600_000_000,
-                (character.time_played / 60_000_000) % 60,
-                character.kills
-            )
-        },
-    );
-
-    let inventory_section = stacked_section(
-        "Inventory",
-        vec![
-            label()
-                .text(summary)
-                .font_size(12.)
-                .color(MUTED)
-                .into_element(),
+    rect()
+        .vertical()
+        .width(Size::fill())
+        .spacing(0.)
+        .child(
             rect()
-                .vertical()
+                .horizontal()
                 .width(Size::fill())
                 .spacing(4.)
-                .children(item_rows)
+                .padding(Gaps::new(10., 18., 8., 18.))
+                .children(buttons)
                 .into_element(),
+        )
+        .child(
             rect()
-                .horizontal()
-                .spacing(8.)
-                .child(label().text("Add item").font_size(12.).color(MUTED))
-                .child(
-                    Input::new(new_item_id)
-                        .placeholder("item id")
-                        .width(Size::px(100.)),
-                )
-                .child(
-                    Input::new(new_item_kind)
-                        .placeholder("type")
-                        .width(Size::px(70.)),
-                )
-                .child(
-                    Input::new(new_item_count)
-                        .placeholder("count")
-                        .width(Size::px(70.)),
-                )
-                .child(Button::new().outline().child("Add").on_press(add_item))
+                .width(Size::fill())
+                .height(Size::px(1.))
+                .background(theme::BORDER)
                 .into_element(),
-        ],
-    );
-
-    ScrollView::new()
-        .show_scrollbar(true)
-        .width(Size::fill())
-        .height(Size::fill())
-        .child(
-            rect()
-                .vertical()
-                .width(Size::fill())
-                .spacing(14.)
-                .padding(Gaps::new_all(16.))
-                .child(character_section)
-                .child(vitals_section)
-                .child(attributes_section)
-                .child(inventory_section),
         )
         .into_element()
 }
 
-fn section(title: &'static str, children: Vec<Element>) -> Element {
-    rect()
-        .vertical()
-        .width(Size::fill())
-        .spacing(10.)
-        .padding(Gaps::new_all(14.))
-        .background(PANEL)
-        .corner_radius(10.)
-        .child(
-            label()
-                .text(title)
-                .font_size(15.)
-                .font_weight(FontWeight::BOLD),
-        )
-        .child(
-            rect()
-                .horizontal()
-                .width(Size::fill())
-                .spacing(10.)
-                .content(Content::wrap_spacing(10.0))
-                .children(children),
-        )
-        .into_element()
-}
-
-fn stacked_section(title: &'static str, children: Vec<Element>) -> Element {
-    rect()
-        .vertical()
-        .width(Size::fill())
-        .spacing(10.)
-        .padding(Gaps::new_all(14.))
-        .background(PANEL)
-        .corner_radius(10.)
-        .child(
-            label()
-                .text(title)
-                .font_size(15.)
-                .font_weight(FontWeight::BOLD),
-        )
-        .children(children)
-        .into_element()
-}
-
-fn field(name: &'static str, input: impl IntoElement) -> Element {
-    rect()
-        .vertical()
-        .spacing(4.)
-        .child(label().text(name).font_size(11.).color(MUTED))
-        .child(input)
-        .into_element()
-}
-
-fn item_row(item: &Item, session: SharedSession, revision: State<u32>) -> Element {
-    let increase = {
-        let session = session.clone();
-        let mut revision = revision;
-        let index = item.struct_index;
+#[allow(clippy::large_types_passed_by_value, clippy::needless_pass_by_value)] // `Form` is a bundle of cheap `Copy` handles
+fn footer(ctx: &Ctx, form: Form, dirty: bool, form_differs: bool, sync: Rc<dyn Fn()>) -> Element {
+    let apply = {
+        let ctx = ctx.clone();
         move |_| {
-            session.borrow_mut().adjust_item_count(index, 1);
-            *revision.write() += 1;
+            ctx.run(|session| {
+                let _ = session.apply(&form.read());
+            });
         }
     };
-    let decrease = {
-        let session = session.clone();
-        let mut revision = revision;
-        let index = item.struct_index;
+    let save = {
+        let ctx = ctx.clone();
+        let sync = sync.clone();
         move |_| {
-            session.borrow_mut().adjust_item_count(index, -1);
-            *revision.write() += 1;
+            ctx.run(|session| {
+                if session.apply(&form.read()).is_ok() {
+                    let _ = session.save();
+                }
+            });
+            sync();
         }
     };
-    let remove = {
-        let mut revision = revision;
-        let index = item.struct_index;
+    let revert = {
+        let ctx = ctx.clone();
+        let sync = sync.clone();
         move |_| {
-            session.borrow_mut().remove_item(index);
-            *revision.write() += 1;
+            ctx.run(|session| {
+                let _ = session.revert();
+            });
+            sync();
         }
     };
 
     rect()
         .horizontal()
         .width(Size::fill())
-        .height(Size::px(34.))
+        .spacing(10.)
         .content(Content::Flex)
-        .spacing(8.)
-        .padding(Gaps::new_symmetric(4., 8.))
-        .background(PANEL_ALT)
-        .corner_radius(6.)
+        .padding(Gaps::new(10., 18., 12., 18.))
+        .background(theme::PANEL)
         .child(
-            label()
-                .text(format!("Item {:<6}", item.item_id))
-                .font_size(12.)
-                .max_lines(1)
-                .width(Size::px(110.)),
+            Button::new()
+                .outline()
+                .child("Apply changes")
+                .on_press(apply),
         )
-        .child(
-            label()
-                .text(format!("type {}", item.kind))
-                .font_size(12.)
-                .max_lines(1)
-                .color(MUTED)
-                .width(Size::px(70.)),
-        )
-        .child(Button::new().flat().child("-").on_press(decrease))
-        .child(
-            label()
-                .text(item.count.to_string())
-                .font_size(13.)
-                .width(Size::px(36.))
-                .text_align(TextAlign::Center),
-        )
-        .child(Button::new().flat().child("+").on_press(increase))
+        .child(Button::new().filled().child("Save to disk").on_press(save))
+        .child(Button::new().flat().child("Revert").on_press(revert))
         .child(rect().width(Size::flex(1.0)))
-        .child(Button::new().flat().child("Remove").on_press(remove))
+        .child(
+            label()
+                .text(if form_differs {
+                    "Character fields are not applied yet."
+                } else if dirty {
+                    "Changes are only in memory until you save."
+                } else {
+                    "Nothing to save."
+                })
+                .font_size(10.)
+                .color(if dirty { theme::ACCENT } else { theme::DIM }),
+        )
+        .into_element()
+}
+
+fn empty_state(savegames: usize) -> Element {
+    let text = if savegames == 0 {
+        "Point JadeForge at the folder that contains your Jade Empire savegames and press Scan."
+    } else {
+        "Pick a savegame on the left to start editing."
+    };
+    rect()
+        .vertical()
+        .width(Size::fill())
+        .spacing(8.)
+        .padding(Gaps::new_all(28.))
+        .child(
+            label()
+                .text("No savegame selected")
+                .font_size(20.)
+                .font_weight(FontWeight::BOLD)
+                .color(theme::TEXT),
+        )
+        .child(label().text(text).font_size(12.).color(theme::MUTED))
+        .child(
+            label()
+                .text(
+                    "JadeForge never writes a savegame without verifying it and keeping a backup.",
+                )
+                .font_size(11.)
+                .color(theme::DIM),
+        )
         .into_element()
 }
