@@ -271,8 +271,11 @@ fn every_list_is_browsable_and_labelled_the_same_way() {
 }
 
 fn count_labels(test: &TestingRunner) -> usize {
-    test.find_many(|_, element| Label::try_downcast(element).map(|_| ()))
-        .len()
+    test.find_many(|_, element| {
+        (Label::try_downcast(element).is_some() || Paragraph::try_downcast(element).is_some())
+            .then_some(())
+    })
+    .len()
 }
 
 #[test]
