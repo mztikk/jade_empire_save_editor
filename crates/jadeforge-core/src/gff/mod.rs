@@ -29,6 +29,8 @@
 //! See `docs/FORMAT.md` for the full description, including the surprising
 //! `fieldCount == 1` encoding of structs.
 
+#![deny(clippy::expect_used)]
+
 mod path;
 mod value;
 mod write;
@@ -125,22 +127,26 @@ impl Gff {
             )));
         }
 
-        let word = |index: usize| -> u32 {
+        let word = |index: usize| -> Result<u32> {
             let offset = 8 + index * 4;
-            u32::from_le_bytes(bytes[offset..offset + 4].try_into().expect("in bounds"))
+            bytes
+                .get(offset..offset + 4)
+                .and_then(|slice| slice.try_into().ok())
+                .map(u32::from_le_bytes)
+                .ok_or_else(|| err(format!("header word {index} is truncated")))
         };
-        let struct_offset = word(0) as usize;
-        let struct_count = word(1) as usize;
-        let field_offset = word(2) as usize;
-        let field_count = word(3) as usize;
-        let label_offset = word(4) as usize;
-        let label_count = word(5) as usize;
-        let field_data_offset = word(6) as usize;
-        let field_data_size = word(7) as usize;
-        let field_indices_offset = word(8) as usize;
-        let field_indices_size = word(9) as usize;
-        let list_indices_offset = word(10) as usize;
-        let list_indices_size = word(11) as usize;
+        let struct_offset = word(0)? as usize;
+        let struct_count = word(1)? as usize;
+        let field_offset = word(2)? as usize;
+        let field_count = word(3)? as usize;
+        let label_offset = word(4)? as usize;
+        let label_count = word(5)? as usize;
+        let field_data_offset = word(6)? as usize;
+        let field_data_size = word(7)? as usize;
+        let field_indices_offset = word(8)? as usize;
+        let field_indices_size = word(9)? as usize;
+        let list_indices_offset = word(10)? as usize;
+        let list_indices_size = word(11)? as usize;
 
         let section_end = |offset: usize, size: usize, what: &str| -> Result<usize> {
             let end = offset
@@ -196,19 +202,17 @@ impl Gff {
         let read_u32 = |buffer: &[u8], offset: usize, what: &str| -> Result<u32> {
             buffer
                 .get(offset..offset + 4)
-                .map(|slice| u32::from_le_bytes(slice.try_into().expect("4 bytes")))
+                .and_then(|slice| slice.try_into().ok())
+                .map(u32::from_le_bytes)
                 .ok_or_else(|| err(format!("{what} at offset {offset} is out of bounds")))
         };
 
         let mut fields = Vec::with_capacity(field_count);
         for index in 0..field_count {
             let start = field_offset + index * FIELD_ENTRY_SIZE;
-            let type_id =
-                u32::from_le_bytes(bytes[start..start + 4].try_into().expect("in bounds"));
-            let label =
-                u32::from_le_bytes(bytes[start + 4..start + 8].try_into().expect("in bounds"));
-            let data =
-                u32::from_le_bytes(bytes[start + 8..start + 12].try_into().expect("in bounds"));
+            let type_id = read_u32(bytes, start, "field type")?;
+            let label = read_u32(bytes, start + 4, "field label")?;
+            let data = read_u32(bytes, start + 8, "field data")?;
             if label as usize >= label_count {
                 return Err(err(format!(
                     "field {index} references label {label}, but only {label_count} labels exist"
@@ -239,12 +243,9 @@ impl Gff {
         let mut reference = Vec::with_capacity(struct_count);
         for index in 0..struct_count {
             let start = struct_offset + index * STRUCT_ENTRY_SIZE;
-            let type_id =
-                u32::from_le_bytes(bytes[start..start + 4].try_into().expect("in bounds"));
-            let data =
-                u32::from_le_bytes(bytes[start + 4..start + 8].try_into().expect("in bounds"));
-            let count =
-                u32::from_le_bytes(bytes[start + 8..start + 12].try_into().expect("in bounds"));
+            let type_id = read_u32(bytes, start, "struct type")?;
+            let data = read_u32(bytes, start + 4, "struct field reference")?;
+            let count = read_u32(bytes, start + 8, "struct field count")?;
             reference.push((data, count));
             structs.push(Struct {
                 type_id,
@@ -530,7 +531,10 @@ impl Gff {
             type_id: value.type_id(),
             value,
         });
-        Ok(structure.fields.last_mut().expect("just pushed"))
+        structure
+            .fields
+            .last_mut()
+            .ok_or_else(|| Error::Corrupt("the field that was just pushed vanished".to_owned()))
     }
 
     /// Removes a field from a struct.

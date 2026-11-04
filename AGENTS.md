@@ -63,6 +63,17 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 - Clippy runs with `-D warnings` and the workspace enables `clippy::pedantic`.
   If a lint genuinely does not fit, add a scoped `#[allow(...)]` **with a
   reason comment**; do not weaken the workspace lint configuration.
+- The workspace also **denies** `unwrap_used`, `panic`, `todo`, `unimplemented`,
+  `unreachable`, `exit`, `string_slice` and `panic_in_result_fn`, and denies
+  `missing_docs`. `expect` is allowed only where a preceding check proves the
+  invariant; `crates/jadeforge-core/src/gff` denies it module-wide and converts
+  those cases into `Error::Gff` instead. Tests may panic (`clippy.toml`), but the
+  test allowances do not cover helper functions in `tests/*.rs`; add a
+  crate-level allow there if a test helper needs it.
+- `ci/clippy-strict.sh` reports the lints that are not gated yet
+  (`expect_used`, `indexing_slicing`, `arithmetic_side_effects`, `nursery`) without
+  failing. Run it before promoting a lint: only add a lint to the workspace config
+  once its count is zero, so the `-D warnings` gate stays meaningful.
 - Public items have doc comments that explain behaviour, not syntax.
 - Errors carry context: use `Error::Corrupt`/`Error::Gff` with the path, block
   or field that failed, not bare strings.

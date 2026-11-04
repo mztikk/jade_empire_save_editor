@@ -27,3 +27,20 @@ What the workflow does:
 
 Tests that need real savegames skip themselves unless `JADEFORGE_SAVE_DIR` is
 set, so the workflow is green on hosted runners without the game.
+
+## Strict clippy report
+
+`ci/clippy-strict.sh` runs the lints that are not part of the gate yet
+(`expect_used`, `indexing_slicing`, `arithmetic_side_effects`, `nursery`) and
+prints the diagnostics per lint. It always exits 0 and is meant to be run
+manually (or as a non-blocking CI job):
+
+```sh
+ci/clippy-strict.sh
+```
+
+When a lint reaches zero findings, promote it to `deny` in the workspace lints
+and it becomes part of the normal gate. The binary parsers intentionally index
+slices after validating offsets, so `indexing_slicing` and
+`arithmetic_side_effects` will need module-level allows rather than a blanket
+fix.
