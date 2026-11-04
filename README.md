@@ -230,13 +230,13 @@ See [AGENTS.md](AGENTS.md) for the development guidelines and
 
 ## Status
 
-The format reader/writer is validated against 88 retail savegames (943 blocks):
+The format reader/writer is validated against 89 retail savegames (962 blocks):
 every block parses, every block survives a serialize/parse round trip, and
 untouched savegames are written back byte for byte.
 
 Not implemented yet:
 
-- editing story variables, journal entries and gem slots,
+- editing story variables and journal entries,
 - companion stats beyond level and availability,
 - item icons in the interface (names, categories and descriptions are resolved
   and shown).

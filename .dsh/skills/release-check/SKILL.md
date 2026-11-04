@@ -25,7 +25,7 @@ JADEFORGE_GAME_DIR="/path/to/Jade Empire" \
 JADEFORGE_CONFIG_DIR="$(mktemp -d)" cargo test --workspace
 ```
 
-Expect `round tripped 88 savegames` and `rewrote 943 blocks` from the core
+Expect `round tripped 89 savegames` and `rewrote 962 blocks` from the core
 tests, resolved item and style names from `jadeforge-gamedata`, and seven passing
 headless UI tests. A different count is fine on another machine, "skipping" is
 not (it means the variables did not reach the tests).
