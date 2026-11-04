@@ -23,7 +23,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 
 # Tests against real savegames (skipped when the variable is not set)
-JADEFORGE_SAVE_DIR="$HOME/games/Jade Empire/Save" cargo test --workspace
+JADEFORGE_SAVE_DIR="$HOME/games/Jade Empire/Save" \
+JADEFORGE_GAME_DIR="$HOME/games/Jade Empire" \
+JADEFORGE_CONFIG_DIR="$(mktemp -d)" cargo test --workspace
 
 # Render the UI into a PNG without a window (screenshots, layout debugging)
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.png [TAB|all]

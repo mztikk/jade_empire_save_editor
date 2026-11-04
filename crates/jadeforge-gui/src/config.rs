@@ -83,8 +83,17 @@ impl Config {
     }
 
     /// Location of the settings file.
+    ///
+    /// `JADEFORGE_CONFIG_DIR` points straight at the directory that should hold
+    /// the file, which keeps tests and portable installs out of the user's
+    /// configuration.
     #[must_use]
     pub fn path() -> Option<PathBuf> {
+        if let Some(dir) =
+            std::env::var_os("JADEFORGE_CONFIG_DIR").filter(|value| !value.is_empty())
+        {
+            return Some(PathBuf::from(dir).join("config"));
+        }
         let xdg = std::env::var_os("XDG_CONFIG_HOME")
             .filter(|value| !value.is_empty())
             .map(PathBuf::from);

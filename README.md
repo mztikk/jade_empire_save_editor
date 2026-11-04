@@ -86,7 +86,8 @@ or start the CLI against a save folder:
    chosen once and remembered in the user configuration
    (`$XDG_CONFIG_HOME/jadeforge/config`, `%APPDATA%\jadeforge\config` or
    `~/Library/Application Support/jadeforge/config`). `JADEFORGE_SAVE_DIR`
-   overrides it for one run.
+   overrides the folder for one run and `JADEFORGE_CONFIG_DIR` moves the
+   settings file (useful for portable installs).
 3. Pick a savegame on the left; the game's own screenshot and character summary
    appear above the list.
 4. Edit the values on the tabs. Text fields are staged until you press **Apply
