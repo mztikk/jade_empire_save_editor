@@ -1,0 +1,15 @@
+[package]
+name = "jadeforge-core"
+description = "Parsing, editing and writing of Jade Empire savegames"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
