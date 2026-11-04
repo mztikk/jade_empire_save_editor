@@ -195,16 +195,16 @@ impl SaveGame {
         Ok(())
     }
 
-    /// Sets or clears one upgrade bit of a style and keeps the level in sync.
+    /// Sets or clears one level-up slot of a style and keeps the level in sync.
     ///
-    /// Bit `row - 1` selects `StyleAdvance.2da` row `row`; the level is
-    /// `1 + number of set bits`, exactly like the game stores it. Returns the
-    /// new mask.
-    pub fn set_style_upgrade(&mut self, struct_index: usize, row: u16, taken: bool) -> Result<u64> {
-        if !(1..=64).contains(&row) {
+    /// Bit `slot - 1` indexes the style's `<Style>LV.2da` table (not the
+    /// `StyleAdvance` row); the level is `1 + number of set bits`, exactly like
+    /// the game stores it. Returns the new mask.
+    pub fn set_style_slot(&mut self, struct_index: usize, slot: u16, taken: bool) -> Result<u64> {
+        if !(1..=64).contains(&slot) {
             return Err(Error::OutOfRange {
-                path: "style upgrade".to_owned(),
-                value: row.to_string(),
+                path: "style upgrade slot".to_owned(),
+                value: slot.to_string(),
                 min: "1".to_owned(),
                 max: "64".to_owned(),
             });
@@ -220,7 +220,7 @@ impl SaveGame {
             )));
         }
         let mask = read_style_mask(gff, struct_index);
-        let bit = 1_u64 << (row - 1);
+        let bit = 1_u64 << (slot - 1);
         let new_mask = if taken { mask | bit } else { mask & !bit };
         if new_mask == mask {
             return Ok(mask);

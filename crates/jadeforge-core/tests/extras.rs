@@ -92,8 +92,8 @@ fn upgrading_a_style_sets_the_right_bit_and_level() {
         .find(|style| style.struct_index == index)
         .expect("style");
     // Row 30 is a tier the sample savegames do not have, so the mask changes.
-    let row = 30_u16;
-    let mask = save.set_style_upgrade(index, row, true).expect("upgrade");
+    let slot = 30_u16;
+    let mask = save.set_style_slot(index, slot, true).expect("upgrade");
     assert_ne!(mask, before.mask, "the bit was already set");
     let after = save
         .styles()
@@ -103,10 +103,9 @@ fn upgrading_a_style_sets_the_right_bit_and_level() {
         .expect("style");
     assert_eq!(after.mask, mask);
     assert_eq!(u32::from(after.level), 1 + mask.count_ones());
-    assert_eq!(after.mask & (1 << (row - 1)), 1 << (row - 1));
+    assert_eq!(after.mask & (1 << (slot - 1)), 1 << (slot - 1));
 
-    save.set_style_upgrade(index, row, false)
-        .expect("downgrade");
+    save.set_style_slot(index, slot, false).expect("downgrade");
     let restored = save
         .styles()
         .expect("styles")
@@ -115,8 +114,8 @@ fn upgrading_a_style_sets_the_right_bit_and_level() {
         .expect("style");
     assert_eq!(restored.mask, before.mask);
     assert_eq!(restored.level, before.level);
-    assert!(save.set_style_upgrade(index, 0, true).is_err());
-    assert!(save.set_style_upgrade(index, 65, true).is_err());
+    assert!(save.set_style_slot(index, 0, true).is_err());
+    assert!(save.set_style_slot(index, 65, true).is_err());
 }
 
 #[test]
