@@ -4,6 +4,7 @@
 //! here so that the headless test suite can drive the application.
 
 pub mod app;
+pub mod config;
 pub mod form;
 pub mod session;
 pub mod theme;

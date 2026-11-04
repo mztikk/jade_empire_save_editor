@@ -3,6 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
+use crate::session::format;
 use crate::theme;
 use crate::widgets;
 
@@ -10,11 +11,13 @@ use crate::widgets;
 #[must_use]
 pub fn alignment_hint(value: &str) -> String {
     match value.trim().parse::<i32>() {
-        Ok(value) if value >= 500 => "Alignment 500 and above: Way of the Open Palm.".to_owned(),
-        Ok(_) => "Alignment below 500: Way of the Closed Fist.".to_owned(),
-        Err(_) => {
-            "Alignment is a number; the game shows it as Closed Fist or Open Palm.".to_owned()
-        }
+        Ok(value) => format!(
+            "{} (the game starts at {}, below is Closed Fist, above is Open Palm).",
+            format::alignment(value),
+            jadeforge_core::DEFAULT_ALIGNMENT
+        ),
+        Err(_) => "Alignment is a number; below 128 is the Closed Fist, above is the Open Palm."
+            .to_owned(),
     }
 }
 

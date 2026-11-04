@@ -3,10 +3,7 @@
 use jadeforge_gamedata::GameData;
 
 fn game_dir() -> Option<std::path::PathBuf> {
-    let root = std::env::var_os("JADEFORGE_GAME_DIR").map_or_else(
-        || std::path::PathBuf::from("/media/Games/Heroic/Jade Empire"),
-        std::path::PathBuf::from,
-    );
+    let root = std::env::var_os("JADEFORGE_GAME_DIR").map(std::path::PathBuf::from)?;
     root.is_dir().then_some(root)
 }
 

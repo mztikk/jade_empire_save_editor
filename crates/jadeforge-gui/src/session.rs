@@ -12,19 +12,18 @@ use jadeforge_core::{
 };
 use jadeforge_gamedata::GameData;
 
-/// Where Jade Empire stores its savegames on the current platform.
+/// Folder to start with: the environment override, the last folder used, or
+/// nothing at all.
+///
+/// `JadeForge` deliberately ships no guess at where a game installation lives:
+/// GOG, Steam, Heroic, Wine and manual installs all put it somewhere else, and
+/// a wrong default is worse than an empty field.
 #[must_use]
 pub fn default_save_dir() -> PathBuf {
     if let Some(directory) = std::env::var_os("JADEFORGE_SAVE_DIR") {
         return PathBuf::from(directory);
     }
-    if cfg!(target_os = "linux") {
-        PathBuf::from("/media/Games/Heroic/Jade Empire/Save")
-    } else if cfg!(target_os = "windows") {
-        PathBuf::from(r"C:\Program Files (x86)\GOG Galaxy\Games\Jade Empire\Save")
-    } else {
-        PathBuf::from("/Applications/Jade Empire/Save")
-    }
+    crate::config::Config::load().save_dir.unwrap_or_default()
 }
 
 /// Formatting helpers shared by the views and the list entries.
@@ -49,6 +48,20 @@ pub mod format {
             format!("{}", value.round() as i64)
         } else {
             format!("{value:.1}")
+        }
+    }
+
+    /// Names the alignment the way the game does.
+    ///
+    /// The engine starts a character at [`jadeforge_core::DEFAULT_ALIGNMENT`]
+    /// and only writes the field once the value moves away from it.
+    #[must_use]
+    pub fn alignment(value: i32) -> &'static str {
+        let reference = jadeforge_core::DEFAULT_ALIGNMENT as i32;
+        match value.cmp(&reference) {
+            std::cmp::Ordering::Greater => "Way of the Open Palm",
+            std::cmp::Ordering::Less => "Way of the Closed Fist",
+            std::cmp::Ordering::Equal => "Balanced",
         }
     }
 
@@ -78,6 +91,127 @@ pub mod format {
         }
         out
     }
+}
+
+/// Order in which the savegame list is shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveSort {
+    /// Folder name, which is how the game names savegames.
+    Name,
+    /// Character level.
+    Level,
+    /// Time played.
+    Played,
+}
+
+impl SaveSort {
+    /// Short label for the sort buttons.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Name => "Name",
+            Self::Level => "Level",
+            Self::Played => "Played",
+        }
+    }
+}
+
+/// Compares two strings, treating runs of digits as numbers.
+///
+/// Savegame folders are named `Auto 10`, `Auto 104`, ...; plain string order
+/// puts `Auto 104` before `Auto 2`, which is not what the game shows.
+#[must_use]
+pub fn natural_order(left: &str, right: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+
+    let left = left.chars().collect::<Vec<_>>();
+    let right = right.chars().collect::<Vec<_>>();
+    let mut left_index = 0;
+    let mut right_index = 0;
+    while left_index < left.len() && right_index < right.len() {
+        let left_digit = left[left_index].is_ascii_digit();
+        let right_digit = right[right_index].is_ascii_digit();
+        if left_digit && right_digit {
+            let left_end = run_end(&left, left_index);
+            let right_end = run_end(&right, right_index);
+            let left_digits: String = left[left_index..left_end].iter().collect();
+            let right_digits: String = right[right_index..right_end].iter().collect();
+            let left_trimmed = left_digits.trim_start_matches('0');
+            let right_trimmed = right_digits.trim_start_matches('0');
+            let order = left_trimmed
+                .len()
+                .cmp(&right_trimmed.len())
+                .then_with(|| left_trimmed.cmp(right_trimmed));
+            if order != Ordering::Equal {
+                return order;
+            }
+            left_index = left_end;
+            right_index = right_end;
+            continue;
+        }
+        let order = left[left_index]
+            .to_lowercase()
+            .cmp(right[right_index].to_lowercase());
+        if order != Ordering::Equal {
+            return order;
+        }
+        left_index += 1;
+        right_index += 1;
+    }
+    (left.len() - left_index).cmp(&(right.len() - right_index))
+}
+
+fn run_end(text: &[char], start: usize) -> usize {
+    let mut end = start;
+    while end < text.len() && text[end].is_ascii_digit() {
+        end += 1;
+    }
+    end
+}
+
+/// Filters and sorts the savegame list.
+///
+/// Returns the indices of the entries to show, so the caller keeps using the
+/// index into [`Session::entries`] when opening one.
+#[must_use]
+pub fn visible_entries(
+    entries: &[SaveEntry],
+    query: &str,
+    sort: SaveSort,
+    descending: bool,
+) -> Vec<usize> {
+    let needle = query.trim().to_lowercase();
+    let mut indices: Vec<usize> = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, entry)| {
+            needle.is_empty()
+                || entry.label.to_lowercase().contains(&needle)
+                || entry
+                    .character
+                    .as_deref()
+                    .is_some_and(|name| name.to_lowercase().contains(&needle))
+        })
+        .map(|(index, _)| index)
+        .collect();
+    indices.sort_by(|left, right| {
+        let left = &entries[*left];
+        let right = &entries[*right];
+        let order = match sort {
+            SaveSort::Name => natural_order(&left.label, &right.label),
+            SaveSort::Level => left
+                .level
+                .unwrap_or(0)
+                .cmp(&right.level.unwrap_or(0))
+                .then_with(|| natural_order(&left.label, &right.label)),
+            SaveSort::Played => left
+                .time_played
+                .cmp(&right.time_played)
+                .then_with(|| natural_order(&left.label, &right.label)),
+        };
+        if descending { order.reverse() } else { order }
+    });
+    indices
 }
 
 /// One entry of the savegame list.
@@ -464,13 +598,15 @@ impl Session {
     ///
     /// Refuses to throw away unsaved changes.
     pub fn set_directory(&mut self, directory: impl Into<PathBuf>) {
+        let directory = directory.into();
         if self.is_dirty() {
             self.message = Message::info(
                 "This savegame has unsaved changes: save them or press Revert before scanning.",
             );
             return;
         }
-        self.directory = directory.into();
+        self.directory = directory;
+        self.persist_directory();
         self.selected = None;
         self.save = None;
         self.character = None;
@@ -521,6 +657,17 @@ impl Session {
                 "Found {total} savegame{plural} in {directory}, {broken} of them cannot be read."
             ));
         }
+    }
+
+    /// Remembers the folder for the next start (best effort).
+    fn persist_directory(&self) {
+        if self.directory.as_os_str().is_empty() {
+            return;
+        }
+        let config = crate::config::Config {
+            save_dir: Some(self.directory.clone()),
+        };
+        let _ = config.store();
     }
 
     /// Loads the game installation that belongs to the save folder.
@@ -1220,6 +1367,72 @@ mod tests {
         let session = Session::with_directory("/definitely/not/a/save/directory");
         assert_eq!(session.entries.len(), 0, "no savegames expected here");
         assert!(session.message.text.contains("No savegames"));
+    }
+
+    #[test]
+    fn natural_order_compares_numbers() {
+        use std::cmp::Ordering;
+        assert_eq!(natural_order("Auto 2", "Auto 10"), Ordering::Less);
+        assert_eq!(natural_order("Auto 10", "Auto 2"), Ordering::Greater);
+        assert_eq!(natural_order("Auto 2", "Auto 2"), Ordering::Equal);
+        assert_eq!(natural_order("Auto 2", "Auto 02"), Ordering::Equal);
+        assert_eq!(natural_order("Spielstand 9", "Auto 99"), Ordering::Greater);
+    }
+
+    #[test]
+    fn alignment_names_follow_the_engine_default() {
+        assert_eq!(format::alignment(220), "Way of the Open Palm");
+        assert_eq!(format::alignment(129), "Way of the Open Palm");
+        assert_eq!(format::alignment(128), "Balanced");
+        assert_eq!(format::alignment(127), "Way of the Closed Fist");
+        assert_eq!(format::alignment(0), "Way of the Closed Fist");
+    }
+
+    #[test]
+    fn entries_can_be_filtered_and_sorted() {
+        let entry = |label: &str, level: u8, played: u64| SaveEntry {
+            path: PathBuf::from(label),
+            label: label.to_owned(),
+            character: Some(format!("{label} hero")),
+            level: Some(level),
+            time_played: played,
+            error: None,
+        };
+        let entries = vec![
+            entry("Auto 10", 5, 3_000),
+            entry("Auto 2", 9, 1_000),
+            entry("Auto 1", 1, 2_000),
+        ];
+        let names = |indices: &[usize]| -> Vec<&str> {
+            indices
+                .iter()
+                .map(|index| entries[*index].label.as_str())
+                .collect()
+        };
+        assert_eq!(
+            names(&visible_entries(&entries, "", SaveSort::Name, false)),
+            ["Auto 1", "Auto 2", "Auto 10"]
+        );
+        assert_eq!(
+            names(&visible_entries(&entries, "", SaveSort::Level, true)),
+            ["Auto 2", "Auto 10", "Auto 1"]
+        );
+        assert_eq!(
+            names(&visible_entries(&entries, "", SaveSort::Played, false)),
+            ["Auto 2", "Auto 1", "Auto 10"]
+        );
+        assert_eq!(
+            names(&visible_entries(&entries, "hero", SaveSort::Name, false)).len(),
+            3
+        );
+        assert_eq!(
+            names(&visible_entries(&entries, "auto 2", SaveSort::Name, false)),
+            ["Auto 2"]
+        );
+        assert_eq!(
+            visible_entries(&entries, "nothing", SaveSort::Name, false).len(),
+            0
+        );
     }
 
     #[test]

@@ -68,11 +68,7 @@ pub fn view(
         },
     );
 
-    let alignment = if character.alignment >= 500 {
-        "Way of the Open Palm"
-    } else {
-        "Way of the Closed Fist"
-    };
+    let alignment = format::alignment(character.alignment);
 
     let hero = rect()
         .horizontal()

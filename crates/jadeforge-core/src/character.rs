@@ -9,6 +9,13 @@ use crate::error::{Error, Result};
 use crate::gff::{Field, Gff, Value};
 use crate::save::{GLOBAL_BLOCK, POLYPLAYER_BLOCK, SaveGame};
 
+/// Alignment value the engine starts every character with.
+///
+/// The field only appears once the player's decisions move it, so a savegame
+/// without it is balanced rather than closed fist. Everything below is the Way
+/// of the Closed Fist, everything above the Way of the Open Palm.
+pub const DEFAULT_ALIGNMENT: i64 = 128;
+
 /// A single field that was changed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Change {
@@ -202,7 +209,7 @@ impl Character {
             charm: signed("Stats.Charm").unwrap_or(0) as i32,
             intuition: signed("Stats.Intuition").unwrap_or(0) as i32,
             intimidate: signed("Stats.Intimidate").unwrap_or(0) as i32,
-            alignment: signed("Stats.Alignment").unwrap_or(0) as i32,
+            alignment: signed("Stats.Alignment").unwrap_or(DEFAULT_ALIGNMENT) as i32,
             appearance: signed("Stats.Appearance").unwrap_or(0) as i32,
             chapter: gff
                 .get("Campaign.Chapter")

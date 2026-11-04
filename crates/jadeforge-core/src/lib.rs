@@ -16,7 +16,7 @@ pub mod save;
 pub mod screenshot;
 pub mod styles;
 
-pub use character::{Change, Character, PlayerLocation, locate_player};
+pub use character::{Change, Character, DEFAULT_ALIGNMENT, PlayerLocation, locate_player};
 pub use error::{Error, Result};
 pub use gff::{Field, FieldPath, Gff, LocString, Struct, Value};
 pub use henchmen::Henchman;
