@@ -124,11 +124,35 @@ fn per_style_upgrade_tables_are_matched() {
             return;
         }
     };
-    // C_Iron_palm ships an IronPalmLV.2da table.
+    // Legendary Strike offers damage, chi strike and speed tiers (rows 1-15).
     let allowed = game
-        .allowed_advances(16)
-        .expect("C_Iron_palm should have a level table");
+        .allowed_advances(52)
+        .expect("Legendary Strike should have a level table");
     assert!(allowed.contains(&1) && allowed.contains(&15));
-    // A normal player style has no table in this installation.
-    assert!(game.allowed_advances(49).is_none());
+    // Most player styles have a table in a complete installation.
+    let total = game.styles().count();
+    let with_table = game
+        .styles()
+        .filter(|style| game.allowed_advances(style.id).is_some())
+        .count();
+    assert!(
+        with_table * 2 > total,
+        "only {with_table} of {total} styles have a level table"
+    );
+}
+
+#[test]
+fn rim_archives_are_indexed() {
+    let Some(root) = game_dir() else {
+        eprintln!("skipping: no game installation found");
+        return;
+    };
+    let archive = jadeforge_gamedata::RimArchive::open(root.join("data").join("miniglobal-a.rim"))
+        .expect("miniglobal archive");
+    assert!(archive.names().any(|name| name == "stylesuperlist"));
+    assert!(archive.names().any(|name| name == "styleadvance"));
+    let bytes = archive.get_2da("stylesuperlist").expect("stylesuperlist");
+    let table = jadeforge_gamedata::TwoDa::parse_binary(bytes).expect("binary 2DA");
+    assert!(table.len() > 50);
+    assert!(table.column("Label").is_some());
 }
