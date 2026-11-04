@@ -198,6 +198,9 @@ documentation, not ground truth — verify against the game files where possible
   (`jadeforge_session::config::ensure_test_path`), so a developer's remembered
   sort order or save folder can never influence them. Keep it that way; do not
   read the real config from a test.
+- The UI fixture discovers the installation from `JADEFORGE_SAVE_DIR` (the same
+  `<game>/Save` walk-up the app uses) and hands it to the session through a
+  thread-local test root, so `JADEFORGE_GAME_DIR` is not required for the tests.
 - A list the user cannot browse without typing a search is a bug: every picker
   shows its full contents and *additionally* offers a filter.
 - The same value is spelled the same way everywhere. Item rows and style rows
