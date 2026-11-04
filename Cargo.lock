@@ -1939,6 +1939,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "jadeforge-core",
+ "jadeforge-gamedata",
  "serde_json",
  "tracing",
  "tracing-subscriber",
@@ -1953,12 +1954,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "jadeforge-gamedata"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "jadeforge-gui"
 version = "0.1.0"
 dependencies = [
  "freya",
  "freya-testing",
  "jadeforge-core",
+ "jadeforge-gamedata",
  "tracing",
  "tracing-subscriber",
 ]

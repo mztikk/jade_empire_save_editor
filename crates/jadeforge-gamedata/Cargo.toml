@@ -1,0 +1,15 @@
+[package]
+name = "jadeforge-gamedata"
+description = "Reads the Jade Empire data files (talk table, 2DA tables) for names and item databases"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+
+
+[lints]
+workspace = true
