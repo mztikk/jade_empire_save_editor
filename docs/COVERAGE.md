@@ -22,13 +22,13 @@ just coverage
 
 | metric | covered |
 | --- | --- |
-| lines | **6 655 / 8 076 = 82.4 %** |
-| functions | **643 / 926 = 69.4 %** |
+| lines | **6 707 / 8 076 = 83.0 %** |
+| functions | **655 / 926 = 70.7 %** |
 
 | crate | lines | functions |
 | --- | --- | --- |
-| `jadeforge-gamedata` | 89.6 % | 83.8 % |
-| `jadeforge-gui` | 87.8 % | 65.5 % |
+| `jadeforge-gamedata` | 93.9 % | 91.2 % |
+| `jadeforge-gui` | 88.0 % | 66.1 % |
 | `jadeforge-core` | 78.7 % | 65.5 % |
 | `jadeforge-session` | 77.2 % | 78.1 % |
 | `jadeforge-gff` | 80.2 % | 58.6 % |
@@ -48,19 +48,19 @@ Notes:
 | --- | --- | --- |
 | `gui/src/views/gems.rs` | 61.2 % | gem actions and empty/error states are untested |
 | `core/src/inventory.rs` | 64.6 % | remaining type/count error branches |
-| `gamedata/src/rim.rs` | 67.5 % | malformed archive handling |
+| `gamedata/src/rim.rs` | 95.0 % | done |
 | `cli/src/main.rs` | 68.3 % | `add_item`, `verify` failure and argument errors |
 | `core/src/henchmen.rs` | 69.7 % | list/field error paths |
 | `core/src/save.rs` | 70.7 % | verification and write-failure paths |
 | `gff/src/value.rs` | 72.8 % | uncommon decode branches |
-| `gamedata/src/talktable.rs` | 74.6 % | malformed TLK handling |
+| `gamedata/src/talktable.rs` | 92.1 % | done |
 | `session/src/session.rs` | 75.3 % | failure paths (config, form, save/revert) |
 
 ## Target
 
 | milestone | overall lines | core | session | gff | cli | gui | gamedata |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| now | 82.4 % | 78.7 % | 77.2 % | 80.2 % | 68.3 % | 87.8 % | 89.6 % |
+| now | 83.0 % | 78.7 % | 77.2 % | 80.2 % | 68.3 % | 88.0 % | 93.9 % |
 | phase 1 | **85 %** | 82 % | 82 % | 82 % | 78 % | 89 % | 92 % |
 | phase 2 | **88 %** | 86 % | 86 % | 86 % | 84 % | 90 % | 94 % |
 
@@ -109,14 +109,18 @@ Expected: +40–60 lines, core ≥ 82 % together with item 2.
 
 Expected: +50–70 lines, session ≥ 82 %.
 
-### 5. gff decode leftovers (`value.rs` 72.8 %, `lib.rs` 79.6 %)
+### 5. gff decode leftovers (partially done; `value.rs` 72.8 %, `lib.rs` 79.6 %)
 
 - type-tag/value mismatches (byte field holding a struct, etc.);
 - label table edge cases (16-byte label, duplicate labels, missing label);
 - offset/length overflow and the `fieldCount == 1` inline encoding;
 - list section with zero-count and repeated indices.
 
-Expected: +30–50 lines, gff ≥ 82 %.
+Done: empty/repeated/zero lists and the 16-byte label are covered, plus the
+single-field inline struct. `gff` stays at 80.2 % and `value.rs` at 72.8 %; the
+remaining branches are exotic decode combinations that may not be reachable
+from real data. Finish these only with synthetic payloads and a comment saying
+which format rule they exercise.
 
 ### 6. CLI leftovers (`main.rs`, 68.3 %)
 
@@ -127,14 +131,18 @@ Expected: +30–50 lines, gff ≥ 82 %.
 
 Expected: +30–50 lines, cli ≥ 78 %.
 
-### 7. Game data error paths (`rim.rs` 67.5 %, `talktable.rs` 74.6 %)
+### 7. Game data error paths (done)
 
 - truncated RIM header/entry table, entry pointing beyond the archive, 2DA
   payload with a bad signature;
 - truncated TLK header, entry offset beyond the data, zero-length strings;
 - these are synthetic files in `jadeforge-gamedata/tests` and need no game.
 
-Expected: +40–60 lines, gamedata ≥ 92 %.
+`crates/jadeforge-gamedata/tests/errors.rs` builds RIM archives, TLK tables and
+2DA tables in memory and covers bad signatures/versions, truncated tables,
+counts that exceed the file, payload offsets beyond the archive, out-of-range
+strings and malformed text/binary 2DA input. `gamedata` moved from 89.6 % to
+**93.9 %**; `rim.rs` is at 95.0 % and `talktable.rs` at 92.1 %.
 
 ## Gating
 
