@@ -32,6 +32,73 @@ pub struct ItemInfo {
     pub icon: Option<String>,
 }
 
+/// How a fighting style is used.
+///
+/// The `Type` column of `stylesuperlist.2da` points into `StyleTypes.2da`
+/// (`HAND`, `WEAPON`, `MAGIC`, `TRANSFORM`, `Support`, ...), but it is not a
+/// reliable description: dual weapon styles are stored as `MONSTER` and
+/// `Unique_Spirit_Thief` as `SpiritThief`. The label prefix is what the
+/// designers used to group styles, so it is what the interface shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StyleKind {
+    /// Unarmed martial style.
+    Martial,
+    /// One or two handed weapon style.
+    Weapon,
+    /// Magic style.
+    Magic,
+    /// Support style (buffs, healing).
+    Support,
+    /// Transformation style.
+    Transformation,
+    /// Improvised weapon style.
+    Improvised,
+    /// Unique, story given style.
+    Unique,
+    /// Not recognised.
+    Other,
+}
+
+impl StyleKind {
+    /// Short lower case name for the interface.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Martial => "martial",
+            Self::Weapon => "weapon",
+            Self::Magic => "magic",
+            Self::Support => "support",
+            Self::Transformation => "transformation",
+            Self::Improvised => "improvised",
+            Self::Unique => "unique",
+            Self::Other => "style",
+        }
+    }
+}
+
+/// Classifies a style by its template label prefix.
+#[must_use]
+pub fn style_kind(label: &str) -> StyleKind {
+    let lower = label.to_lowercase();
+    if lower.starts_with("martial") {
+        StyleKind::Martial
+    } else if lower.starts_with("weapon") || lower.starts_with("hench_weapon") {
+        StyleKind::Weapon
+    } else if lower.starts_with("magic") {
+        StyleKind::Magic
+    } else if lower.starts_with("support") {
+        StyleKind::Support
+    } else if lower.starts_with("transformation") || lower.starts_with("c_") {
+        StyleKind::Transformation
+    } else if lower.starts_with("improvised") {
+        StyleKind::Improvised
+    } else if lower.starts_with("unique") || lower.starts_with("spirit") {
+        StyleKind::Unique
+    } else {
+        StyleKind::Other
+    }
+}
+
 /// One row of `stylesuperlist.2da`, resolved to human readable text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StyleInfo {
@@ -51,6 +118,8 @@ pub struct StyleInfo {
     pub weapon_count: u8,
     /// Weapon resource, when the style is a weapon style.
     pub weapon: Option<String>,
+    /// Kind of style, derived from the label prefix.
+    pub kind: StyleKind,
 }
 
 /// A loaded game installation.
@@ -171,10 +240,12 @@ impl GameData {
                 else {
                     continue;
                 };
+                let label = table.cell(index, "Label").unwrap_or_default().to_owned();
                 style_slots[id as usize] = Some(StyleInfo {
                     id,
                     name_ref,
-                    label: table.cell(index, "Label").unwrap_or_default().to_owned(),
+                    kind: style_kind(&label),
+                    label,
                     name,
                     description: table
                         .uint(index, "DescRef")
@@ -246,6 +317,21 @@ impl GameData {
         self.items.iter().flatten()
     }
 
+    /// Items that a player can actually own.
+    ///
+    /// The table also contains developer placeholders (`[TEMP] ...`, `temp_*`,
+    /// `zzz*`) and cut content; those are hidden from the item picker but can
+    /// still be looked up by id when a savegame references one.
+    pub fn playable_items(&self) -> impl Iterator<Item = &ItemInfo> {
+        self.items().filter(|item| is_playable_item(item))
+    }
+
+    /// Number of items a player can own.
+    #[must_use]
+    pub fn playable_item_count(&self) -> usize {
+        self.playable_items().count()
+    }
+
     /// All styles with a resolved name, ordered by id.
     pub fn styles(&self) -> impl Iterator<Item = &StyleInfo> {
         self.styles.iter().flatten()
@@ -264,7 +350,7 @@ impl GameData {
         let mut matches: Vec<(bool, &ItemInfo)> = Vec::new();
         for (id, haystack) in &self.search_index {
             if haystack.contains(&query) {
-                if let Some(item) = self.item(*id) {
+                if let Some(item) = self.item(*id).filter(|item| is_playable_item(item)) {
                     matches.push((item.name.to_lowercase().starts_with(&query), item));
                 }
             }
@@ -307,6 +393,20 @@ pub fn is_game_root(directory: &Path) -> bool {
         || directory.join("chitin.key").is_file()
 }
 
+/// True when an item is not a development placeholder or cut content.
+#[must_use]
+pub fn is_playable_item(item: &ItemInfo) -> bool {
+    let label = item.label.to_lowercase();
+    let name = item.name.to_lowercase();
+    !(label.starts_with("temp")
+        || label.starts_with("zzz")
+        || label.starts_with("cut_")
+        || label.starts_with("test")
+        || name.starts_with("[temp]")
+        || name.starts_with("[test]")
+        || name.starts_with("zzz"))
+}
+
 fn load_two_da(root: &Path, name: &str) -> Option<TwoDa> {
     let candidates = [root.join("override").join(name), root.join(name)];
     for path in candidates {
@@ -338,5 +438,37 @@ mod tests {
     fn missing_installation_is_reported() {
         let error = GameData::open("/definitely/not/a/game").expect_err("must fail");
         assert!(error.to_string().contains("not a Jade Empire"));
+    }
+
+    #[test]
+    fn style_kind_follows_the_label_prefix() {
+        assert_eq!(style_kind("Martial_Legendary_Strike"), StyleKind::Martial);
+        assert_eq!(style_kind("Weapon_Staff"), StyleKind::Weapon);
+        assert_eq!(style_kind("Magic_Fire"), StyleKind::Magic);
+        assert_eq!(style_kind("Support_Storm_Dragon"), StyleKind::Support);
+        assert_eq!(style_kind("Transformation_Bull"), StyleKind::Transformation);
+        assert_eq!(style_kind("Improvised_Legs"), StyleKind::Improvised);
+        assert_eq!(style_kind("Unique_Spirit_Thief"), StyleKind::Unique);
+        assert_eq!(style_kind("EMPEROR_STAFF"), StyleKind::Other);
+        assert_eq!(StyleKind::Support.label(), "support");
+    }
+
+    #[test]
+    fn development_items_are_not_playable() {
+        let item = |label: &str, name: &str| ItemInfo {
+            id: 1,
+            label: label.to_owned(),
+            name: name.to_owned(),
+            description: None,
+            category: None,
+            save_type: None,
+            cost: 0,
+            icon: None,
+        };
+        assert!(is_playable_item(&item("sword_01", "Sword")));
+        assert!(!is_playable_item(&item("temp_ring", "Ring")));
+        assert!(!is_playable_item(&item("TEMP_Ring", "[TEMP] ring")));
+        assert!(!is_playable_item(&item("zzz_unused", "Unused")));
+        assert!(!is_playable_item(&item("cut_item", "Cut")));
     }
 }
