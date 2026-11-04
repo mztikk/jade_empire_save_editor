@@ -31,4 +31,3 @@ rustc-ice-*.txt
 *.jadeforge-tmp-*
 .env
 
-temp_repos/
