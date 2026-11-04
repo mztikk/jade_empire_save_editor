@@ -1,0 +1,10 @@
+//! `JadeForge` desktop application.
+//!
+//! The binary in `src/main.rs` only starts the window; everything else lives
+//! here so that the headless test suite can drive the application.
+
+pub mod app;
+pub mod session;
+
+pub use app::{app, app_with_directory};
+pub use session::{CharacterForm, Message, MessageKind, SaveEntry, Session, default_save_dir};

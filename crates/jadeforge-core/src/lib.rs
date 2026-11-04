@@ -1,0 +1,20 @@
+//! # `JadeForge` core
+//!
+//! Reading, editing and writing Jade Empire savegames.
+//!
+//! The crate is intentionally free of any user interface: the command line
+//! tool and the desktop application are thin layers on top of it, and the test
+//! suite exercises this crate directly against real savegames.
+
+pub mod character;
+pub mod error;
+pub mod gff;
+pub mod inventory;
+pub mod json;
+pub mod save;
+
+pub use character::{Change, Character, PlayerLocation, locate_player};
+pub use error::{Error, Result};
+pub use gff::{Field, FieldPath, Gff, LocString, Struct, Value};
+pub use inventory::Item;
+pub use save::{Block, SaveGame, SaveOptions};

@@ -1,0 +1,24 @@
+[package]
+name = "jadeforge-gui"
+description = "JadeForge desktop savegame editor for Jade Empire"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "jadeforge-gui"
+path = "src/main.rs"
+
+[dependencies]
+jadeforge-core.workspace = true
+freya.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+freya-testing = "0.4.3"
