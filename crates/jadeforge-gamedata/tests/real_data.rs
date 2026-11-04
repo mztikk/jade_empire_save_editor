@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! Tests against a real game installation (skipped when none is available).
 
 use jadeforge_gamedata::GameData;

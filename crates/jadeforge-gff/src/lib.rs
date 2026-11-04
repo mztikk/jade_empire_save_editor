@@ -29,8 +29,6 @@
 //! See `docs/FORMAT.md` for the full description, including the surprising
 //! `fieldCount == 1` encoding of structs.
 
-#![deny(clippy::expect_used)]
-
 mod path;
 mod value;
 mod write;

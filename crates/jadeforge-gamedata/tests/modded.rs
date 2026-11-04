@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! A modded installation: styles and their level tables shipped in `override/`.
 //!
 //! This is the supported way to add styles: the mod extends

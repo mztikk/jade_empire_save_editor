@@ -9,8 +9,6 @@
 //! savegame can still be edited, the UI just shows numeric ids instead of
 //! names. Nothing here ever writes to the installation.
 
-#![deny(clippy::expect_used)]
-
 pub mod error;
 pub mod gamedata;
 pub mod rim;

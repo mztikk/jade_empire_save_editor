@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! Rewrite tests: every block of every available savegame is serialized from
 //! the parsed tree again and must survive a full round trip.
 

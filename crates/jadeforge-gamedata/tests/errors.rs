@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! Malformed game-data files.
 //!
 //! RIM archives, talk tables and 2DA tables are built in memory here, so these

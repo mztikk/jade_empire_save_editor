@@ -49,6 +49,7 @@ missing_panics_doc = "allow"
 
 # Correctness lints that are already clean; keep them that way.
 unwrap_used = "deny"
+expect_used = "deny"
 panic = "deny"
 todo = "deny"
 unimplemented = "deny"

@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)] // tests fail loudly; expects are assertions
+
 //! Boundary and error-path tests for the savegame layer.
 //!
 //! Everything here is built from scratch, so the tests run without the game or
