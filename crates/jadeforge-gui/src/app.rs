@@ -119,6 +119,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let item_limit = use_state(|| 30_usize);
     let style_limit = use_state(|| 20_usize);
     let hovered = use_state(|| None::<HoverKey>);
+    let gem_query = use_state(String::new);
     let expanded_item = use_state(|| None::<u16>);
     let expanded_style = use_state(|| None::<u16>);
     let save_query = use_state(String::new);
@@ -230,7 +231,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 move |_| *item_limit.write() += 50,
             )
         }
-        (Tab::Gems, _) => views::gems::view(&ctx, &session.borrow().gems),
+        (Tab::Gems, _) => {
+            let available = session.borrow().available_gems();
+            views::gems::view(&ctx, &session.borrow().gems, gem_query, &available)
+        }
         (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen),
         (_, None) => empty_state(entries.len()),
     };

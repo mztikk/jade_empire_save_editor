@@ -209,6 +209,13 @@ Moving a gem only moves its struct index from one list to the other, so the gem
 data is never rewritten. Some savegames point at the gem struct directly instead
 of wrapping it in an entry with a `Gem` field; both shapes are read.
 
+Adding a gem builds the struct from scratch with the field types the game uses:
+`Gem.ItemID` is a word, `Gem.GemsEffectList` is a list of structs with dword
+`GemsEffectType`/`GemsEffectValue`/`GemsEffectCurVal` and a float
+`GemsEffectDurati` (the label is truncated to 16 bytes). The effect data comes
+from `gems.2da` (`Effect0..2`, `Parameter0..2`, `Duration0`), joined to
+`items.2da` by label, so only gems the game defines can be created.
+
 The global story variables live in `Campaign.VarTable` (`ID`, `Type`, `Value`,
 sometimes `Number`). The IDs are hashes without a name table in the savegame, and
 journal entries were not found in `save.sav`; both need more mapping work before

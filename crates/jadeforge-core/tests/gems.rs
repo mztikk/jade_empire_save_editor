@@ -65,6 +65,22 @@ fn gems_move_between_amulet_and_inventory() {
             .all(|candidate| candidate.struct_index != gem.struct_index)
     );
 
+    // Add a predefined gem with a synthetic effect list.
+    let added = save
+        .add_gem(434, &[(62, 2), (65, 1)], 0.0)
+        .expect("add gem");
+    let added_gem = save
+        .gems()
+        .expect("gems")
+        .into_iter()
+        .find(|candidate| candidate.struct_index == added)
+        .expect("added gem");
+    assert_eq!(added_gem.item_id, 434);
+    assert_eq!(added_gem.location, jadeforge_core::GemLocation::Inventory);
+    assert_eq!(added_gem.effects.len(), 2);
+    assert_eq!(added_gem.effects[0].kind, 62);
+    assert_eq!(added_gem.effects[0].value, 2);
+
     // The modified savegame still has to serialize and verify.
     save.save(SaveOptions::default()).expect("save");
     let _ = std::fs::remove_dir_all(temp);
