@@ -193,6 +193,10 @@ documentation, not ground truth — verify against the game files where possible
 - Prefer small, focused tests over one giant test.
 - UI changes should be verified with the headless runner
   (`cargo test -p jadeforge-gui`) or the snapshot example.
+- UI tests isolate the settings file through a thread-local override
+  (`jadeforge_session::config::ensure_test_path`), so a developer's remembered
+  sort order or save folder can never influence them. Keep it that way; do not
+  read the real config from a test.
 - A list the user cannot browse without typing a search is a bug: every picker
   shows its full contents and *additionally* offers a filter.
 - The same value is spelled the same way everywhere. Item rows and style rows

@@ -60,7 +60,7 @@ pub enum HoverKey {
 }
 
 /// Entries a searchable picker renders per page (items, styles, gems).
-pub(crate) const PAGE_SIZE: usize = 30;
+pub const PAGE_SIZE: usize = 30;
 
 /// The tabs of the editor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
