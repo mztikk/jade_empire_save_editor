@@ -149,11 +149,12 @@ pub fn details(description: Option<&str>) -> Option<Element> {
                 .width(Size::fill())
                 .padding(Gaps::new(2., 10., 6., 10.))
                 .child(
-                    label()
-                        .text(text.to_owned())
+                    paragraph()
+                        .width(Size::fill())
+                        .max_lines(5)
                         .font_size(11.)
-                        .max_lines(4)
-                        .color(theme::MUTED),
+                        .color(theme::MUTED)
+                        .span(text.to_owned()),
                 )
                 .into_element()
         })
