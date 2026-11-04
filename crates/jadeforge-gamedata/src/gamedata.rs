@@ -128,7 +128,64 @@ pub struct GameData {
     root: PathBuf,
     items: Vec<Option<ItemInfo>>,
     styles: Vec<Option<StyleInfo>>,
+    advances: Vec<Option<Advance>>,
     search_index: HashMap<u16, String>,
+}
+
+/// One line of `StyleAdvance.2da`, the table that style upgrade bits point at.
+///
+/// Bit *i* of a style's upgrade mask selects row *i + 1*; the saved level is
+/// `1 + number of set bits`. Rows come in families of five tiers with costs
+/// 1, 2, 4, 6 and 10.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Advance {
+    /// Row in `StyleAdvance.2da`; bit `row - 1` of the style mask selects it.
+    pub row: u16,
+    /// Internal label, for example `Increase_Damage_3`.
+    pub label: String,
+    /// Localized name from the talk table.
+    pub name: String,
+    /// Style points the upgrade costs.
+    pub cost: u8,
+    /// Effect id applied by the upgrade.
+    pub effect: u8,
+    /// Parameter passed to the effect.
+    pub param: f32,
+    /// Family label without the tier suffix, for example `Increase_Damage`.
+    pub family: String,
+    /// Tier inside the family (1 based), zero when the label has no suffix.
+    pub tier: u8,
+}
+
+impl Advance {
+    /// Short line describing the effect, for example `Damage +25%`.
+    #[must_use]
+    pub fn effect_text(&self) -> String {
+        let percent = self.param * 100.0;
+        match self.effect {
+            69 => format!("Chi cost {percent:+.0}%"),
+            70 => format!("Focus cost {percent:+.0}%"),
+            72 => format!("Damage {percent:+.0}%"),
+            81 => format!("Speed {percent:+.0}%"),
+            84 => format!("Chi strike {percent:+.0}%"),
+            85 => format!("Range {percent:+.0}%"),
+            86 => format!("Duration {percent:+.0}%"),
+            87 => format!("Resistance +{}", self.param),
+            _ => format!("Effect {} ({})", self.effect, self.param),
+        }
+    }
+}
+
+/// Splits `Increase_Damage_3` into `("Increase_Damage", 3)`.
+#[must_use]
+pub fn family_and_tier(label: &str) -> (String, u8) {
+    match label.rsplit_once('_') {
+        Some((family, tier)) if !family.is_empty() => match tier.parse::<u8>() {
+            Ok(tier) => (family.to_owned(), tier),
+            Err(_) => (label.to_owned(), 0),
+        },
+        _ => (label.to_owned(), 0),
+    }
 }
 
 impl GameData {
@@ -171,6 +228,7 @@ impl GameData {
 
         let items = load_two_da(&root, "items.2da");
         let styles = load_two_da(&root, "stylesuperlist.2da");
+        let advances = load_two_da(&root, "StyleAdvance.2da");
 
         let mut item_records = Vec::new();
         if let (Some(table), Some(talk)) = (&items, &talktable) {
@@ -274,10 +332,51 @@ impl GameData {
             );
         }
 
+        let mut advance_slots: Vec<Option<Advance>> = Vec::new();
+        if let Some(table) = &advances {
+            advance_slots.resize(table.len(), None);
+            for (index, _) in table.iter() {
+                let Ok(row) = u16::try_from(index) else {
+                    continue;
+                };
+                if row == 0 {
+                    continue;
+                }
+                let label = table.cell(index, "Label").unwrap_or_default();
+                if label.is_empty() || label == "****" || label.eq_ignore_ascii_case("INVALID") {
+                    continue;
+                }
+                let (family, tier) = family_and_tier(label);
+                advance_slots[row as usize] = Some(Advance {
+                    row,
+                    label: label.to_owned(),
+                    name: table
+                        .uint(index, "DescRef")
+                        .and_then(|reference| talktable.as_ref()?.get(reference as u32))
+                        .unwrap_or_default(),
+                    cost: table
+                        .uint(index, "CostToLevelUp")
+                        .and_then(|value| u8::try_from(value).ok())
+                        .unwrap_or(0),
+                    effect: table
+                        .uint(index, "Effect1")
+                        .and_then(|value| u8::try_from(value).ok())
+                        .unwrap_or(0),
+                    param: table
+                        .row(index)
+                        .and_then(|row| row.float(table.column("Param1")?))
+                        .unwrap_or(0.0),
+                    family,
+                    tier,
+                });
+            }
+        }
+
         Ok(Self {
             root,
             items: item_slots,
             styles: style_slots,
+            advances: advance_slots,
             search_index,
         })
     }
@@ -292,6 +391,20 @@ impl GameData {
     #[must_use]
     pub fn item_count(&self) -> usize {
         self.items.iter().flatten().count()
+    }
+
+    /// All style upgrades that could be resolved, ordered by row.
+    pub fn advances(&self) -> impl Iterator<Item = &Advance> {
+        self.advances.iter().flatten()
+    }
+
+    /// Looks an upgrade up by its `StyleAdvance.2da` row.
+    #[must_use]
+    pub fn advance(&self, row: u16) -> Option<&Advance> {
+        self.advances
+            .get(usize::from(row))
+            .and_then(Option::as_ref)
+            .filter(|advance| advance.row == row)
     }
 
     /// Number of resolved styles.

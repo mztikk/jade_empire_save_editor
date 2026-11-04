@@ -3,7 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::session::{StyleRow, StyleSuggestion};
+use crate::session::{StyleRow, StyleSuggestion, StyleUpgrade};
 use crate::theme;
 use crate::widgets;
 
@@ -189,11 +189,122 @@ fn style_row(ctx: &Ctx, style: &StyleRow, expanded: State<Option<u16>>) -> Eleme
                 ),
         )
         .maybe_child(if is_expanded {
-            widgets::details(style.description.as_deref())
+            Some(upgrade_panel(ctx, style))
         } else {
             None
         })
         .into_element()
+}
+
+/// Expanded panel: description plus the upgrade choices of the style.
+fn upgrade_panel(ctx: &Ctx, style: &StyleRow) -> Element {
+    let mut rows: Vec<Element> = Vec::new();
+    if let Some(details) = widgets::details(style.description.as_deref()) {
+        rows.push(details);
+    }
+    if style.upgrades.is_empty() {
+        if style.description.is_none() {
+            rows.push(widgets::hint(
+                "No upgrade data available: install the game data next to the savegames.",
+            ));
+        }
+        return rect()
+            .vertical()
+            .width(Size::fill())
+            .spacing(4.)
+            .padding(Gaps::new(0., 10., 6., 10.))
+            .children(rows)
+            .into_element();
+    }
+
+    rows.push(widgets::section_label("UPGRADES"));
+    let mut family: Option<&str> = None;
+    let mut chips: Vec<Element> = Vec::new();
+    for upgrade in &style.upgrades {
+        if family.is_some_and(|family| family != upgrade.family) {
+            rows.push(upgrade_row(
+                family.unwrap_or_default(),
+                std::mem::take(&mut chips),
+            ));
+        }
+        if family != Some(upgrade.family.as_str()) {
+            family = Some(upgrade.family.as_str());
+        }
+        chips.push(upgrade_chip(ctx, style.struct_index, upgrade));
+    }
+    if let Some(family) = family {
+        rows.push(upgrade_row(family, chips));
+    }
+    rows.push(widgets::hint(
+        "One chip per upgrade tier; the level follows the number of owned upgrades.",
+    ));
+    rect()
+        .vertical()
+        .width(Size::fill())
+        .spacing(6.)
+        .padding(Gaps::new(0., 10., 8., 10.))
+        .children(rows)
+        .into_element()
+}
+
+/// One family line: its name and a chip per tier.
+fn upgrade_row(family: &str, chips: Vec<Element>) -> Element {
+    rect()
+        .horizontal()
+        .width(Size::fill())
+        .spacing(6.)
+        .content(Content::Flex)
+        .child(
+            label()
+                .text(family_title(family))
+                .font_size(11.)
+                .width(Size::px(120.))
+                .color(theme::MUTED),
+        )
+        .children(chips)
+        .into_element()
+}
+
+/// One toggleable upgrade tier.
+fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Element {
+    let taken = upgrade.taken;
+    let row = upgrade.row;
+    let ctx = ctx.clone();
+    let button = Button::new().compact();
+    let button = if taken {
+        button.filled()
+    } else {
+        button.outline()
+    };
+    button
+        .child(upgrade.tier.to_string())
+        .on_press(move |_| {
+            ctx.run(|session| session.toggle_style_upgrade(struct_index, row));
+        })
+        .into_element()
+}
+
+/// Human readable family name for the upgrade rows.
+#[must_use]
+pub fn family_title(family: &str) -> String {
+    let named = match family {
+        "Increase_Damage" => "Damage",
+        "Chi_Strike_Damage" => "Chi strike",
+        "Speed_Increase" => "Speed",
+        "Lower_Chi_Cost" => "Chi cost",
+        "Duration" => "Duration",
+        "Chi_Reduction" => "Chi damage taken",
+        "Focus_Cost_Reduction" => "Focus cost",
+        "Damage_Reduction" => "Damage taken",
+        "Spirit_Thief_Duration" => "Spirit thief",
+        "Gun_Focus_Cost_Reduction" => "Gun focus cost",
+        _ => family,
+    };
+    if std::ptr::eq(named, family) {
+        named.replace('_', " ")
+    } else {
+        named.to_owned()
+    }
 }
 
 /// Secondary line shown for a style, owned or not.

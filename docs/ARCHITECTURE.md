@@ -84,7 +84,9 @@ Names live in the installation, not in the savegame. The crate reads
 * text 2DA tables from `override/` (`items.2da`, `stylesuperlist.2da`).
 
 `GameData::discover` walks up from the save folder (`JADEFORGE_GAME_DIR`
-overrides) and resolves items and styles once, caching the decoded names.
+overrides) and resolves items, styles and style upgrades once, caching the
+decoded names. `StyleAdvance.2da` is the table behind the style upgrade mask:
+bit *i* selects row *i+1*, so the editor can show and toggle individual upgrades.
 `search_items` powers the item picker. Every table is optional: without the game
 files the UI falls back to numeric ids.
 

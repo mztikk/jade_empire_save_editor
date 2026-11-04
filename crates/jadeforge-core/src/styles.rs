@@ -7,11 +7,11 @@
 //! from the levels of all owned styles.
 
 use crate::error::{Error, Result};
-use crate::gff::Value;
+use crate::gff::{Gff, Value};
 use crate::save::SaveGame;
 
 /// Highest style level `JadeForge` allows to be set.
-pub const MAX_STYLE_LEVEL: u8 = 20;
+pub const MAX_STYLE_LEVEL: u8 = 64;
 
 /// One fighting style of the player.
 #[derive(Debug, Clone, PartialEq)]
@@ -195,6 +195,49 @@ impl SaveGame {
         Ok(())
     }
 
+    /// Sets or clears one upgrade bit of a style and keeps the level in sync.
+    ///
+    /// Bit `row - 1` selects `StyleAdvance.2da` row `row`; the level is
+    /// `1 + number of set bits`, exactly like the game stores it. Returns the
+    /// new mask.
+    pub fn set_style_upgrade(&mut self, struct_index: usize, row: u16, taken: bool) -> Result<u64> {
+        if !(1..=64).contains(&row) {
+            return Err(Error::OutOfRange {
+                path: "style upgrade".to_owned(),
+                value: row.to_string(),
+                min: "1".to_owned(),
+                max: "64".to_owned(),
+            });
+        }
+        let location = self.player_location()?;
+        let block = self
+            .block_mut(location.block)
+            .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
+        let gff = block.gff_mut();
+        if gff.struct_at(struct_index).is_none() {
+            return Err(Error::Corrupt(format!(
+                "struct {struct_index} does not exist"
+            )));
+        }
+        let mask = read_style_mask(gff, struct_index);
+        let bit = 1_u64 << (row - 1);
+        let new_mask = if taken { mask | bit } else { mask & !bit };
+        if new_mask == mask {
+            return Ok(mask);
+        }
+        let level = u8::try_from(new_mask.count_ones() + 1).unwrap_or(u8::MAX);
+        if level > MAX_STYLE_LEVEL {
+            return Err(Error::OutOfRange {
+                path: "style level".to_owned(),
+                value: level.to_string(),
+                min: "1".to_owned(),
+                max: MAX_STYLE_LEVEL.to_string(),
+            });
+        }
+        write_style_level(gff, struct_index, new_mask, level)?;
+        Ok(new_mask)
+    }
+
     /// Adds a style by cloning the field layout of an existing one.
     ///
     /// The identity of the style (`StyleId`, `NameRef`, `DescRef`, `IconRef`,
@@ -257,4 +300,53 @@ impl SaveGame {
         elements.retain(|element| *element != struct_index);
         Ok(elements.len() != before)
     }
+}
+
+/// Reads the upgrade mask of a style struct, treating a missing field as zero.
+fn read_style_mask(gff: &Gff, struct_index: usize) -> u64 {
+    gff.struct_at(struct_index)
+        .and_then(|structure| {
+            structure
+                .fields
+                .iter()
+                .find(|field| gff.label_name(field.label) == Some("StyleLevelInfo"))
+        })
+        .and_then(|field| match field.value {
+            Value::DWord64(mask) => Some(mask),
+            _ => None,
+        })
+        .unwrap_or(0)
+}
+
+/// Writes the mask and the level field of a style struct.
+fn write_style_level(gff: &mut Gff, struct_index: usize, mask: u64, level: u8) -> Result<()> {
+    let mask_position = gff.struct_at(struct_index).and_then(|structure| {
+        structure
+            .fields
+            .iter()
+            .position(|field| gff.label_name(field.label) == Some("StyleLevelInfo"))
+    });
+    if let Some(position) = mask_position {
+        gff.struct_at_mut(struct_index)
+            .expect("struct checked by the caller")
+            .fields[position]
+            .value = Value::DWord64(mask);
+    } else {
+        gff.add_field(struct_index, "StyleLevelInfo", Value::DWord64(mask))?;
+    }
+    let level_position = gff.struct_at(struct_index).and_then(|structure| {
+        structure
+            .fields
+            .iter()
+            .position(|field| gff.label_name(field.label) == Some("StyleLevel"))
+    });
+    if let Some(position) = level_position {
+        gff.struct_at_mut(struct_index)
+            .expect("struct checked by the caller")
+            .fields[position]
+            .value = Value::Byte(level);
+    } else {
+        gff.add_field(struct_index, "StyleLevel", Value::Byte(level))?;
+    }
+    Ok(())
 }

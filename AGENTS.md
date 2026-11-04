@@ -86,6 +86,9 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 - Style kinds come from the template label prefix (`StyleKind`), not from the
   `Type` column: the table stores dual weapon styles as `MONSTER` and the
   Spirit Thief style as `SpiritThief`, so `Type` is not a usable description.
+- A style's upgrade mask is not a counter: bit *i* selects row *i+1* of
+  `StyleAdvance.2da` and the level is `1 + popcount`. `set_style_upgrade` must
+  keep mask and level in sync; never write one without the other.
 - Development placeholders (`[TEMP] ...`, `temp_*`, `zzz*`, `cut_*`) are hidden
   from the item picker (`is_playable_item`) but stay resolvable by id.
 

@@ -67,6 +67,59 @@ fn styles_keep_their_mask_in_sync_with_the_level() {
 }
 
 #[test]
+fn upgrading_a_style_sets_the_right_bit_and_level() {
+    let Some(dir) = save_dir() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let files = save_files(&dir);
+    if files.is_empty() {
+        eprintln!("skipping: no savegames");
+        return;
+    }
+    let mut save = SaveGame::open(&files[0]).expect("open");
+    let styles = save.styles().expect("styles");
+    if styles.is_empty() {
+        eprintln!("skipping: savegame has no styles");
+        return;
+    }
+    let target = &styles[0];
+    let index = target.struct_index;
+    let before = save
+        .styles()
+        .expect("styles")
+        .into_iter()
+        .find(|style| style.struct_index == index)
+        .expect("style");
+    // Row 30 is a tier the sample savegames do not have, so the mask changes.
+    let row = 30_u16;
+    let mask = save.set_style_upgrade(index, row, true).expect("upgrade");
+    assert_ne!(mask, before.mask, "the bit was already set");
+    let after = save
+        .styles()
+        .expect("styles")
+        .into_iter()
+        .find(|style| style.struct_index == index)
+        .expect("style");
+    assert_eq!(after.mask, mask);
+    assert_eq!(u32::from(after.level), 1 + mask.count_ones());
+    assert_eq!(after.mask & (1 << (row - 1)), 1 << (row - 1));
+
+    save.set_style_upgrade(index, row, false)
+        .expect("downgrade");
+    let restored = save
+        .styles()
+        .expect("styles")
+        .into_iter()
+        .find(|style| style.struct_index == index)
+        .expect("style");
+    assert_eq!(restored.mask, before.mask);
+    assert_eq!(restored.level, before.level);
+    assert!(save.set_style_upgrade(index, 0, true).is_err());
+    assert!(save.set_style_upgrade(index, 65, true).is_err());
+}
+
+#[test]
 fn adding_and_removing_a_style_survives_a_save() {
     let Some(dir) = save_dir() else {
         eprintln!("skipping: no savegames found");

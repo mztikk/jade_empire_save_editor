@@ -258,10 +258,13 @@ confirm this: a level 11 style carries ten bits, for example `[0-4, 10-14]`
 (five damage tiers plus five speed tiers), and every style satisfies
 `level == 1 + popcount`.
 
-The editor's `+`/`-` buttons currently toggle the lowest free / highest set bit,
-which keeps the mask valid but chooses the upgrade for the player. Choosing a
-*specific* upgrade needs the per-style `<Style>LV.2da` table, which lives in the
-BIF archives rather than in `override/`.
+The editor shows those bits as one chip per tier and family inside the expanded
+style row, so a specific upgrade can be bought or removed; the level is derived
+from the mask. The `+`/`-` buttons remain as a quick way to change the number of
+upgrades without picking them individually, and the per-style `<Style>LV.2da`
+tables (which decide what the game's own level-up screen offers) are only partly
+present in `override/`, so the editor offers the full table instead of guessing
+per-style restrictions.
 
 ## Unknowns
 
