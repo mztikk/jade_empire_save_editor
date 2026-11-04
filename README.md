@@ -21,8 +21,12 @@ the game does, verifies the result and keeps a backup of the original.
   the level: one chip per tier and family (damage, chi strike, speed, chi cost,
   duration, ...), each one a row of `StyleAdvance.2da` with its own cost. The
   level follows `1 + number of owned upgrades`, exactly like the game stores it,
-  and the `+`/`-` buttons remain as a quick level shortcut. All learnable styles
-  are listed for browsing, with a filter for searching, and styles can be
+  and the `+`/`-` buttons remain as a quick level shortcut. Tiers are bought
+  **in order** (tier 2 needs tier 1, only the highest owned tier can be removed)
+  so the mask never contains gaps the game does not expect. A **Game rules**
+  toggle (on by default) further limits the chips to the upgrades the style's
+  own `<Style>LV.2da` table offers when the installation ships one. All learnable
+  styles are listed for browsing, with a filter for searching, and styles can be
   learned and removed.
 - **Inventory** – every stack with its real name and category resolved from
   `items.2da` and `dialog.tlk`. Stack sizes can be changed, items removed, and

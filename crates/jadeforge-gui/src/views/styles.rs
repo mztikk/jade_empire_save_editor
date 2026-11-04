@@ -30,7 +30,9 @@ pub fn view(
         ));
     }
 
+    let strict = ctx.session.borrow().strict_upgrades_enabled();
     let mut children = vec![
+        rules_row(ctx, strict),
         rect()
             .vertical()
             .width(Size::fill())
@@ -196,6 +198,36 @@ fn style_row(ctx: &Ctx, style: &StyleRow, expanded: State<Option<u16>>) -> Eleme
         .into_element()
 }
 
+/// Game rules toggle: restrict upgrades to what the style offers.
+fn rules_row(ctx: &Ctx, strict: bool) -> Element {
+    let ctx = ctx.clone();
+    rect()
+        .horizontal()
+        .width(Size::fill())
+        .spacing(10.)
+        .content(Content::Flex)
+        .child(
+            Button::new()
+                .compact()
+                .outline()
+                .child(if strict {
+                    "Game rules: on"
+                } else {
+                    "Game rules: off"
+                })
+                .on_press(move |_| {
+                    let current = ctx.session.borrow().strict_upgrades_enabled();
+                    ctx.run(|session| session.set_strict_upgrades(!current));
+                }),
+        )
+        .child(widgets::hint(if strict {
+            "Only upgrades the style offers, bought in order."
+        } else {
+            "Any upgrade row, still bought in order."
+        }))
+        .into_element()
+}
+
 /// Expanded panel: description plus the upgrade choices of the style.
 fn upgrade_panel(ctx: &Ctx, style: &StyleRow) -> Element {
     let mut rows: Vec<Element> = Vec::new();
@@ -218,9 +250,14 @@ fn upgrade_panel(ctx: &Ctx, style: &StyleRow) -> Element {
     }
 
     rows.push(widgets::section_label("UPGRADES"));
+    let strict = ctx.session.borrow().strict_upgrades_enabled();
     let mut family: Option<&str> = None;
     let mut chips: Vec<Element> = Vec::new();
-    for upgrade in &style.upgrades {
+    for upgrade in style
+        .upgrades
+        .iter()
+        .filter(|upgrade| !strict || upgrade.available || upgrade.taken)
+    {
         if family.is_some_and(|family| family != upgrade.family) {
             rows.push(upgrade_row(
                 family.unwrap_or_default(),
@@ -269,6 +306,23 @@ fn upgrade_row(family: &str, chips: Vec<Element>) -> Element {
 fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Element {
     let taken = upgrade.taken;
     let row = upgrade.row;
+    let enabled = ctx.session.borrow().can_toggle_upgrade(struct_index, row);
+    if !enabled {
+        // Dim and inert instead of a button that silently ignores presses.
+        return rect()
+            .center()
+            .width(Size::px(22.))
+            .height(Size::px(22.))
+            .corner_radius(6.)
+            .border(Border::new().fill(theme::BORDER).width(1.))
+            .child(
+                label()
+                    .text(upgrade.tier.to_string())
+                    .font_size(11.)
+                    .color(theme::DIM),
+            )
+            .into_element();
+    }
     let ctx = ctx.clone();
     let button = Button::new().compact();
     let button = if taken {

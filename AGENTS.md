@@ -89,6 +89,13 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 - A style's upgrade mask is not a counter: bit *i* selects row *i+1* of
   `StyleAdvance.2da` and the level is `1 + popcount`. `set_style_upgrade` must
   keep mask and level in sync; never write one without the other.
+- Upgrades are bought in order: `can_toggle_upgrade` only allows the next tier
+  of a family or the highest owned one, so the mask stays a gap-free prefix.
+  Do not add a free-selection path that can create gaps.
+- `<Style>LV.2da` tables limit what the game's level-up screen offers. They are
+  matched by normalized style label and only a few ship in `override/`; when one
+  is missing the editor offers the full table, which the Game rules toggle can
+  restrict.
 - Development placeholders (`[TEMP] ...`, `temp_*`, `zzz*`, `cut_*`) are hidden
   from the item picker (`is_playable_item`) but stay resolvable by id.
 

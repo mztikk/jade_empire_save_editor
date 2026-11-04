@@ -260,11 +260,16 @@ confirm this: a level 11 style carries ten bits, for example `[0-4, 10-14]`
 
 The editor shows those bits as one chip per tier and family inside the expanded
 style row, so a specific upgrade can be bought or removed; the level is derived
-from the mask. The `+`/`-` buttons remain as a quick way to change the number of
-upgrades without picking them individually, and the per-style `<Style>LV.2da`
-tables (which decide what the game's own level-up screen offers) are only partly
-present in `override/`, so the editor offers the full table instead of guessing
-per-style restrictions.
+from the mask. Tiers are always bought in order (a gap-free prefix per family,
+only the highest owned tier can be removed), because the game's own level-up
+screen never creates gaps and other tools do not agree on how it reacts to them.
+
+The `+`/`-` buttons remain as a quick way to change the number of upgrades
+without picking them individually. A **Game rules** toggle (on by default)
+restricts the chips to the rows listed by the style's own `<Style>LV.2da` table
+(`IronPalmLV`, `ViperLV`, `Ghost_KingLV` in this installation; most styles do
+not ship one), and falls back to the full `StyleAdvance.2da` table when the
+table is missing so nothing is hidden by guesswork.
 
 ## Unknowns
 

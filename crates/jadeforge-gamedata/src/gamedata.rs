@@ -129,6 +129,7 @@ pub struct GameData {
     items: Vec<Option<ItemInfo>>,
     styles: Vec<Option<StyleInfo>>,
     advances: Vec<Option<Advance>>,
+    style_advances: Vec<Option<Vec<u16>>>,
     search_index: HashMap<u16, String>,
 }
 
@@ -332,6 +333,7 @@ impl GameData {
             );
         }
 
+        let level_tables = load_level_tables(&root);
         let mut advance_slots: Vec<Option<Advance>> = Vec::new();
         if let Some(table) = &advances {
             advance_slots.resize(table.len(), None);
@@ -372,11 +374,21 @@ impl GameData {
             }
         }
 
+        let mut style_advances: Vec<Option<Vec<u16>>> = vec![None; style_slots.len()];
+        for (index, style) in style_slots.iter().enumerate() {
+            if let Some(style) = style {
+                if let Some(allowed) = level_tables.get(&normalize_style_name(&style.label)) {
+                    style_advances[index] = Some(allowed.clone());
+                }
+            }
+        }
+
         Ok(Self {
             root,
             items: item_slots,
             styles: style_slots,
             advances: advance_slots,
+            style_advances,
             search_index,
         })
     }
@@ -405,6 +417,19 @@ impl GameData {
             .get(usize::from(row))
             .and_then(Option::as_ref)
             .filter(|advance| advance.row == row)
+    }
+
+    /// Upgrade rows the game offers for a style, from its `<Style>LV.2da` table.
+    ///
+    /// `None` when the installation does not ship a table for the style, which
+    /// is the case for most styles: the editor then offers the whole
+    /// `StyleAdvance.2da` table instead of guessing.
+    #[must_use]
+    pub fn allowed_advances(&self, style_id: u16) -> Option<&[u16]> {
+        self.style_advances
+            .get(usize::from(style_id))
+            .and_then(Option::as_ref)
+            .map(Vec::as_slice)
     }
 
     /// Number of resolved styles.
@@ -520,6 +545,69 @@ pub fn is_playable_item(item: &ItemInfo) -> bool {
         || name.starts_with("zzz"))
 }
 
+/// Loads every `<Style>LV.2da` in `override/`, keyed by the normalized style
+/// name, and returns the union of the advancement rows each table offers.
+fn load_level_tables(root: &Path) -> HashMap<String, Vec<u16>> {
+    let mut tables = HashMap::new();
+    let Ok(entries) = std::fs::read_dir(root.join("override")) else {
+        return tables;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let lower = name.to_lowercase();
+        if !lower.ends_with("lv.2da") {
+            continue;
+        }
+        let Some(text) = std::fs::read_to_string(&path).ok() else {
+            continue;
+        };
+        let Ok(table) = TwoDa::parse(&text) else {
+            continue;
+        };
+        let mut rows: Vec<u16> = Vec::new();
+        for (_, row) in table.iter() {
+            for column in ["Choice_1", "Choice_2", "Choice_3", "Choice_4", "Choice_5"] {
+                let Some(column) = table.column(column) else {
+                    continue;
+                };
+                if let Some(value) = row.uint(column) {
+                    if let Ok(value) = u16::try_from(value) {
+                        if value > 0 && !rows.contains(&value) {
+                            rows.push(value);
+                        }
+                    }
+                }
+            }
+        }
+        rows.sort_unstable();
+        let stem = lower.trim_end_matches("lv.2da").to_owned();
+        tables.insert(normalize_style_name(&stem), rows);
+    }
+    tables
+}
+
+/// Normalizes style labels and table names for matching.
+///
+/// `C_Iron_palm` matches `IronPalmLV`, `cutC_Ghost_King__` matches
+/// `Ghost_KingLV`: strip the cut and creature prefixes, the `lv` suffix and
+/// every separator, then compare.
+#[must_use]
+pub fn normalize_style_name(name: &str) -> String {
+    let mut name = name.to_lowercase();
+    for prefix in ["cut_", "cut"] {
+        if let Some(rest) = name.strip_prefix(prefix) {
+            name = rest.to_owned();
+        }
+    }
+    if let Some(rest) = name.strip_prefix("c_") {
+        name = rest.to_owned();
+    }
+    name.chars().filter(|c| c.is_alphanumeric()).collect()
+}
+
 fn load_two_da(root: &Path, name: &str) -> Option<TwoDa> {
     let candidates = [root.join("override").join(name), root.join(name)];
     for path in candidates {
@@ -564,6 +652,15 @@ mod tests {
         assert_eq!(style_kind("Unique_Spirit_Thief"), StyleKind::Unique);
         assert_eq!(style_kind("EMPEROR_STAFF"), StyleKind::Other);
         assert_eq!(StyleKind::Support.label(), "support");
+    }
+
+    #[test]
+    fn style_names_normalize_for_table_matching() {
+        assert_eq!(normalize_style_name("C_Iron_palm"), "ironpalm");
+        assert_eq!(normalize_style_name("IronPalmLV"), "ironpalmlv");
+        assert_eq!(normalize_style_name("Ghost_KingLV"), "ghostkinglv");
+        assert_eq!(normalize_style_name("cutC_Ghost_King__"), "ghostking");
+        assert_eq!(normalize_style_name("Viper"), "viper");
     }
 
     #[test]
