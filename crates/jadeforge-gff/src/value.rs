@@ -68,9 +68,9 @@ pub enum Value {
     LocString(LocString),
     /// An opaque blob.
     Void(Vec<u8>),
-    /// Index of a sub-struct in [`crate::gff::Gff::structs`].
+    /// Index of a sub-struct in [`crate::Gff::structs`].
     Struct(usize),
-    /// Indices of sub-structs in [`crate::gff::Gff::structs`].
+    /// Indices of sub-structs in [`crate::Gff::structs`].
     List(Vec<usize>),
     /// Four floats, used for camera and object orientations.
     Quaternion([f32; 4]),
@@ -283,12 +283,12 @@ impl Value {
         block: &str,
     ) -> Result<Self> {
         let start = offset as usize;
-        let err = |what: &str, at: usize| Error::Gff {
+        let err = |what: &str, at: usize| Error::Malformed {
             block: block.to_owned(),
             message: format!("{what} at {at} is truncated"),
         };
         let take = |len: usize| -> Result<&[u8]> {
-            data.get(start..start + len).ok_or_else(|| Error::Gff {
+            data.get(start..start + len).ok_or_else(|| Error::Malformed {
                 block: block.to_owned(),
                 message: format!(
                     "field data offset {start} with length {len} (type {type_id}) exceeds section size {}",
@@ -318,22 +318,22 @@ impl Value {
                         .try_into()
                         .map_err(|_| err("string length", start))?,
                 ) as usize;
-                let bytes = data
-                    .get(start + 4..start + 4 + len)
-                    .ok_or_else(|| Error::Gff {
-                        block: block.to_owned(),
-                        message: format!("string at {start} of length {len} is out of bounds"),
-                    })?;
+                let bytes =
+                    data.get(start + 4..start + 4 + len)
+                        .ok_or_else(|| Error::Malformed {
+                            block: block.to_owned(),
+                            message: format!("string at {start} of length {len} is out of bounds"),
+                        })?;
                 Self::String(decode_text(bytes, block, start)?)
             }
             11 => {
                 let len = usize::from(take(1)?[0]);
-                let bytes = data
-                    .get(start + 1..start + 1 + len)
-                    .ok_or_else(|| Error::Gff {
-                        block: block.to_owned(),
-                        message: format!("resref at {start} of length {len} is out of bounds"),
-                    })?;
+                let bytes =
+                    data.get(start + 1..start + 1 + len)
+                        .ok_or_else(|| Error::Malformed {
+                            block: block.to_owned(),
+                            message: format!("resref at {start} of length {len} is out of bounds"),
+                        })?;
                 Self::ResRef(decode_text(bytes, block, start)?)
             }
             12 | 18 => {
@@ -342,14 +342,14 @@ impl Value {
                         .try_into()
                         .map_err(|_| err("locstring size", start))?,
                 ) as usize;
-                let inner = data
-                    .get(start + 4..start + 4 + total)
-                    .ok_or_else(|| Error::Gff {
-                        block: block.to_owned(),
-                        message: format!("localized string at {start} is out of bounds"),
-                    })?;
+                let inner =
+                    data.get(start + 4..start + 4 + total)
+                        .ok_or_else(|| Error::Malformed {
+                            block: block.to_owned(),
+                            message: format!("localized string at {start} is out of bounds"),
+                        })?;
                 if inner.len() < 4 {
-                    return Err(Error::Gff {
+                    return Err(Error::Malformed {
                         block: block.to_owned(),
                         message: format!("localized string at {start} is truncated"),
                     });
@@ -360,12 +360,13 @@ impl Value {
                         .map_err(|_| err("locstring reference", start))?,
                 );
                 let text = if inner.len() > 4 {
-                    let len =
-                        u32::from_le_bytes(inner[4..8].try_into().map_err(|_| Error::Gff {
+                    let len = u32::from_le_bytes(inner[4..8].try_into().map_err(|_| {
+                        Error::Malformed {
                             block: block.to_owned(),
                             message: format!("localized string at {start} is truncated"),
-                        })?) as usize;
-                    let bytes = inner.get(8..8 + len).ok_or_else(|| Error::Gff {
+                        }
+                    })?) as usize;
+                    let bytes = inner.get(8..8 + len).ok_or_else(|| Error::Malformed {
                         block: block.to_owned(),
                         message: format!("localized string text at {start} is truncated"),
                     })?;
@@ -384,7 +385,7 @@ impl Value {
                         as usize;
                 Self::Void(
                     data.get(start + 4..start + 4 + len)
-                        .ok_or_else(|| Error::Gff {
+                        .ok_or_else(|| Error::Malformed {
                             block: block.to_owned(),
                             message: format!("blob at {start} of length {len} is out of bounds"),
                         })?
@@ -395,7 +396,7 @@ impl Value {
                 f32::from_le_bytes(take(4)?.try_into().map_err(|_| err("quaternion", start))?),
                 f32::from_le_bytes(
                     data.get(start + 4..start + 8)
-                        .ok_or_else(|| Error::Gff {
+                        .ok_or_else(|| Error::Malformed {
                             block: block.to_owned(),
                             message: format!("quaternion at {start} is out of bounds"),
                         })?
@@ -404,7 +405,7 @@ impl Value {
                 ),
                 f32::from_le_bytes(
                     data.get(start + 8..start + 12)
-                        .ok_or_else(|| Error::Gff {
+                        .ok_or_else(|| Error::Malformed {
                             block: block.to_owned(),
                             message: format!("quaternion at {start} is out of bounds"),
                         })?
@@ -413,7 +414,7 @@ impl Value {
                 ),
                 f32::from_le_bytes(
                     data.get(start + 12..start + 16)
-                        .ok_or_else(|| Error::Gff {
+                        .ok_or_else(|| Error::Malformed {
                             block: block.to_owned(),
                             message: format!("quaternion at {start} is out of bounds"),
                         })?
@@ -425,7 +426,7 @@ impl Value {
                 f32::from_le_bytes(take(4)?.try_into().map_err(|_| err("vector", start))?),
                 f32::from_le_bytes(
                     data.get(start + 4..start + 8)
-                        .ok_or_else(|| Error::Gff {
+                        .ok_or_else(|| Error::Malformed {
                             block: block.to_owned(),
                             message: format!("vector at {start} is out of bounds"),
                         })?
@@ -434,7 +435,7 @@ impl Value {
                 ),
                 f32::from_le_bytes(
                     data.get(start + 8..start + 12)
-                        .ok_or_else(|| Error::Gff {
+                        .ok_or_else(|| Error::Malformed {
                             block: block.to_owned(),
                             message: format!("vector at {start} is out of bounds"),
                         })?
@@ -443,7 +444,7 @@ impl Value {
                 ),
             ]),
             other => {
-                return Err(Error::Gff {
+                return Err(Error::Malformed {
                     block: block.to_owned(),
                     message: format!("unsupported field type {other}"),
                 });
@@ -521,7 +522,7 @@ fn encode_u32_string(text: &str) -> Vec<u8> {
 }
 
 fn decode_text(bytes: &[u8], block: &str, offset: usize) -> Result<String> {
-    String::from_utf8(bytes.to_vec()).map_err(|_| Error::Gff {
+    String::from_utf8(bytes.to_vec()).map_err(|_| Error::Malformed {
         block: block.to_owned(),
         message: format!("text at {offset} is not valid UTF-8"),
     })

@@ -71,10 +71,10 @@ above remain canonical.
 - The workspace also **denies** `unwrap_used`, `panic`, `todo`, `unimplemented`,
   `unreachable`, `exit`, `string_slice` and `panic_in_result_fn`, and denies
   `missing_docs`. `expect` is allowed only where a preceding check proves the
-  invariant; `crates/jadeforge-core/src/gff` denies it module-wide and converts
-  those cases into `Error::Gff` instead. Tests may panic (`clippy.toml`), but the
-  test allowances do not cover helper functions in `tests/*.rs`; add a
-  crate-level allow there if a test helper needs it.
+  invariant; `crates/jadeforge-gff` denies it crate-wide and converts those
+  cases into `jadeforge_gff::Error::Malformed` instead. Tests may panic
+  (`clippy.toml`), but the test allowances do not cover helper functions in
+  `tests/*.rs`; add a crate-level allow there if a test helper needs it.
 - `just strict` reports the lints that are not gated yet
   (`expect_used`, `indexing_slicing`, `arithmetic_side_effects`, `nursery`) as
   an audit that never gates the build. Run it before promoting a lint: only add
@@ -82,7 +82,8 @@ above remain canonical.
   gate stays meaningful.
 - Public items have doc comments that explain behaviour, not syntax.
 - Errors carry context: use `Error::Corrupt`/`Error::Gff` with the path, block
-  or field that failed, not bare strings.
+  or field that failed, not bare strings; the GFF crate uses its own
+  `Error::Malformed` for the same reason.
 - No panics on user data. `expect`/`unwrap` are only allowed where a preceding
   check proves the invariant, and the message must state why.
 - Keep the core free of UI dependencies; keep the GUI free of format knowledge.
@@ -171,7 +172,7 @@ documentation, not ground truth — verify against the game files where possible
 
 ## Changing the format layer
 
-- Any change to `gff::parse`/`gff::to_bytes` must keep
+- Any change to `jadeforge-gff`'s `Gff::parse`/`Gff::to_bytes` must keep
   `tests/rewrite.rs` (all blocks of all savegames) and
   `tests/roundtrip.rs` (byte identical copy) green.
 - Add a synthetic test that covers the new code path, so CI without game data
@@ -209,7 +210,8 @@ documentation, not ground truth — verify against the game files where possible
 
 | path | content |
 | --- | --- |
-| `crates/jadeforge-core` | format reader/writer, character, inventory, styles, companions, screenshots |
+| `crates/jadeforge-core` | savegame container, character, inventory, styles, companions, screenshots |
+| `crates/jadeforge-gff` | GFF block reader/writer, dotted field paths |
 | `crates/jadeforge-session` | UI independent session state and settings (no Freya) |
 | `crates/jadeforge-gamedata` | talk table and 2DA readers, names for items and styles |
 | `crates/jadeforge-cli` | `jadeforge` command line tool |

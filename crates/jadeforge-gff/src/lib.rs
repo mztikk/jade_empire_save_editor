@@ -1,4 +1,4 @@
-//! Reader for the GFF variant used by Jade Empire savegames.
+//! Reader and writer for the GFF variant used by Jade Empire savegames.
 //!
 //! A savegame is a container of named blocks; every block is a self describing
 //! tree of structs and fields. The layout of a block is:
@@ -35,10 +35,11 @@ mod path;
 mod value;
 mod write;
 
+pub mod error;
+
+pub use error::{Error, Result};
 pub use path::FieldPath;
 pub use value::{LocString, Value};
-
-use crate::error::{Error, Result};
 
 /// Four byte magic that starts every block.
 pub const MAGIC: [u8; 4] = *b"SAV ";
@@ -100,7 +101,7 @@ impl Gff {
     /// `block` is only used to produce readable error messages.
     #[allow(clippy::too_many_lines)] // the parser mirrors the on-disk layout
     pub fn parse(block: &str, bytes: &[u8]) -> Result<Self> {
-        let err = |message: String| Error::Gff {
+        let err = |message: String| Error::Malformed {
             block: block.to_owned(),
             message,
         };
@@ -580,7 +581,7 @@ impl Gff {
 
     /// Checks the invariants that the on-disk format requires.
     pub fn validate(&self, block: &str) -> Result<()> {
-        let err = |message: String| Error::Gff {
+        let err = |message: String| Error::Malformed {
             block: block.to_owned(),
             message,
         };

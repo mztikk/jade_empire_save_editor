@@ -26,14 +26,9 @@ pub enum Error {
     #[error("corrupt savegame: {0}")]
     Corrupt(String),
 
-    /// A single GFF block is structurally damaged.
-    #[error("GFF block {block}: {message}")]
-    Gff {
-        /// Name of the offending block, e.g. `save.sav`.
-        block: String,
-        /// Human readable description of the problem.
-        message: String,
-    },
+    /// A single GFF block is damaged or cannot be written.
+    #[error(transparent)]
+    Gff(jadeforge_gff::Error),
 
     /// The given field path does not exist.
     #[error("field {path:?} does not exist")]
@@ -66,17 +61,9 @@ pub enum Error {
         max: String,
     },
 
-    /// A label does not fit into the fixed size label table slots.
-    #[error("label {0:?} cannot be stored: labels are limited to 16 bytes")]
-    LabelTooLong(String),
-
     /// The newly written savegame did not survive a round trip.
     #[error("savegame verification failed: {0}")]
     Verification(String),
-
-    /// A field type is not supported by this build.
-    #[error("field type {0} is not supported")]
-    UnsupportedType(u32),
 
     /// A requested list element does not exist.
     #[error("list {path:?} has no element at index {index} (length {len})")]
@@ -97,5 +84,55 @@ impl Error {
             path: path.into(),
             source,
         }
+    }
+}
+
+impl From<jadeforge_gff::Error> for Error {
+    fn from(error: jadeforge_gff::Error) -> Self {
+        match error {
+            jadeforge_gff::Error::FieldNotFound { path } => Self::FieldNotFound { path },
+            jadeforge_gff::Error::TypeMismatch {
+                path,
+                expected,
+                actual,
+            } => Self::TypeMismatch {
+                path,
+                expected,
+                actual,
+            },
+            other => Self::Gff(other),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gff_errors_keep_their_context_when_converted() {
+        let error: Error = jadeforge_gff::Error::FieldNotFound {
+            path: "Stats.Gold".to_owned(),
+        }
+        .into();
+        assert!(matches!(error, Error::FieldNotFound { .. }));
+        assert!(error.to_string().contains("Stats.Gold"));
+
+        let error: Error = jadeforge_gff::Error::TypeMismatch {
+            path: "Stats.Gold".to_owned(),
+            expected: "dword",
+            actual: "word",
+        }
+        .into();
+        assert!(matches!(error, Error::TypeMismatch { .. }));
+        assert!(error.to_string().contains("dword"));
+
+        let error: Error = jadeforge_gff::Error::Malformed {
+            block: "save.sav".to_owned(),
+            message: "bad magic".to_owned(),
+        }
+        .into();
+        assert!(matches!(error, Error::Gff(_)));
+        assert!(error.to_string().contains("save.sav"));
     }
 }

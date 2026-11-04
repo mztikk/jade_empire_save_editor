@@ -218,7 +218,7 @@ fn broken_files_are_rejected() {
 #[test]
 fn json_export_contains_the_fields() {
     let gff = sample_block();
-    let json = gff.to_json();
+    let json = jadeforge_core::json::to_json(&gff);
     let text = serde_json::to_string(&json).expect("json");
     assert!(text.contains("\"Tag\":\"PLAYER\""), "{text}");
     assert!(text.contains("ItemList"), "{text}");
