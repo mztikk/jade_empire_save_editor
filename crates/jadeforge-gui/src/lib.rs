@@ -5,6 +5,7 @@
 
 pub mod app;
 pub mod config;
+pub mod dialog;
 pub mod form;
 pub mod session;
 pub mod theme;

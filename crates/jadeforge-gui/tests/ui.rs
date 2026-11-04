@@ -435,18 +435,22 @@ fn savegames_can_be_filtered_and_sorted() {
 }
 
 #[test]
-fn the_folder_picker_can_choose_a_folder() {
+fn the_browse_button_uses_the_folder_dialog() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
         return;
     };
     let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+
+    // The headless runner cannot open a portal dialog, so the test seam answers
+    // it with the fixture folder.
+    jadeforge_gui::dialog::set_next_pick_for_tests(Some(fixture.save_dir.clone()));
     assert!(click_text(&mut test, "Browse"), "no browse button");
-    assert!(find_label_text(&test, "Choose the save folder").is_some());
-    assert!(find_label_text(&test, "Use this folder").is_some());
-    // The picker starts in the current folder, so using it rescans it.
-    assert!(click_text(&mut test, "Use this folder"));
-    assert!(find_label_text(&test, "Choose the save folder").is_none());
+    assert!(find_label_text(&test, "Found 1 savegame").is_some());
+
+    // Cancelling changes nothing.
+    jadeforge_gui::dialog::set_next_pick_for_tests(None);
+    assert!(click_text(&mut test, "Browse"));
     assert!(find_label_text(&test, "Found 1 savegame").is_some());
 }
 

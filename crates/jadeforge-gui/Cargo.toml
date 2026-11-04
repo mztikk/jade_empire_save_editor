@@ -15,6 +15,7 @@ path = "src/main.rs"
 jadeforge-core.workspace = true
 jadeforge-gamedata.workspace = true
 freya = { workspace = true, features = ["engine"] }
+rfd.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

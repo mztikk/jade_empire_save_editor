@@ -32,9 +32,10 @@ the game does, verifies the result and keeps a backup of the original.
   screenshot, character name, level and play time for every savegame. The list
   can be filtered by name and sorted by name, level or play time, with natural
   ordering (`Auto 2` before `Auto 10`).
-- **Folder picker** – a **Browse…** dialog walks the file system, so the save
-  folder never has to be typed. The choice is remembered between runs and no
-  installation path is baked into the program.
+- **Native folder dialog** – **Browse…** opens the operating system's own folder
+  dialog (GTK/XDG portal on Linux, Win32 on Windows, `NSOpenPanel` on macOS), so
+  the save folder never has to be typed. The choice is remembered between runs
+  and no installation path is baked into the program.
 - **Responsive layout** – the sidebar, tab bar and stat rows adapt down to small
   windows instead of clipping.
 - **Safe by design** – every write is verified by re-parsing the produced file,
@@ -52,8 +53,9 @@ the game does, verifies the result and keeps a backup of the original.
 
 - Rust 1.85 or newer to build from source.
 - Linux: an X11 or Wayland session with OpenGL 3.3 (or the equivalent on
-  macOS/Windows). The GUI is a native window, there is no browser or Electron
-  layer.
+  macOS/Windows) and, for the native folder dialog, `xdg-desktop-portal`
+  (installed by default on GNOME, KDE and most desktops). The GUI is a native
+  window, there is no browser or Electron layer.
 
 ## Building
 
@@ -81,7 +83,8 @@ or start the CLI against a save folder:
 ## Using the desktop application
 
 1. Start `jadeforge-gui`.
-2. Pick your Jade Empire `Save` folder with **Browse…** (or type the path) and
+2. Pick your Jade Empire `Save` folder with **Browse…** (the native dialog, or
+   type the path) and
    press **Scan**. JadeForge has no built-in guess where the game is installed:
    GOG, Steam, Heroic, Wine and manual installs all differ, so the folder is
    chosen once and remembered in the user configuration
@@ -168,8 +171,8 @@ game was installed, so JadeForge asks for it once instead of guessing:
 - Wine/Proton: the prefix's `drive_c` path.
 
 Any folder works as long as it contains one sub-folder per savegame with a
-`save.sac` inside. Use **Browse…** in the application, or set
-`JADEFORGE_SAVE_DIR` for scripts and CI.
+`save.sac` inside. Use **Browse…** in the application (the system's folder
+dialog), or set `JADEFORGE_SAVE_DIR` for scripts and CI.
 
 ## How it works
 

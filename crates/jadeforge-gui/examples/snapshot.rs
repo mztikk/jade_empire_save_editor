@@ -31,7 +31,6 @@ fn main() {
             .expect("usage: snapshot <SAVE_DIR> <OUT.png> [TAB|all]"),
     );
     let mut wanted = None;
-    let mut browse = false;
     let mut click_text = None;
     let mut width = 1280.0_f32;
     let mut height = 800.0_f32;
@@ -51,7 +50,6 @@ fn main() {
                     .unwrap_or(800.0);
             }
             "--query" => query = arguments.next(),
-            "--browse" => browse = true,
             "--click" => click_text = arguments.next(),
             other => wanted = Some(other.to_owned()),
         }
@@ -69,10 +67,6 @@ fn main() {
     // Open the first savegame so the screenshots show the editor.
     if let Some(entry) = find_label(&test, "Level ") {
         click(&mut test, &entry);
-    }
-
-    if browse && let Some(node) = find_label(&test, "Browse") {
-        click(&mut test, &node);
     }
 
     match wanted.as_deref() {
