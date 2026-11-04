@@ -749,7 +749,7 @@ impl Session {
     pub fn persist_sort(&self, sort: SaveSort, descending: bool) {
         let mut config = crate::config::Config::load();
         config.sort = Some(sort.key().to_owned());
-        config.descending = descending;
+        config.sort_descending = descending;
         let _ = config.store();
     }
 
