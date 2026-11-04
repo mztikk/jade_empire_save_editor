@@ -1,8 +1,10 @@
 //! Headless UI tests.
 //!
 //! The tests render the real component tree with `freya-testing`, which is the
-//! same code path the windowed application uses minus the window. They are
-//! skipped when no savegame is available on the machine.
+//! same code path the windowed application uses minus the window. A miniature
+//! game installation is assembled in a temporary folder (talk table and the two
+//! 2DA tables) so item and style names are resolvable. When neither the game
+//! nor savegames are available the tests skip instead of failing.
 
 use std::path::{Path, PathBuf};
 
@@ -10,11 +12,20 @@ use freya::prelude::*;
 use freya_testing::TestingRunner;
 use jadeforge_gui::app_with_directory;
 
-fn default_save_dir() -> PathBuf {
-    std::env::var_os("JADEFORGE_SAVE_DIR").map_or_else(
+fn game_dir() -> Option<PathBuf> {
+    let dir = std::env::var_os("JADEFORGE_SAVE_DIR")
+        .map(PathBuf::from)
+        .and_then(|dir| dir.parent().map(Path::to_path_buf))
+        .unwrap_or_else(|| PathBuf::from("/media/Games/Heroic/Jade Empire"));
+    dir.join("dialog.tlk").is_file().then_some(dir)
+}
+
+fn save_dir() -> Option<PathBuf> {
+    let dir = std::env::var_os("JADEFORGE_SAVE_DIR").map_or_else(
         || PathBuf::from("/media/Games/Heroic/Jade Empire/Save"),
         PathBuf::from,
-    )
+    );
+    dir.is_dir().then_some(dir)
 }
 
 fn smallest_save(dir: &Path) -> Option<PathBuf> {
@@ -33,21 +44,64 @@ fn smallest_save(dir: &Path) -> Option<PathBuf> {
     candidates.into_iter().next().map(|(_, path)| path)
 }
 
-/// Creates a temporary save folder that contains a copy of a real savegame.
-fn fixture() -> Option<PathBuf> {
-    let source = smallest_save(&default_save_dir())?;
-    let mut root = std::env::temp_dir();
-    root.push(format!(
-        "jadeforge-ui-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_nanos())
-    ));
-    let folder = root.join("Test Save");
-    std::fs::create_dir_all(&folder).expect("create fixture");
-    std::fs::copy(&source, folder.join("save.sac")).expect("copy savegame");
-    Some(root)
+/// Assembles a temporary installation with one savegame.
+struct Fixture {
+    root: PathBuf,
+    save_dir: PathBuf,
+    game_data: bool,
+}
+
+impl Fixture {
+    fn create() -> Option<Self> {
+        let save = smallest_save(&save_dir()?)?;
+        let root = std::env::temp_dir().join(format!(
+            "jadeforge-ui-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_nanos())
+        ));
+        let game = root.join("Game");
+        let save_dir = game.join("Save");
+        let folder = save_dir.join("Test Save");
+        std::fs::create_dir_all(&folder).expect("create fixture");
+
+        let mut game_data = false;
+        if let Some(source) = game_dir() {
+            let override_dir = game.join("override");
+            std::fs::create_dir_all(&override_dir).expect("create override");
+            let mut copied = 0;
+            for (from, to) in [
+                (source.join("dialog.tlk"), game.join("dialog.tlk")),
+                (
+                    source.join("override").join("items.2da"),
+                    override_dir.join("items.2da"),
+                ),
+                (
+                    source.join("override").join("stylesuperlist.2da"),
+                    override_dir.join("stylesuperlist.2da"),
+                ),
+            ] {
+                if from.is_file() && std::fs::copy(&from, &to).is_ok() {
+                    copied += 1;
+                }
+            }
+            game_data = copied == 3;
+        }
+
+        std::fs::copy(&save, folder.join("save.sac")).expect("copy savegame");
+        Some(Self {
+            root,
+            save_dir,
+            game_data,
+        })
+    }
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
 }
 
 fn find_label_text(test: &TestingRunner, needle: &str) -> Option<String> {
@@ -64,56 +118,205 @@ fn find_node_with_text(test: &TestingRunner, needle: &str) -> Option<freya_testi
     })
 }
 
-#[test]
-fn savegames_are_listed_and_can_be_opened() {
-    let Some(root) = fixture() else {
-        eprintln!("skipping: no savegames found (set JADEFORGE_SAVE_DIR)");
-        return;
-    };
-    let directory = root.clone();
-    let (mut test, ()) = TestingRunner::new(
-        move || app_with_directory(directory.clone()),
-        (1280., 800.).into(),
-        |_| {},
-        1.0,
-    );
-    test.sync_and_update();
-
-    // The savegame folder is part of the sidebar.
-    let listed = find_label_text(&test, "Test Save");
-    assert!(listed.is_some(), "the save folder is not listed");
-    let entry = find_node_with_text(&test, "Test Save").expect("entry");
-    let area = entry.layout().area;
+fn click_node(test: &mut TestingRunner, node: &freya_testing::TestingNode) {
+    let area = node.layout().area;
     let center = CursorPoint::new(
         f64::from(area.origin.x) + f64::from(area.size.width) / 2.0,
         f64::from(area.origin.y) + f64::from(area.size.height) / 2.0,
     );
+    test.move_cursor(center);
+    test.sync_and_update();
     test.click_cursor(center);
     test.sync_and_update();
-    let status = find_label_text(&test, "Opened Test Save").expect("status message");
-    assert!(status.contains("Opened"), "{status}");
+}
 
-    // The character form is populated with the name of the character.
-    let character = find_label_text(&test, "Character").expect("character section");
-    assert!(character.contains("Character"));
+fn click_text(test: &mut TestingRunner, needle: &str) -> bool {
+    match find_node_with_text(test, needle) {
+        Some(node) => {
+            click_node(test, &node);
+            true
+        }
+        None => false,
+    }
+}
 
-    // Rendering must succeed even in a headless environment.
+fn launch_sized(save_dir: PathBuf, height: f64) -> TestingRunner {
+    let (mut test, ()) = TestingRunner::new(
+        move || app_with_directory(save_dir.clone()),
+        (1280.0_f32, height as f32).into(),
+        |_| {},
+        1.0,
+    );
+    test.sync_and_update();
+    // Open the single savegame of the fixture.
+    click_text(&mut test, "Level ");
+    test
+}
+
+fn launch(save_dir: PathBuf) -> TestingRunner {
+    launch_sized(save_dir, 800.0)
+}
+
+/// Finds a paragraph whose text contains `needle` (input placeholders and
+/// values are paragraphs, not labels).
+fn find_paragraph(test: &TestingRunner, needle: &str) -> Option<freya_testing::TestingNode> {
+    test.find(|node, element| {
+        let paragraph = Paragraph::try_downcast(element)?;
+        paragraph.to_string().contains(needle).then_some(node)
+    })
+}
+
+#[test]
+fn savegames_are_listed_and_can_be_opened() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found (set JADEFORGE_SAVE_DIR)");
+        return;
+    };
+    let mut test = launch(fixture.save_dir.clone());
+
+    assert!(
+        find_label_text(&test, "Opened Test Save").is_some(),
+        "the savegame was not opened"
+    );
+    assert!(find_label_text(&test, "Level ").is_some());
+    // The overview shows the character and the action bar.
+    assert!(find_label_text(&test, "Apply changes").is_some());
+    assert!(find_label_text(&test, "Save to disk").is_some());
     let image = test.render();
     assert!(
         image.len() > 1024,
         "the rendered frame is suspiciously small"
     );
-    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn tabs_switch_the_content() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch(fixture.save_dir.clone());
+
+    assert!(click_text(&mut test, "Styles"));
+    assert!(find_label_text(&test, "Fighting styles").is_some());
+
+    assert!(click_text(&mut test, "Inventory"));
+    assert!(find_label_text(&test, "ADD AN ITEM").is_some());
+
+    assert!(click_text(&mut test, "Companions"));
+    assert!(find_label_text(&test, "Companions").is_some());
+
+    assert!(click_text(&mut test, "Character"));
+    assert!(find_label_text(&test, "UNSPENT ATTRIBUTE POINTS").is_some());
+}
+
+#[test]
+fn items_can_be_searched_and_added() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data to resolve item names");
+        return;
+    }
+    // A tall window keeps the add-item section visible without scrolling.
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(click_text(&mut test, "Inventory"));
+
+    // Focus the search field and type.
+    let input = find_paragraph(&test, "Search items by name").expect("the search input is missing");
+    click_node(&mut test, &input);
+    test.write_text("Viper");
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "Viper").is_some(),
+        "no search result for Viper"
+    );
+
+    assert!(click_text(&mut test, "Add"), "no add button in the results");
+    let status = find_label_text(&test, "Added").expect("status message");
+    assert!(status.contains("Added"), "{status}");
+}
+
+#[test]
+fn style_levels_can_be_raised() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch(fixture.save_dir.clone());
+    assert!(click_text(&mut test, "Styles"));
+    if find_label_text(&test, "Lv ").is_none() {
+        eprintln!("skipping: the test savegame has no styles");
+        return;
+    }
+    assert!(click_text(&mut test, "+"), "no plus button");
+    let status = find_label_text(&test, "Style level").expect("status message");
+    assert!(status.contains("Style level"), "{status}");
+}
+
+#[test]
+fn clicking_around_does_not_panic() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch(fixture.save_dir.clone());
+    for tab in ["Character", "Styles", "Inventory", "Companions", "Overview"] {
+        assert!(click_text(&mut test, tab), "tab {tab} is missing");
+        let _ = test.render();
+    }
+    // Hovering the savegame entry must not break the layout either.
+    if let Some(node) = find_node_with_text(&test, "Test Save") {
+        let area = node.layout().area;
+        test.move_cursor(CursorPoint::new(
+            f64::from(area.origin.x) + f64::from(area.size.width) / 2.0,
+            f64::from(area.origin.y) + f64::from(area.size.height) / 2.0,
+        ));
+        test.sync_and_update();
+        let _ = test.render();
+    }
+}
+
+#[test]
+fn staged_edits_block_scanning() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch(fixture.save_dir.clone());
+    assert!(click_text(&mut test, "Character"));
+    // The first paragraph is the save folder input, the second one is the name.
+    let paragraphs = test.find_many(|node, element| {
+        let paragraph = Paragraph::try_downcast(element)?;
+        (!paragraph.to_string().trim().is_empty()).then_some(node)
+    });
+    let field = paragraphs.get(1).expect("no character input found");
+    click_node(&mut test, field);
+    test.write_text("X");
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "unapplied input").is_some(),
+        "the unapplied changes badge is missing"
+    );
+
+    assert!(click_text(&mut test, "Scan"));
+    assert!(
+        find_label_text(&test, "Apply or discard").is_some(),
+        "scanning was not blocked"
+    );
 }
 
 #[test]
 fn empty_folder_shows_a_hint() {
-    let mut root = std::env::temp_dir();
-    root.push(format!("jadeforge-empty-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("jadeforge-empty-{}", std::process::id()));
     std::fs::create_dir_all(&root).expect("create empty dir");
-    let directory = root.clone();
     let (mut test, ()) = TestingRunner::new(
-        move || app_with_directory(directory.clone()),
+        {
+            let root = root.clone();
+            move || app_with_directory(root.clone())
+        },
         (1000., 700.).into(),
         |_| {},
         1.0,
@@ -126,11 +329,11 @@ fn empty_folder_shows_a_hint() {
 
 #[test]
 fn unsaved_changes_are_protected() {
-    let Some(root) = fixture() else {
-        eprintln!("skipping: no savegames found (set JADEFORGE_SAVE_DIR)");
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
         return;
     };
-    let mut session = jadeforge_gui::Session::with_directory(root.clone());
+    let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
     assert_eq!(session.entries.len(), 1);
     assert!(session.open(0));
     let character = session.character.clone().expect("character");
@@ -141,7 +344,7 @@ fn unsaved_changes_are_protected() {
 
     // Scanning another folder must not throw the changes away.
     session.set_directory(std::env::temp_dir());
-    assert_eq!(session.directory, root, "the folder was changed anyway");
+    assert_eq!(session.directory, fixture.save_dir, "folder changed anyway");
     assert!(session.is_dirty(), "the changes were dropped");
     assert!(
         session.message.text.contains("unsaved"),
@@ -149,8 +352,6 @@ fn unsaved_changes_are_protected() {
         session.message.text
     );
 
-    // Reverting is the explicit way out.
     session.revert().expect("revert");
     assert!(!session.is_dirty());
-    let _ = std::fs::remove_dir_all(root);
 }

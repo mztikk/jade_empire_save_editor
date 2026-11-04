@@ -4,7 +4,13 @@
 //! here so that the headless test suite can drive the application.
 
 pub mod app;
+pub mod form;
 pub mod session;
+pub mod theme;
+pub mod views;
+pub mod widgets;
 
 pub use app::{app, app_with_directory};
-pub use session::{CharacterForm, Message, MessageKind, SaveEntry, Session, default_save_dir};
+pub use session::{
+    CharacterForm, GameStatus, Message, MessageKind, SaveEntry, Session, default_save_dir,
+};

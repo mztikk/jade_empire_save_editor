@@ -6,6 +6,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 use jadeforge_core::gff::Value;
 use jadeforge_core::{Error, Gff, SaveGame, SaveOptions, locate_player};
+use jadeforge_gamedata::GameData;
 
 /// `JadeForge` - a save editor for Jade Empire.
 #[derive(Debug, Parser)]
@@ -29,6 +30,10 @@ enum Command {
     Character,
     /// Print the player inventory.
     Items,
+    /// Print the player's fighting styles.
+    Styles,
+    /// Print the player's companions.
+    Companions,
     /// Print a field of a block.
     Get {
         /// Path of the block, for example `save.sav`.
@@ -99,6 +104,8 @@ fn run(cli: Cli) -> Result<(), Error> {
         Command::Blocks => blocks(&path),
         Command::Character => character(&path),
         Command::Items => items(&path),
+        Command::Styles => styles(&path),
+        Command::Companions => companions(&path),
         Command::Get { block, path: field } => get(&path, &block, &field),
         Command::Set {
             block,
@@ -202,15 +209,52 @@ fn character(path: &Path) -> Result<(), Error> {
 
 fn items(path: &Path) -> Result<(), Error> {
     let save = SaveGame::open(path)?;
+    let game = GameData::discover(path);
     let items = save.items()?;
-    println!(
-        "{:<10} {:>6} {:>8} {:>5}",
-        "struct", "itemId", "type", "count"
-    );
+    println!("{:<32} {:>6} {:>6} {:>5}", "name", "id", "type", "count");
     for item in items {
+        let name = game
+            .as_ref()
+            .and_then(|game| game.item(item.item_id))
+            .map_or_else(
+                || format!("<item {}>", item.item_id),
+                |info| info.name.clone(),
+            );
         println!(
-            "{:<10} {:>6} {:>8} {:>5}",
-            item.struct_index, item.item_id, item.kind, item.count
+            "{:<32} {:>6} {:>6} {:>5}",
+            name, item.item_id, item.kind, item.count
+        );
+    }
+    Ok(())
+}
+
+fn styles(path: &Path) -> Result<(), Error> {
+    let save = SaveGame::open(path)?;
+    let game = GameData::discover(path);
+    let styles = save.styles()?;
+    println!("{:<32} {:>6} {:>5}", "name", "level", "id");
+    for style in styles {
+        let name = game
+            .as_ref()
+            .and_then(|game| game.style(style.style_id))
+            .map_or_else(
+                || format!("<style {}>", style.style_id),
+                |info| info.name.clone(),
+            );
+        println!("{:<32} {:>6} {:>5}", name, style.level, style.style_id);
+    }
+    Ok(())
+}
+
+fn companions(path: &Path) -> Result<(), Error> {
+    let save = SaveGame::open(path)?;
+    let henchmen = save.henchmen()?;
+    println!("{:<16} {:>6} {:>10}", "template", "level", "available");
+    for henchman in henchmen {
+        let available = if henchman.available { "yes" } else { "no" };
+        println!(
+            "{:<16} {:>6} {:>10}",
+            henchman.resref, henchman.level, available
         );
     }
     Ok(())
