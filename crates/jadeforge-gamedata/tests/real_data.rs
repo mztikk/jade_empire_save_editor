@@ -110,3 +110,25 @@ fn style_advances_are_resolved() {
     assert!(damage.effect_text().contains("Damage"));
     assert!(game.advance(0).is_none(), "row 0 is invalid");
 }
+
+#[test]
+fn per_style_upgrade_tables_are_matched() {
+    let Some(root) = game_dir() else {
+        eprintln!("skipping: no game installation found");
+        return;
+    };
+    let game = match GameData::open(&root) {
+        Ok(game) => game,
+        Err(error) => {
+            eprintln!("skipping: cannot load game data: {error}");
+            return;
+        }
+    };
+    // C_Iron_palm ships an IronPalmLV.2da table.
+    let allowed = game
+        .allowed_advances(16)
+        .expect("C_Iron_palm should have a level table");
+    assert!(allowed.contains(&1) && allowed.contains(&15));
+    // A normal player style has no table in this installation.
+    assert!(game.allowed_advances(49).is_none());
+}

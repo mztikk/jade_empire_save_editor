@@ -355,6 +355,92 @@ fn style_upgrades_can_be_toggled() {
 }
 
 #[test]
+fn style_upgrades_are_bought_in_order() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data to resolve upgrades");
+        return;
+    }
+    let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
+    assert!(session.open(0));
+    let Some(style) = session.styles.first().cloned() else {
+        eprintln!("skipping: the test savegame has no styles");
+        return;
+    };
+    // Find a family with two untaken, available tiers.
+    let families: Vec<&str> = style
+        .upgrades
+        .iter()
+        .map(|upgrade| upgrade.family.as_str())
+        .collect();
+    let mut pair = None;
+    for family in families {
+        let mut tiers: Vec<_> = style
+            .upgrades
+            .iter()
+            .filter(|upgrade| upgrade.family == family && !upgrade.taken && upgrade.available)
+            .collect();
+        tiers.sort_by_key(|upgrade| upgrade.tier);
+        if tiers.len() >= 2 && tiers[0].tier == 1 {
+            pair = Some((tiers[0].row, tiers[1].row));
+            break;
+        }
+    }
+    let Some((first, second)) = pair else {
+        eprintln!("skipping: no family with two free tiers");
+        return;
+    };
+    let before = style.level;
+    assert!(!session.can_toggle_upgrade(style.struct_index, second));
+    assert!(!session.toggle_style_upgrade(style.struct_index, second));
+    assert!(session.can_toggle_upgrade(style.struct_index, first));
+    assert!(session.toggle_style_upgrade(style.struct_index, first));
+    assert_eq!(
+        session
+            .styles
+            .iter()
+            .find(|candidate| candidate.struct_index == style.struct_index)
+            .expect("style")
+            .level,
+        before + 1
+    );
+    assert!(session.can_toggle_upgrade(style.struct_index, second));
+    assert!(session.toggle_style_upgrade(style.struct_index, second));
+    // Removing out of order is refused, removing from the top works.
+    assert!(!session.can_toggle_upgrade(style.struct_index, first));
+    assert!(!session.toggle_style_upgrade(style.struct_index, first));
+    assert!(session.toggle_style_upgrade(style.struct_index, second));
+    assert!(session.toggle_style_upgrade(style.struct_index, first));
+    assert_eq!(
+        session
+            .styles
+            .iter()
+            .find(|candidate| candidate.struct_index == style.struct_index)
+            .expect("style")
+            .level,
+        before
+    );
+}
+
+#[test]
+fn the_game_rules_toggle_can_be_switched() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    assert!(click_text(&mut test, "Styles"));
+    assert!(find_label_text(&test, "Game rules: on").is_some());
+    assert!(click_text(&mut test, "Game rules: on"));
+    assert!(find_label_text(&test, "Game rules: off").is_some());
+    assert!(click_text(&mut test, "Game rules: off"));
+    assert!(find_label_text(&test, "Game rules: on").is_some());
+}
+
+#[test]
 fn expanded_styles_show_upgrade_choices() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
