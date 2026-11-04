@@ -52,7 +52,7 @@ savegame container and the typed editing model.
 | `styles` | fighting styles: names, levels, upgrade masks, add/remove |
 | `henchmen` | companions: level and availability |
 | `screenshot` | `SaveImage.tga` decoder (TGA 24/32 bit, RLE and raw) |
-| `json` | JSON export used by `jadeforge dump` and debugging |
+| `json` | JSON export used by `jadeforge dump --json`; the only JSON surface |
 | `error` | one error enum with context, wrapping the GFF layer's error |
 
 ### Data flow
@@ -190,7 +190,8 @@ it is not set, so CI stays green on machines without Jade Empire.
 Deliberately small:
 
 * `clap` for the CLI,
-* `serde_json` for dumps,
+* `serde_json`, only for the `jadeforge dump --json` export (never for settings or
+  internal data flow),
 * `thiserror` for errors,
 * `serde` and `toml` for the settings file,
 * `freya` for the GUI,

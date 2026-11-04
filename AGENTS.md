@@ -87,6 +87,10 @@ above remain canonical.
 - No panics on user data. `expect`/`unwrap` are only allowed where a preceding
   check proves the invariant, and the message must state why.
 - Keep the core free of UI dependencies; keep the GUI free of format knowledge.
+- JSON is reserved for machine-readable output and machine-to-machine
+  communication: the CLI's `dump --json` export (`jadeforge-core::json`). Do not
+  use JSON for configuration, persisted settings or internal data flow; the
+  settings file is TOML and savegames stay binary.
 
 ## Game data (names, item and style tables)
 
