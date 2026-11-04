@@ -18,20 +18,20 @@ just coverage
 - `coverage/lcov.info` for tooling,
 - `coverage/html/index.html` for browsing per file (gitignored).
 
-## Baseline (2026-11-04)
+## Baseline (2026-11-05)
 
 | metric | covered |
 | --- | --- |
-| lines | **6 387 / 7 990 = 79.9 %** |
-| functions | **610 / 914 = 66.7 %** |
+| lines | **6 566 / 8 076 = 81.3 %** |
+| functions | **628 / 926 = 67.8 %** |
 
 | crate | lines | functions |
 | --- | --- | --- |
-| `jadeforge-gamedata` | 88.5 % | 82.9 % |
-| `jadeforge-gui` | 87.8 % | 65.5 % |
+| `jadeforge-gamedata` | 89.6 % | 83.8 % |
+| `jadeforge-gui` | 88.0 % | 66.1 % |
 | `jadeforge-core` | 77.4 % | 63.9 % |
-| `jadeforge-session` | 76.7 % | 77.7 % |
-| `jadeforge-gff` | 72.1 % | 54.7 % |
+| `jadeforge-session` | 77.2 % | 78.1 % |
+| `jadeforge-gff` | 79.8 % | 58.6 % |
 | `jadeforge-cli` | 48.6 % | 29.8 % |
 
 Notes:
@@ -46,7 +46,7 @@ Notes:
 
 | phase | overall lines | gff | cli | core | session | gui | gamedata |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| baseline | 79.9 % | 72 % | 49 % | 77 % | 77 % | 88 % | 88.5 % |
+| baseline | 81.3 % | 80 % | 49 % | 77 % | 77 % | 88 % | 90 % |
 | phase 1 | ≥ 84 % | ≥ 80 % | ≥ 60 % | ≥ 82 % | ≥ 79 % | ≥ 88 % | ≥ 90 % |
 | phase 2 | ≥ 88 % | ≥ 85 % | ≥ 80 % | ≥ 86 % | ≥ 85 % | ≥ 89 % | ≥ 92 % |
 
@@ -56,10 +56,18 @@ misreported savegame. View code is worth covering only where it contains logic.
 
 ## Plan
 
-### 1. `jadeforge-gff`: field codec matrix (largest single win)
+### 1. `jadeforge-gff`: field codec matrix (done)
 
-`value.rs` sits at 62.4 %, mostly because field types that never appear in the
-test savegames are never decoded.
+`crates/jadeforge-gff/tests/codec.rs` now builds a block with every field type,
+round trips it, mutates a locstring back to the legacy type 12, and exercises
+the parser/writer error paths (short header, bad magic/version, bad label index,
+unknown type, list index out of range, oversized string length, truncated
+locstring, duplicate labels, type mismatches, dangling structs). `gff` moved
+from 72.1 % to **79.8 %** and the overall project from 79.9 % to **81.3 %**.
+
+Remaining: `value.rs` is at 68.5 % — some decode branches are still only reached
+through unusual payloads (for example an empty locstring or a zero-length void).
+Add those to the same file before promoting the lint thresholds.
 
 - Add `crates/jadeforge-gff/tests/codec.rs` with a synthetic GFF block that
   contains **every** field type: inline byte/char/word/short/dword/int/float,
