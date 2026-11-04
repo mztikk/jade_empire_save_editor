@@ -7,9 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use jadeforge_core::{
-    Character, Henchman, Item, MAX_STYLE_LEVEL, SaveGame, SaveImage, SaveOptions, Style,
-};
+use jadeforge_core::{Character, Henchman, Item, SaveGame, SaveImage, SaveOptions, Style};
 use jadeforge_gamedata::GameData;
 
 /// Folder to start with: the environment override, the last folder used, or
@@ -1088,84 +1086,89 @@ impl Session {
         });
     }
 
-    /// Whether the upgrade may be toggled right now.
+    /// Upgrades of one family, ordered by tier and filtered by the mode.
+    fn family_upgrades<'a>(&self, style: &'a StyleRow, family: &str) -> Vec<&'a StyleUpgrade> {
+        let mut rows: Vec<&StyleUpgrade> = style
+            .upgrades
+            .iter()
+            .filter(|upgrade| upgrade.family == family)
+            .filter(|upgrade| !self.strict_upgrades || upgrade.available || upgrade.taken)
+            .collect();
+        rows.sort_by_key(|upgrade| upgrade.tier);
+        rows
+    }
+
+    /// Changes a whole family at once: owning the clicked tier means every
+    /// missing tier up to it is bought, an owned tier is removed together with
+    /// everything above it.
     ///
-    /// Tiers are bought in order: only the next tier of a family can be added
-    /// and only the highest owned tier can be removed, so a style never ends up
-    /// with gaps the game does not expect. In strict mode the upgrade also has
-    /// to be one the style's `<Style>LV.2da` table offers.
-    #[must_use]
-    pub fn can_toggle_upgrade(&self, struct_index: usize, row: u16) -> bool {
+    /// This is how the game's own level-up screen behaves (one pick per level,
+    /// never a gap), so `1 -> 4` buys tiers 2, 3 and 4 and clicking tier 1 of a
+    /// maxed family drops it back to zero.
+    pub fn change_upgrade(&mut self, struct_index: usize, row: u16) -> bool {
         let Some(style) = self
             .styles
             .iter()
             .find(|style| style.struct_index == struct_index)
+            .cloned()
         else {
             return false;
         };
-        let Some(upgrade) = style.upgrades.iter().find(|upgrade| upgrade.row == row) else {
+        let Some(clicked) = style.upgrades.iter().find(|upgrade| upgrade.row == row) else {
             return false;
         };
-        if upgrade.taken {
-            let highest = style
-                .upgrades
+        if self.strict_upgrades && !clicked.available && !clicked.taken {
+            self.message =
+                Message::info("Game rules are on: this style does not offer that upgrade.");
+            return false;
+        }
+        let family = self.family_upgrades(&style, &clicked.family);
+        let targets: Vec<u16> = if clicked.taken {
+            family
                 .iter()
-                .filter(|candidate| candidate.family == upgrade.family && candidate.taken)
-                .map(|candidate| candidate.tier)
-                .max();
-            return highest == Some(upgrade.tier);
-        }
-        if self.strict_upgrades && !upgrade.available {
-            return false;
-        }
-        let mut tiers: Vec<&StyleUpgrade> = style
-            .upgrades
-            .iter()
-            .filter(|candidate| candidate.family == upgrade.family)
-            .filter(|candidate| !self.strict_upgrades || candidate.available || candidate.taken)
-            .collect();
-        tiers.sort_by_key(|candidate| candidate.tier);
-        tiers
-            .into_iter()
-            .find(|candidate| !candidate.taken)
-            .is_some_and(|candidate| candidate.row == row)
-    }
-
-    /// Sets or clears one upgrade of a style.
-    pub fn toggle_style_upgrade(&mut self, struct_index: usize, row: u16) -> bool {
-        if self.save.is_none() {
-            return false;
-        }
-        if !self.can_toggle_upgrade(struct_index, row) {
-            self.message = Message::info(
-                "Upgrades are bought in order: add the next tier of the family, or remove its highest one.",
-            );
-            return false;
-        }
-        let Some(save) = self.save.as_mut() else {
-            return false;
+                .filter(|candidate| candidate.tier >= clicked.tier)
+                .map(|candidate| candidate.row)
+                .collect()
+        } else {
+            family
+                .iter()
+                .filter(|candidate| candidate.tier <= clicked.tier)
+                .map(|candidate| candidate.row)
+                .collect()
         };
-        let taken = self
-            .styles
-            .iter()
-            .find(|style| style.struct_index == struct_index)
-            .and_then(|style| style.upgrades.iter().find(|upgrade| upgrade.row == row))
-            .is_some_and(|upgrade| upgrade.taken);
-        match save.set_style_upgrade(struct_index, row, !taken) {
-            Ok(_) => {
-                self.rebuild_rows();
-                self.message = Message::success(if taken {
-                    "Upgrade removed."
-                } else {
-                    "Upgrade added."
-                });
-                true
+        let taken = !clicked.taken;
+        let mut changed = 0_usize;
+        let mut error = None;
+        if let Some(save) = self.save.as_mut() {
+            for target in &targets {
+                match save.set_style_upgrade(struct_index, *target, taken) {
+                    Ok(_) => changed += 1,
+                    Err(failure) => {
+                        error = Some(failure);
+                        break;
+                    }
+                }
             }
-            Err(error) => {
-                self.message = Message::error(format!("Cannot change the upgrade: {error}"));
-                false
-            }
+        } else {
+            return false;
         }
+        if let Some(error) = error {
+            self.rebuild_rows();
+            self.message = Message::error(format!("Cannot change the upgrade: {error}"));
+            return false;
+        }
+        self.rebuild_rows();
+        self.message = if changed == 0 {
+            Message::info("That upgrade is already in the requested state.")
+        } else {
+            let noun = if changed == 1 { "upgrade" } else { "upgrades" };
+            if taken {
+                Message::success(format!("Bought {changed} {noun}."))
+            } else {
+                Message::success(format!("Removed {changed} {noun}."))
+            }
+        };
+        changed > 0
     }
 
     /// All styles from the game data that the player does not own yet.
@@ -1203,36 +1206,6 @@ impl Session {
                 .then_with(|| left.style_id.cmp(&right.style_id))
         });
         styles
-    }
-
-    /// Sets the level of a fighting style.
-    pub fn set_style_level(&mut self, struct_index: usize, level: u8) {
-        if level > MAX_STYLE_LEVEL {
-            self.message = Message::info(format!(
-                "Styles cannot be raised above level {MAX_STYLE_LEVEL}."
-            ));
-            return;
-        }
-        if level < 1 {
-            self.message = Message::info("A style starts at level 1.");
-            return;
-        }
-        let Some(save) = self.save.as_mut() else {
-            return;
-        };
-        match save.set_style_level(struct_index, level) {
-            Ok(()) => {
-                if let Some(style) = self
-                    .styles
-                    .iter_mut()
-                    .find(|style| style.struct_index == struct_index)
-                {
-                    style.level = level;
-                }
-                self.message = Message::success(format!("Style level set to {level}."));
-            }
-            Err(error) => self.message = Message::error(format!("Cannot change style: {error}")),
-        }
     }
 
     /// Adds a style by its `stylesuperlist.2da` row.
