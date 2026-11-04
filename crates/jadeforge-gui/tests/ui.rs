@@ -313,49 +313,7 @@ fn rows_expand_to_show_descriptions() {
 }
 
 #[test]
-fn style_upgrades_can_be_toggled() {
-    let Some(fixture) = Fixture::create() else {
-        eprintln!("skipping: no savegames found");
-        return;
-    };
-    let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
-    assert!(session.open(0));
-    let Some(style) = session.styles.first().cloned() else {
-        eprintln!("skipping: the test savegame has no styles");
-        return;
-    };
-    let row = style
-        .upgrades
-        .iter()
-        .find(|upgrade| !upgrade.taken)
-        .map_or(30, |upgrade| upgrade.row);
-    let before = style;
-    assert!(
-        session.toggle_style_upgrade(before.struct_index, row),
-        "{}",
-        session.message.text
-    );
-    let after = session
-        .styles
-        .iter()
-        .find(|candidate| candidate.struct_index == before.struct_index)
-        .expect("style");
-    assert_eq!(after.mask & (1 << (row - 1)), 1 << (row - 1));
-    assert_eq!(u32::from(after.level), 1 + after.mask.count_ones());
-    assert_eq!(after.level, before.level + 1);
-
-    assert!(session.toggle_style_upgrade(before.struct_index, row));
-    let restored = session
-        .styles
-        .iter()
-        .find(|candidate| candidate.struct_index == before.struct_index)
-        .expect("style");
-    assert_eq!(restored.mask, before.mask);
-    assert_eq!(restored.level, before.level);
-}
-
-#[test]
-fn style_upgrades_are_bought_in_order() {
+fn style_upgrades_are_bought_and_removed_in_steps() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
         return;
@@ -370,59 +328,82 @@ fn style_upgrades_are_bought_in_order() {
         eprintln!("skipping: the test savegame has no styles");
         return;
     };
-    // Find a family with two untaken, available tiers.
-    let families: Vec<&str> = style
-        .upgrades
-        .iter()
-        .map(|upgrade| upgrade.family.as_str())
-        .collect();
-    let mut pair = None;
-    for family in families {
+    // A family with at least three free tiers, starting at tier 1.
+    let mut family = None;
+    for candidate in &style.upgrades {
         let mut tiers: Vec<_> = style
             .upgrades
             .iter()
-            .filter(|upgrade| upgrade.family == family && !upgrade.taken && upgrade.available)
+            .filter(|upgrade| {
+                upgrade.family == candidate.family && !upgrade.taken && upgrade.available
+            })
             .collect();
         tiers.sort_by_key(|upgrade| upgrade.tier);
-        if tiers.len() >= 2 && tiers[0].tier == 1 {
-            pair = Some((tiers[0].row, tiers[1].row));
+        if tiers.len() >= 3 && tiers[0].tier == 1 {
+            family = Some((tiers[0].row, tiers[2].row, tiers[1].row));
             break;
         }
     }
-    let Some((first, second)) = pair else {
-        eprintln!("skipping: no family with two free tiers");
+    let Some((first, third, second)) = family else {
+        eprintln!("skipping: no family with three free tiers");
         return;
     };
     let before = style.level;
-    assert!(!session.can_toggle_upgrade(style.struct_index, second));
-    assert!(!session.toggle_style_upgrade(style.struct_index, second));
-    assert!(session.can_toggle_upgrade(style.struct_index, first));
-    assert!(session.toggle_style_upgrade(style.struct_index, first));
-    assert_eq!(
-        session
-            .styles
-            .iter()
-            .find(|candidate| candidate.struct_index == style.struct_index)
-            .expect("style")
-            .level,
-        before + 1
+
+    // Jumping from nothing to tier 3 buys 1, 2 and 3 at once.
+    assert!(
+        session.change_upgrade(style.struct_index, third),
+        "{}",
+        session.message.text
     );
-    assert!(session.can_toggle_upgrade(style.struct_index, second));
-    assert!(session.toggle_style_upgrade(style.struct_index, second));
-    // Removing out of order is refused, removing from the top works.
-    assert!(!session.can_toggle_upgrade(style.struct_index, first));
-    assert!(!session.toggle_style_upgrade(style.struct_index, first));
-    assert!(session.toggle_style_upgrade(style.struct_index, second));
-    assert!(session.toggle_style_upgrade(style.struct_index, first));
-    assert_eq!(
-        session
-            .styles
+    let after = session
+        .styles
+        .iter()
+        .find(|candidate| candidate.struct_index == style.struct_index)
+        .expect("style");
+    assert_eq!(after.level, before + 3);
+    for row in [first, second, third] {
+        let taken = after
+            .upgrades
             .iter()
-            .find(|candidate| candidate.struct_index == style.struct_index)
-            .expect("style")
-            .level,
-        before
+            .find(|upgrade| upgrade.row == row)
+            .is_some_and(|upgrade| upgrade.taken);
+        assert!(taken, "row {row} should be owned");
+    }
+
+    // Clicking the first tier removes the whole family again.
+    assert!(
+        session.change_upgrade(style.struct_index, first),
+        "{}",
+        session.message.text
     );
+    let restored = session
+        .styles
+        .iter()
+        .find(|candidate| candidate.struct_index == style.struct_index)
+        .expect("style");
+    assert_eq!(restored.level, before);
+    assert_eq!(restored.mask, style.mask);
+}
+
+#[test]
+fn style_rows_have_no_level_stepper() {
+    // The level is derived from the upgrades; + / - buttons must not come back.
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    assert!(click_text(&mut test, "Styles"));
+    let exact = |text: &str| {
+        test.find(|_, element| {
+            let label = Label::try_downcast(element)?;
+            (label.text == text).then_some(())
+        })
+        .is_some()
+    };
+    assert!(!exact("+"), "a level stepper is back");
+    assert!(!exact("−"), "a level stepper is back");
 }
 
 #[test]
@@ -475,23 +456,6 @@ fn show_more_pages_through_the_item_database() {
     let after = find_label_text(&test, " of ").expect("browse counter after paging");
     assert_ne!(before, after, "paging did not change the counter");
     assert!(after.contains("of"), "{after}");
-}
-
-#[test]
-fn style_levels_can_be_raised() {
-    let Some(fixture) = Fixture::create() else {
-        eprintln!("skipping: no savegames found");
-        return;
-    };
-    let mut test = launch(fixture.save_dir.clone());
-    assert!(click_text(&mut test, "Styles"));
-    if find_label_text(&test, "Lv ").is_none() {
-        eprintln!("skipping: the test savegame has no styles");
-        return;
-    }
-    assert!(click_text(&mut test, "+"), "no plus button");
-    let status = find_label_text(&test, "Style level").expect("status message");
-    assert!(status.contains("Style level"), "{status}");
 }
 
 #[test]

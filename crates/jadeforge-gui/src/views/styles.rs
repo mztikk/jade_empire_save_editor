@@ -126,19 +126,6 @@ pub fn view(
 fn style_row(ctx: &Ctx, style: &StyleRow, expanded: State<Option<u16>>) -> Element {
     let index = style.struct_index;
     let level = style.level;
-
-    let lower = {
-        let ctx = ctx.clone();
-        move |_| ctx.run(|session| session.set_style_level(index, level.saturating_sub(1).max(1)))
-    };
-    let raise = {
-        let ctx = ctx.clone();
-        move |_| {
-            ctx.run(|session| {
-                session.set_style_level(index, (level + 1).min(jadeforge_core::MAX_STYLE_LEVEL));
-            });
-        }
-    };
     let remove = {
         let ctx = ctx.clone();
         move |_| ctx.run(|session| session.remove_style(index))
@@ -172,7 +159,6 @@ fn style_row(ctx: &Ctx, style: &StyleRow, expanded: State<Option<u16>>) -> Eleme
                     theme::SURFACE_ACTIVE,
                     style_badge_color(style.kind),
                 ))
-                .child(Button::new().compact().flat().child("−").on_press(lower))
                 .child(
                     label()
                         .text(format!("Lv {level}"))
@@ -181,7 +167,6 @@ fn style_row(ctx: &Ctx, style: &StyleRow, expanded: State<Option<u16>>) -> Eleme
                         .text_align(TextAlign::Center)
                         .color(theme::ACCENT),
                 )
-                .child(Button::new().compact().flat().child("+").on_press(raise))
                 .child(
                     Button::new()
                         .compact()
@@ -306,23 +291,6 @@ fn upgrade_row(family: &str, chips: Vec<Element>) -> Element {
 fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Element {
     let taken = upgrade.taken;
     let row = upgrade.row;
-    let enabled = ctx.session.borrow().can_toggle_upgrade(struct_index, row);
-    if !enabled {
-        // Dim and inert instead of a button that silently ignores presses.
-        return rect()
-            .center()
-            .width(Size::px(22.))
-            .height(Size::px(22.))
-            .corner_radius(6.)
-            .border(Border::new().fill(theme::BORDER).width(1.))
-            .child(
-                label()
-                    .text(upgrade.tier.to_string())
-                    .font_size(11.)
-                    .color(theme::DIM),
-            )
-            .into_element();
-    }
     let ctx = ctx.clone();
     let button = Button::new().compact();
     let button = if taken {
@@ -333,7 +301,7 @@ fn upgrade_chip(ctx: &Ctx, struct_index: usize, upgrade: &StyleUpgrade) -> Eleme
     button
         .child(upgrade.tier.to_string())
         .on_press(move |_| {
-            ctx.run(|session| session.toggle_style_upgrade(struct_index, row));
+            ctx.run(|session| session.change_upgrade(struct_index, row));
         })
         .into_element()
 }
