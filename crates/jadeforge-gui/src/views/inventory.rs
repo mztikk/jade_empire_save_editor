@@ -113,11 +113,14 @@ pub fn view(
 }
 
 /// Secondary line shown for an item, in the inventory and in the database.
+///
+/// Without the game data the name is just `Item <id>`, so the subtitle only
+/// carries the type to avoid repeating the id.
 #[must_use]
 pub fn item_subtitle(item_id: u16, category: Option<&str>, kind: u8) -> String {
     match category {
         Some(category) => format!("{category} · #{item_id}"),
-        None => format!("type {kind} · #{item_id}"),
+        None => format!("type {kind}"),
     }
 }
 

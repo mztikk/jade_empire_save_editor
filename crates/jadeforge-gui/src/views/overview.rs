@@ -123,6 +123,7 @@ pub fn view(
                 .child(
                     rect()
                         .horizontal()
+                        .content(Content::wrap_spacing(26.))
                         .spacing(26.)
                         .child(widgets::stat(
                             "GOLD",

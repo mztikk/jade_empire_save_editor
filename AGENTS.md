@@ -27,7 +27,8 @@ JADEFORGE_SAVE_DIR="/media/Games/Heroic/Jade Empire/Save" cargo test --workspace
 
 # Render the UI into a PNG without a window (screenshots, layout debugging)
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.png [TAB|all]
-# Add `--height 1800 --query viper` to capture tall layouts and search results.
+# Add `--height 1800 --query viper` for tall layouts and search results,
+# `--width 900` to check narrow windows.
 ```
 
 ## Non-negotiable rules

@@ -51,7 +51,11 @@ cargo check -p jadeforge-gui
 cargo test -p jadeforge-gui                 # headless UI tests
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/ui.png all
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/inv.png Inventory --height 1900 --query "Drachen"
+cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/small.png Overview --width 900 --height 600
 ```
+
+Check narrow windows too: rows with `spacing` overflow silently at 900 px unless
+their container wraps (`Content::wrap_spacing`).
 
 Look at the PNG. Squeezed inputs, clipped rows and off-screen buttons are
 invisible to the compiler.

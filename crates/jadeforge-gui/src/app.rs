@@ -186,7 +186,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 style_query,
                 &style_matches,
                 game_ready,
-                total_missing,
+                game_ready.then_some(total_missing),
                 style_matches_total,
                 move |_| *style_limit.write() += 50,
             )
@@ -469,6 +469,11 @@ fn sidebar(
         );
     }
 
+    let empty_preview = if selected.is_some() {
+        "no screenshot"
+    } else {
+        "select a save"
+    };
     let preview_block = preview.map_or_else(
         || {
             rect()
@@ -477,12 +482,7 @@ fn sidebar(
                 .center()
                 .background(theme::SURFACE)
                 .corner_radius(10.)
-                .child(
-                    label()
-                        .text("select a save")
-                        .font_size(10.)
-                        .color(theme::DIM),
-                )
+                .child(label().text(empty_preview).font_size(10.).color(theme::DIM))
                 .into_element()
         },
         |handle| {

@@ -365,6 +365,35 @@ fn staged_edits_block_scanning() {
 }
 
 #[test]
+fn broken_savegames_are_reported() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let broken = fixture.save_dir.join("ZZ Broken Save");
+    std::fs::create_dir_all(&broken).expect("create broken save");
+    std::fs::write(broken.join("save.sac"), b"SAV V3.2 not really").expect("write broken save");
+
+    let save_dir = fixture.save_dir.clone();
+    let (mut test, ()) = TestingRunner::new(
+        move || app_with_directory(save_dir.clone()),
+        (1280.0_f32, 800.0_f32).into(),
+        |_| {},
+        1.0,
+    );
+    test.sync_and_update();
+
+    let scan = find_label_text(&test, "cannot be read").expect("scan warning");
+    assert!(scan.contains("1 of them"), "{scan}");
+    assert!(
+        find_label_text(&test, "Cannot be read").is_some(),
+        "the broken entry has no subtitle"
+    );
+    assert!(click_text(&mut test, "ZZ Broken Save"));
+    assert!(find_label_text(&test, "Cannot open").is_some());
+}
+
+#[test]
 fn empty_folder_shows_a_hint() {
     let root = std::env::temp_dir().join(format!("jadeforge-empty-{}", std::process::id()));
     std::fs::create_dir_all(&root).expect("create empty dir");

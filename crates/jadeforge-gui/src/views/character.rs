@@ -64,7 +64,7 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
                 .child(quick_add(ctx, "+1 point", 1))
                 .child(quick_add(ctx, "+5 points", 5))
                 .child(widgets::hint(
-                    "Points you can still spend. The game stores them as Stats.UnassignedPts; JadeForge creates the field when it is missing.",
+                    "Attribute points you can still spend; the field is created when the savegame does not have it.",
                 ))
                 .into_element(),
         ],
