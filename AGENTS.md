@@ -26,7 +26,8 @@ cargo fmt --all --check
 JADEFORGE_SAVE_DIR="/media/Games/Heroic/Jade Empire/Save" cargo test --workspace
 
 # Render the UI into a PNG without a window (screenshots, layout debugging)
-cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.png
+cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.png [TAB|all]
+# Add `--height 1800 --query viper` to capture tall layouts and search results.
 ```
 
 ## Non-negotiable rules
@@ -45,6 +46,9 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 6. **Range check every edit** in `jadeforge-core`, not in the UI.
 7. **No game data in the repository.** Test savegames are never committed;
    tests that need them look for `JADEFORGE_SAVE_DIR` and skip otherwise.
+8. **Treat the game installation as read only.** `jadeforge-gamedata` only
+   reads `dialog.tlk` and the 2DA tables; it must never open a file for writing
+   and the editor must keep working when those files are absent.
 
 ## Code style
 
@@ -59,6 +63,20 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
   check proves the invariant, and the message must state why.
 - Keep the core free of UI dependencies; keep the GUI free of format knowledge.
 
+## Game data (names, item and style tables)
+
+- `crates/jadeforge-gamedata` locates the installation from the save folder
+  (`JADEFORGE_GAME_DIR` wins), parses `dialog.tlk` (TLK V4.0) and the text 2DA
+  tables in `override/`.
+- Every lookup degrades gracefully: when the files are missing the UI falls back
+  to numeric ids, it never fails to open a savegame because of missing game data.
+- Names come from the talk table via the 2DA `STRREF_NAME`/`NameRef` columns. Do
+  not hardcode names that the tables already provide.
+- The item category mapping (`gems` → 1, `powerups` → 4, `weapons` → 5,
+  `plot_items` → 6, `mgweapons` → 7, `improve` → 8) was derived from real
+  savegames and lives in `save_type_for_category`. New categories need evidence
+  from a savegame before they are added.
+
 ## Adding an editable field
 
 1. Find the field: `cargo run -p jadeforge-cli -- "<SAVE_DIR>" dump save.sav --path PlayerCreature`
@@ -66,8 +84,9 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 2. Add it to `crates/jadeforge-core/src/character.rs`
    (`Character`, `Character::read`, `Character::write`) with a range check and a
    path that is relative to the player block.
-3. Add it to the form in `crates/jadeforge-gui/src/session.rs` (`CharacterForm`)
-   and to the UI in `crates/jadeforge-gui/src/app.rs`.
+3. Add it to the form in `crates/jadeforge-gui/src/session.rs` (`CharacterForm`),
+   to `crates/jadeforge-gui/src/form.rs` and to the matching view in
+   `crates/jadeforge-gui/src/views/character.rs`.
 4. Extend the tests:
    - `CharacterForm` round trip in `session.rs`,
    - synthetic test if the encoding is new (`tests/synthetic.rs`),
@@ -101,16 +120,17 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 - Imperative, lower-case subject lines, one logical change per commit
   (`add focus editing`, `fix zero-length locstring parsing`).
 - The body explains *why* when the change is not obvious.
-- Do not commit `target/`, savegames, screenshots other than
-  `docs/screenshot.png`, or editor state.
+- Do not commit `target/`, savegames, screenshots other than the ones in
+  `docs/`, or editor state.
 
 ## Layout
 
 | path | content |
 | --- | --- |
-| `crates/jadeforge-core` | format reader/writer, character and inventory model |
+| `crates/jadeforge-core` | format reader/writer, character, inventory, styles, companions, screenshots |
+| `crates/jadeforge-gamedata` | talk table and 2DA readers, names for items and styles |
 | `crates/jadeforge-cli` | `jadeforge` command line tool |
-| `crates/jadeforge-gui` | Freya application, `session` (logic) and `app` (view) |
+| `crates/jadeforge-gui` | Freya application: `session` (logic), `app` (shell), `views` (tabs), `theme`, `widgets` |
 | `docs/FORMAT.md` | savegame format reference |
 | `docs/ARCHITECTURE.md` | crate layout, data flow, safety model |
 | `.dsh/skills` | task-specific skills for working on this repository |
@@ -123,5 +143,5 @@ The repository ships skills that encode repeatable workflows:
 
 - `savegame-format` – inspecting and validating format changes against real
   savegames,
-- `freya-ui` – building and headlessly testing Freya screens,
+- `freya-ui` – building, theming and headlessly testing Freya screens,
 - `release-check` – the checklist before a release or a push.

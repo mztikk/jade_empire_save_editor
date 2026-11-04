@@ -24,14 +24,16 @@ JADEFORGE_SAVE_DIR="/media/Games/Heroic/Jade Empire/Save" cargo test --workspace
 ```
 
 Expect `round tripped 88 savegames` and `rewrote 943 blocks` from the core
-tests. A different count is fine on another machine, "skipping" is not (it means
-the variable did not reach the test).
+tests, resolved item and style names from `jadeforge-gamedata`, and seven passing
+headless UI tests. A different count is fine on another machine, "skipping" is
+not (it means the variables did not reach the tests).
 
 ## Manual checks
 
 1. `cargo build --release --workspace` succeeds.
-2. `cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/ui.png`
-   renders the editor, not the empty state, and the image looks sane.
+2. `cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/ui.png all`
+   renders every tab, not the empty state, and the images look sane. Regenerate
+   `docs/screenshot*.png` when the layout changed.
 3. The CLI round trip on a *copy* of a savegame leaves the file byte identical
    when nothing is changed:
 
