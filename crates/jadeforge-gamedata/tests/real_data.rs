@@ -160,3 +160,24 @@ fn rim_archives_are_indexed() {
     assert!(table.len() > 50);
     assert!(table.column("Label").is_some());
 }
+
+#[test]
+fn predefined_gems_are_resolved() {
+    let Some(root) = game_dir() else {
+        eprintln!("skipping: no game installation found");
+        return;
+    };
+    let game = match GameData::open(&root) {
+        Ok(game) => game,
+        Err(error) => {
+            eprintln!("skipping: cannot load game data: {error}");
+            return;
+        }
+    };
+    assert!(game.gems().len() > 50, "only {} gems", game.gems().len());
+    let gem = game.gems().iter().find(|gem| !gem.effects.is_empty());
+    let gem = gem.expect("a gem with effects");
+    assert_ne!(gem.name.len(), 0);
+    assert!(game.gem(gem.item_id).is_some());
+    assert_eq!(gem.effects, game.gem(gem.item_id).expect("gem").effects);
+}

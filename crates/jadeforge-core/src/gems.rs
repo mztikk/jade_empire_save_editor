@@ -66,24 +66,85 @@ impl SaveGame {
                 continue;
             };
             for index in indices {
-                let Some(base) = gem_base(gff, *index) else {
+                let Some(entry) = gff.struct_at(*index) else {
                     continue;
                 };
-                let item_id = gff
-                    .get(format!("{base}.ItemID"))
-                    .ok()
-                    .and_then(|field| field.value.as_u64())
+                let gem_struct = entry
+                    .fields
+                    .iter()
+                    .find(|field| gff.label_name(field.label) == Some("Gem"))
+                    .and_then(|field| match field.value {
+                        crate::gff::Value::Struct(inner) => gff.struct_at(inner),
+                        _ => None,
+                    })
+                    .unwrap_or(entry);
+                let item_id = label_number(gff, gem_struct, "ItemID")
                     .and_then(|value| u16::try_from(value).ok())
                     .unwrap_or(0);
                 gems.push(Gem {
                     struct_index: *index,
                     item_id,
                     location: place,
-                    effects: read_effects(gff, &base),
+                    effects: read_effects(gff, gem_struct),
                 });
             }
         }
         Ok(gems)
+    }
+
+    /// Adds a gem with the given predefined effects to the inventory.
+    ///
+    /// The gem struct is built from scratch with the field types the game uses,
+    /// so no template gem has to exist in the savegame.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the player block or the gem list cannot be
+    /// written.
+    pub fn add_gem(
+        &mut self,
+        item_id: u16,
+        effects: &[(u32, u32)],
+        duration: f32,
+    ) -> Result<usize> {
+        let location = self.player_location()?;
+        let block = self
+            .block_mut(location.block)
+            .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
+        let gff = block.gff_mut();
+        let list_path = format!("{}Gems", location.prefix);
+        if gff.get(&list_path).is_err() {
+            gff.add(&list_path, crate::gff::Value::List(Vec::new()))?;
+        }
+        let mut effect_indices = Vec::new();
+        for (kind, value) in effects {
+            let index = gff.push_struct(0);
+            gff.add_field(index, "GemsEffectType", crate::gff::Value::DWord(*kind))?;
+            gff.add_field(index, "GemsEffectValue", crate::gff::Value::DWord(*value))?;
+            gff.add_field(index, "GemsEffectCurVal", crate::gff::Value::DWord(*value))?;
+            gff.add_field(
+                index,
+                "GemsEffectDurati",
+                crate::gff::Value::Float(duration),
+            )?;
+            effect_indices.push(index);
+        }
+        let gem = gff.push_struct(0);
+        gff.add_field(gem, "ItemID", crate::gff::Value::Word(item_id))?;
+        gff.add_field(
+            gem,
+            "GemsEffectList",
+            crate::gff::Value::List(effect_indices),
+        )?;
+        let entry = gff.push_struct(0);
+        gff.add_field(entry, "Gem", crate::gff::Value::Struct(gem))?;
+        let list = gff
+            .get_mut(&list_path)?
+            .value
+            .as_list_mut()
+            .ok_or_else(|| Error::Corrupt(format!("{list_path} is not a list")))?;
+        list.push(entry);
+        Ok(entry)
     }
 
     /// Moves a gem to the other list and returns its new location.
@@ -171,46 +232,52 @@ fn list_mut<'a>(gff: &'a mut crate::gff::Gff, path: &str) -> Result<&'a mut Vec<
     )))
 }
 
-/// Path of the `Gem` struct of an entry. Some savegames point at the gem
-/// struct directly, others wrap it in an entry struct with a `Gem` field.
-fn gem_base(gff: &crate::gff::Gff, index: usize) -> Option<String> {
-    let structure = gff.struct_at(index)?;
-    let has_gem = structure
+fn read_effects(gff: &crate::gff::Gff, gem: &crate::gff::Struct) -> Vec<GemEffect> {
+    let Some(list) = gem
         .fields
         .iter()
-        .any(|field| gff.label_name(field.label) == Some("Gem"));
-    Some(if has_gem {
-        format!("{index}.Gem")
-    } else {
-        format!("{index}")
-    })
-}
-
-fn read_effects(gff: &crate::gff::Gff, base: &str) -> Vec<GemEffect> {
+        .find(|field| gff.label_name(field.label) == Some("GemsEffectList"))
+        .and_then(|field| field.value.as_list())
+    else {
+        return Vec::new();
+    };
     let mut effects = Vec::new();
-    let Ok(field) = gff.get(format!("{base}.GemsEffectList")) else {
-        return effects;
-    };
-    let Some(indices) = field.value.as_list() else {
-        return effects;
-    };
-    for index in indices {
-        let number = |name: &str| {
-            gff.get(format!("{index}.{name}"))
-                .ok()
-                .and_then(|field| field.value.as_i64())
-                .and_then(|value| i32::try_from(value).ok())
+    for index in list {
+        let Some(effect) = gff.struct_at(*index) else {
+            continue;
         };
         effects.push(GemEffect {
-            kind: number("GemsEffectType").unwrap_or(0),
-            value: number("GemsEffectValue").unwrap_or(0),
-            current: number("GemsEffectCurVal").unwrap_or(0),
-            duration: gff
-                .get(format!("{index}.GemsEffectDuration"))
-                .ok()
-                .and_then(|field| field.value.as_f32())
-                .unwrap_or(0.0),
+            kind: number(gff, effect, "GemsEffectType").unwrap_or(0),
+            value: number(gff, effect, "GemsEffectValue").unwrap_or(0),
+            current: number(gff, effect, "GemsEffectCurVal").unwrap_or(0),
+            duration: float(gff, effect, "GemsEffectDurati").unwrap_or(0.0),
         });
     }
     effects
+}
+
+fn label_field<'a>(
+    gff: &crate::gff::Gff,
+    structure: &'a crate::gff::Struct,
+    label: &str,
+) -> Option<&'a crate::gff::Value> {
+    structure
+        .fields
+        .iter()
+        .find(|field| gff.label_name(field.label) == Some(label))
+        .map(|field| &field.value)
+}
+
+fn number(gff: &crate::gff::Gff, structure: &crate::gff::Struct, label: &str) -> Option<i32> {
+    label_field(gff, structure, label)
+        .and_then(crate::gff::Value::as_i64)
+        .and_then(|value| i32::try_from(value).ok())
+}
+
+fn label_number(gff: &crate::gff::Gff, structure: &crate::gff::Struct, label: &str) -> Option<i64> {
+    label_field(gff, structure, label).and_then(crate::gff::Value::as_i64)
+}
+
+fn float(gff: &crate::gff::Gff, structure: &crate::gff::Struct, label: &str) -> Option<f32> {
+    label_field(gff, structure, label).and_then(crate::gff::Value::as_f32)
 }

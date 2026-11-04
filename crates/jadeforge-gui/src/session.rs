@@ -1181,6 +1181,42 @@ impl Session {
             .collect()
     }
 
+    /// Gems that can be added, as `(item id, name, effect count)`.
+    #[must_use]
+    pub fn available_gems(&self) -> Vec<(u16, String, usize)> {
+        self.game.as_ref().map_or_else(Vec::new, |game| {
+            game.gems()
+                .iter()
+                .map(|gem| (gem.item_id, gem.name.clone(), gem.effects.len()))
+                .collect()
+        })
+    }
+
+    /// Adds a predefined gem to the inventory.
+    pub fn add_gem(&mut self, item_id: u16) {
+        let Some(gem) = self
+            .game
+            .as_ref()
+            .and_then(|game| game.gem(item_id))
+            .cloned()
+        else {
+            self.message = Message::error("That gem is not in the game data.");
+            return;
+        };
+        let Some(save) = self.save.as_mut() else {
+            return;
+        };
+        match save.add_gem(item_id, &gem.effects, gem.duration) {
+            Ok(_) => {
+                self.gems = self.build_gem_rows();
+                self.message = Message::success(format!("Added {}.", gem.name));
+            }
+            Err(error) => {
+                self.message = Message::error(format!("Cannot add the gem: {error}"));
+            }
+        }
+    }
+
     /// Moves a gem between the amulet and the inventory.
     pub fn move_gem(&mut self, struct_index: usize) {
         let Some(save) = self.save.as_mut() else {

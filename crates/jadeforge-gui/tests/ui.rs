@@ -505,6 +505,34 @@ fn gems_can_be_moved_and_removed() {
 }
 
 #[test]
+fn predefined_gems_can_be_added() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data");
+        return;
+    }
+    let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
+    assert!(session.open(0));
+    let available = session.available_gems();
+    if available.is_empty() {
+        eprintln!("skipping: no predefined gems");
+        return;
+    }
+    let before = session.gems.len();
+    let (item_id, name, _) = available[0].clone();
+    session.add_gem(item_id);
+    assert_eq!(session.gems.len(), before + 1);
+    assert!(
+        session.gems.iter().any(|gem| gem.name == name),
+        "{}",
+        session.message.text
+    );
+}
+
+#[test]
 fn the_gems_tab_lists_amulet_and_inventory() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");

@@ -124,6 +124,21 @@ pub struct StyleInfo {
 }
 
 /// A loaded game installation.
+/// A predefined gem from `gems.2da`, joined with its item name.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GemInfo {
+    /// Item id, a row in `items.2da` of category `gems`.
+    pub item_id: u16,
+    /// Internal label, for example `item_gem_body_I`.
+    pub label: String,
+    /// Localized name from the talk table.
+    pub name: String,
+    /// Effects as `(type, value)` pairs.
+    pub effects: Vec<(u32, u32)>,
+    /// Effect duration in seconds.
+    pub duration: f32,
+}
+
 #[derive(Debug)]
 pub struct GameData {
     root: PathBuf,
@@ -131,6 +146,7 @@ pub struct GameData {
     styles: Vec<Option<StyleInfo>>,
     advances: Vec<Option<Advance>>,
     style_choices: Vec<Option<Vec<StyleChoice>>>,
+    gems: Vec<GemInfo>,
     search_index: HashMap<u16, String>,
 }
 
@@ -253,6 +269,7 @@ impl GameData {
         let styles = source.load("stylesuperlist.2da");
         let advances = source.load("StyleAdvance.2da");
         let style_data = source.load("styledata.2da");
+        let gem_table = source.load("gems.2da");
 
         let mut item_records = Vec::new();
         if let (Some(table), Some(talk)) = (&items, &talktable) {
@@ -356,6 +373,55 @@ impl GameData {
             );
         }
 
+        let mut gem_infos: Vec<GemInfo> = Vec::new();
+        if let Some(table) = &gem_table {
+            let mut by_label: HashMap<String, (Vec<(u32, u32)>, f32)> = HashMap::new();
+            for (index, row) in table.iter() {
+                let label = table
+                    .cell(index, "Label")
+                    .unwrap_or_default()
+                    .to_lowercase();
+                let mut effects = Vec::new();
+                let mut duration = 0.0_f32;
+                for slot in 0..3 {
+                    let effect = table
+                        .uint(index, &format!("Effect{slot}"))
+                        .and_then(|value| u32::try_from(value).ok())
+                        .unwrap_or(0);
+                    let parameter = table
+                        .row(index)
+                        .and_then(|row| row.float(table.column(&format!("Parameter{slot}"))?))
+                        .unwrap_or(0.0);
+                    if effect != 0 {
+                        effects.push((effect, parameter.max(0.0) as u32));
+                    }
+                    if slot == 0 {
+                        duration = table
+                            .row(index)
+                            .and_then(|row| row.float(table.column("Duration0")?))
+                            .unwrap_or(0.0);
+                    }
+                }
+                let _ = row;
+                by_label.insert(label, (effects, duration));
+            }
+            for item in item_slots.iter().flatten() {
+                if item.category.as_deref() != Some("gems") {
+                    continue;
+                }
+                if let Some((effects, duration)) = by_label.get(&item.label.to_lowercase()) {
+                    gem_infos.push(GemInfo {
+                        item_id: item.id,
+                        label: item.label.clone(),
+                        name: item.name.clone(),
+                        effects: effects.clone(),
+                        duration: *duration,
+                    });
+                }
+            }
+            gem_infos.sort_by(|left, right| left.name.cmp(&right.name));
+        }
+
         let mut advance_slots: Vec<Option<Advance>> = Vec::new();
         if let Some(table) = &advances {
             advance_slots.resize(table.len(), None);
@@ -429,6 +495,7 @@ impl GameData {
             styles: style_slots,
             advances: advance_slots,
             style_choices,
+            gems: gem_infos,
             search_index,
         })
     }
@@ -469,6 +536,18 @@ impl GameData {
             .get(usize::from(style_id))
             .and_then(Option::as_ref)
             .map(Vec::as_slice)
+    }
+
+    /// Predefined gems from `gems.2da`, sorted by name.
+    #[must_use]
+    pub fn gems(&self) -> &[GemInfo] {
+        &self.gems
+    }
+
+    /// Looks a predefined gem up by item id.
+    #[must_use]
+    pub fn gem(&self, item_id: u16) -> Option<&GemInfo> {
+        self.gems.iter().find(|gem| gem.item_id == item_id)
     }
 
     /// Number of resolved styles.
