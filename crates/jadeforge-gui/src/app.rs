@@ -86,6 +86,18 @@ impl Tab {
         Self::Companions,
     ];
 
+    /// Position of the tab in [`Tab::ALL`], used to index per-tab state.
+    fn index(self) -> usize {
+        match self {
+            Self::Overview => 0,
+            Self::Character => 1,
+            Self::Styles => 2,
+            Self::Inventory => 3,
+            Self::Gems => 4,
+            Self::Companions => 5,
+        }
+    }
+
     fn label(self) -> &'static str {
         match self {
             Self::Overview => "Overview",
@@ -134,6 +146,15 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     });
     let preview_cache: Rc<RefCell<Option<(u64, ImageHandle)>>> =
         use_hook(|| Rc::new(RefCell::new(None)));
+    // One scroll controller per tab so each tab keeps its own scroll position.
+    let scrolls: [ScrollController; 6] = [
+        use_scroll_controller(ScrollConfig::default),
+        use_scroll_controller(ScrollConfig::default),
+        use_scroll_controller(ScrollConfig::default),
+        use_scroll_controller(ScrollConfig::default),
+        use_scroll_controller(ScrollConfig::default),
+        use_scroll_controller(ScrollConfig::default),
+    ];
 
     // Subscribe to session changes.
     let _ = *revision.read();
@@ -315,7 +336,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         .content(Content::Flex)
                         .child(tabs)
                         .child(
-                            ScrollView::new()
+                            ScrollView::new_controlled(scrolls[active_tab.index()])
                                 .show_scrollbar(true)
                                 .width(Size::fill())
                                 .height(Size::flex(1.0))
