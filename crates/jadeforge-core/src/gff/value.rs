@@ -283,6 +283,10 @@ impl Value {
         block: &str,
     ) -> Result<Self> {
         let start = offset as usize;
+        let err = |what: &str, at: usize| Error::Gff {
+            block: block.to_owned(),
+            message: format!("{what} at {at} is truncated"),
+        };
         let take = |len: usize| -> Result<&[u8]> {
             data.get(start..start + len).ok_or_else(|| Error::Gff {
                 block: block.to_owned(),
@@ -293,11 +297,27 @@ impl Value {
             })
         };
         Ok(match type_id {
-            6 => Self::DWord64(u64::from_le_bytes(take(8)?.try_into().expect("8 bytes"))),
-            7 => Self::Int64(i64::from_le_bytes(take(8)?.try_into().expect("8 bytes"))),
-            9 => Self::Double(f64::from_le_bytes(take(8)?.try_into().expect("8 bytes"))),
+            6 => Self::DWord64(u64::from_le_bytes(
+                take(8)?
+                    .try_into()
+                    .map_err(|_| err("64 bit value", start))?,
+            )),
+            7 => Self::Int64(i64::from_le_bytes(
+                take(8)?
+                    .try_into()
+                    .map_err(|_| err("64 bit value", start))?,
+            )),
+            9 => Self::Double(f64::from_le_bytes(
+                take(8)?
+                    .try_into()
+                    .map_err(|_| err("64 bit value", start))?,
+            )),
             10 => {
-                let len = u32::from_le_bytes(take(4)?.try_into().expect("4 bytes")) as usize;
+                let len = u32::from_le_bytes(
+                    take(4)?
+                        .try_into()
+                        .map_err(|_| err("string length", start))?,
+                ) as usize;
                 let bytes = data
                     .get(start + 4..start + 4 + len)
                     .ok_or_else(|| Error::Gff {
@@ -317,7 +337,11 @@ impl Value {
                 Self::ResRef(decode_text(bytes, block, start)?)
             }
             12 | 18 => {
-                let total = u32::from_le_bytes(take(4)?.try_into().expect("4 bytes")) as usize;
+                let total = u32::from_le_bytes(
+                    take(4)?
+                        .try_into()
+                        .map_err(|_| err("locstring size", start))?,
+                ) as usize;
                 let inner = data
                     .get(start + 4..start + 4 + total)
                     .ok_or_else(|| Error::Gff {
@@ -330,7 +354,11 @@ impl Value {
                         message: format!("localized string at {start} is truncated"),
                     });
                 }
-                let strref = u32::from_le_bytes(inner[..4].try_into().expect("4 bytes"));
+                let strref = u32::from_le_bytes(
+                    inner[..4]
+                        .try_into()
+                        .map_err(|_| err("locstring reference", start))?,
+                );
                 let text = if inner.len() > 4 {
                     let len =
                         u32::from_le_bytes(inner[4..8].try_into().map_err(|_| Error::Gff {
@@ -351,7 +379,9 @@ impl Value {
                 })
             }
             13 => {
-                let len = u32::from_le_bytes(take(4)?.try_into().expect("4 bytes")) as usize;
+                let len =
+                    u32::from_le_bytes(take(4)?.try_into().map_err(|_| err("void length", start))?)
+                        as usize;
                 Self::Void(
                     data.get(start + 4..start + 4 + len)
                         .ok_or_else(|| Error::Gff {
@@ -362,7 +392,7 @@ impl Value {
                 )
             }
             16 => Self::Quaternion([
-                f32::from_le_bytes(take(4)?.try_into().expect("4 bytes")),
+                f32::from_le_bytes(take(4)?.try_into().map_err(|_| err("quaternion", start))?),
                 f32::from_le_bytes(
                     data.get(start + 4..start + 8)
                         .ok_or_else(|| Error::Gff {
@@ -370,7 +400,7 @@ impl Value {
                             message: format!("quaternion at {start} is out of bounds"),
                         })?
                         .try_into()
-                        .expect("4 bytes"),
+                        .map_err(|_| err("component", start))?,
                 ),
                 f32::from_le_bytes(
                     data.get(start + 8..start + 12)
@@ -379,7 +409,7 @@ impl Value {
                             message: format!("quaternion at {start} is out of bounds"),
                         })?
                         .try_into()
-                        .expect("4 bytes"),
+                        .map_err(|_| err("component", start))?,
                 ),
                 f32::from_le_bytes(
                     data.get(start + 12..start + 16)
@@ -388,11 +418,11 @@ impl Value {
                             message: format!("quaternion at {start} is out of bounds"),
                         })?
                         .try_into()
-                        .expect("4 bytes"),
+                        .map_err(|_| err("component", start))?,
                 ),
             ]),
             17 => Self::Vector3([
-                f32::from_le_bytes(take(4)?.try_into().expect("4 bytes")),
+                f32::from_le_bytes(take(4)?.try_into().map_err(|_| err("vector", start))?),
                 f32::from_le_bytes(
                     data.get(start + 4..start + 8)
                         .ok_or_else(|| Error::Gff {
@@ -400,7 +430,7 @@ impl Value {
                             message: format!("vector at {start} is out of bounds"),
                         })?
                         .try_into()
-                        .expect("4 bytes"),
+                        .map_err(|_| err("component", start))?,
                 ),
                 f32::from_le_bytes(
                     data.get(start + 8..start + 12)
@@ -409,7 +439,7 @@ impl Value {
                             message: format!("vector at {start} is out of bounds"),
                         })?
                         .try_into()
-                        .expect("4 bytes"),
+                        .map_err(|_| err("component", start))?,
                 ),
             ]),
             other => {

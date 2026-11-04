@@ -140,6 +140,7 @@ pub struct GemInfo {
 }
 
 #[derive(Debug)]
+/// Resolved game data: item and style names, style slots, gems and effect names.
 pub struct GameData {
     root: PathBuf,
     items: Vec<Option<ItemInfo>>,
