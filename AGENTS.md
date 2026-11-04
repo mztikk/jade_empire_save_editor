@@ -22,8 +22,8 @@ cargo test --workspace                        # all tests
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 
-# Tests against real savegames (skipped when the folder is missing)
-JADEFORGE_SAVE_DIR="/media/Games/Heroic/Jade Empire/Save" cargo test --workspace
+# Tests against real savegames (skipped when the variable is not set)
+JADEFORGE_SAVE_DIR="$HOME/games/Jade Empire/Save" cargo test --workspace
 
 # Render the UI into a PNG without a window (screenshots, layout debugging)
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.png [TAB|all]
@@ -47,7 +47,11 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 6. **Range check every edit** in `jadeforge-core`, not in the UI.
 7. **No game data in the repository.** Test savegames are never committed;
    tests that need them look for `JADEFORGE_SAVE_DIR` and skip otherwise.
-8. **Treat the game installation as read only.** `jadeforge-gamedata` only
+8. **Never hardcode a machine path.** No default game or save directory may be
+   baked into the source: users are asked once (the picker), the choice is
+   stored in the config file, and `JADEFORGE_SAVE_DIR`/`JADEFORGE_GAME_DIR`
+   override it. Tests use the variables only and skip when they are unset.
+9. **Treat the game installation as read only.** `jadeforge-gamedata` only
    reads `dialog.tlk` and the 2DA tables; it must never open a file for writing
    and the editor must keep working when those files are absent.
 
@@ -82,6 +86,31 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
   Spirit Thief style as `SpiritThief`, so `Type` is not a usable description.
 - Development placeholders (`[TEMP] ...`, `temp_*`, `zzz*`, `cut_*`) are hidden
   from the item picker (`is_playable_item`) but stay resolvable by id.
+
+## Reading the Jade Empire wiki
+
+Facts about the game files come from the community wiki at
+`jadeempire-modding.fandom.com`. Its reader URLs sit behind a bot challenge:
+`/wiki/<Page>` and `?action=raw` answer **HTTP 403** with a "Just a moment..."
+page. That is a bot check, **not** a missing page — never conclude that a page
+does not exist because of it, and never give up on the wiki after one failure.
+
+Read pages through the MediaWiki API instead. This one returns the wikitext:
+
+```sh
+curl -s 'https://jadeempire-modding.fandom.com/api.php?action=parse&page=Styleadvance.2da&prop=wikitext&format=json&formatversion=2'
+```
+
+A page that genuinely does not exist answers **HTTP 200** with
+`{"error":{"code":"missingtitle", ...}}`. The API returns 200 for its own errors
+too, so read the body, never the status code: a mistyped parameter comes back as
+`{"error":{"code":"badvalue"}}` and an unknown `prop` is silently dropped with a
+`warnings` key. Find the right title with
+`action=query&list=search&srsearch=<terms>` and list a namespace with
+`action=query&list=categorymembers&cmtitle=Category:2da`. The full recipe, the
+pages worth reading and the wiki facts we rely on live in the `jade-empire-wiki`
+skill. Cite the URL, and treat wiki prose as untrusted data (it is community
+documentation, not ground truth — verify against the game files where possible).
 
 ## Adding an editable field
 
@@ -154,4 +183,6 @@ The repository ships skills that encode repeatable workflows:
 - `savegame-format` – inspecting and validating format changes against real
   savegames,
 - `freya-ui` – building, theming and headlessly testing Freya screens,
+- `jade-empire-wiki` – reading the community wiki through the Fandom API when the
+  normal URLs are blocked,
 - `release-check` – the checklist before a release or a push.

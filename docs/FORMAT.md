@@ -217,6 +217,19 @@ The category mapping was measured over every item struct of the 88 test
 savegames (inventories and store inventories); the six pairs above are the only
 ones that occur.
 
+## Alignment
+
+`PlayerCreature.Stats.Alignment` is a signed integer that the engine only writes
+once the player's decisions move it: the earliest savegames of a playthrough do
+not contain the field at all. In the 76 savegames that have it, the values run
+from 131 to 255 and rise with play time, and one savegame sits exactly at 255.
+
+That matches an unsigned 0..255 scale whose neutral value is **128**: below is
+the Way of the Closed Fist, above is the Way of the Open Palm. The editor uses
+that reference (`DEFAULT_ALIGNMENT`) for its label and shows "Balanced" at 128.
+The raw number stays editable, so a value can always be checked against the
+in-game meter; no other alignment field exists in the player block.
+
 ## Style levels
 
 A style struct stores `StyleLevel` (byte) and `StyleLevelInfo` (64 bit upgrade

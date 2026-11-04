@@ -5,10 +5,7 @@ use std::path::{Path, PathBuf};
 use jadeforge_core::{SaveGame, SaveImage, SaveOptions};
 
 fn save_dir() -> Option<PathBuf> {
-    let dir = std::env::var_os("JADEFORGE_SAVE_DIR").map_or_else(
-        || PathBuf::from("/media/Games/Heroic/Jade Empire/Save"),
-        PathBuf::from,
-    );
+    let dir = std::env::var_os("JADEFORGE_SAVE_DIR").map(PathBuf::from)?;
     dir.is_dir().then_some(dir)
 }
 
