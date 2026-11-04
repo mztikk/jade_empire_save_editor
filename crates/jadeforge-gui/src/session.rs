@@ -331,6 +331,25 @@ pub struct ItemRow {
     pub description: Option<String>,
 }
 
+/// One upgrade a style can own (a row of `StyleAdvance.2da`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StyleUpgrade {
+    /// Row in `StyleAdvance.2da`; the toggle sets bit `row - 1`.
+    pub row: u16,
+    /// Family the upgrade belongs to, for grouping.
+    pub family: String,
+    /// Tier inside the family (1 based).
+    pub tier: u8,
+    /// Localized name.
+    pub name: String,
+    /// Short effect description, for example `Damage +25%`.
+    pub effect: String,
+    /// Style points the upgrade costs.
+    pub cost: u8,
+    /// Whether the player already owns it.
+    pub taken: bool,
+}
+
 /// A fighting style together with its display data.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StyleRow {
@@ -348,6 +367,10 @@ pub struct StyleRow {
     pub kind: &'static str,
     /// Description from the game data.
     pub description: Option<String>,
+    /// Raw `StyleLevelInfo` upgrade mask.
+    pub mask: u64,
+    /// Upgrade choices that can be toggled for this style.
+    pub upgrades: Vec<StyleUpgrade>,
 }
 
 /// A style the player could learn.
@@ -795,6 +818,8 @@ impl Session {
             name: info.map_or(fallback, |info| info.name.clone()),
             label: info.map_or_else(String::new, |info| info.label.clone()),
             description: info.and_then(|info| info.description.clone()),
+            mask: style.mask,
+            upgrades: self.upgrade_choices(style.mask),
             kind: info.map_or("style", |info| {
                 if info.kind == jadeforge_gamedata::StyleKind::Other && info.weapon_count > 0 {
                     "weapon"
@@ -1016,6 +1041,56 @@ impl Session {
             .take(limit)
             .collect();
         (rows, total)
+    }
+
+    /// Builds the upgrade choices a style offers, marked with what is owned.
+    fn upgrade_choices(&self, mask: u64) -> Vec<StyleUpgrade> {
+        let Some(game) = self.game.as_ref() else {
+            return Vec::new();
+        };
+        game.advances()
+            // The savegame mask is 64 bits wide; the table is longer.
+            .filter(|advance| (1..=64).contains(&advance.row))
+            .filter(|advance| advance.tier > 0 && advance.cost > 0)
+            .filter(|advance| !advance.family.to_lowercase().contains("test"))
+            .map(|advance| StyleUpgrade {
+                row: advance.row,
+                family: advance.family.clone(),
+                tier: advance.tier,
+                name: advance.name.clone(),
+                effect: advance.effect_text(),
+                cost: advance.cost,
+                taken: mask & (1_u64 << (advance.row - 1)) != 0,
+            })
+            .collect()
+    }
+
+    /// Sets or clears one upgrade of a style.
+    pub fn toggle_style_upgrade(&mut self, struct_index: usize, row: u16) -> bool {
+        let Some(save) = self.save.as_mut() else {
+            return false;
+        };
+        let taken = self
+            .styles
+            .iter()
+            .find(|style| style.struct_index == struct_index)
+            .and_then(|style| style.upgrades.iter().find(|upgrade| upgrade.row == row))
+            .is_some_and(|upgrade| upgrade.taken);
+        match save.set_style_upgrade(struct_index, row, !taken) {
+            Ok(_) => {
+                self.rebuild_rows();
+                self.message = Message::success(if taken {
+                    "Upgrade removed."
+                } else {
+                    "Upgrade added."
+                });
+                true
+            }
+            Err(error) => {
+                self.message = Message::error(format!("Cannot change the upgrade: {error}"));
+                false
+            }
+        }
     }
 
     /// All styles from the game data that the player does not own yet.

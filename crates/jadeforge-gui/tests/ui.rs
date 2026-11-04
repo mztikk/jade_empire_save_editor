@@ -313,6 +313,66 @@ fn rows_expand_to_show_descriptions() {
 }
 
 #[test]
+fn style_upgrades_can_be_toggled() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
+    assert!(session.open(0));
+    let Some(style) = session.styles.first().cloned() else {
+        eprintln!("skipping: the test savegame has no styles");
+        return;
+    };
+    let row = style
+        .upgrades
+        .iter()
+        .find(|upgrade| !upgrade.taken)
+        .map_or(30, |upgrade| upgrade.row);
+    let before = style;
+    assert!(
+        session.toggle_style_upgrade(before.struct_index, row),
+        "{}",
+        session.message.text
+    );
+    let after = session
+        .styles
+        .iter()
+        .find(|candidate| candidate.struct_index == before.struct_index)
+        .expect("style");
+    assert_eq!(after.mask & (1 << (row - 1)), 1 << (row - 1));
+    assert_eq!(u32::from(after.level), 1 + after.mask.count_ones());
+    assert_eq!(after.level, before.level + 1);
+
+    assert!(session.toggle_style_upgrade(before.struct_index, row));
+    let restored = session
+        .styles
+        .iter()
+        .find(|candidate| candidate.struct_index == before.struct_index)
+        .expect("style");
+    assert_eq!(restored.mask, before.mask);
+    assert_eq!(restored.level, before.level);
+}
+
+#[test]
+fn expanded_styles_show_upgrade_choices() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data to resolve upgrades");
+        return;
+    }
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_text(&mut test, "Styles"));
+    let subtitle = find_node_with_text(&test, " · #").expect("style subtitle");
+    click_node(&mut test, &subtitle);
+    assert!(find_label_text(&test, "UPGRADES").is_some());
+    assert!(find_label_text(&test, "Damage").is_some());
+}
+
+#[test]
 fn show_more_pages_through_the_item_database() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");

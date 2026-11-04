@@ -195,3 +195,30 @@ pub fn expanding_name(
         )
         .into_element()
 }
+
+/// Two-column key/value grid that collapses to one column in narrow windows.
+#[must_use]
+pub fn label_grid(rows: Vec<(String, Element)>) -> Element {
+    let cells: Vec<Element> = rows
+        .into_iter()
+        .map(|(name, value)| {
+            rect()
+                .horizontal()
+                .width(Size::px(340.))
+                .spacing(12.)
+                .content(Content::Flex)
+                .padding(Gaps::new_symmetric(8., 0.))
+                .child(label().text(name).font_size(12.).color(theme::MUTED))
+                .child(rect().width(Size::flex(1.0)))
+                .child(value)
+                .into_element()
+        })
+        .collect();
+    rect()
+        .horizontal()
+        .width(Size::fill())
+        .content(Content::wrap_spacing(16.))
+        .spacing(16.)
+        .children(cells)
+        .into_element()
+}

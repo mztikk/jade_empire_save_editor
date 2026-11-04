@@ -17,10 +17,13 @@ the game does, verifies the result and keeps a backup of the original.
   Palm label), appearance, chapter and kill counter.
 - **Fighting styles** – every learned style with its localized name, kind
   (martial, weapon, magic, support, transformation, improvised, unique) and
-  level. Levels can be raised or lowered; raising a level unlocks the next
-  upgrade slot so the game's own level-up accounting stays consistent. All
-  learnable styles are listed for browsing, with a filter for searching, and
-  styles can be learned and removed.
+  level. Expanding a style shows its description and the actual upgrades behind
+  the level: one chip per tier and family (damage, chi strike, speed, chi cost,
+  duration, ...), each one a row of `StyleAdvance.2da` with its own cost. The
+  level follows `1 + number of owned upgrades`, exactly like the game stores it,
+  and the `+`/`-` buttons remain as a quick level shortcut. All learnable styles
+  are listed for browsing, with a filter for searching, and styles can be
+  learned and removed.
 - **Inventory** – every stack with its real name and category resolved from
   `items.2da` and `dialog.tlk`. Stack sizes can be changed, items removed, and
   new items can be added from the game's item database, which is browsable in
@@ -216,9 +219,7 @@ Not implemented yet:
 - editing story variables, journal entries and gem slots,
 - companion stats beyond level and availability,
 - item icons in the interface (names, categories and descriptions are resolved
-  and shown),
-- choosing a specific style upgrade (see `docs/FORMAT.md`: the level buttons keep
-  the mask valid, but the per-style upgrade table is inside the BIF archives).
+  and shown).
 
 ## License
 

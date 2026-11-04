@@ -84,3 +84,29 @@ fn style_kinds_are_resolved_for_known_styles() {
     let magic = game.style(5).expect("magic fire");
     assert_eq!(magic.kind, jadeforge_gamedata::StyleKind::Magic);
 }
+
+#[test]
+fn style_advances_are_resolved() {
+    let Some(root) = game_dir() else {
+        eprintln!("skipping: no game installation found");
+        return;
+    };
+    let game = match GameData::open(&root) {
+        Ok(game) => game,
+        Err(error) => {
+            eprintln!("skipping: cannot load game data: {error}");
+            return;
+        }
+    };
+    assert!(game.advances().count() > 30);
+    let damage = game.advance(1).expect("Increase_Damage_1");
+    assert_eq!(damage.label, "Increase_Damage_1");
+    assert_eq!(damage.family, "Increase_Damage");
+    assert_eq!(damage.tier, 1);
+    assert_eq!(damage.cost, 1);
+    assert_eq!(damage.effect, 72);
+    assert!((damage.param - 0.25).abs() < f32::EPSILON);
+    assert!(!damage.name.is_empty(), "the name should resolve");
+    assert!(damage.effect_text().contains("Damage"));
+    assert!(game.advance(0).is_none(), "row 0 is invalid");
+}

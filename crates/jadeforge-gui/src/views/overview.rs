@@ -154,25 +154,25 @@ pub fn view(
     let quick = widgets::card(
         "At a glance",
         None,
-        vec![
-            widgets::label_row(
-                "Inventory",
+        vec![widgets::label_grid(vec![
+            (
+                "Inventory".to_owned(),
                 label()
                     .text(format!("{item_count} stacks"))
                     .font_size(13.)
-                    .color(theme::TEXT),
+                    .color(theme::TEXT)
+                    .into_element(),
             ),
-            widgets::divider(),
-            widgets::label_row(
-                "Styles",
+            (
+                "Styles".to_owned(),
                 label()
                     .text(format!("{style_count} learned"))
                     .font_size(13.)
-                    .color(theme::TEXT),
+                    .color(theme::TEXT)
+                    .into_element(),
             ),
-            widgets::divider(),
-            widgets::label_row(
-                "Unspent attribute points",
+            (
+                "Unspent attribute points".to_owned(),
                 label()
                     .text(character.attribute_points.to_string())
                     .font_size(13.)
@@ -180,31 +180,32 @@ pub fn view(
                         theme::ACCENT
                     } else {
                         theme::MUTED
-                    }),
+                    })
+                    .into_element(),
             ),
-            widgets::divider(),
-            widgets::label_row(
-                "Body / Mind / Spirit",
+            (
+                "Body / Mind / Spirit".to_owned(),
                 label()
                     .text(format!(
                         "{} / {} / {}",
                         character.body, character.mind, character.spirit
                     ))
                     .font_size(13.)
-                    .color(theme::TEXT),
+                    .color(theme::TEXT)
+                    .into_element(),
             ),
-            widgets::divider(),
-            widgets::label_row(
-                "Charm / Intuition / Intimidate",
+            (
+                "Charm / Intuition / Intimidate".to_owned(),
                 label()
                     .text(format!(
                         "{} / {} / {}",
                         character.charm, character.intuition, character.intimidate
                     ))
                     .font_size(13.)
-                    .color(theme::TEXT),
+                    .color(theme::TEXT)
+                    .into_element(),
             ),
-        ],
+        ])],
     );
 
     let details = widgets::card(
