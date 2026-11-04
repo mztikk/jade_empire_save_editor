@@ -225,7 +225,8 @@ fn items_can_be_searched_and_added() {
     assert!(click_text(&mut test, "Inventory"));
 
     // Focus the search field and type.
-    let input = find_paragraph(&test, "Search items by name").expect("the search input is missing");
+    let input =
+        find_paragraph(&test, "Filter the item database").expect("the search input is missing");
     click_node(&mut test, &input);
     test.write_text("Viper");
     test.sync_and_update();
@@ -237,6 +238,61 @@ fn items_can_be_searched_and_added() {
     assert!(click_text(&mut test, "Add"), "no add button in the results");
     let status = find_label_text(&test, "Added").expect("status message");
     assert!(status.contains("Added"), "{status}");
+}
+
+#[test]
+fn every_list_is_browsable_and_labelled_the_same_way() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+
+    assert!(click_text(&mut test, "Styles"));
+    // Without a query the whole learnable list is shown, not nothing.
+    assert!(
+        find_label_text(&test, "ALL STYLES").is_some(),
+        "the style list is not browsable without a search"
+    );
+    // Owned and learnable rows share the `label · #id` subtitle.
+    assert!(
+        find_label_text(&test, " · #").is_some(),
+        "styles do not show the shared label and id subtitle"
+    );
+    assert!(find_label_text(&test, "Lv ").is_some());
+
+    assert!(click_text(&mut test, "Inventory"));
+    assert!(
+        find_label_text(&test, "ALL ITEMS").is_some(),
+        "the item list is not browsable without a search"
+    );
+    assert!(
+        find_label_text(&test, " of ").is_some(),
+        "the item list does not show how many entries exist"
+    );
+    assert!(
+        find_label_text(&test, " · #").is_some(),
+        "items do not show the category and id subtitle"
+    );
+}
+
+#[test]
+fn show_more_pages_through_the_item_database() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data to browse");
+        return;
+    }
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(click_text(&mut test, "Inventory"));
+    let before = find_label_text(&test, " of ").expect("browse counter");
+    assert!(click_text(&mut test, "Show more"), "no show more button");
+    let after = find_label_text(&test, " of ").expect("browse counter after paging");
+    assert_ne!(before, after, "paging did not change the counter");
+    assert!(after.contains("of"), "{after}");
 }
 
 #[test]

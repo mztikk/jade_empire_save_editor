@@ -6,6 +6,18 @@ use crate::app::Ctx;
 use crate::theme;
 use crate::widgets;
 
+/// Explains the numeric alignment the way the game names it.
+#[must_use]
+pub fn alignment_hint(value: &str) -> String {
+    match value.trim().parse::<i32>() {
+        Ok(value) if value >= 500 => "Alignment 500 and above: Way of the Open Palm.".to_owned(),
+        Ok(_) => "Alignment below 500: Way of the Closed Fist.".to_owned(),
+        Err(_) => {
+            "Alignment is a number; the game shows it as Closed Fist or Open Palm.".to_owned()
+        }
+    }
+}
+
 /// Renders the character tab.
 #[allow(clippy::too_many_lines)] // one declarative layout is easier to follow
 pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
@@ -13,7 +25,7 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
 
     let identity = widgets::card(
         "Identity",
-        Some("staged changes are applied with Apply or Save to disk".to_owned()),
+        Some("Staged changes are applied with Apply or Save to disk".to_owned()),
         vec![
             widgets::field_grid(vec![
                 widgets::field("NAME", Input::new(form.name).width(Size::fill()), 220.),
@@ -35,18 +47,24 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
                     110.,
                 ),
                 widgets::field(
+                    "APPEARANCE",
+                    Input::new(form.appearance).width(Size::fill()),
+                    110.,
+                ),
+                widgets::field(
                     "UNSPENT ATTRIBUTE POINTS",
                     Input::new(form.attribute_points).width(Size::fill()),
                     170.,
                 ),
             ]),
+            widgets::hint(alignment_hint(&form.alignment.read())),
             rect()
                 .horizontal()
                 .spacing(8.)
                 .child(quick_add(ctx, "+1 point", 1))
                 .child(quick_add(ctx, "+5 points", 5))
                 .child(widgets::hint(
-                    "Stored as Stats.UnassignedPts; JadeForge adds the field when it is missing.",
+                    "Points you can still spend. The game stores them as Stats.UnassignedPts; JadeForge creates the field when it is missing.",
                 ))
                 .into_element(),
         ],

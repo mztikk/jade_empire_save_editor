@@ -22,6 +22,8 @@ pub fn view(
         .borrow()
         .current_path()
         .map_or_else(|| "—".to_owned(), |path| path.display().to_string());
+    let block_count = ctx.session.borrow().block_count();
+    let file_size = ctx.session.borrow().file_size();
     let (game_text, game_ok) = {
         let session = ctx.session.borrow();
         match &session.game_status {
@@ -215,6 +217,17 @@ pub fn view(
             widgets::label_row(
                 "File",
                 label().text(path).font_size(12.).color(theme::MUTED),
+            ),
+            widgets::divider(),
+            widgets::label_row(
+                "Contents",
+                label()
+                    .text(format!(
+                        "{block_count} blocks · {}",
+                        file_size.map_or_else(|| "unknown size".to_owned(), format::bytes)
+                    ))
+                    .font_size(12.)
+                    .color(theme::MUTED),
             ),
             widgets::divider(),
             rect()

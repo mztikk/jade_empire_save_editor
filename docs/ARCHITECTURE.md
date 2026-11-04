@@ -116,8 +116,9 @@ The shell renders the session and forwards input:
 * apply changes in memory, save to disk, revert.
 
 The GUI is tested headlessly through `freya-testing`: the real component tree is
-rendered off-screen, a savegame is opened by clicking it, tabs are switched, an
-item is searched and added, and the rendered frames are checked. The tests build
+rendered off-screen, a savegame is opened by clicking it, tabs are switched, a
+style level is raised, an item is searched and added, the pagination of the item
+database is exercised and the rendered frames are checked. The tests build
 a miniature installation (talk table + two 2DA files + one savegame) in a
 temporary folder. `cargo run -p jadeforge-gui --example snapshot -- <dir> <png>
 [TAB|all] [--height N] [--query TEXT]` produces the screenshots used in the

@@ -52,6 +52,19 @@ pub mod format {
         }
     }
 
+    /// Formats a byte count as `4.6 MB`.
+    #[must_use]
+    pub fn bytes(value: u64) -> String {
+        let value = value as f64;
+        if value >= 1024.0 * 1024.0 {
+            format!("{:.1} MB", value / (1024.0 * 1024.0))
+        } else if value >= 1024.0 {
+            format!("{:.1} kB", value / 1024.0)
+        } else {
+            format!("{value:.0} B")
+        }
+    }
+
     /// Formats a large number with thin separators.
     #[must_use]
     pub fn amount(value: u32) -> String {
@@ -177,6 +190,8 @@ pub struct ItemRow {
     pub name: String,
     /// Category label, for example `weapons` or `gems`.
     pub category: Option<String>,
+    /// Description from the game data.
+    pub description: Option<String>,
 }
 
 /// A fighting style together with its display data.
@@ -190,8 +205,27 @@ pub struct StyleRow {
     pub level: u8,
     /// Display name.
     pub name: String,
-    /// Whether it is a weapon style.
-    pub weapon: bool,
+    /// Internal template label, for example `Martial_Legendary_Strike`.
+    pub label: String,
+    /// Kind of style, for example `magic` or `support`.
+    pub kind: &'static str,
+    /// Description from the game data.
+    pub description: Option<String>,
+}
+
+/// A style the player could learn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StyleSuggestion {
+    /// Row in `stylesuperlist.2da`.
+    pub style_id: u16,
+    /// Localized name.
+    pub name: String,
+    /// Internal template label.
+    pub label: String,
+    /// Kind of style.
+    pub kind: &'static str,
+    /// Description from the game data.
+    pub description: Option<String>,
 }
 
 /// A companion together with display data.
@@ -220,6 +254,8 @@ pub struct ItemSuggestion {
     pub category: String,
     /// Value for the `Type` field of a new item struct.
     pub save_type: u8,
+    /// Description from the game data.
+    pub description: Option<String>,
 }
 
 /// A decoded savegame screenshot.
@@ -274,6 +310,8 @@ pub struct CharacterForm {
     pub intimidate: String,
     /// Alignment.
     pub alignment: String,
+    /// Appearance index.
+    pub appearance: String,
     /// Chapter.
     pub chapter: String,
     /// Kills.
@@ -303,6 +341,7 @@ impl CharacterForm {
             intuition: character.intuition.to_string(),
             intimidate: character.intimidate.to_string(),
             alignment: character.alignment.to_string(),
+            appearance: character.appearance.to_string(),
             chapter: character.chapter.to_string(),
             kills: character.kills.to_string(),
         }
@@ -329,6 +368,7 @@ impl CharacterForm {
         character.intuition = parse::<i32>("intuition", &self.intuition)?;
         character.intimidate = parse::<i32>("intimidate", &self.intimidate)?;
         character.alignment = parse::<i32>("alignment", &self.alignment)?;
+        character.appearance = parse::<i32>("appearance", &self.appearance)?;
         character.chapter = parse::<u32>("chapter", &self.chapter)?;
         character.kills = parse::<u32>("kills", &self.kills)?;
         Ok(character)
@@ -474,7 +514,7 @@ impl Session {
     fn load_game_data(&mut self) {
         if let Some(game) = GameData::discover(&self.directory) {
             self.game_status = GameStatus::Loaded {
-                items: game.item_count(),
+                items: game.playable_item_count(),
                 styles: game.style_count(),
                 root: game.root().to_path_buf(),
             };
@@ -578,6 +618,7 @@ impl Session {
             kind: item.kind,
             name: info.map_or(fallback, |info| info.name.clone()),
             category: info.and_then(|info| info.category.clone()),
+            description: info.and_then(|info| info.description.clone()),
         }
     }
 
@@ -592,7 +633,15 @@ impl Session {
             style_id: style.style_id,
             level: style.level,
             name: info.map_or(fallback, |info| info.name.clone()),
-            weapon: info.is_some_and(|info| info.weapon_count > 0),
+            label: info.map_or_else(String::new, |info| info.label.clone()),
+            description: info.and_then(|info| info.description.clone()),
+            kind: info.map_or("style", |info| {
+                if info.kind == jadeforge_gamedata::StyleKind::Other && info.weapon_count > 0 {
+                    "weapon"
+                } else {
+                    info.kind.label()
+                }
+            }),
         }
     }
 
@@ -608,6 +657,19 @@ impl Session {
         self.selected
             .and_then(|index| self.entries.get(index))
             .map(|entry| entry.path.join("save.sac"))
+    }
+
+    /// Number of blocks in the open savegame.
+    #[must_use]
+    pub fn block_count(&self) -> usize {
+        self.save.as_ref().map_or(0, |save| save.blocks().len())
+    }
+
+    /// Size of the open savegame in bytes.
+    #[must_use]
+    pub fn file_size(&self) -> Option<u64> {
+        let path = self.current_path()?;
+        std::fs::metadata(path).ok().map(|meta| meta.len())
     }
 
     /// Applies the form to the in memory savegame.
@@ -685,7 +747,12 @@ impl Session {
             return;
         };
         let new_count = i32::from(current) + delta;
-        if !(1..=255).contains(&new_count) {
+        if new_count > 255 {
+            self.message = Message::info(format!("{name}: a stack cannot hold more than 255."));
+            return;
+        }
+        if new_count < 1 {
+            self.message = Message::info("A stack needs at least one item; use Remove instead.");
             return;
         }
         let Some(save) = self.save.as_mut() else {
@@ -756,20 +823,39 @@ impl Session {
     }
 
     /// Searches the item database.
+    ///
+    /// An empty query lists the whole database so the picker doubles as a
+    /// browsable list.
     #[must_use]
-    pub fn search_items(&self, query: &str, limit: usize) -> Vec<ItemSuggestion> {
+    pub fn search_items(&self, query: &str, limit: usize) -> (Vec<ItemSuggestion>, usize) {
         let Some(game) = self.game.as_ref() else {
-            return Vec::new();
+            return (Vec::new(), 0);
         };
-        game.search_items(query, limit)
+        let matches: Vec<&jadeforge_gamedata::ItemInfo> = if query.trim().is_empty() {
+            let mut all: Vec<&jadeforge_gamedata::ItemInfo> = game.playable_items().collect();
+            all.sort_by(|left, right| {
+                left.name
+                    .to_lowercase()
+                    .cmp(&right.name.to_lowercase())
+                    .then_with(|| left.id.cmp(&right.id))
+            });
+            all
+        } else {
+            game.search_items(query, usize::MAX)
+        };
+        let total = matches.len();
+        let rows: Vec<ItemSuggestion> = matches
             .into_iter()
             .map(|item| ItemSuggestion {
                 item_id: item.id,
                 name: item.name.clone(),
                 category: item.category.clone().unwrap_or_else(|| "item".to_owned()),
                 save_type: item.save_type.unwrap_or(8),
+                description: item.description.clone(),
             })
-            .collect()
+            .take(limit)
+            .collect();
+        (rows, total)
     }
 
     /// All styles from the game data that the player does not own yet.
@@ -777,25 +863,48 @@ impl Session {
     /// Styles used by henchmen or scripted scenes are filtered out: they cannot
     /// be learned by the player and would only clutter the list.
     #[must_use]
-    pub fn missing_styles(&self) -> Vec<(u16, String, String)> {
+    pub fn missing_styles(&self) -> Vec<StyleSuggestion> {
         let Some(game) = self.game.as_ref() else {
             return Vec::new();
         };
         let owned: std::collections::HashSet<u16> =
             self.styles.iter().map(|style| style.style_id).collect();
-        let mut styles: Vec<(u16, String, String)> = game
+        let mut styles: Vec<StyleSuggestion> = game
             .styles()
             .filter(|style| !owned.contains(&style.id))
             .filter(|style| is_player_style(&style.label))
-            .map(|style| (style.id, style.name.clone(), style.label.clone()))
+            .map(|style| StyleSuggestion {
+                style_id: style.id,
+                name: style.name.clone(),
+                label: style.label.clone(),
+                description: style.description.clone(),
+                kind: if style.kind == jadeforge_gamedata::StyleKind::Other
+                    && style.weapon_count > 0
+                {
+                    "weapon"
+                } else {
+                    style.kind.label()
+                },
+            })
             .collect();
-        styles.sort_by(|left, right| left.1.cmp(&right.1).then_with(|| left.0.cmp(&right.0)));
+        styles.sort_by(|left, right| {
+            left.name
+                .cmp(&right.name)
+                .then_with(|| left.style_id.cmp(&right.style_id))
+        });
         styles
     }
 
     /// Sets the level of a fighting style.
     pub fn set_style_level(&mut self, struct_index: usize, level: u8) {
-        if !(1..=MAX_STYLE_LEVEL).contains(&level) {
+        if level > MAX_STYLE_LEVEL {
+            self.message = Message::info(format!(
+                "Styles cannot be raised above level {MAX_STYLE_LEVEL}."
+            ));
+            return;
+        }
+        if level < 1 {
+            self.message = Message::info("A style starts at level 1.");
             return;
         }
         let Some(save) = self.save.as_mut() else {
@@ -871,6 +980,7 @@ impl Session {
     /// Changes the level of a companion.
     pub fn set_henchman_level(&mut self, struct_index: usize, level: u8) {
         if !(1..=60).contains(&level) {
+            self.message = Message::info("Companion levels go from 1 to 60.");
             return;
         }
         let Some(save) = self.save.as_mut() else {

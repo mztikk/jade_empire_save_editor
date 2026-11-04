@@ -1,4 +1,4 @@
-//! The inventory tab: item stacks, search and removal.
+//! The inventory tab: item stacks, the searchable item database and removal.
 
 use freya::prelude::*;
 
@@ -8,44 +8,89 @@ use crate::theme;
 use crate::widgets;
 
 /// Renders the inventory tab.
+#[allow(clippy::too_many_arguments)]
 pub fn view(
     ctx: &Ctx,
     items: &[ItemRow],
     query: State<String>,
     results: &[ItemSuggestion],
     game_ready: bool,
+    matching: usize,
+    total_items: usize,
+    show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for item in items {
         rows.push(item_row(ctx, item));
     }
     if rows.is_empty() {
-        rows.push(
-            rect()
-                .padding(Gaps::new_all(16.))
-                .child(
-                    label()
-                        .text("The inventory is empty.")
-                        .font_size(12.)
-                        .color(theme::DIM),
-                )
-                .into_element(),
-        );
+        rows.push(widgets::hint("The inventory is empty."));
     }
 
-    let add_section = if game_ready {
-        let mut block: Vec<Element> = vec![
+    let mut children = vec![
+        rect()
+            .vertical()
+            .width(Size::fill())
+            .spacing(4.)
+            .children(rows)
+            .into_element(),
+        widgets::divider(),
+        widgets::section_label("ADD AN ITEM"),
+    ];
+
+    if game_ready {
+        children.push(
             Input::new(query)
-                .placeholder("Search items by name or template, for example \"sword\"")
+                .placeholder("Filter the item database, or leave empty to browse it")
                 .width(Size::fill())
                 .into_element(),
-        ];
-        if !results.is_empty() {
+        );
+        if results.is_empty() {
+            children.push(widgets::hint(if query.read().trim().is_empty() {
+                "The item database is empty."
+            } else {
+                "No items match this search."
+            }));
+        } else {
+            let shown = results.len();
+            let browsing = query.read().trim().is_empty();
+            let total = if browsing { total_items } else { matching };
+            let mut heading = rect()
+                .horizontal()
+                .width(Size::fill())
+                .spacing(10.)
+                .content(Content::Flex)
+                .child(widgets::section_label(if browsing {
+                    "ALL ITEMS"
+                } else {
+                    "SEARCH RESULTS"
+                }))
+                .child(rect().width(Size::flex(1.0)))
+                .child(
+                    label()
+                        .text(match (browsing, shown == total) {
+                            (true, _) => format!("{shown} of {total}"),
+                            (false, true) => format!("{total} matches"),
+                            (false, false) => format!("{shown} of {total} matches"),
+                        })
+                        .font_size(10.)
+                        .color(theme::DIM),
+                );
+            if shown < total {
+                heading = heading.child(
+                    Button::new()
+                        .compact()
+                        .outline()
+                        .child("Show more")
+                        .on_press(show_more),
+                );
+            }
+            children.push(heading.into_element());
             let mut result_rows: Vec<Element> = Vec::new();
             for suggestion in results {
                 result_rows.push(suggestion_row(ctx, suggestion));
             }
-            block.push(
+            children.push(
                 rect()
                     .vertical()
                     .width(Size::fill())
@@ -53,33 +98,27 @@ pub fn view(
                     .children(result_rows)
                     .into_element(),
             );
-        } else if !query.read().trim().is_empty() {
-            block.push(widgets::hint("No items match this search."));
         }
-        block
     } else {
-        vec![widgets::hint(
+        children.push(widgets::hint(
             "The game data was not found, so items can only be removed, not added.",
-        )]
-    };
+        ));
+    }
 
     widgets::card(
         "Inventory",
         Some(format!("{} stacks", items.len())),
-        vec![
-            rect()
-                .vertical()
-                .width(Size::fill())
-                .spacing(4.)
-                .children(rows)
-                .into_element(),
-            widgets::divider(),
-            widgets::section_label("ADD AN ITEM"),
-        ]
-        .into_iter()
-        .chain(add_section)
-        .collect::<Vec<_>>(),
+        children,
     )
+}
+
+/// Secondary line shown for an item, in the inventory and in the database.
+#[must_use]
+pub fn item_subtitle(item_id: u16, category: Option<&str>, kind: u8) -> String {
+    match category {
+        Some(category) => format!("{category} · #{item_id}"),
+        None => format!("type {kind} · #{item_id}"),
+    }
 }
 
 fn item_row(ctx: &Ctx, item: &ItemRow) -> Element {
@@ -121,15 +160,16 @@ fn item_row(ctx: &Ctx, item: &ItemRow) -> Element {
                 )
                 .child(
                     label()
-                        .text(format!("id {} · type {}", item.item_id, item.kind))
+                        .text(item_subtitle(
+                            item.item_id,
+                            item.category.as_deref(),
+                            item.kind,
+                        ))
                         .font_size(10.)
                         .color(theme::DIM),
-                ),
+                )
+                .into_element(),
         )
-        .child(match &item.category {
-            Some(category) => widgets::badge(category.clone(), theme::SURFACE_ACTIVE, theme::MUTED),
-            None => label().text("").font_size(10.).into_element(),
-        })
         .child(Button::new().compact().flat().child("−").on_press(minus))
         .child(
             label()
@@ -168,18 +208,28 @@ fn suggestion_row(ctx: &Ctx, suggestion: &ItemSuggestion) -> Element {
         .background(theme::PANEL)
         .corner_radius(6.)
         .child(
-            label()
-                .text(suggestion.name.clone())
-                .font_size(12.)
-                .max_lines(1)
+            rect()
+                .vertical()
+                .spacing(1.)
                 .width(Size::flex(1.0))
-                .color(theme::TEXT),
-        )
-        .child(
-            label()
-                .text(format!("{} · #{}", suggestion.category, suggestion.item_id))
-                .font_size(10.)
-                .color(theme::DIM),
+                .child(
+                    label()
+                        .text(suggestion.name.clone())
+                        .font_size(12.)
+                        .max_lines(1)
+                        .color(theme::TEXT),
+                )
+                .child(
+                    label()
+                        .text(item_subtitle(
+                            suggestion.item_id,
+                            Some(suggestion.category.as_str()),
+                            suggestion.save_type,
+                        ))
+                        .font_size(10.)
+                        .color(theme::DIM),
+                )
+                .into_element(),
         )
         .child(Button::new().compact().outline().child("Add").on_press(add))
         .into_element()
