@@ -1,9 +1,11 @@
 # Jade Empire savegame format
 
 This document describes the format of `save.sac` as implemented by
-`jadeforge-core`. Everything below was derived from observation of retail
-savegames; it is the reference that the parser, the writer and the test suite
-are checked against.
+`jadeforge-core`, plus the game data files the editor reads for names, styles
+and gems. Everything below was derived from retail savegames and the shipped
+data files; it is the reference that the parser, the writer and the test suite
+are checked against. Facts taken from the community wiki are linked in
+[References](#references).
 
 All integers are little endian. The format is a variant of BioWare's *generic
 file format* (GFF) that Jade Empire shares with its other Aurora engine games,
@@ -23,14 +25,14 @@ repeat blockCount times:
 ```
 
 The block order is significant to the game (the last block is always
-`save.sav`). JadeForge preserves the order.
+`save.sav` in all 89 inspected savegames). JadeForge preserves the order.
 
 Real examples found in savegames:
 
 | block | content |
 | --- | --- |
 | `J01_BEACH.sav` … | serialized state of one area (creatures, placeables, triggers, ...) |
-| `polyplayer.sav` | character sheet, only present in a few releases |
+| `polyplayer.sav` | character sheet; only present in some saves (2 of 89) |
 | `save.sav` | global campaign state and the live player creature |
 
 ## Block
@@ -68,13 +70,13 @@ offsets from the header and does not rely on that.
 One entry per struct:
 
 ```
-u32 structType     0xFFFFFFFF for the root, 0 for every other known struct
+u32 structType     0xFFFFFFFF for the root, 0 in every struct inspected so far
 u32 fieldReference
 u32 fieldCount
 ```
 
 The root struct is the one with type `0xFFFFFFFF`; in all known files it is
-struct 0.
+struct 0. The reader does not require a particular value for the other structs.
 
 `fieldReference` has two meanings:
 
@@ -155,16 +157,15 @@ u32 structIndex[count]
 ```
 
 Lists are stored inline in that section; consecutive lists are simply
-concatenated (the writer of the game appears to de-duplicate identical lists,
-the reader does not care).
+concatenated. Identical lists may be shared, and the reader does not rely on
+either behaviour.
 
 ## Field data
 
-Values referenced by offset are stored back to back in the field data section in
-the order the fields appear in the field table, and the engine de-duplicates
-identical payloads (for example the same string used by two fields). JadeForge
-reproduces that: blocks are rewritten with payloads de-duplicated by
-`(type, bytes)`.
+Values referenced by offset are stored back to back in the field data section.
+The game's files store payloads de-duplicated (for example the same string used
+by two fields); JadeForge reproduces that: blocks are rewritten with payloads
+de-duplicated by `(type, bytes)`.
 
 ## The player creature
 
@@ -189,183 +190,263 @@ exposes:
 | `PlayerCreature.Stats.Alignment` | int | alignment |
 | `PlayerCreature.Stats.Appearance` | int | appearance index |
 | `PlayerCreature.ItemList[]` | list | inventory items |
-| `PlayerCreature.Progress.Kills` | dword | kill counter |
+| `PlayerCreature.Progress.Kills` | int | kill counter |
+| `PlayerCreature.Gems` | list | carried gems, see below |
+| `PlayerCreature.Amulet.OpenGemsList` | list | amulet sockets, see below |
 | `Campaign.Chapter` | dword | story chapter |
 | `Campaign.TimePlayed` | dword64 | play time in microseconds |
 
 The inventory holds structs with `Count` (byte), `ItemId` (word) and `Type`
-(byte).
+(byte). Fields are sparse: the game only writes what differs from its defaults,
+so for example `Stats.Alignment`, `Stats.UnassignedPts` and the style level
+fields are absent until the player first changes them.
+
+`Campaign.TimePlayed / 1_000_000` is the play time in seconds, which matches the
+folder timestamps of the test savegames.
 
 `polyplayer.sav`, when present, keeps a second copy of a character sheet at the
 root of the block (`FirstName`, `Stats`, ...). JadeForge only falls back to it
 when `save.sav` has no player creature, because it can be stale.
 
-## Gems
+## Gems and the amulet
 
 `PlayerCreature.Gems` and `PlayerCreature.Amulet.OpenGemsList` are lists of
-structs shaped `{ Gem: { ItemID, GemsEffectList[] } }`; effects carry
-`GemsEffectType`, `GemsEffectValue`, `GemsEffectCurVal` and `GemsEffectDuration`.
-`OpenGemsList` always holds seven entries. Which of them are *unlocked sockets* is
-decided by `PlayerCreature.Amulet.Type` (a byte): tier 1 has three sockets, tier
-2 has five, tier 3 and 4 have seven (the cap). A savegame without the field (and
-without `Amulet.Active`) predates the amulet: the player has not unlocked it yet
-and has no sockets at all. The trailing entries beyond the unlocked sockets are
-unused and are hidden by the editor, which shows the amulet tier and socket count
-above the list.
+structs shaped `{ Gem: { ItemID, GemsEffectList[] } }`. An effect carries
+`GemsEffectType` (dword), `GemsEffectValue` (dword), `GemsEffectCurVal` (dword)
+and `GemsEffectDurati` (float; the label is truncated to the 16 byte limit of
+labels). `Gem.ItemID` is a word and points at a row of `items.2da` of category
+`gems`.
+
+`OpenGemsList` always holds seven entries. Which of them are *unlocked sockets*
+is decided by `PlayerCreature.Amulet.Type` (a byte):
+
+| `Amulet.Type` | sockets |
+| --- | --- |
+| absent (and no `Amulet.Active`) | the amulet is not unlocked yet, no sockets |
+| 1 | 3 |
+| 2 | 5 |
+| 3 / 4 | 7 (the list is capped at seven) |
+
+Evidence: across all 89 savegames the number of socketed gems never exceeds the
+tier's socket count, and the counts only ever take the values 3, 5 and 7
+(tier 1, tier 2, tier 4). Tier 3 was not observed; it is mapped to the cap like
+tier 4. Savegames without `Amulet.Type` also have no `Amulet.Active` and no
+socketed gems, i.e. the player has not received the amulet yet. The trailing
+entries beyond the unlocked sockets are unused; the editor hides them and shows
+the tier and socket count above the list.
 
 Moving a gem only moves its struct index from one list to the other, so the gem
 data is never rewritten. Some savegames point at the gem struct directly instead
-of wrapping it in an entry with a `Gem` field; both shapes are read.
+of wrapping it in an entry with a `Gem` field; both shapes are read. An entry
+with no `ItemID` and an empty effect list inside the unlocked sockets is an empty
+socket and is displayed read-only.
 
-Adding a gem builds the struct from scratch with the field types the game uses:
-`Gem.ItemID` is a word, `Gem.GemsEffectList` is a list of structs with dword
-`GemsEffectType`/`GemsEffectValue`/`GemsEffectCurVal` and a float
-`GemsEffectDurati` (the label is truncated to 16 bytes). The effect data comes
-from `gems.2da` (`Effect0..2`, `Parameter0..2`, `Duration0`), joined to
-`items.2da` by label, so only gems the game defines can be created.
-
-Effect ids point at rows of `effects.2da` inside `data/miniglobal-a.rim`
-(`label`, `effectid`, `durationtype`, `2da`, `row`); the label is what the UI
-shows (`EFFECT_MODIFYBODYBASE` → `Body`). An amulet entry with no `ItemID` and
-an empty effect list is an empty socket and is displayed read-only.
-
-The global story variables live in `Campaign.VarTable` (`ID`, `Type`, `Value`,
-sometimes `Number`). The IDs are hashes without a name table in the savegame, and
-journal entries were not found in `save.sav`; both need more mapping work before
-they are exposed in the editor.
-
-## Where names come from
-
-Savegames only store numeric ids and talk table references. The names shown by
-JadeForge come from the game installation:
-
-| data | lookup |
-| --- | --- |
-| item name | `items.2da` row = `ItemId`, `STRREF_NAME` → `dialog.tlk` |
-| item category | `items.2da` `TYPE` column (`weapons`, `gems`, `improve`, ...) |
-| item category → savegame type | gems 1, powerups 4, weapons 5, plot_items 6, mgweapons 7, improve 8 |
-| style name | `stylesuperlist.2da` row = `StyleId`, `NameRef` → `dialog.tlk` |
-| style is a weapon style | `stylesuperlist.2da` `WeaponCount` > 0 |
-
-The category mapping was measured over every item struct of the 88 test
-savegames (inventories and store inventories); the six pairs above are the only
-ones that occur.
-
-## Alignment
-
-`PlayerCreature.Stats.Alignment` is a signed integer that the engine only writes
-once the player's decisions move it: the earliest savegames of a playthrough do
-not contain the field at all. In the 76 savegames that have it, the values run
-from 131 to 255 and rise with play time, and one savegame sits exactly at 255.
-
-That matches an unsigned 0..255 scale whose neutral value is **128**: below is
-the Way of the Closed Fist, above is the Way of the Open Palm. The editor uses
-that reference (`DEFAULT_ALIGNMENT`) for its label and shows "Balanced" at 128.
-The raw number stays editable, so a value can always be checked against the
-in-game meter; no other alignment field exists in the player block.
+Adding a gem builds the struct from scratch with the field types the game uses
+(`Gem.ItemID` word, effect dwords and a float duration) and appends it to
+`PlayerCreature.Gems`. The effect data comes from `gems.2da` (`Effect0..2`,
+`Parameter0..2`, `Duration0`), joined to `items.2da` by label, so only gems the
+game defines can be created. Effect ids are rows of `effects.2da`; the editor
+shows their labels (`EFFECT_MODIFYBODYBASE` → `Body`, `EFFECT_MODIFYCHARM` →
+`Charm`), with the parameter as the amount.
 
 ## Style levels and upgrades
 
 A style struct stores `StyleLevel` (byte) and `StyleLevelInfo` (64 bit mask).
-`StyleLevel` is `1 + population count of the mask`; a freshly learned style has
-level 1 and no bits set. The game derives the unspent style points from the
-levels of all owned styles, so editing a level also changes the style points
-shown in game.
+Both fields are absent for a freshly learned style: level 1 means no bits set.
+`StyleLevel` is `1 + population count of the mask`. The game derives the unspent
+style points from the levels of all owned styles, so editing a level also
+changes the style points shown in game.
 
 The mask indexes the **slots of the style's own level-up table**, not rows of
 `StyleAdvance.2da`: bit `i` is the `i + 1`-th purchasable entry of the
 `<Style>LV.2da` table, flattened row by row. Each slot points at a
 `StyleAdvance` row that supplies the effect, the style point cost and the
-description. The tables live as binary `2DA V2.b` resources inside
-`data/miniglobal-a.rim`; `stylesuperlist.StyleData` selects a row of
-`styledata.2da` whose `levelup2da` column names the table. Override files win
-over the archive, so modded styles work.
+description. The mapping is `stylesuperlist.StyleData` (row of the style) →
+`styledata.2da` row → `levelup2da` column → the `<Style>LV.2da` table. The
+tables ship as binary `2DA V2.b` resources inside `data/miniglobal-a.rim`;
+`override/` text tables take precedence, which is what makes modded styles work.
 
 Verification: Storm Dragon's table offers advance rows 6-10, 21-25 and 11-15
 (slots 1-15). A savegame with Storm Dragon at level 8 carries bits
 `{1,2,6,7,11,12,13}` (1-based slots), i.e. chi strike 1-2, duration 1-2 and
 speed 1-3. Under the old "bit = advance row" assumption bits 1 and 2 would be
-damage tiers, which the style does not even offer. Every upgrade bit in all 88
-test savegames is inside its style's slot range, and `level == 1 + popcount`
-holds for every style; a test enforces both.
+damage tiers, which the style does not even offer. In all 89 test savegames,
+every set bit of every style that has a level-up table is inside that style's
+slot range, and `level == 1 + popcount` holds for those styles; a test enforces
+both. The sparsity of the fields is visible in the data too: 319 of the 551
+style structs across the saves have no `StyleLevel`/`StyleLevelInfo` at all,
+i.e. they are level 1.
 
 The families visible in the level-up screen come from the level-up table rows
-(their `Label` is a talk table reference). Tier costs are 1, 2, 4, 6 and 10
-style points.
+(their `Label` is a talk table reference). The `StyleAdvance.2da` families carry
+five tiers with style point costs 1, 2, 4, 6 and 10, for example
+`Increase_Damage_1..5` (effect 72, +25 % damage per tier) or
+`Speed_Increase_1..5` (effect 81). The game's level-up screen never creates gaps
+inside a family.
 
-The editor shows the slots as plain golden orbs per family. Clicking an orb
-buys every missing slot up to it, clicking an owned orb removes it and
-everything above it, so a family is always a gap-free prefix. Styles whose
-level-up table is missing are read-only: guessing slot semantics would write
-the wrong upgrade.
+The editor shows the slots as plain golden orbs per family. Clicking an orb buys
+every missing slot up to it, clicking an owned orb removes it and everything
+above it, so a family is always a gap-free prefix. Styles whose level-up table
+is missing are read-only: guessing slot semantics would write the wrong upgrade.
+There is no "free selection" mode, because only the style's real slots exist.
+
+## Game data files
+
+Savegames only store numeric ids and talk table references. JadeForge reads the
+installation (found from the save folder, `JADEFORGE_GAME_DIR` wins) for names
+and tables. Every file is optional: without the installation the UI falls back
+to numeric ids.
+
+| file | format | purpose |
+| --- | --- | --- |
+| `dialog.tlk` | `TLK V4.0` | localized strings (names and descriptions) |
+| `dialogf.tlk` | `TLK V4.0` | female player character variants |
+| `override/*.2da` | text `2DA V2.0` | tables a mod or the release leaves loose |
+| `data/miniglobal-a.rim` | RIM archive | most 2DA tables, incl. styles and effects |
+| `data/globalunload-a.rim` | RIM archive | style animation tables |
+
+`override/` is consulted first and the archives second; names are matched case
+insensitively and text tables are decoded lossily, so tables with extended
+characters still load.
+
+### Talk table (`TLK V4.0`)
+
+```
+0x00  "TLK "
+0x04  "V4.0"
+0x08  u32 languageCount
+0x0c  u32 stringCount
+0x10  u32 entryTableOffset
+0x14  u32 stringDataOffset
+      entries: 10 bytes each, (u32 flags, u32 offset, u16 length)
+      string data: UTF-8, not NUL terminated
+```
+
+### Text 2DA (`2DA V2.0`)
+
+```
+2DA V2.0
+<default values>
+LABEL   TYPE    ID
+0       Sword   weapons
+1       ****    gems
+```
+
+Cells contain `****` when they have no value. Values may be quoted when they
+contain spaces. The row number in front of each line is the row id; rows do not
+have to be contiguous.
+
+### Binary 2DA (`2DA V2.b`)
+
+```
+"2DA V2.b\n"
+column names, each followed by a tab, list terminated by NUL
+u32 rowCount
+row labels, each followed by a tab
+u16 cellOffset[rowCount * columnCount]   row major, relative to cellBase
+u16 cellDataSize
+cellBase: NUL terminated cell strings
+```
+
+This is the layout the style, effect and gem tables use inside the RIM
+archives; column names and row labels are tab terminated there.
+
+### RIM archive
+
+```
+0x00  "RIM " "V1.0"
+0x08  u32 unknown
+0x0c  u32 entryCount
+0x10  u32 entryTableOffset
+entry (32 bytes): name[16]  u32 type  u32 id  u32 offset  u32 size
+```
+
+Type `2017` is a 2DA table. Offsets are relative to the start of the archive.
+
+### Names and categories
+
+| data | lookup |
+| --- | --- |
+| item name | `items.2da` row = `ItemId`, `STRREF_NAME` → `dialog.tlk` |
+| item category | `items.2da` `TYPE` column (`gems`, `powerups`, `weapons`, `plot_items`, `mgweapons`, `improve`) |
+| item category → savegame `Type` | gems 1, powerups 4, weapons 5, plot_items 6, mgweapons 7, improve 8 |
+| style name | `stylesuperlist.2da` row = `StyleId`, `NameRef` → `dialog.tlk` |
+| style description | `stylesuperlist.2da` `DescRef` → `dialog.tlk` |
+| style kind | template-label prefix (``Martial_Strike``, ``Magic_Fire``, ...); `WeaponCount > 0` is only a fallback for labels the prefix table does not know |
+| gem name and effects | `items.2da` joined with `gems.2da` on `LABEL` |
+| effect name | row of `effects.2da` (`label`, `effectid`, `durationtype`, `2da`, `row`) |
+
+The category mapping was measured over every item struct of the 89 test
+savegames (inventories and store inventories); the six pairs above are the only
+ones that occur. `items.2da` writes the improvement category as `improve`; the
+wiki calls it *improvements*.
+
+Development placeholders (`[TEMP] ...`, `temp_*`, `zzz*`, `cut_*`) are hidden
+from the item picker but stay resolvable by id.
 
 ## Alignment
 
 `PlayerCreature.Stats.Alignment` is a signed integer that the engine only writes
 once the player's decisions move it: the earliest savegames of a playthrough do
-not contain the field at all. In the 76 savegames that have it, the values run
+not contain the field at all. In the 77 savegames that have it, the values run
 from 131 to 255 and rise with play time, and one savegame sits exactly at 255.
 
-That matches an unsigned 0..255 scale whose neutral value is **128**: below is
-the Way of the Closed Fist, above is the Way of the Open Palm. The editor uses
+The scale is unsigned 0..255: the community documentation for `gems.2da` states
+that completely Closed Fist characters have alignment 0 and completely Open Palm
+characters have 255. The neutral midpoint is therefore **128**; the editor uses
 that reference (`DEFAULT_ALIGNMENT`) for its label and shows "Balanced" at 128.
-The raw number stays editable, so a value can always be checked against the
-in-game meter; no other alignment field exists in the player block.
+The observed savegames only cover the Open Palm half (131..255). The raw number
+stays editable, so a value can always be checked against the in-game meter; no
+other alignment field exists in the player block.
 
-## Style levels and upgrades
+## Story variables and journal
 
-A style struct stores `StyleLevel` (byte) and `StyleLevelInfo` (64 bit mask).
-`StyleLevel` is `1 + population count of the mask`; a freshly learned style has
-level 1 and no bits set. The game derives the unspent style points from the
-levels of all owned styles, so editing a level also changes the style points
-shown in game.
+`Campaign.VarTable` is a list of `{ ID, Type, Value, Number? }` entries (1122 in
+the 10 h save, 1940 in the 22 h save) that grows with story progress. The IDs
+are hashes and there is no name table in the savegame, so a viewer would show
+opaque numbers; no name mapping is implemented yet.
 
-The mask is **not** a plain "how many upgrades" counter: bit *i* selects row
-*i + 1* of `StyleAdvance.2da`, which is one concrete upgrade with its own effect
-and style point cost. The table groups five tiers per family, with costs
-1, 2, 4, 6 and 10:
-
-| rows (1 based) | family | effect |
-| --- | --- | --- |
-| 1-5 | `Increase_Damage_1..5` | effect 72, +25 % damage per tier |
-| 6-10 | `Chi_Strike_Damage_1..5` | effect 84, chi strike multiplier |
-| 11-15 | `Speed_Increase_1..5` | effect 81, +5 % speed per tier |
-| 16-20 | `Lower_Chi_Cost_1..5` | effect 69, -5 % chi cost per tier |
-| 21-25 | `Duration_1..5` | style duration |
-| 26-30 | `Chi_Reduction_1..5` | chi damage reduction |
-
-Per style level the game offers the five tiers of one family (the `<Style>LV.2da`
-tables hold that mapping); buying one sets its bit. The 76 real savegames
-confirm this: a level 11 style carries ten bits, for example `[0-4, 10-14]`
-(five damage tiers plus five speed tiers), and every style satisfies
-`level == 1 + popcount`.
-
-The editor shows those bits as one plain golden orb per tier and family inside the
-expanded style row (left to right is tier 1-5).
-Clicking an orb sets the family to that tier: missing tiers up to it
-are bought, clicking an owned orb removes it and everything above it. That is a
-gap-free prefix per family, because the game's own level-up screen never creates
-gaps. The level itself is read-only in the editor; it is derived from the mask.
-
-A **Game rules** toggle (on by default)
-restricts the orbs to the rows listed by the style's own `<Style>LV.2da` table
-(`IronPalmLV`, `ViperLV`, `Ghost_KingLV` in this installation; most styles do
-not ship one), and falls back to the full `StyleAdvance.2da` table when the
-table is missing so nothing is hidden by guesswork.
+Journal entries were not found in `save.sav`. Area state lives in the 30
+`J0x_*.sav` blocks, so journal/quest data is most likely there or derived from
+the story variables; both need more mapping work before they are exposed.
 
 ## Unknowns
 
 * Some fields that look numeric are stored as opaque blobs (for example
   `OceanWaveX`), because that is how the engine serializes them. JadeForge keeps
   them byte identical.
-* Item names live in the game's data files (`.uti` templates inside the BIF
-  archives), not in the savegame. JadeForge therefore shows numeric item ids.
-* `Alignment` semantics (0 = closed fist, 1000 = open palm) are plausible but
-  not verified in game.
+* `Amulet.Type` tier 3 was never observed; it is treated like tier 4 (7 sockets).
+* The exact neutral alignment value is inferred as the midpoint 128; the observed
+  saves only prove the 0/255 endpoints from the wiki and values 131..255.
+* Item icons are not implemented: they live in texture resources (TXB/TGA) in
+  the BIF archives, and JadeForge does not read BIF/KEY archives yet. Item names,
+  categories and descriptions are resolved.
+* Companion stats beyond level and availability are not exposed yet.
+* Journal/quest structures and story variable names are unmapped (see above).
 
 ## Verification status
 
-The format description above was validated against 88 retail savegames with 943
-blocks: every block parses, every block can be serialized again, and re-parsing
-the result yields the identical tree. Unmodified savegames are written back
-byte for byte, because untouched blocks are copied verbatim.
+The format description above was validated against **89 retail savegames with
+962 blocks**: every block parses, every block can be serialized again, and
+re-parsing the result yields the identical tree. Unmodified savegames are
+written back byte for byte, because untouched blocks are copied verbatim. Two
+further properties are enforced across every savegame:
+
+* every style satisfies `StyleLevel == 1 + popcount(StyleLevelInfo)` and every
+  set bit is inside its style's slot range,
+* every socketed gem fits the amulet tier's socket count.
+
+## References
+
+Community documentation, used for the semantics of the game data tables:
+
+* [Gems.2da](https://jadeempire-modding.fandom.com/wiki/Gems.2da) — effect
+  columns, unique sets, alignment requirement (0 = Closed Fist, 255 = Open Palm).
+* [Effects.2da](https://jadeempire-modding.fandom.com/wiki/Effects.2da) — the
+  columns and the effect id list.
+* [Items.2da](https://jadeempire-modding.fandom.com/wiki/Items.2da) — item
+  categories, including styles being filed under powerups.
+* [Styleadvance.2da](https://jadeempire-modding.fandom.com/wiki/Styleadvance.2da)
+  — style upgrade effects and costs.
+* [2DA Files](https://jadeempire-modding.fandom.com/wiki/2DA_Files) — index of
+  the tables.

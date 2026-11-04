@@ -80,18 +80,21 @@ compares every struct and label. A mismatch aborts the save.
 
 Names live in the installation, not in the savegame. The crate reads
 
-* `dialog.tlk` (format `TLK V4.0`, fixed 10 byte entries with UTF-8 offsets),
-* text 2DA tables from `override/` (`items.2da`, `stylesuperlist.2da`).
+* `dialog.tlk` (`TLK V4.0`, 10 byte entries, UTF-8 string data),
+* text 2DA tables from `override/` and binary `2DA V2.b` tables from the RIM
+  archives (`items.2da`, `gems.2da`, `effects.2da`, `stylesuperlist.2da`, ...).
 
 `GameData::discover` walks up from the save folder (`JADEFORGE_GAME_DIR`
 overrides) and resolves items, styles and style upgrades once, caching the
-decoded names. `StyleAdvance.2da` is the table behind the style upgrade mask:
-bit *i* selects row *i+1*, so the editor can show and toggle individual upgrades.
-`<Style>LV.2da` tables limit the chips: `stylesuperlist.StyleData` selects a
-row of `styledata.2da`, whose `levelup2da` column names the table. Most of them
-live in `data/miniglobal-a.rim` as binary `2DA V2.b` resources, so the crate has
-a `rim` reader and a binary 2DA parser; `override/` text tables take precedence
-(case-insensitive lookup, lossy decoding), which is what makes modded styles work.
+decoded names. `StyleAdvance.2da` supplies the effect, cost and description of a slot, while
+the style's own `<Style>LV.2da` table defines the purchasable slots: bit *i* of
+`StyleLevelInfo` is slot `i+1`, and the slot points at an advance row.
+`stylesuperlist.StyleData` selects a row of `styledata.2da`, whose `levelup2da`
+column names the table. Those tables (and `gems.2da`, `effects.2da`) live in
+`data/miniglobal-a.rim` as binary `2DA V2.b` resources, so the crate has a `rim`
+reader and a binary 2DA parser; `override/` text tables take precedence
+(case-insensitive lookup, lossy decoding), which is what makes mods work. Styles
+without a level-up table are read-only in the editor.
 `tests/modded.rs` builds a small modded installation and asserts the resolution.
 `search_items` powers the item picker. Every table is optional: without the game
 files the UI falls back to numeric ids.
