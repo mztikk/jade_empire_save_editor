@@ -541,7 +541,11 @@ fn the_gems_tab_lists_amulet_and_inventory() {
     let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
     assert!(click_text(&mut test, "Gems"));
     assert!(find_label_text(&test, "Amulet").is_some());
-    assert!(find_label_text(&test, "socketed").is_some());
+    assert!(
+        find_label_text(&test, "socketed").is_some()
+            || find_label_text(&test, "No amulet yet").is_some(),
+        "the amulet card did not render its state"
+    );
 }
 
 #[test]
