@@ -100,6 +100,9 @@ fn amulet_sockets_cover_every_socketed_gem() {
         }
         let save = SaveGame::open(&path).expect("open");
         let amulet = save.amulet().expect("amulet");
+        let Some(amulet) = amulet else {
+            continue;
+        };
         assert!(
             matches!(amulet.sockets, 3 | 5 | 7),
             "{}: unexpected socket count {}",

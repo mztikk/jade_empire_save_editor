@@ -44,6 +44,9 @@ pub struct Gem {
 }
 
 /// The amulet and its unlocked sockets.
+///
+/// A savegame before the amulet is unlocked has no `Amulet.Type` (and no
+/// `Amulet.Active`): the player has no amulet yet, so there are no sockets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AmuletInfo {
     /// Amulet upgrade tier stored in `Amulet.Type` (1 when the field is absent).
@@ -68,23 +71,30 @@ pub fn sockets_for_tier(tier: u8) -> u8 {
 
 impl SaveGame {
     /// Reads the amulet tier and the number of sockets it unlocks.
-    pub fn amulet(&self) -> Result<AmuletInfo> {
+    ///
+    /// Returns `None` while the player does not have the amulet yet; the field
+    /// only appears once the story unlocks it.
+    pub fn amulet(&self) -> Result<Option<AmuletInfo>> {
         let location = self.player_location()?;
         let block = self
             .block(location.block)
             .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
-        let tier = block
-            .gff()
-            .get(format!("{}Amulet.Type", location.prefix))
+        let gff = block.gff();
+        let tier_field = gff.get(format!("{}Amulet.Type", location.prefix));
+        let has_active = gff.get(format!("{}Amulet.Active", location.prefix)).is_ok();
+        if tier_field.is_err() && !has_active {
+            return Ok(None);
+        }
+        let tier = tier_field
             .ok()
             .and_then(|field| field.value.as_u64())
             .and_then(|value| u8::try_from(value).ok())
             .unwrap_or(1)
             .clamp(1, 4);
-        Ok(AmuletInfo {
+        Ok(Some(AmuletInfo {
             tier,
             sockets: sockets_for_tier(tier),
-        })
+        }))
     }
 
     /// Reads the gems of the player.

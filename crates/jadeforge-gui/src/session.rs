@@ -590,8 +590,8 @@ pub struct Session {
     pub henchmen: Vec<HenchRow>,
     /// Gems of the opened savegame.
     pub gems: Vec<GemRow>,
-    /// Amulet tier and unlocked sockets.
-    pub amulet: AmuletInfo,
+    /// Amulet tier and unlocked sockets; `None` until the amulet is unlocked.
+    pub amulet: Option<AmuletInfo>,
     /// Game data used for names.
     pub game: Option<Rc<GameData>>,
     /// Human readable state of the game data.
@@ -629,10 +629,7 @@ impl Session {
             styles: Vec::new(),
             henchmen: Vec::new(),
             gems: Vec::new(),
-            amulet: AmuletInfo {
-                tier: 1,
-                sockets: 3,
-            },
+            amulet: None,
             game: None,
             game_status: GameStatus::Missing,
             preview: None,
@@ -1175,15 +1172,15 @@ impl Session {
         let Ok(gems) = save.gems() else {
             return Vec::new();
         };
-        let amulet = save.amulet().unwrap_or(AmuletInfo {
-            tier: 1,
-            sockets: 3,
-        });
+        let amulet = save.amulet().unwrap_or(None);
         self.amulet = amulet;
         let mut seen_amulet = 0_usize;
         gems.into_iter()
             .filter(|gem| {
                 if gem.location == GemLocation::Amulet {
+                    let Some(amulet) = amulet else {
+                        return false;
+                    };
                     seen_amulet += 1;
                     seen_amulet <= usize::from(amulet.sockets)
                 } else {

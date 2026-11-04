@@ -18,7 +18,7 @@ pub fn view(
     gems: &[GemRow],
     query: State<String>,
     available: &[(u16, String, usize)],
-    amulet: AmuletInfo,
+    amulet: Option<AmuletInfo>,
 ) -> Element {
     let amulet_gems: Vec<&GemRow> = gems
         .iter()
@@ -33,7 +33,20 @@ pub fn view(
         .iter()
         .filter(|gem| gem.location == GemLocation::Amulet && !gem.empty)
         .count();
-    let amulet_rows: Vec<Element> = if amulet_gems.is_empty() {
+    let amulet_title = amulet.map_or_else(
+        || "No amulet yet".to_owned(),
+        |amulet| {
+            format!(
+                "{socketed} socketed · tier {} ({} sockets)",
+                amulet.tier, amulet.sockets
+            )
+        },
+    );
+    let amulet_rows: Vec<Element> = if amulet.is_none() {
+        vec![widgets::hint(
+            "The amulet is unlocked early in the story; it has no sockets before that.",
+        )]
+    } else if amulet_gems.is_empty() {
         vec![widgets::hint("No gems socketed into the amulet.")]
     } else {
         amulet_gems
@@ -122,23 +135,23 @@ pub fn view(
         .spacing(16.)
         .child(widgets::card(
             "Amulet",
-            Some(format!(
-                "{socketed} socketed · tier {} ({} sockets)",
-                amulet.tier, amulet.sockets
-            )),
-            vec![
-                rect()
+            Some(amulet_title),
+            {
+                let mut children = vec![rect()
                     .vertical()
                     .width(Size::fill())
                     .spacing(4.)
                     .children(amulet_rows)
-                    .into_element(),
-                widgets::hint(if amulet.sockets >= 7 {
-                    "All seven sockets are unlocked."
-                } else {
-                    "More sockets unlock as the story progresses."
-                }),
-            ],
+                    .into_element()];
+                if let Some(amulet) = amulet {
+                    children.push(widgets::hint(if amulet.sockets >= 7 {
+                        "All seven sockets are unlocked."
+                    } else {
+                        "More sockets unlock as the story progresses."
+                    }));
+                }
+                children
+            },
         ))
         .child(add_card)
         .child(widgets::card(
