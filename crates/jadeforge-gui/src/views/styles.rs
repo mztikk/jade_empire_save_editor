@@ -3,7 +3,11 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::session::{StyleRow, StyleSuggestion, StyleUpgrade};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use crate::app::HoverKey;
+use crate::session::{Session, StyleRow, StyleSuggestion, StyleUpgrade};
 use crate::theme;
 use crate::widgets;
 
@@ -272,59 +276,106 @@ fn upgrade_row(family: &str, chips: Vec<Element>) -> Element {
         .into_element()
 }
 
-/// One toggleable upgrade tier.
+/// Session handle that compares by pointer, so it can be a component prop.
+#[derive(Clone)]
+struct SharedSession(Rc<RefCell<Session>>);
+
+impl PartialEq for SharedSession {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+/// One upgrade orb: a focusable circle that buys or removes a tier.
+///
+/// A component is needed (instead of a plain rect) to get an accessibility id
+/// and the keyboard focus state, which is what makes Tab + Enter work and lets
+/// the focused orb show a ring.
+#[derive(PartialEq)]
+struct UpgradeOrb {
+    session: SharedSession,
+    revision: State<u32>,
+    struct_index: usize,
+    upgrade: StyleUpgrade,
+    hovered: State<Option<HoverKey>>,
+}
+
+impl Component for UpgradeOrb {
+    fn render(&self) -> impl IntoElement {
+        let a11y_id = use_a11y();
+        let focus = use_focus(a11y_id);
+        let key = HoverKey::Orb(self.struct_index, self.upgrade.slot);
+        let is_hovered = *self.hovered.read() == Some(key);
+        let focused = focus() == Focus::Keyboard;
+        let taken = self.upgrade.taken;
+        let background = if taken {
+            if is_hovered || focused {
+                theme::ACCENT_HOVER
+            } else {
+                theme::ACCENT
+            }
+        } else if is_hovered || focused {
+            theme::SURFACE_ACTIVE
+        } else {
+            theme::BACKGROUND
+        };
+        let border = if focused {
+            theme::TEXT
+        } else if taken || is_hovered {
+            theme::ACCENT_HOVER
+        } else {
+            theme::ACCENT
+        };
+        let border_width = if focused { 2.0 } else { 1.5 };
+        let mut hovered = self.hovered;
+        let session = self.session.clone();
+        let mut revision = self.revision;
+        let struct_index = self.struct_index;
+        let slot = self.upgrade.slot;
+        rect()
+            .center()
+            .width(Size::px(26.))
+            .height(Size::px(26.))
+            .corner_radius(13.)
+            .background(background)
+            .border(Border::new().fill(border).width(border_width))
+            .a11y_id(a11y_id)
+            .a11y_focusable(true)
+            .a11y_role(AccessibilityRole::Button)
+            .a11y_alt(format!("tier {}", self.upgrade.tier))
+            .on_pointer_enter(move |_| {
+                Cursor::set(CursorIcon::Pointer);
+                *hovered.write() = Some(key);
+            })
+            .on_pointer_leave(move |_| {
+                Cursor::set(CursorIcon::default());
+                if *hovered.read() == Some(key) {
+                    *hovered.write() = None;
+                }
+            })
+            .on_all_press(move |_| {
+                session.0.borrow_mut().change_upgrade(struct_index, slot);
+                *revision.write() += 1;
+            })
+            .into_element()
+    }
+}
+
+/// Renders one orb.
 fn upgrade_chip(
     ctx: &Ctx,
     struct_index: usize,
     upgrade: &StyleUpgrade,
-    mut hovered: State<Option<crate::app::HoverKey>>,
+    hovered: State<Option<HoverKey>>,
 ) -> Element {
-    let key = crate::app::HoverKey::Orb(struct_index, upgrade.slot);
-    let is_hovered = *hovered.read() == Some(key);
-    let taken = upgrade.taken;
-    let slot = upgrade.slot;
-    let ctx = ctx.clone();
-    // The game shows upgrade choices as plain golden circles: filled when
-    // owned, an empty ring when the tier can still be bought. The order is the
-    // tier, so no number is drawn on them.
-    let background = if taken {
-        if is_hovered {
-            theme::ACCENT_HOVER
-        } else {
-            theme::ACCENT
-        }
-    } else if is_hovered {
-        theme::SURFACE_ACTIVE
-    } else {
-        theme::BACKGROUND
-    };
-    let border = if taken || is_hovered {
-        theme::ACCENT_HOVER
-    } else {
-        theme::ACCENT
-    };
-    rect()
-        .center()
-        .width(Size::px(26.))
-        .height(Size::px(26.))
-        .corner_radius(13.)
-        .background(background)
-        .border(Border::new().fill(border).width(1.5))
-        .a11y_alt(format!("tier {}", upgrade.tier))
-        .on_pointer_enter(move |_| {
-            Cursor::set(CursorIcon::Pointer);
-            *hovered.write() = Some(key);
-        })
-        .on_pointer_leave(move |_| {
-            Cursor::set(CursorIcon::default());
-            if *hovered.read() == Some(key) {
-                *hovered.write() = None;
-            }
-        })
-        .on_all_press(move |_| {
-            ctx.run(|session| session.change_upgrade(struct_index, slot));
-        })
-        .into_element()
+    UpgradeOrb {
+        session: SharedSession(ctx.session.clone()),
+        revision: ctx.revision,
+        struct_index,
+        upgrade: upgrade.clone(),
+        hovered,
+    }
+    .into_element()
 }
 
 /// Human readable family name for the upgrade rows.
