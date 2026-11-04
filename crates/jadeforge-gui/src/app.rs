@@ -59,6 +59,9 @@ pub enum HoverKey {
     Orb(usize, u16),
 }
 
+/// Entries a searchable picker renders per page (items, styles, gems).
+pub(crate) const PAGE_SIZE: usize = 30;
+
 /// The tabs of the editor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
@@ -128,8 +131,9 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let tab = use_state(|| Tab::Overview);
     let item_query = use_state(String::new);
     let style_query = use_state(String::new);
-    let item_limit = use_state(|| 30_usize);
-    let style_limit = use_state(|| 20_usize);
+    let item_limit = use_state(|| PAGE_SIZE);
+    let style_limit = use_state(|| PAGE_SIZE);
+    let gem_limit = use_state(|| PAGE_SIZE);
     let hovered = use_state(|| None::<HoverKey>);
     let gem_query = use_state(String::new);
     let expanded_item = use_state(|| None::<u16>);
@@ -259,7 +263,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 style_matches_total,
                 expanded_style,
                 hovered,
-                move |_| *style_limit.write() += 50,
+                move |_| *style_limit.write() += PAGE_SIZE,
             )
         }
         (Tab::Inventory, _) => {
@@ -274,13 +278,20 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 total_items,
                 expanded_item,
                 hovered,
-                move |_| *item_limit.write() += 50,
+                move |_| *item_limit.write() += PAGE_SIZE,
             )
         }
         (Tab::Gems, _) => {
             let available = session.borrow().available_gems();
             let amulet = session.borrow().amulet;
-            views::gems::view(&ctx, &session.borrow().gems, gem_query, &available, amulet)
+            views::gems::view(
+                &ctx,
+                &session.borrow().gems,
+                gem_query,
+                &available,
+                amulet,
+                gem_limit,
+            )
         }
         (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen),
         (_, None) => empty_state(entries.len()),

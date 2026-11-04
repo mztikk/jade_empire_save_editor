@@ -19,6 +19,7 @@ pub fn view(
     query: State<String>,
     available: &[(u16, String, usize)],
     amulet: Option<AmuletInfo>,
+    gem_limit: State<usize>,
 ) -> Element {
     let amulet_gems: Vec<&GemRow> = gems
         .iter()
@@ -64,14 +65,14 @@ pub fn view(
     };
 
     let needle = query.read().trim().to_lowercase();
+    let matching: Vec<&(u16, String, usize)> = available
+        .iter()
+        .filter(|(_, name, _)| needle.is_empty() || name.to_lowercase().contains(&needle))
+        .collect();
+    let limit = *gem_limit.read();
+    let shown = matching.len().min(limit);
     let mut add_rows: Vec<Element> = Vec::new();
-    for (item_id, name, effects) in available {
-        if !needle.is_empty() && !name.to_lowercase().contains(&needle) {
-            continue;
-        }
-        if add_rows.len() >= 12 {
-            break;
-        }
+    for (item_id, name, effects) in matching.iter().take(shown) {
         let ctx = ctx.clone();
         let item_id = *item_id;
         add_rows.push(
@@ -112,21 +113,49 @@ pub fn view(
             "No gem matches this filter."
         }));
     }
+    let mut add_children = vec![
+        Input::new(query)
+            .placeholder("Filter the gem list, or leave empty to browse it")
+            .width(Size::fill())
+            .into_element(),
+    ];
+    if matching.len() > shown {
+        let mut gem_limit = gem_limit;
+        add_children.push(
+            rect()
+                .horizontal()
+                .width(Size::fill())
+                .spacing(8.)
+                .content(Content::Flex)
+                .child(
+                    label()
+                        .text(format!("{shown} of {} gems", matching.len()))
+                        .font_size(10.)
+                        .color(theme::DIM),
+                )
+                .child(rect().width(Size::flex(1.0)))
+                .child(
+                    Button::new()
+                        .compact()
+                        .outline()
+                        .child("Show more")
+                        .on_press(move |_| *gem_limit.write() += crate::app::PAGE_SIZE),
+                )
+                .into_element(),
+        );
+    }
+    add_children.push(
+        rect()
+            .vertical()
+            .width(Size::fill())
+            .spacing(2.)
+            .children(add_rows)
+            .into_element(),
+    );
     let add_card = widgets::card(
         "Add a gem",
         Some("predefined gems".to_owned()),
-        vec![
-            Input::new(query)
-                .placeholder("Filter the gem list, or leave empty to browse it")
-                .width(Size::fill())
-                .into_element(),
-            rect()
-                .vertical()
-                .width(Size::fill())
-                .spacing(2.)
-                .children(add_rows)
-                .into_element(),
-        ],
+        add_children,
     );
 
     rect()
