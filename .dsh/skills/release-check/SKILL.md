@@ -46,7 +46,7 @@ not (it means the variables did not reach the tests).
    cmp /tmp/before.sac /tmp/after.sac
    ```
 
-4. `git status` shows no `target/`, `.cargo-home/`, `scratch/`, savegames or
+4. `git status` shows no `target/`, `scratch/`, savegames or
    stray screenshots. `docs/screenshot.png` may be committed when it changed.
 
 ## Review the diff

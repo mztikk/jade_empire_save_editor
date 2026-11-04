@@ -24,7 +24,6 @@ rustc-ice-*.txt
 #.idea/
 
 # JadeForge
-/.cargo-home/
 /scratch/
 /dist/
 /ui-debug.png
