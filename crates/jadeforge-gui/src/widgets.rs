@@ -138,3 +138,59 @@ pub fn label_row(label_text: impl Into<String>, trailing: impl IntoElement) -> E
         .child(trailing)
         .into_element()
 }
+
+/// Details area shown under a row when it is expanded.
+pub fn details(description: Option<&str>) -> Option<Element> {
+    description
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(|text| {
+            rect()
+                .width(Size::fill())
+                .padding(Gaps::new(2., 10., 6., 10.))
+                .child(
+                    label()
+                        .text(text.to_owned())
+                        .font_size(11.)
+                        .max_lines(4)
+                        .color(theme::MUTED),
+                )
+                .into_element()
+        })
+}
+
+/// Name block that expands a description when pressed.
+pub fn expanding_name(
+    id: u16,
+    name: String,
+    subtitle: String,
+    expanded: State<Option<u16>>,
+    font_size: f32,
+) -> Element {
+    let mut expanded = expanded;
+    Button::new()
+        .flat()
+        .compact()
+        .width(Size::flex(1.0))
+        .on_press(move |_| {
+            let current = *expanded.read();
+            *expanded.write() = if current == Some(id) { None } else { Some(id) };
+        })
+        .child(
+            rect()
+                .vertical()
+                .spacing(1.)
+                .width(Size::fill())
+                .padding(Gaps::new_symmetric(6., 6.))
+                .child(
+                    label()
+                        .text(name)
+                        .font_size(font_size)
+                        .max_lines(1)
+                        .color(theme::TEXT),
+                )
+                .child(label().text(subtitle).font_size(10.).color(theme::DIM))
+                .into_element(),
+        )
+        .into_element()
+}

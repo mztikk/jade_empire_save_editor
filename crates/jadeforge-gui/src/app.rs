@@ -101,6 +101,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let style_query = use_state(String::new);
     let item_limit = use_state(|| 30_usize);
     let style_limit = use_state(|| 20_usize);
+    let expanded_item = use_state(|| None::<u16>);
+    let expanded_style = use_state(|| None::<u16>);
     let picker_open = use_state(|| false);
     let picker_path = use_state(String::new);
     let save_query = use_state(String::new);
@@ -192,6 +194,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 game_ready,
                 game_ready.then_some(total_missing),
                 style_matches_total,
+                expanded_style,
                 move |_| *style_limit.write() += 50,
             )
         }
@@ -205,6 +208,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 game_ready,
                 item_matches,
                 total_items,
+                expanded_item,
                 move |_| *item_limit.write() += 50,
             )
         }

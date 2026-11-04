@@ -230,14 +230,38 @@ that reference (`DEFAULT_ALIGNMENT`) for its label and shows "Balanced" at 128.
 The raw number stays editable, so a value can always be checked against the
 in-game meter; no other alignment field exists in the player block.
 
-## Style levels
+## Style levels and upgrades
 
-A style struct stores `StyleLevel` (byte) and `StyleLevelInfo` (64 bit upgrade
-mask). `StyleLevel` is `1 + number of set bits`; a freshly learned style has
-level 1 and no mask. Raising a level therefore means setting the next free bit,
-which is what JadeForge does (and the reverse when lowering). The game derives
-the unspent style points from the levels of all owned styles, so editing a level
-also changes the style points shown in game.
+A style struct stores `StyleLevel` (byte) and `StyleLevelInfo` (64 bit mask).
+`StyleLevel` is `1 + population count of the mask`; a freshly learned style has
+level 1 and no bits set. The game derives the unspent style points from the
+levels of all owned styles, so editing a level also changes the style points
+shown in game.
+
+The mask is **not** a plain "how many upgrades" counter: bit *i* selects row
+*i + 1* of `StyleAdvance.2da`, which is one concrete upgrade with its own effect
+and style point cost. The table groups five tiers per family, with costs
+1, 2, 4, 6 and 10:
+
+| rows (1 based) | family | effect |
+| --- | --- | --- |
+| 1-5 | `Increase_Damage_1..5` | effect 72, +25 % damage per tier |
+| 6-10 | `Chi_Strike_Damage_1..5` | effect 84, chi strike multiplier |
+| 11-15 | `Speed_Increase_1..5` | effect 81, +5 % speed per tier |
+| 16-20 | `Lower_Chi_Cost_1..5` | effect 69, -5 % chi cost per tier |
+| 21-25 | `Duration_1..5` | style duration |
+| 26-30 | `Chi_Reduction_1..5` | chi damage reduction |
+
+Per style level the game offers the five tiers of one family (the `<Style>LV.2da`
+tables hold that mapping); buying one sets its bit. The 76 real savegames
+confirm this: a level 11 style carries ten bits, for example `[0-4, 10-14]`
+(five damage tiers plus five speed tiers), and every style satisfies
+`level == 1 + popcount`.
+
+The editor's `+`/`-` buttons currently toggle the lowest free / highest set bit,
+which keeps the mask valid but chooses the upgrade for the player. Choosing a
+*specific* upgrade needs the per-style `<Style>LV.2da` table, which lives in the
+BIF archives rather than in `override/`.
 
 ## Unknowns
 

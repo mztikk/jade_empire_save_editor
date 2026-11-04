@@ -25,7 +25,8 @@ the game does, verifies the result and keeps a backup of the original.
   `items.2da` and `dialog.tlk`. Stack sizes can be changed, items removed, and
   new items can be added from the game's item database, which is browsable in
   full and searchable by name or template. Rows always show the same
-  `category · #id` (items) and `template · #id` (styles) subtitle.
+  `category · #id` (items) and `template · #id` (styles) subtitle. Click a row
+  to expand the game's own description.
 - **Companions** – all party members with their level and availability, editable.
 - **Savegame browser** – scans the save folder and shows the game's own
   screenshot, character name, level and play time for every savegame. The list
@@ -211,8 +212,10 @@ Not implemented yet:
 
 - editing story variables, journal entries and gem slots,
 - companion stats beyond level and availability,
-- item icons and item/style descriptions in the interface (names, categories and
-  descriptions are resolved from the game data, but not shown yet).
+- item icons in the interface (names, categories and descriptions are resolved
+  and shown),
+- choosing a specific style upgrade (see `docs/FORMAT.md`: the level buttons keep
+  the mask valid, but the per-style upgrade table is inside the BIF archives).
 
 ## License
 

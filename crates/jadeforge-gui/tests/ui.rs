@@ -270,6 +270,45 @@ fn every_list_is_browsable_and_labelled_the_same_way() {
     );
 }
 
+fn count_labels(test: &TestingRunner) -> usize {
+    test.find_many(|_, element| Label::try_downcast(element).map(|_| ()))
+        .len()
+}
+
+#[test]
+fn rows_expand_to_show_descriptions() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data to resolve descriptions");
+        return;
+    }
+    let mut test = launch_sized(fixture.save_dir.clone(), 1600.0);
+
+    assert!(click_text(&mut test, "Inventory"));
+    let before = count_labels(&test);
+    let subtitle = find_node_with_text(&test, " · #").expect("item subtitle");
+    click_node(&mut test, &subtitle);
+    assert!(
+        count_labels(&test) > before,
+        "clicking an item did not reveal its description"
+    );
+    let subtitle = find_node_with_text(&test, " · #").expect("item subtitle");
+    click_node(&mut test, &subtitle);
+    assert_eq!(count_labels(&test), before, "the row did not collapse");
+
+    assert!(click_text(&mut test, "Styles"));
+    let before = count_labels(&test);
+    let subtitle = find_node_with_text(&test, " · #").expect("style subtitle");
+    click_node(&mut test, &subtitle);
+    assert!(
+        count_labels(&test) > before,
+        "clicking a style did not reveal its description"
+    );
+}
+
 #[test]
 fn show_more_pages_through_the_item_database() {
     let Some(fixture) = Fixture::create() else {
