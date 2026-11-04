@@ -276,13 +276,11 @@ impl SaveGame {
 
 fn list_mut<'a>(gff: &'a mut crate::gff::Gff, path: &str) -> Result<&'a mut Vec<usize>> {
     let field = gff.get_mut(path)?;
-    if field.value.as_list_mut().is_some() {
-        return Ok(field.value.as_list_mut().expect("checked above"));
-    }
-    Err(Error::Corrupt(format!(
-        "{path} is not a list ({})",
-        field.value.type_name()
-    )))
+    let actual = field.value.type_name();
+    field
+        .value
+        .as_list_mut()
+        .ok_or_else(|| Error::Corrupt(format!("{path} is not a list ({actual})")))
 }
 
 fn read_effects(gff: &crate::gff::Gff, gem: &crate::gff::Struct) -> Vec<GemEffect> {

@@ -147,7 +147,9 @@ impl SaveGame {
             _ => Value::DWord(u32::try_from(value).map_err(|_| out_of_range(label))?),
         };
         if existing.is_some() {
-            let structure = gff.struct_at_mut(struct_index).expect("checked above");
+            let structure = gff.struct_at_mut(struct_index).ok_or_else(|| {
+                Error::Corrupt(format!("henchman struct {struct_index} does not exist"))
+            })?;
             if let Some(field) = structure
                 .fields
                 .iter_mut()
