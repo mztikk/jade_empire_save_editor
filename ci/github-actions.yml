@@ -88,7 +88,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Build the Linux binaries on 22.04 (glibc 2.35) so they also start on
+        # SteamOS / Steam Deck and older LTS distributions.
+        os: [ubuntu-22.04, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
       # Skia statically links ICU, while accesskit_windows imports the system
@@ -125,6 +127,12 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Build fat-LTO binaries
         run: just publish
+      - name: Check glibc baseline
+        if: runner.os == 'Linux'
+        run: |
+          for binary in dist/jadeforge-*/jadeforge dist/jadeforge-*/jadeforge-gui; do
+            ci/check-glibc.sh "$binary" 2.35
+          done
       - name: Headless UI tests
         if: runner.os != 'Linux'
         run: cargo nextest run -p jadeforge-gui
