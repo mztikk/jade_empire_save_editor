@@ -162,6 +162,7 @@ fn item_row(
     rect()
         .vertical()
         .width(Size::fill())
+        .key(item.struct_index)
         .background(if is_hovered {
             theme::SURFACE_HOVER
         } else {
@@ -234,6 +235,7 @@ fn suggestion_row(
     rect()
         .vertical()
         .width(Size::fill())
+        .key(suggestion.item_id)
         .background(if is_hovered {
             theme::SURFACE
         } else {

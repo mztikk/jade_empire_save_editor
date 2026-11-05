@@ -52,6 +52,12 @@ component looks wrong, the fix belongs in `theme.rs`, not in a one-off
 - Focus rings must reserve their space even when unfocused; otherwise keyboard
   navigation moves tabs, sort controls and rows. `AccessibleButton` always
   carries a transparent 1.5 px border and only recolours it on focus.
+- Every dynamic list item, conditional tab root and preview subtree needs a
+  stable key. Freya 0.4's diff can panic (`runner.rs`, `Option::unwrap`) when
+  unkeyed or differently-rooted elements are replaced; this reproduced when
+  switching Gems -> Inventory on a large save. `AccessibleButton` and
+  `ExpandingName` implement `KeyExt`; tab content and preview roots are keyed.
+  Do not remove these keys or change an element's root type between renders.
 - No layout shifts: anything whose size changes with its content gets a fixed
   slot instead of natural sizing. The save preview and its placeholder share one
   height, status messages reserve their maximum lines, selection bars and arrow

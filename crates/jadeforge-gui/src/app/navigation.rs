@@ -40,6 +40,7 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
                             }),
                     ),
             )
+            .key(candidate.index())
             .into_element(),
         );
     }

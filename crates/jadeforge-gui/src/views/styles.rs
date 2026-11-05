@@ -151,6 +151,7 @@ fn style_row(
     rect()
         .vertical()
         .width(Size::fill())
+        .key(style.struct_index)
         .background(if is_hovered {
             theme::SURFACE_HOVER
         } else {
@@ -266,6 +267,7 @@ fn upgrade_row(family: &str, chips: Vec<Element>) -> Element {
     rect()
         .horizontal()
         .width(Size::fill())
+        .key(family.to_owned())
         .spacing(6.)
         .content(Content::Flex)
         .child(
@@ -301,6 +303,13 @@ struct UpgradeOrb {
     struct_index: usize,
     upgrade: StyleUpgrade,
     hovered: State<Option<HoverKey>>,
+    key: DiffKey,
+}
+
+impl KeyExt for UpgradeOrb {
+    fn write_key(&mut self) -> &mut DiffKey {
+        &mut self.key
+    }
 }
 
 impl Component for UpgradeOrb {
@@ -377,7 +386,9 @@ fn upgrade_chip(
         struct_index,
         upgrade: upgrade.clone(),
         hovered,
+        key: DiffKey::None,
     }
+    .key((struct_index, upgrade.slot))
     .into_element()
 }
 
@@ -429,6 +440,7 @@ fn learn_row(
     rect()
         .vertical()
         .width(Size::fill())
+        .key(suggestion.style_id)
         .background(if is_hovered {
             theme::SURFACE
         } else {

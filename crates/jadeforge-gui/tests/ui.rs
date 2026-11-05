@@ -236,6 +236,21 @@ fn find_paragraph(test: &TestingRunner, needle: &str) -> Option<freya_testing::T
 }
 
 #[test]
+fn repeated_tab_switching_is_stable() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    for _ in 0..4 {
+        assert!(click_text(&mut test, "Gems"), "Gems tab missing");
+        assert!(click_text(&mut test, "Inventory"), "Inventory tab missing");
+        assert!(click_text(&mut test, "Styles"), "Styles tab missing");
+    }
+    assert!(find_label_text(&test, "Fighting styles").is_some());
+}
+
+#[test]
 fn every_tab_renders_at_narrow_and_wide_sizes() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");

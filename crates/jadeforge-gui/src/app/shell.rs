@@ -168,25 +168,45 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
     } else {
         "select a save"
     };
+    // Keep the root and its content box stable while the preview loads. Freya's
+    // diff can panic if an element changes its root type in place, especially
+    // during rapid tab/window changes.
     let frame = rect()
         .width(Size::fill())
         .height(Size::px(PREVIEW_HEIGHT))
-        .center();
+        .center()
+        .key("save-preview-frame");
+    let content = rect()
+        .width(Size::px(PREVIEW_HEIGHT))
+        .height(Size::px(PREVIEW_HEIGHT))
+        .center()
+        .key("save-preview-content");
     match preview {
         Some(handle) => frame
             .child(
-                image(handle)
-                    .width(Size::px(PREVIEW_HEIGHT))
-                    .height(Size::px(PREVIEW_HEIGHT))
-                    .corner_radius(10.)
-                    .sampling_mode(SamplingMode::Bilinear)
-                    .aspect_ratio(AspectRatio::Min),
+                content.child(
+                    image(handle)
+                        .width(Size::px(PREVIEW_HEIGHT))
+                        .height(Size::px(PREVIEW_HEIGHT))
+                        .corner_radius(10.)
+                        .sampling_mode(SamplingMode::Bilinear)
+                        .aspect_ratio(AspectRatio::Min)
+                        .key("save-preview-image"),
+                ),
             )
             .into_element(),
         None => frame
             .background(theme::SURFACE)
             .corner_radius(10.)
-            .child(label().text(message).font_size(10.).color(theme::DIM))
+            .child(
+                content.child(
+                    label()
+                        .text(message)
+                        .font_size(10.)
+                        .color(theme::DIM)
+                        .key("save-preview-placeholder"),
+                ),
+            )
             .into_element(),
     }
 }

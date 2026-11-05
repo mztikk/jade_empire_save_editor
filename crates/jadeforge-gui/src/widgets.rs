@@ -1,6 +1,7 @@
 //! Small reusable pieces of the `JadeForge` interface.
 
 use std::cell::RefCell;
+use std::hash::Hash;
 use std::rc::Rc;
 
 use freya::prelude::*;
@@ -178,7 +179,7 @@ pub fn expanding_name<T>(
     font_size: f32,
 ) -> Element
 where
-    T: Copy + PartialEq + 'static,
+    T: Copy + Hash + PartialEq + 'static,
 {
     ExpandingName {
         id,
@@ -186,7 +187,9 @@ where
         subtitle,
         expanded,
         font_size,
+        key: DiffKey::None,
     }
+    .key(id)
     .into_element()
 }
 
@@ -197,11 +200,21 @@ struct ExpandingName<T: 'static> {
     subtitle: String,
     expanded: State<Option<T>>,
     font_size: f32,
+    key: DiffKey,
+}
+
+impl<T> KeyExt for ExpandingName<T>
+where
+    T: Copy + Hash + PartialEq + 'static,
+{
+    fn write_key(&mut self) -> &mut DiffKey {
+        &mut self.key
+    }
 }
 
 impl<T> Component for ExpandingName<T>
 where
-    T: Copy + PartialEq + 'static,
+    T: Copy + Hash + PartialEq + 'static,
 {
     fn render(&self) -> impl IntoElement {
         let a11y_id = use_a11y();
@@ -311,6 +324,7 @@ pub struct AccessibleButton {
     action: Action,
     content: Element,
     fill_width: bool,
+    key: DiffKey,
 }
 
 impl AccessibleButton {
@@ -321,6 +335,7 @@ impl AccessibleButton {
             action,
             content: content.into(),
             fill_width: false,
+            key: DiffKey::None,
         }
     }
 
@@ -329,6 +344,12 @@ impl AccessibleButton {
     pub fn fill_width(mut self) -> Self {
         self.fill_width = true;
         self
+    }
+}
+
+impl KeyExt for AccessibleButton {
+    fn write_key(&mut self) -> &mut DiffKey {
+        &mut self.key
     }
 }
 
