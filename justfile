@@ -121,16 +121,16 @@ publish-linux:
         -v jadeforge-cargo-registry:/root/.cargo/registry \
         jadeforge-build:22.04 cargo build --locked --profile dist \
         -p jadeforge-gui -p jadeforge-cli
-    version=$(awk -F'"' '/^version = / { print $2; exit }' Cargo.toml)
-    host=$(rustc -vV | sed -n 's/^host: //p')
-    out="dist/jadeforge-$version-$host"
-    mkdir -p "$out"
-    rm -f "$out/jadeforge" "$out/jadeforge-gui" "$out/jadeforge-cli"
-    cp "target/podman/$host/dist/jadeforge" "$out/"
-    cp "target/podman/$host/dist/jadeforge-cli" "$out/"
-    cp LICENSE README.md "$out/"
-    ci/check-glibc.sh "$out/jadeforge" 2.35
-    @echo "publish-linux: staged $out/"
+    version=$(awk -F'"' '/^version = / { print $2; exit }' Cargo.toml); \
+    host=$(rustc -vV | sed -n 's/^host: //p'); \
+    out="dist/jadeforge-$version-$host"; \
+    mkdir -p "$out"; \
+    rm -f "$out/jadeforge" "$out/jadeforge-gui" "$out/jadeforge-cli"; \
+    cp "target/podman/dist/jadeforge" "$out/"; \
+    cp "target/podman/dist/jadeforge-cli" "$out/"; \
+    cp LICENSE README.md "$out/"; \
+    ci/check-glibc.sh "$out/jadeforge" 2.35; \
+    echo "publish-linux: staged $out/"
 
 # Remove all build artifacts: the cargo target directory and the staged
 # distribution binaries in dist/.
