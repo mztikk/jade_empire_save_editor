@@ -8,6 +8,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use freya::prelude::{Key, NamedKey};
+
 use super::driver::{Driver, InputMode};
 use super::probe::{NodeKind, Probe};
 
@@ -24,6 +26,10 @@ pub const SCENARIOS: &[(&str, Scenario)] = &[
     (
         "typing_filters_the_item_database",
         typing_filters_the_item_database,
+    ),
+    (
+        "keyboard_navigates_the_save_list",
+        keyboard_navigates_the_save_list,
     ),
     (
         "the_window_is_really_presented",
@@ -108,6 +114,36 @@ fn typing_filters_the_item_database(driver: &mut Driver) -> Result<(), String> {
             format!("typing \"Viper\" into the real window did not filter the item list: {error}")
         })?;
     println!("  filtered result: {:?}", result.text);
+    Ok(())
+}
+
+fn keyboard_navigates_the_save_list(driver: &mut Driver) -> Result<(), String> {
+    // Add a second savegame to the fixture, refresh the real window, then use
+    // only the keyboard from the filter field to the list box: Tab x4 reaches
+    // sort Name, Level, Played and the list box; Down selects the second save;
+    // Enter opens it.
+    let saves = std::env::var_os("JADEFORGE_SAVE_DIR")
+        .map(PathBuf::from)
+        .ok_or_else(|| "JADEFORGE_SAVE_DIR is missing".to_owned())?;
+    let source = saves.join("Test Save").join("save.sac");
+    let second = saves.join("Test Save 2");
+    std::fs::create_dir_all(&second)
+        .map_err(|error| format!("cannot create {}: {error}", second.display()))?;
+    std::fs::copy(&source, second.join("save.sac"))
+        .map_err(|error| format!("cannot copy {}: {error}", source.display()))?;
+
+    driver.click_exact("Scan", STEP)?;
+    driver.wait_for_text("Test Save 2", STEP)?;
+    driver.click_exact("Filter by name", STEP)?;
+    for _ in 0..4 {
+        driver.press_key(&Key::Named(NamedKey::Tab))?;
+    }
+    driver.press_key(&Key::Named(NamedKey::ArrowDown))?;
+    driver.press_key(&Key::Named(NamedKey::Enter))?;
+    driver
+        .wait_for_text("Opened Test Save 2", STEP)
+        .map_err(|error| format!("keyboard navigation did not open the second save: {error}"))?;
+    println!("  keyboard: Tab -> list box, Down -> Test Save 2, Enter -> opened");
     Ok(())
 }
 

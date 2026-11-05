@@ -248,6 +248,31 @@ impl Driver {
         Ok(())
     }
 
+    /// Presses and releases one named key through the active backend.
+    pub fn press_key(&mut self, key: &Key) -> Result<(), String> {
+        match &mut self.input {
+            InputBackend::Plugin => {
+                for name in [KeyboardEventName::KeyDown, KeyboardEventName::KeyUp] {
+                    self.probe.send_event(PlatformEvent::Keyboard {
+                        name,
+                        key: key.clone(),
+                        code: Code::Unidentified,
+                        modifiers: Modifiers::default(),
+                    });
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+            }
+            InputBackend::KWin { kwin, fake, .. } => {
+                kwin.activate()?;
+                let code =
+                    live_keycode(key).ok_or_else(|| format!("no live keycode for {key:?}"))?;
+                fake.tap_keycode(code)?;
+                std::thread::sleep(Duration::from_millis(60));
+            }
+        }
+        Ok(())
+    }
+
     /// Captures the active window with Spectacle.
     ///
     /// Only available on the KWin backend; the plugin backend runs on
@@ -288,6 +313,20 @@ impl Driver {
     fn origin_for(&self, kwin: &KWin) -> Result<Origin, String> {
         let info = kwin.info()?;
         info.client_origin(self.window.width, self.window.height)
+    }
+}
+
+/// Linux evdev keycodes for the named keys used by the windowed scenarios.
+fn live_keycode(key: &Key) -> Option<u32> {
+    match key {
+        Key::Named(NamedKey::Tab) => Some(15),
+        Key::Named(NamedKey::Enter) => Some(28),
+        Key::Named(NamedKey::Escape) => Some(1),
+        Key::Named(NamedKey::Home) => Some(102),
+        Key::Named(NamedKey::ArrowUp) => Some(103),
+        Key::Named(NamedKey::End) => Some(107),
+        Key::Named(NamedKey::ArrowDown) => Some(108),
+        _ => None,
     }
 }
 
