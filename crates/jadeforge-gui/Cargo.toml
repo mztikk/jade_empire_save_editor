@@ -12,6 +12,7 @@ name = "jadeforge"
 path = "src/main.rs"
 
 [dependencies]
+futures-channel = "0.3"
 jadeforge-core.workspace = true
 jadeforge-session.workspace = true
 freya = { workspace = true, features = ["engine"] }
