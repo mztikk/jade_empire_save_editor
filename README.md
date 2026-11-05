@@ -115,17 +115,17 @@ It needs `podman` (`sudo apt install podman`) and the first run builds the image
 in `ci/Containerfile`; later runs reuse the cached layers and the
 `target/podman` build cache.
 
-Linux and Windows x86-64 binaries default to the **x86-64-v3** ISA (AVX2, FMA,
-BMI2), which covers Haswell (2013+) and Steam Deck's Zen 2. For pre-2013 CPUs,
-build the baseline variant instead; it is staged in a separate `-baseline`
-folder:
+Linux and Windows x86-64 releases contain two GUI binaries and two CLI binaries:
 
-```sh
-just publish-linux baseline     # or: just publish-baseline
-```
+| binary | ISA | CPUs |
+| --- | --- | --- |
+| `jadeforge`, `jadeforge-cli` | **x86-64-v3** (AVX2, FMA, BMI2) | Haswell (2013+), Steam Deck Zen 2 |
+| `jadeforge-baseline`, `jadeforge-cli-baseline` | baseline | every x86-64 CPU |
 
-macOS always uses the baseline x86-64/aarch64 code generation (the Intel build
-must also run under Rosetta, which has no AVX2). Run it on
+The fallback is built and staged automatically, so users on pre-2013 CPUs run
+the `-baseline` binary and everyone else gets the faster default. macOS builds
+once in baseline mode for both architectures: the Intel binary must also run
+under Rosetta, which has no AVX2. Run it on
 each platform you want to ship:
 
 | host | targets |
