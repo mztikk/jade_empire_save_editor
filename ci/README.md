@@ -28,14 +28,20 @@ pushes to `main`, pull requests, tags and manual dispatches.
 - `publish` (non-PR only): builds the fat-LTO binaries with `just publish` on
   Linux and Windows, stages the Windows icon and the Linux `share/` tree,
   checks the glibc baseline on Linux, writes `THIRD_PARTY_NOTICES.txt`, the
-  dependency inventory, a CycloneDX `sbom.cdx.json`, `SHA256SUMS` and a GitHub
-  build-provenance attestation, and attaches the files to a release when the
-  ref is a tag. macOS is not in the release matrix yet and the published
-  binaries are unsigned; see [Release signing](#release-signing). Windows also
-  runs the headless UI tests.
+  dependency inventory, a CycloneDX `sbom.cdx.json` and a GitHub
+  build-provenance attestation, and uploads the staged folders as per-OS
+  artifacts. macOS is not in the release matrix yet and the published binaries
+  are unsigned; see [Release signing](#release-signing). Windows also runs the
+  headless UI tests.
+- `release` (tags only): downloads the per-OS artifacts, zips every staged
+  folder (the Linux `share/` tree travels inside the Linux archive), writes one
+  `SHA256SUMS` over the uploaded assets and `RELEASE_NOTES.md` from the
+  matching changelog section, creates a draft GitHub release and publishes it
+  once the assets are attached. Re-running a failed tag run re-uploads with
+  `--clobber`.
 
 All actions are pinned to commit SHAs. The workflow has a read-only default
-token; only the publish job may write release contents.
+token; only the release job may write release contents.
 
 ## Local reproduction
 
@@ -47,7 +53,8 @@ just check           # fmt, clippy, nextest, doctests
 just strict         # non-gating audit of the strict lints
 just coverage       # cargo llvm-cov summary, lcov and html
 just publish        # fat-LTO binaries, macOS .app/Linux share, notices under dist/
-just checksums      # dist/SHA256SUMS
+ci/assemble-release.sh dist vX.Y.Z  # zip the folders, write SHA256SUMS and notes
+just checksums      # dist/SHA256SUMS for the staged (unzipped) files
 just sbom           # dist/sbom.cdx.json
 just icons          # regenerate the icon PNG/ICO/ICNS assets from icon.svg
 just install-desktop # Linux GUI + launcher entry + hicolor icons
@@ -95,13 +102,15 @@ exercised against the real credentials.
    --workspace`.
 2. Bump the workspace version in `Cargo.toml` on the release branch.
 3. Merge the release branch through a pull request, then tag the merge commit on
-   `origin/main` without checking it out:
+   `origin/main` without checking it out. The tag run builds the binaries and
+   the `release` job creates and publishes the GitHub release:
    `git fetch origin && git tag -a vMAJOR.MINOR.PATCH origin/main -m "..." &&
    git push origin vMAJOR.MINOR.PATCH`.
 4. Verify the four Linux binaries with `ci/check-glibc.sh` against 2.35.
-5. Verify the release includes `SHA256SUMS`, `THIRD_PARTY_NOTICES.txt`,
-   `cargo-metadata.json`, `sbom.cdx.json`, the provenance attestation, the
-   Skia licence and the Linux `share/` tree.
+5. Verify the release contains one `.zip` per platform (the Linux `share/`
+   tree is inside the Linux archive), one `SHA256SUMS`, `THIRD_PARTY_NOTICES.txt`,
+   `cargo-metadata.json`, `sbom.cdx.json`, the provenance attestation and the
+   Skia licence when present; `sha256sum -c SHA256SUMS` must pass.
 6. Verify the icons on the real artifacts: the Windows `.exe` in Explorer and
    the Linux hicolor files resolving `Icon=jadeforge`.
 7. This release is unsigned: state that in the notes. Signing is a follow-up
