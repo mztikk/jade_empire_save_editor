@@ -89,7 +89,7 @@ pub(super) fn header(
                     crate::widgets::badge(
                         "invalid character input",
                         theme::SURFACE_ACTIVE,
-                        theme::ACCENT,
+                        theme::WARNING,
                     )
                 } else {
                     crate::widgets::badge("all changes saved", theme::SURFACE, theme::DIM)

@@ -322,9 +322,9 @@ impl Component for UpgradeOrb {
         let taken = self.upgrade.taken;
         let background = if taken {
             if is_hovered || focused {
-                theme::ACCENT_HOVER
+                theme::ORB_HOVER
             } else {
-                theme::ACCENT
+                theme::ORB
             }
         } else if is_hovered || focused {
             theme::SURFACE_ACTIVE
@@ -334,9 +334,9 @@ impl Component for UpgradeOrb {
         let border = if focused {
             theme::TEXT
         } else if taken || is_hovered {
-            theme::ACCENT_HOVER
+            theme::ORB_HOVER
         } else {
-            theme::ACCENT
+            theme::ORB
         };
         let border_width = if focused { 2.0 } else { 1.5 };
         let mut hovered = self.hovered;
