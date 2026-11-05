@@ -6,6 +6,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+authors.workspace = true
+homepage.workspace = true
+readme.workspace = true
 
 [[bin]]
 name = "jadeforge"
@@ -17,8 +20,6 @@ jadeforge-core.workspace = true
 jadeforge-session.workspace = true
 freya = { workspace = true, features = ["engine"] }
 rfd.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
 
 [lints]
 workspace = true

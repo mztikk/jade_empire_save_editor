@@ -111,6 +111,8 @@ pub struct StyleInfo {
     pub label: String,
     /// Localized name from the talk table.
     pub name: String,
+    /// Talk table reference of the description.
+    pub desc_ref: Option<u32>,
     /// Localized description from the talk table.
     pub description: Option<String>,
     /// Icon resource name.
@@ -123,7 +125,6 @@ pub struct StyleInfo {
     pub kind: StyleKind,
 }
 
-/// A loaded game installation.
 /// A predefined gem from `gems.2da`, joined with its item name.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GemInfo {
@@ -139,8 +140,9 @@ pub struct GemInfo {
     pub duration: f32,
 }
 
+/// A loaded game installation: item and style names, style slots, gems and
+/// effect names.
 #[derive(Debug)]
-/// Resolved game data: item and style names, style slots, gems and effect names.
 pub struct GameData {
     root: PathBuf,
     items: Vec<Option<ItemInfo>>,
@@ -150,16 +152,18 @@ pub struct GameData {
     gems: Vec<GemInfo>,
     effects: Vec<Option<String>>,
     search_index: HashMap<u16, String>,
+    warnings: Vec<String>,
 }
 
-/// One line of `StyleAdvance.2da`, the table that style upgrade bits point at.
+/// One line of `StyleAdvance.2da`, the table that style upgrade slots point at.
 ///
-/// Bit *i* of a style's upgrade mask selects row *i + 1*; the saved level is
+/// Bit *i* of a style's upgrade mask selects slot *i + 1* of the style's own
+/// `<Style>LV.2da` table; that slot names one of these rows. The saved level is
 /// `1 + number of set bits`. Rows come in families of five tiers with costs
 /// 1, 2, 4, 6 and 10.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Advance {
-    /// Row in `StyleAdvance.2da`; bit `row - 1` of the style mask selects it.
+    /// Row in `StyleAdvance.2da`; a level-up slot points at it.
     pub row: u16,
     /// Internal label, for example `Increase_Damage_3`.
     pub label: String,
@@ -219,7 +223,8 @@ pub struct StyleChoice {
 /// Turns an `effects.2da` label into something readable.
 ///
 /// `EFFECT_MODIFYBODYBASE` becomes `Body`, `EFFECT_DAMAGEARMOR` becomes
-/// `Damage armor`; unknown labels fall back to the lower case label.
+/// `Damage armor`; unknown labels fall back to a title-cased version of the
+/// label with underscores replaced by spaces.
 #[must_use]
 pub fn pretty_effect_name(label: &str) -> String {
     let name = label
@@ -236,6 +241,7 @@ pub fn pretty_effect_name(label: &str) -> String {
         ("FOCUS", "Focus"),
         ("HEALTH", "Health"),
         ("CHI", "Chi"),
+        ("DAMAGEARMOR", "Damage armor"),
     ] {
         if name.contains(keyword) {
             return display.to_owned();
@@ -289,19 +295,33 @@ impl GameData {
     /// `JADEFORGE_GAME_DIR` wins over the discovery.
     #[must_use]
     pub fn discover(save_path: &Path) -> Option<Self> {
+        Self::discover_result(save_path).ok().flatten()
+    }
+
+    /// Like [`GameData::discover`], but keeps the error of an override or game
+    /// root that exists and cannot be read. `Ok(None)` means no installation
+    /// was found; `Err` means one was found and is broken.
+    pub fn discover_result(save_path: &Path) -> Result<Option<Self>> {
+        let mut last_error = None;
         if let Some(root) = TEST_ROOT.with(|cell| cell.borrow().clone()) {
-            if let Ok(game) = Self::open(root) {
-                return Some(game);
+            match Self::open(root) {
+                Ok(game) => return Ok(Some(game)),
+                Err(error) => last_error = Some(error),
             }
         }
         if let Some(directory) = std::env::var_os("JADEFORGE_GAME_DIR") {
-            if let Ok(game) = Self::open(PathBuf::from(directory)) {
-                return Some(game);
+            match Self::open(PathBuf::from(directory)) {
+                Ok(game) => return Ok(Some(game)),
+                Err(error) => last_error = Some(error),
             }
-            // A stale or wrong override must not stop the normal layout from
-            // being found.
         }
-        Self::discover_beside(save_path)
+        if let Some(game) = Self::discover_beside(save_path) {
+            return Ok(Some(game));
+        }
+        match last_error {
+            Some(error) => Err(error),
+            None => Ok(None),
+        }
     }
 
     /// Walks up from the save folder looking for the installation.
@@ -310,8 +330,16 @@ impl GameData {
     /// the game root is one or two levels above the selected folder. The
     /// environment override is handled by [`GameData::discover`].
     fn discover_beside(save_path: &Path) -> Option<Self> {
+        // `Path::ancestors` is lexical, so a relative path such as `save.sac`
+        // or `Auto 1` would never walk to the real game folder. Anchor it at
+        // the current directory first (without resolving symlinks).
+        let save_path = if save_path.is_absolute() {
+            save_path.to_path_buf()
+        } else {
+            std::env::current_dir().ok()?.join(save_path)
+        };
         let folder = if save_path.is_dir() {
-            save_path
+            save_path.as_path()
         } else {
             save_path.parent()?
         };
@@ -332,19 +360,22 @@ impl GameData {
             return Err(Error::NotAGameInstallation(root));
         }
 
+        // Try both files until one parses. A corrupt `dialog.tlk` must not hide
+        // a valid `dialogf.tlk`.
         let talktable = ["dialog.tlk", "dialogf.tlk"]
             .iter()
             .map(|name| root.join(name))
-            .find(|path| path.is_file())
-            .and_then(|path| TalkTable::open(path).ok());
+            .filter(|path| path.is_file())
+            .find_map(|path| TalkTable::open(path).ok());
 
         let source = TableSource::new(&root);
-        let items = source.load("items.2da");
-        let styles = source.load("stylesuperlist.2da");
-        let advances = source.load("StyleAdvance.2da");
-        let style_data = source.load("styledata.2da");
-        let gem_table = source.load("gems.2da");
-        let effects_table = source.load("effects.2da");
+        let mut warnings = Vec::new();
+        let items = source.load("items.2da", &mut warnings);
+        let styles = source.load("stylesuperlist.2da", &mut warnings);
+        let advances = source.load("StyleAdvance.2da", &mut warnings);
+        let style_data = source.load("styledata.2da", &mut warnings);
+        let gem_table = source.load("gems.2da", &mut warnings);
+        let effects_table = source.load("effects.2da", &mut warnings);
 
         let mut item_records = Vec::new();
         if let (Some(table), Some(talk)) = (&items, &talktable) {
@@ -358,7 +389,8 @@ impl GameData {
                 let name_ref = table.uint(index, "STRREF_NAME");
                 let description_ref = table.uint(index, "STRREF_DESC");
                 let name = name_ref
-                    .and_then(|reference| talk.get(reference as u32))
+                    .and_then(|reference| u32::try_from(reference).ok())
+                    .and_then(|reference| talk.get(reference))
                     .filter(|text| !text.is_empty());
                 let Some(name) = name else {
                     continue;
@@ -374,9 +406,14 @@ impl GameData {
                     id,
                     label: label.to_owned(),
                     name,
-                    description: description_ref.and_then(|reference| talk.get(reference as u32)),
+                    description: description_ref
+                        .and_then(|reference| u32::try_from(reference).ok())
+                        .and_then(|reference| talk.get(reference)),
                     save_type: category.as_deref().and_then(save_type_for_category),
-                    cost: table.uint(index, "COST").unwrap_or(0) as u32,
+                    cost: table
+                        .uint(index, "COST")
+                        .and_then(|value| u32::try_from(value).ok())
+                        .unwrap_or(0),
                     category,
                     icon: table
                         .cell(index, "ICON")
@@ -401,7 +438,10 @@ impl GameData {
                     continue;
                 };
                 let name_ref = table.uint(index, "NameRef");
-                let Some(name) = name_ref.and_then(|reference| talk.get(reference as u32)) else {
+                let Some(name) = name_ref
+                    .and_then(|reference| u32::try_from(reference).ok())
+                    .and_then(|reference| talk.get(reference))
+                else {
                     continue;
                 };
                 if name.is_empty() || name == "****" {
@@ -421,9 +461,13 @@ impl GameData {
                     kind: style_kind(&label),
                     label,
                     name,
+                    desc_ref: table
+                        .uint(index, "DescRef")
+                        .and_then(|reference| u32::try_from(reference).ok()),
                     description: table
                         .uint(index, "DescRef")
-                        .and_then(|reference| talk.get(reference as u32)),
+                        .and_then(|reference| u32::try_from(reference).ok())
+                        .and_then(|reference| talk.get(reference)),
                     icon: table
                         .cell(index, "IconRef")
                         .filter(|value| !value.is_empty() && *value != "****")
@@ -529,7 +573,8 @@ impl GameData {
                     label: label.to_owned(),
                     name: table
                         .uint(index, "DescRef")
-                        .and_then(|reference| talktable.as_ref()?.get(reference as u32))
+                        .and_then(|reference| u32::try_from(reference).ok())
+                        .and_then(|reference| talktable.as_ref()?.get(reference))
                         .unwrap_or_default(),
                     cost: table
                         .uint(index, "CostToLevelUp")
@@ -570,7 +615,7 @@ impl GameData {
                 if table_name.is_empty() || table_name == "****" {
                     continue;
                 }
-                if let Some(table) = source.load(&format!("{table_name}.2da")) {
+                if let Some(table) = source.load(&format!("{table_name}.2da"), &mut warnings) {
                     style_choices[index] = Some(level_up_choices(&table, talktable.as_ref()));
                 }
             }
@@ -585,6 +630,7 @@ impl GameData {
             gems: gem_infos,
             effects: effect_names,
             search_index,
+            warnings,
         })
     }
 
@@ -592,6 +638,16 @@ impl GameData {
     #[must_use]
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// Tables that were found but could not be parsed.
+    ///
+    /// A malformed table degrades to numeric ids just like a missing one, but
+    /// the editor can now say that the file exists and is broken instead of
+    /// pretending the installation has no data.
+    #[must_use]
+    pub fn warnings(&self) -> &[String] {
+        &self.warnings
     }
 
     /// Number of resolved items.
@@ -689,33 +745,34 @@ impl GameData {
 
     /// Full text search over item names and labels.
     ///
-    /// Results that start with the query are ranked first, the rest keep id
-    /// order.
+    /// Results whose name starts with the query are ranked first; within each
+    /// group the order is name, then id.
     #[must_use]
     pub fn search_items(&self, query: &str, limit: usize) -> Vec<&ItemInfo> {
         let query = query.trim().to_lowercase();
         if query.is_empty() {
             return Vec::new();
         }
-        let mut matches: Vec<(bool, &ItemInfo)> = Vec::new();
+        let mut matches: Vec<(bool, &ItemInfo, String)> = Vec::new();
         for (id, haystack) in &self.search_index {
-            if haystack.contains(&query) {
-                if let Some(item) = self.item(*id).filter(|item| is_playable_item(item)) {
-                    matches.push((item.name.to_lowercase().starts_with(&query), item));
-                }
+            if haystack.contains(&query)
+                && let Some(item) = self.item(*id).filter(|item| is_playable_item(item))
+            {
+                let sort_name = item.name.to_lowercase();
+                matches.push((sort_name.starts_with(&query), item, sort_name));
             }
         }
         matches.sort_by(|left, right| {
             right
                 .0
                 .cmp(&left.0)
-                .then_with(|| left.1.name.to_lowercase().cmp(&right.1.name.to_lowercase()))
+                .then_with(|| left.2.cmp(&right.2))
                 .then_with(|| left.1.id.cmp(&right.1.id))
         });
         matches
             .into_iter()
             .take(limit)
-            .map(|(_, item)| item)
+            .map(|(_, item, _)| item)
             .collect()
     }
 }
@@ -763,18 +820,19 @@ pub fn is_playable_item(item: &ItemInfo) -> bool {
 /// five tiers; the row's `Label` names the family. The slot number is the
 /// position in that flattened list and is what the savegame mask indexes.
 fn level_up_choices(table: &TwoDa, talk: Option<&TalkTable>) -> Vec<StyleChoice> {
-    let Some(choice_columns) = ["Choice_1", "Choice_2", "Choice_3", "Choice_4", "Choice_5"]
+    let choice_columns: Vec<usize> = ["Choice_1", "Choice_2", "Choice_3", "Choice_4", "Choice_5"]
         .iter()
-        .map(|name| table.column(name))
-        .collect::<Option<Vec<usize>>>()
-    else {
+        .filter_map(|name| table.column(name))
+        .collect();
+    if choice_columns.is_empty() {
         return Vec::new();
-    };
+    }
     let mut choices = Vec::new();
     for (row_index, row) in table.iter() {
         let family = table
             .uint(row_index, "Label")
-            .and_then(|reference| talk.and_then(|talk| talk.get(reference as u32)))
+            .and_then(|reference| u32::try_from(reference).ok())
+            .and_then(|reference| talk.and_then(|talk| talk.get(reference)))
             .unwrap_or_else(|| format!("Upgrades {}", row_index + 1));
         let mut tier = 0_u8;
         for column in &choice_columns {
@@ -803,10 +861,10 @@ fn level_up_choices(table: &TwoDa, talk: Option<&TalkTable>) -> Vec<StyleChoice>
     choices
 }
 
-/// Where the 2DA tables come from: `override/` first, the RIM archive second.
+/// Where the 2DA tables come from: `override/` first, the RIM archives second.
 struct TableSource {
     overrides: HashMap<String, PathBuf>,
-    rim: Option<RimArchive>,
+    rims: Vec<RimArchive>,
 }
 
 impl TableSource {
@@ -823,31 +881,40 @@ impl TableSource {
                 }
             }
         }
-        let rim = ["miniglobal-a.rim", "globalunload-a.rim"]
+        let rims = ["miniglobal-a.rim", "globalunload-a.rim"]
             .iter()
             .map(|name| root.join("data").join(name))
-            .find(|path| path.is_file())
-            .and_then(|path| RimArchive::open(path).ok());
-        Self { overrides, rim }
+            .filter(|path| path.is_file())
+            .filter_map(|path| RimArchive::open(path).ok())
+            .collect();
+        Self { overrides, rims }
     }
 
     /// Loads a table by file name, honouring `override/` before the archive.
-    fn load(&self, name: &str) -> Option<TwoDa> {
+    fn load(&self, name: &str, warnings: &mut Vec<String>) -> Option<TwoDa> {
         let key = name.to_lowercase();
         if let Some(path) = self.overrides.get(&key) {
             // Mod tables are not always UTF-8; decoding lossily keeps them usable.
-            if let Ok(bytes) = std::fs::read(path) {
-                let text = String::from_utf8_lossy(&bytes);
-                if let Ok(table) = TwoDa::parse(&text) {
-                    return Some(table);
+            match std::fs::read(path) {
+                Ok(bytes) => {
+                    let text = String::from_utf8_lossy(&bytes);
+                    match TwoDa::parse(&text) {
+                        Ok(table) => return Some(table),
+                        Err(error) => warnings.push(format!("{name}: {error}")),
+                    }
                 }
+                Err(error) => warnings.push(format!("{name}: {error}")),
             }
         }
         let stem = key.strip_suffix(".2da").unwrap_or(&key);
-        self.rim
-            .as_ref()
-            .and_then(|rim| rim.get_2da(stem))
-            .and_then(|bytes| TwoDa::parse_binary(bytes).ok())
+        let bytes = self.rims.iter().find_map(|rim| rim.get_2da(stem))?;
+        match TwoDa::parse_binary(bytes) {
+            Ok(table) => Some(table),
+            Err(error) => {
+                warnings.push(format!("{name}: {error}"));
+                None
+            }
+        }
     }
 }
 
@@ -951,5 +1018,21 @@ mod tests {
         assert!(!is_playable_item(&item("TEMP_Ring", "[TEMP] ring")));
         assert!(!is_playable_item(&item("zzz_unused", "Unused")));
         assert!(!is_playable_item(&item("cut_item", "Cut")));
+    }
+    #[test]
+    fn a_broken_override_is_reported_instead_of_hidden() {
+        let root = std::env::temp_dir().join(format!(
+            "jadeforge-broken-root-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_nanos())
+        ));
+        std::fs::create_dir_all(&root).expect("create broken root");
+        set_test_game_root(Some(root.clone()));
+        let result = GameData::discover_result(Path::new("/definitely/not/a/save"));
+        set_test_game_root(None);
+        let _ = std::fs::remove_dir_all(root);
+        assert!(result.is_err(), "a found but broken root must be an error");
     }
 }

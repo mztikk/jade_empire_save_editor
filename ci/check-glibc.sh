@@ -9,7 +9,7 @@ set -euo pipefail
 binary=${1:?usage: check-glibc.sh <binary> [max-version]}
 allowed=${2:-2.35}
 
-versions=$(objdump -T "$binary" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV)
+versions=$(objdump -T "$binary" 2>/dev/null | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV || true)
 highest=$(printf '%s\n' "$versions" | tail -1)
 
 if [ -z "$highest" ]; then

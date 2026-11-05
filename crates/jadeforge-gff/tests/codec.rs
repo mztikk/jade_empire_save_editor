@@ -128,10 +128,12 @@ fn every_field_type_round_trips() {
 
     // Accessors, so the never-called helper arms are exercised too.
     assert_eq!(Value::Byte(3).as_u64(), Some(3));
-    assert_eq!(Value::Char(-3).as_u64(), Some((-3_i8) as u64));
-    assert_eq!(Value::Short(-3).as_u64(), Some((-3_i16) as u64));
+    assert_eq!(Value::Char(-3).as_u64(), None);
+    assert_eq!(Value::Short(-3).as_u64(), None);
     assert_eq!(Value::Int(-3).as_i64(), Some(-3));
+    assert_eq!(Value::Int64(12).as_u64(), Some(12));
     assert_eq!(Value::DWord64(9).as_u64(), Some(9));
+    assert_eq!(Value::DWord64(u64::MAX).as_i64(), None);
     assert_eq!(Value::Double(1.5).as_f32(), Some(1.5));
     assert_eq!(Value::Float(1.5).as_f32(), Some(1.5));
     assert_eq!(Value::String("x".to_owned()).as_str(), Some("x"));
@@ -214,8 +216,9 @@ fn legacy_locstring_type_is_read() {
     let parsed = Gff::parse("legacy", &bytes).expect("parse legacy locstring");
     assert_eq!(
         parsed.struct_at(0).expect("root").fields[0].value,
-        gff.root().fields[0].value
+        gff.root().expect("root").fields[0].value
     );
+    parsed.to_bytes().expect("rewrite legacy locstring");
 }
 
 #[test]

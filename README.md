@@ -53,8 +53,10 @@ the game does, verifies the result and keeps a backup of the original.
 - **Responsive layout** – the sidebar, tab bar and stat rows adapt down to small
   windows instead of clipping.
 - **Safe by design** – every write is verified by re-parsing the produced file,
-  written atomically through a temporary file, and guarded by a timestamped
-  backup.
+  written atomically through an exclusive temporary file, and guarded by a
+  unique backup. The original permissions are kept, a savegame that changed on
+  disk is reported instead of overwritten, and saving through a symlink keeps
+  the link.
 - **Byte exact when untouched** – opening and saving without changes produces
   the identical file, because only edited blocks are re-serialized.
 - **Command line tool** for scripting, bulk inspection and debugging.
@@ -65,7 +67,7 @@ the game does, verifies the result and keeps a backup of the original.
 
 ## Requirements
 
-- Rust 1.85 or newer to build from source.
+- Rust 1.88 or newer to build from source.
 - Linux: an X11 or Wayland session with OpenGL 3.3 (or the equivalent on
   macOS/Windows) and, for the native folder dialog, `xdg-desktop-portal`
   (installed by default on GNOME, KDE and most desktops). The GUI is a native
@@ -140,9 +142,10 @@ needs the Apple SDK. The command skips those targets elsewhere with a notice.
 `just publish-target <triple>` builds and stages a single target, for example
 `aarch64-unknown-linux-gnu` when an ARM64 cross compiler is installed.
 
-The [CI workflow](ci/github-actions.yml) runs `just publish` on Linux, Windows
-and macOS and uploads the staged folders as per-OS artifacts; pull requests skip
-that job.
+The [CI workflow](.github/workflows/ci.yml) runs `just publish` on Linux,
+Windows and macOS, stages third-party notices, checksums, an SBOM and build
+provenance (and signs/notarises when the platform secrets are configured), and
+uploads the staged folders as per-OS artifacts; pull requests skip that job.
 
 The `just` shortcuts are optional; the cargo commands above remain the
 canonical ones. `just check` runs the formatting, clippy and test gate and
@@ -170,8 +173,9 @@ canonical ones. `just check` runs the formatting, clippy and test gate and
    or revert. A field with invalid text is reported and not applied until it is
    fixed.
 5. Press **Save to disk**. A backup called
-   `save.sac.jadeforge-backup-<unix timestamp>` is created next to the savegame;
-   copy it back over `save.sac` to undo a change.
+   `save.sac.jadeforge-backup-<seconds>.<nanos>.<counter>` is created next to
+   the savegame; copy it back over `save.sac` to undo a change. Repeated saves
+   never overwrite an earlier backup.
 
 ## Game data
 
@@ -214,12 +218,15 @@ Commands:
   companions                Print the player's companions
   get    <BLOCK> <PATH>     Print a field
   set    <BLOCK> <PATH> <VALUE> [--dry-run] [--no-backup]
-  dump   [BLOCK] [--path]   Dump a block as JSON
+  dump   [BLOCK] [--path] [--json]   Dump a block as JSON
   verify                    Verify that a savegame can be parsed and written
   add-item <ITEM_ID> [--kind 6] [--count 1] [--dry-run]
 ```
 
 `SAVE` may be the savegame file itself or the folder that contains it.
+`dump` always emits JSON; `--json` is accepted for scripts that spell it out.
+`set` is the raw debugging escape hatch: unlike the desktop editor it does not
+range check known character fields.
 
 Examples:
 
@@ -293,13 +300,17 @@ available:
 JADEFORGE_SAVE_DIR="/path/to/Jade Empire/Save" cargo nextest run --workspace
 ```
 
-The headless UI tests render the real component tree with `freya-testing`, so
-they work on CI machines without a display. The GitHub Actions definition is in
-[ci/github-actions.yml](ci/github-actions.yml) (see [ci/README.md](ci/README.md)
-for why it is not enabled yet).
+The headless UI tests render the real component tree with `freya-testing` and
+build a synthetic savegame plus installation when no game data is present, so
+they work on CI machines without a display or the retail game. The active
+workflow is [`.github/workflows/ci.yml`](.github/workflows/ci.yml); see
+[ci/README.md](ci/README.md) for its jobs and the release signing checklist.
 
-See [AGENTS.md](AGENTS.md) for the development guidelines and
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the crate layout.
+See [AGENTS.md](AGENTS.md) for the development guidelines,
+[CONTRIBUTING.md](CONTRIBUTING.md) for the review checklist,
+[SECURITY.md](SECURITY.md) for vulnerability reporting and
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the crate layout. User-visible
+changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Status
 

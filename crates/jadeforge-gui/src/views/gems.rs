@@ -34,6 +34,7 @@ pub fn view(
         .iter()
         .filter(|gem| gem.location == GemLocation::Amulet && !gem.empty)
         .count();
+    let can_socket = amulet.is_some_and(|amulet| socketed < usize::from(amulet.sockets));
     let amulet_title = amulet.map_or_else(
         || "No amulet yet".to_owned(),
         |amulet| {
@@ -52,7 +53,7 @@ pub fn view(
     } else {
         amulet_gems
             .into_iter()
-            .map(|gem| gem_row(ctx, gem, true))
+            .map(|gem| gem_row(ctx, gem, true, true, amulet.is_some()))
             .collect()
     };
     let inventory_rows: Vec<Element> = if inventory.is_empty() {
@@ -60,7 +61,7 @@ pub fn view(
     } else {
         inventory
             .into_iter()
-            .map(|gem| gem_row(ctx, gem, false))
+            .map(|gem| gem_row(ctx, gem, false, can_socket, amulet.is_some()))
             .collect()
     };
 
@@ -201,7 +202,7 @@ pub fn view(
         .into_element()
 }
 
-fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool) -> Element {
+fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool, can_move: bool, has_amulet: bool) -> Element {
     let ctx = ctx.clone();
     let index = gem.struct_index;
     let action = if socketed {
@@ -242,23 +243,35 @@ fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool) -> Element {
                 ),
         );
     if !gem.empty {
-        let move_ctx = ctx.clone();
         let remove_ctx = ctx.clone();
-        row = row
-            .child(
+        if can_move {
+            let move_ctx = ctx.clone();
+            row = row.child(
                 Button::new()
                     .compact()
                     .flat()
                     .child(action)
                     .on_press(move |_| move_ctx.run(|session| session.move_gem(index))),
-            )
-            .child(
-                Button::new()
-                    .compact()
-                    .flat()
-                    .child("Remove")
-                    .on_press(move |_| remove_ctx.run(|session| session.remove_gem(index))),
             );
+        } else {
+            row = row.child(
+                label()
+                    .text(if has_amulet {
+                        "Amulet full"
+                    } else {
+                        "No amulet yet"
+                    })
+                    .font_size(10.)
+                    .color(theme::DIM),
+            );
+        }
+        row = row.child(
+            Button::new()
+                .compact()
+                .flat()
+                .child("Remove")
+                .on_press(move |_| remove_ctx.run(|session| session.remove_gem(index))),
+        );
     }
     row.into_element()
 }

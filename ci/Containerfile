@@ -4,6 +4,9 @@
 # CI/dev hosts, otherwise it refuses to start on SteamOS/Steam Deck.
 FROM ubuntu:22.04
 
+# Keep the compiler that produces release binaries reproducible.
+ARG RUST_VERSION=1.99.1
+
 ENV DEBIAN_FRONTEND=noninteractive \
     CARGO_TERM_COLOR=always
 
@@ -30,7 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | sh -s -- -y --profile minimal
+        | sh -s -- -y --profile minimal --default-toolchain "$RUST_VERSION"
 ENV PATH=/root/.cargo/bin:$PATH
 
 WORKDIR /src

@@ -6,6 +6,7 @@
 //! rewritten as TOML on the next save.
 
 use std::cell::RefCell;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -13,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 /// Distinguishes the temporary settings directories created by tests.
 static TEST_PATH_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static STORE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 thread_local! {
     /// Settings path used by the UI test harness. Thread local so parallel tests
@@ -103,11 +105,11 @@ impl Config {
             };
             match key.trim() {
                 "save_dir" => {
-                    let value = value.trim();
+                    let value = unquote(value.trim());
                     config.save_dir = (!value.is_empty()).then(|| PathBuf::from(value));
                 }
                 "sort" => {
-                    let value = value.trim();
+                    let value = unquote(value.trim());
                     config.sort = (!value.is_empty()).then(|| value.to_owned());
                 }
                 "sort_descending" => {
@@ -120,13 +122,25 @@ impl Config {
     }
 
     /// Renders the settings file.
+    ///
+    /// A path that cannot be represented as TOML yields only the header here;
+    /// [`Config::store`] refuses to write such a file instead of erasing the
+    /// previous settings.
     #[must_use]
     pub fn to_text(&self) -> String {
-        let body = toml::to_string_pretty(self).unwrap_or_default();
-        format!("# JadeForge settings\n{body}")
+        self.render()
+            .unwrap_or_else(|_| "# JadeForge settings\n".to_owned())
+    }
+
+    fn render(&self) -> Result<String, toml::ser::Error> {
+        let body = toml::to_string_pretty(self)?;
+        Ok(format!("# JadeForge settings\n{body}"))
     }
 
     /// Writes the settings, creating the configuration directory if needed.
+    ///
+    /// The file is written to an exclusive temporary sibling and renamed into
+    /// place, so a crash cannot truncate the previous settings.
     ///
     /// # Errors
     ///
@@ -136,10 +150,38 @@ impl Config {
         let Some(path) = Self::path() else {
             return Err(std::io::Error::other("no configuration directory"));
         };
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| std::io::Error::other("no configuration directory"))?;
+        std::fs::create_dir_all(parent)?;
+        let text = self.render().map_err(std::io::Error::other)?;
+        let counter = STORE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let temporary = parent.join(format!(
+            ".{}.tmp-{}-{counter}",
+            path.file_name()
+                .map_or("config", |name| name.to_str().unwrap_or("config")),
+            std::process::id()
+        ));
+        let result = (|| -> std::io::Result<()> {
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)?;
+            file.write_all(text.as_bytes())?;
+            file.sync_all()?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt as _;
+                std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))?;
+            }
+            drop(file);
+            std::fs::rename(&temporary, path)?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = std::fs::remove_file(&temporary);
         }
-        std::fs::write(path, self.to_text())
+        result
     }
 
     /// Location of the settings file.
@@ -160,11 +202,23 @@ impl Config {
         let xdg = std::env::var_os("XDG_CONFIG_HOME")
             .filter(|value| !value.is_empty())
             .map(PathBuf::from);
-        let appdata = std::env::var_os("APPDATA").map(PathBuf::from);
-        let home = std::env::var_os("HOME").map(PathBuf::from);
+        let appdata = std::env::var_os("APPDATA")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from);
+        let home = std::env::var_os("HOME")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from);
         let base = directory(xdg.as_deref(), appdata.as_deref(), home.as_deref())?;
         Some(base.join("jadeforge").join("config"))
     }
+}
+
+/// Removes one pair of surrounding quotes from a legacy value.
+fn unquote(value: &str) -> &str {
+    value
+        .strip_prefix('"')
+        .and_then(|value| value.strip_suffix('"'))
+        .unwrap_or(value)
 }
 
 /// True when at least one line uses the old unquoted `key=value` format.
@@ -289,5 +343,61 @@ mod tests {
             Some(home.join(".config"))
         };
         assert_eq!(directory(None, None, Some(home)), expected);
+    }
+    #[test]
+    fn legacy_values_may_be_quoted() {
+        let config = Config::parse(
+            "save_dir=\"/tmp/saves\"\n# mixed file forces the legacy parser\nsort=played\n",
+        );
+        assert_eq!(config.save_dir.as_deref(), Some(Path::new("/tmp/saves")));
+        assert_eq!(config.sort.as_deref(), Some("played"));
+    }
+
+    #[test]
+    fn storing_settings_leaves_no_temporary_file() {
+        ensure_test_path();
+        let path = Config::path().expect("test path");
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::remove_dir_all(parent);
+        }
+        let config = Config {
+            save_dir: Some(PathBuf::from("/games/Jade Empire/Save")),
+            sort: Some("name".to_owned()),
+            sort_descending: false,
+        };
+        config.store().expect("store");
+        let parent = path.parent().expect("parent");
+        let temporaries: Vec<_> = std::fs::read_dir(parent)
+            .expect("read config dir")
+            .flatten()
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".tmp-"))
+            .collect();
+        assert!(temporaries.is_empty());
+        assert_eq!(Config::load(), config);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unrepresentable_path_does_not_erase_the_settings_file() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt as _;
+
+        ensure_test_path();
+        let path = Config::path().expect("test path");
+        let good = Config {
+            save_dir: Some(PathBuf::from("/tmp/saves")),
+            sort: None,
+            sort_descending: false,
+        };
+        good.store().expect("store good settings");
+        let before = std::fs::read(&path).expect("read config");
+
+        let bad = Config {
+            save_dir: Some(PathBuf::from(OsString::from_vec(vec![0xff, b'x']))),
+            sort: None,
+            sort_descending: false,
+        };
+        assert!(bad.store().is_err());
+        assert_eq!(std::fs::read(&path).expect("read config"), before);
     }
 }

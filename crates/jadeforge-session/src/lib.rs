@@ -11,5 +11,6 @@ pub mod config;
 pub mod session;
 
 pub use session::{
-    CharacterForm, GameStatus, Message, MessageKind, SaveEntry, Session, default_save_dir,
+    CharacterForm, GameStatus, Message, MessageKind, SaveEntry, Session, SessionError,
+    default_save_dir,
 };

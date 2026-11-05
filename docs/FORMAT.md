@@ -26,6 +26,8 @@ repeat blockCount times:
 
 The block order is significant to the game (the last block is always
 `save.sav` in all 89 inspected savegames). JadeForge preserves the order.
+Block names are unique, non-empty and NUL terminated; the reader rejects a
+missing NUL, an embedded NUL and duplicate names.
 
 Real examples found in savegames:
 
@@ -61,9 +63,13 @@ Real examples found in savegames:
 ```
 
 `structOffset` is always 56 and `listIndicesOffset + listIndicesSize` is always
-the size of the block; the parser enforces both. The tables are contiguous and
-in the order above in every file that has been inspected; the reader uses the
-offsets from the header and does not rely on that.
+the size of the block. The reader now enforces the complete canonical chain:
+every table starts exactly where the previous one ends, the field data, field
+index and list index sections follow in that order, and the last section ends
+at the end of the block. It also requires every multi-field struct's range in
+the field-index section to tile that section without gaps or overlaps. A block
+that puts its tables anywhere else is rejected instead of being interpreted as
+a different tree.
 
 ## Struct table
 
@@ -235,11 +241,15 @@ socketed gems, i.e. the player has not received the amulet yet. The trailing
 entries beyond the unlocked sockets are unused; the editor hides them and shows
 the tier and socket count above the list.
 
-Moving a gem only moves its struct index from one list to the other, so the gem
-data is never rewritten. Some savegames point at the gem struct directly instead
-of wrapping it in an entry with a `Gem` field; both shapes are read. An entry
-with no `ItemID` and an empty effect list inside the unlocked sockets is an empty
-socket and is displayed read-only.
+`OpenGemsList` always contains exactly seven entries. Moving a gem swaps the
+entry struct between the two lists: socketing replaces the first empty unlocked
+placeholder, and moving a gem out puts an empty placeholder back in the same
+position. The list length never changes, the socket order is preserved and the
+gem struct itself is never rewritten. Some savegames point at the gem struct
+directly instead of wrapping it in an entry with a `Gem` field; both shapes are
+read. An entry with no `ItemID` and an empty effect list inside the unlocked
+sockets is an empty socket and is displayed read-only. A move into a full or
+missing amulet is rejected before either list is touched.
 
 Adding a gem builds the struct from scratch with the field types the game uses
 (`Gem.ItemID` word, effect dwords and a float duration) and appends it to
@@ -253,9 +263,9 @@ shows their labels (`EFFECT_MODIFYBODYBASE` → `Body`, `EFFECT_MODIFYCHARM` →
 
 A style struct stores `StyleLevel` (byte) and `StyleLevelInfo` (64 bit mask).
 Both fields are absent for a freshly learned style: level 1 means no bits set.
-`StyleLevel` is `1 + population count of the mask`. The game derives the unspent
-style points from the levels of all owned styles, so editing a level also
-changes the style points shown in game.
+`StyleLevel` is `1 + population count of the mask` and is always derived. The
+game derives the unspent style points from the levels of all owned styles; the
+editor never exposes a direct level control.
 
 The mask indexes the **slots of the style's own level-up table**, not rows of
 `StyleAdvance.2da`: bit `i` is the `i + 1`-th purchasable entry of the
@@ -286,9 +296,16 @@ inside a family.
 
 The editor shows the slots as plain golden orbs per family. Clicking an orb buys
 every missing slot up to it, clicking an owned orb removes it and everything
-above it, so a family is always a gap-free prefix. Styles whose level-up table
-is missing are read-only: guessing slot semantics would write the wrong upgrade.
-There is no "free selection" mode, because only the style's real slots exist.
+above it, so a family is always a gap-free prefix. `set_style_family_slot`
+rejects a family with a pre-existing gap, validates every slot against the
+style's real table and writes the mask and derived level together. Styles whose
+level-up table is missing are read-only: guessing slot semantics would write the
+wrong upgrade. There is no "free selection" mode, because only the style's real
+slots exist.
+
+A newly learned style clones the field layout and type tags of an existing
+style and replaces its identity (`StyleId`, `NameRef`, `DescRef`, `IconRef`,
+`WeaponRef`, `WeaponCount`); the level starts at 1 with an empty mask.
 
 ## Game data files
 
@@ -305,9 +322,11 @@ to numeric ids.
 | `data/miniglobal-a.rim` | RIM archive | most 2DA tables, incl. styles and effects |
 | `data/globalunload-a.rim` | RIM archive | style animation tables |
 
-`override/` is consulted first and the archives second; names are matched case
-insensitively and text tables are decoded lossily, so tables with extended
-characters still load.
+`override/` is consulted first and both RIM archives are searched second; names
+are matched case insensitively and text tables are decoded lossily, so tables
+with extended characters still load. RIM files must be `RIM V1.0` and text
+tables must be `2DA V2.0`; binary tables are `2DA V2.b`. A `<Style>LV.2da` table
+with only some `Choice_*` columns is accepted and flattens the columns it has.
 
 ### Talk table (`TLK V4.0`)
 
@@ -429,8 +448,11 @@ the story variables; both need more mapping work before they are exposed.
 The format description above was validated against **89 retail savegames with
 962 blocks**: every block parses, every block can be serialized again, and
 re-parsing the result yields the identical tree. Unmodified savegames are
-written back byte for byte, because untouched blocks are copied verbatim. Two
-further properties are enforced across every savegame:
+written back byte for byte, because untouched blocks are copied verbatim. The
+parser also enforces canonical section offsets, struct/list references, unique
+labels and a decoded-data budget, so a truncated or hostile block produces an
+error instead of a partial tree or an unbounded allocation. Two further
+properties are enforced across every savegame:
 
 * every style satisfies `StyleLevel == 1 + popcount(StyleLevelInfo)` and every
   set bit is inside its style's slot range,

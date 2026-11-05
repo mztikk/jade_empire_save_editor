@@ -17,7 +17,8 @@ pub fn view(
     game_ready: bool,
     matching: usize,
     total_items: usize,
-    expanded: State<Option<u16>>,
+    expanded: State<Option<usize>>,
+    expanded_suggestion: State<Option<u16>>,
     hovered: State<Option<crate::app::HoverKey>>,
     show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
@@ -90,7 +91,12 @@ pub fn view(
             children.push(heading.into_element());
             let mut result_rows: Vec<Element> = Vec::new();
             for suggestion in results {
-                result_rows.push(suggestion_row(ctx, suggestion, expanded, hovered));
+                result_rows.push(suggestion_row(
+                    ctx,
+                    suggestion,
+                    expanded_suggestion,
+                    hovered,
+                ));
             }
             children.push(
                 rect()
@@ -129,10 +135,10 @@ pub fn item_subtitle(item_id: u16, category: Option<&str>, kind: u8) -> String {
 fn item_row(
     ctx: &Ctx,
     item: &ItemRow,
-    expanded: State<Option<u16>>,
+    expanded: State<Option<usize>>,
     mut hovered: State<Option<crate::app::HoverKey>>,
 ) -> Element {
-    let key = crate::app::HoverKey::Item(item.item_id);
+    let key = crate::app::HoverKey::Item(item.struct_index);
     let is_hovered = *hovered.read() == Some(key);
     let minus = {
         let ctx = ctx.clone();
@@ -149,7 +155,7 @@ fn item_row(
         let index = item.struct_index;
         move |_| ctx.run(|session| session.remove_item(index))
     };
-    let is_expanded = *expanded.read() == Some(item.item_id);
+    let is_expanded = *expanded.read() == Some(item.struct_index);
 
     rect()
         .vertical()
@@ -174,7 +180,7 @@ fn item_row(
                 .content(Content::Flex)
                 .padding(Gaps::new_symmetric(4., 6.))
                 .child(widgets::expanding_name(
-                    item.item_id,
+                    item.struct_index,
                     item.name.clone(),
                     item_subtitle(item.item_id, item.category.as_deref(), item.kind),
                     expanded,
@@ -211,7 +217,7 @@ fn suggestion_row(
     expanded: State<Option<u16>>,
     mut hovered: State<Option<crate::app::HoverKey>>,
 ) -> Element {
-    let key = crate::app::HoverKey::Item(suggestion.item_id);
+    let key = crate::app::HoverKey::ItemSuggestion(suggestion.item_id);
     let is_hovered = *hovered.read() == Some(key);
     let add = {
         let ctx = ctx.clone();

@@ -21,6 +21,10 @@ pub struct SaveImage {
 
 /// Name of the screenshot next to `save.sac`.
 pub const SAVE_IMAGE_NAME: &str = "SaveImage.tga";
+/// Largest accepted screenshot dimension per side.
+const MAX_DIMENSION: u32 = 4096;
+/// Largest accepted total pixel count (16 Mi pixels).
+const MAX_PIXELS: usize = 16 * 1024 * 1024;
 
 impl SaveImage {
     /// Loads and decodes `SaveImage.tga` from the folder of a savegame.
@@ -44,6 +48,7 @@ impl SaveImage {
     ///
     /// Supports the uncompressed and RLE true colour and greyscale variants
     /// that the game could produce; anything else is rejected with an error.
+    #[allow(clippy::too_many_lines)] // one linear decoder for the whole TGA format
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         if bytes.len() < 18 {
             return Err(Error::Corrupt("the screenshot is too short".to_owned()));
@@ -72,6 +77,11 @@ impl SaveImage {
                 )));
             }
         };
+        if image_type == 3 && depth != 8 {
+            return Err(Error::Corrupt(format!(
+                "greyscale screenshots must use 8 bit pixels, found {depth}"
+            )));
+        }
         let bytes_per_pixel = match depth {
             8 | 24 | 32 => usize::from(depth) / 8,
             other => {
@@ -80,43 +90,77 @@ impl SaveImage {
                 )));
             }
         };
+        if width > MAX_DIMENSION || height > MAX_DIMENSION {
+            return Err(Error::Corrupt(format!(
+                "screenshot dimensions {width}x{height} exceed the {MAX_DIMENSION} pixel limit"
+            )));
+        }
+        let pixel_count = (width as usize)
+            .checked_mul(height as usize)
+            .ok_or_else(|| Error::Corrupt("screenshot dimensions overflow".to_owned()))?;
+        if pixel_count > MAX_PIXELS {
+            return Err(Error::Corrupt(format!(
+                "screenshot has {pixel_count} pixels, above the {MAX_PIXELS} pixel limit"
+            )));
+        }
+        let needed = pixel_count
+            .checked_mul(bytes_per_pixel)
+            .ok_or_else(|| Error::Corrupt("screenshot data size overflows".to_owned()))?;
 
         let mut position = 18 + id_length;
-        let pixel_count = (width as usize) * (height as usize);
-        let mut raw = Vec::with_capacity(pixel_count * bytes_per_pixel);
+        let mut raw = Vec::with_capacity(needed);
         if compressed {
-            while raw.len() < pixel_count * bytes_per_pixel {
+            while raw.len() < needed {
                 let packet = *bytes
                     .get(position)
                     .ok_or_else(|| Error::Corrupt("truncated RLE packet".to_owned()))?;
                 position += 1;
                 let count = usize::from(packet & 0x7f) + 1;
+                let remaining_pixels = (needed - raw.len()) / bytes_per_pixel;
+                if count > remaining_pixels {
+                    return Err(Error::Corrupt(
+                        "RLE packet writes past the end of the screenshot".to_owned(),
+                    ));
+                }
                 if packet & 0x80 != 0 {
+                    let end = position
+                        .checked_add(bytes_per_pixel)
+                        .ok_or_else(|| Error::Corrupt("RLE pixel overflows".to_owned()))?;
                     let pixel = bytes
-                        .get(position..position + bytes_per_pixel)
+                        .get(position..end)
                         .ok_or_else(|| Error::Corrupt("truncated RLE pixel".to_owned()))?;
-                    position += bytes_per_pixel;
+                    position = end;
                     for _ in 0..count {
                         raw.extend_from_slice(pixel);
                     }
                 } else {
-                    let count_bytes = count * bytes_per_pixel;
+                    let count_bytes = count
+                        .checked_mul(bytes_per_pixel)
+                        .ok_or_else(|| Error::Corrupt("RLE run overflows".to_owned()))?;
+                    let end = position
+                        .checked_add(count_bytes)
+                        .ok_or_else(|| Error::Corrupt("RLE run overflows".to_owned()))?;
                     let pixels = bytes
-                        .get(position..position + count_bytes)
+                        .get(position..end)
                         .ok_or_else(|| Error::Corrupt("truncated RLE run".to_owned()))?;
-                    position += count_bytes;
+                    position = end;
                     raw.extend_from_slice(pixels);
                 }
             }
         } else {
-            let needed = pixel_count * bytes_per_pixel;
+            let end = position
+                .checked_add(needed)
+                .ok_or_else(|| Error::Corrupt("screenshot data overflows".to_owned()))?;
             raw = bytes
-                .get(position..position + needed)
+                .get(position..end)
                 .ok_or_else(|| Error::Corrupt("the screenshot data is truncated".to_owned()))?
                 .to_vec();
         }
 
-        let mut rgba = Vec::with_capacity(pixel_count * 4);
+        let rgba_len = pixel_count
+            .checked_mul(4)
+            .ok_or_else(|| Error::Corrupt("screenshot output size overflows".to_owned()))?;
+        let mut rgba = Vec::with_capacity(rgba_len);
         for pixel in raw.chunks_exact(bytes_per_pixel) {
             match bytes_per_pixel {
                 3 => {
@@ -180,6 +224,36 @@ mod tests {
         assert_eq!(&image.rgba[..4], &[255, 0, 0, 255]);
         assert_eq!(&image.rgba[4..8], &[255, 255, 255, 255]);
         assert_eq!(&image.rgba[8..12], &[0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn rejects_hostile_dimensions_and_rle_overruns() {
+        let mut huge = vec![0_u8; 18];
+        huge[2] = 2;
+        huge[12..14].copy_from_slice(&u16::MAX.to_le_bytes());
+        huge[14..16].copy_from_slice(&u16::MAX.to_le_bytes());
+        huge[16] = 32;
+        assert!(SaveImage::parse(&huge).is_err());
+
+        let mut overrun = vec![0_u8; 18];
+        overrun[2] = 10;
+        overrun[12..14].copy_from_slice(&1_u16.to_le_bytes());
+        overrun[14..16].copy_from_slice(&1_u16.to_le_bytes());
+        overrun[16] = 32;
+        overrun[17] = 0x28;
+        overrun.push(0x81);
+        overrun.extend_from_slice(&[1, 2, 3, 4]);
+        assert!(SaveImage::parse(&overrun).is_err());
+    }
+
+    #[test]
+    fn rejects_greyscale_with_a_colour_depth() {
+        let mut file = vec![0_u8; 18];
+        file[2] = 3;
+        file[12..14].copy_from_slice(&1_u16.to_le_bytes());
+        file[14..16].copy_from_slice(&1_u16.to_le_bytes());
+        file[16] = 24;
+        assert!(SaveImage::parse(&file).is_err());
     }
 
     #[test]

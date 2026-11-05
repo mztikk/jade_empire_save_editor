@@ -10,16 +10,19 @@
 
 use std::path::{Path, PathBuf};
 
+use freya::elements::image::Image;
 use freya::prelude::*;
 use freya_testing::TestingRunner;
 use jadeforge_gui::app_with_directory;
+
+mod support;
 
 fn game_dir() -> Option<PathBuf> {
     let dir = std::env::var_os("JADEFORGE_GAME_DIR").map(PathBuf::from)?;
     dir.join("dialog.tlk").is_file().then_some(dir)
 }
 
-fn save_dir() -> Option<PathBuf> {
+fn save_dir_from_env() -> Option<PathBuf> {
     let dir = std::env::var_os("JADEFORGE_SAVE_DIR").map(PathBuf::from)?;
     dir.is_dir().then_some(dir)
 }
@@ -45,42 +48,73 @@ struct Fixture {
     root: PathBuf,
     save_dir: PathBuf,
     game_data: bool,
+    /// Whether the copied savegame brought its `SaveImage.tga` along.
+    screenshot: bool,
 }
 
 impl Fixture {
     fn create() -> Option<Self> {
-        let source_saves = save_dir()?;
-        let save = smallest_save(&source_saves)?;
-        let root = std::env::temp_dir().join(format!(
+        Self::create_at(Self::unique_root())
+    }
+
+    /// Creates the fixture below a path long enough to make the scan message
+    /// wrap onto its second line.
+    fn create_with_long_path() -> Option<Self> {
+        let mut root = Self::unique_root();
+        for index in 0..12 {
+            root.push(format!("jadeforge-long-path-{index}-0123456789"));
+        }
+        Self::create_at(root)
+    }
+
+    fn unique_root() -> PathBuf {
+        std::env::temp_dir().join(format!(
             "jadeforge-ui-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |duration| duration.as_nanos())
-        ));
+        ))
+    }
+
+    fn create_at(root: PathBuf) -> Option<Self> {
         let game = root.join("Game");
         let save_dir = game.join("Save");
         let folder = save_dir.join("Test Save");
-        std::fs::create_dir_all(&folder).expect("create fixture");
+        std::fs::create_dir_all(&folder).ok()?;
 
-        // The real installation is discovered from the source save folder, so
-        // the UI tests work with just JADEFORGE_SAVE_DIR set. No game data is
-        // copied: the thread-local test root points the session at the real
-        // installation.
-        let source = game_dir().or_else(|| {
-            jadeforge_gamedata::GameData::discover(&source_saves)
-                .map(|game| game.root().to_path_buf())
-        });
-        let game_data = source.is_some();
-        if let Some(source) = source {
+        // Prefer the real corpus when a developer has it; otherwise build a
+        // complete synthetic installation so CI exercises the UI too.
+        let real = save_dir_from_env()
+            .and_then(|source_saves| smallest_save(&source_saves).map(|save| (save, source_saves)));
+        let (save, source_game, screenshot_available) = if let Some((save, source_saves)) = real {
+            let game_root = game_dir().or_else(|| {
+                jadeforge_gamedata::GameData::discover(&source_saves)
+                    .map(|game| game.root().to_path_buf())
+            });
+            std::fs::copy(&save, folder.join("save.sac")).ok()?;
+            let screenshot = std::fs::copy(
+                save.with_file_name(jadeforge_core::screenshot::SAVE_IMAGE_NAME),
+                folder.join(jadeforge_core::screenshot::SAVE_IMAGE_NAME),
+            )
+            .is_ok();
+            (save, game_root, screenshot)
+        } else {
+            let (save, game_root) = support::synthetic(&root)?;
+            (save, Some(game_root), true)
+        };
+
+        let game_data = source_game.is_some();
+        if let Some(source) = source_game {
             jadeforge_gamedata::set_test_game_root(Some(source));
         }
 
-        std::fs::copy(&save, folder.join("save.sac")).expect("copy savegame");
+        let screenshot = screenshot_available && jadeforge_core::SaveImage::load(&save).is_ok();
         Some(Self {
             root,
             save_dir,
             game_data,
+            screenshot,
         })
     }
 }
@@ -104,6 +138,17 @@ fn find_node_with_text(test: &TestingRunner, needle: &str) -> Option<freya_testi
         let label = Label::try_downcast(element)?;
         label.text.contains(needle).then_some(node)
     })
+}
+
+fn find_label_exact(test: &TestingRunner, wanted: &str) -> Option<freya_testing::TestingNode> {
+    test.find(|node, element| {
+        let label = Label::try_downcast(element)?;
+        (label.text.as_ref() == wanted).then_some(node)
+    })
+}
+
+fn find_image(test: &TestingRunner) -> Option<freya_testing::TestingNode> {
+    test.find(|node, element| Image::try_downcast(element).map(|_| node))
 }
 
 fn click_node(test: &mut TestingRunner, node: &freya_testing::TestingNode) {
@@ -138,19 +183,40 @@ fn click_text(test: &mut TestingRunner, needle: &str) -> bool {
     }
 }
 
-fn launch_sized(save_dir: PathBuf, height: f64) -> TestingRunner {
+fn click_label_exact(test: &mut TestingRunner, wanted: &str) -> bool {
+    match find_label_exact(test, wanted) {
+        Some(node) => {
+            click_node(test, &node);
+            true
+        }
+        None => false,
+    }
+}
+
+/// Renders the application at a given size and waits for the background scan,
+/// without opening the savegame.
+fn launch_unopened_at(save_dir: PathBuf, width: f64, height: f64) -> TestingRunner {
     // Keep the developer's settings (and therefore their saved sort order) out
     // of the UI tests.
     let _ = jadeforge_gui::config::ensure_test_path();
     let (mut test, ()) = TestingRunner::new(
         move || app_with_directory(save_dir.clone()),
-        (1280.0_f32, height as f32).into(),
+        (width as f32, height as f32).into(),
         |_| {},
         1.0,
     );
     test.sync_and_update();
     // The scan runs after the first frame.
     wait_for_text(&mut test, "Level ");
+    test
+}
+
+fn launch_unopened(save_dir: PathBuf, height: f64) -> TestingRunner {
+    launch_unopened_at(save_dir, 1280.0, height)
+}
+
+fn launch_sized(save_dir: PathBuf, height: f64) -> TestingRunner {
+    let mut test = launch_unopened(save_dir, height);
     // Open the single savegame of the fixture.
     click_text(&mut test, "Level ");
     test
@@ -188,6 +254,257 @@ fn savegames_are_listed_and_can_be_opened() {
     assert!(
         image.len() > 1024,
         "the rendered frame is suspiciously small"
+    );
+}
+
+#[test]
+fn opening_a_save_does_not_move_the_sidebar() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found (set JADEFORGE_SAVE_DIR)");
+        return;
+    };
+    if !fixture.screenshot {
+        eprintln!("skipping: the savegame has no screenshot");
+        return;
+    }
+    let mut test = launch_unopened(fixture.save_dir.clone(), 800.0);
+
+    let before = find_node_with_text(&test, "SAVEGAMES")
+        .expect("the savegame heading is missing")
+        .layout()
+        .area;
+    let row_before = find_label_exact(&test, "Test Save")
+        .expect("the savegame row is missing")
+        .layout()
+        .area
+        .origin
+        .x;
+
+    assert!(
+        click_text(&mut test, "Level "),
+        "the savegame row is missing"
+    );
+    // The preview is decoded before the session re-renders, so the image has
+    // to be part of the very next frame.
+    let image = find_image(&test).expect("the screenshot was not rendered");
+    let after = find_node_with_text(&test, "SAVEGAMES")
+        .expect("the savegame heading is missing")
+        .layout()
+        .area;
+    let row_after = find_label_exact(&test, "Test Save")
+        .expect("the savegame row is missing")
+        .layout()
+        .area
+        .origin
+        .x;
+
+    assert!(
+        (after.origin.y - before.origin.y).abs() < 0.5,
+        "the sidebar moved by {} px when the screenshot appeared",
+        after.origin.y - before.origin.y
+    );
+    assert!(
+        (row_after - row_before).abs() < 0.5,
+        "the savegame row text moved by {} px when it was selected",
+        row_after - row_before
+    );
+    assert!(
+        image.layout().area.size.height <= 160.5,
+        "the screenshot is {} px tall and outgrew its slot",
+        image.layout().area.size.height
+    );
+}
+
+#[test]
+fn long_status_messages_do_not_move_the_tab_bar() {
+    let Some(fixture) = Fixture::create_with_long_path() else {
+        eprintln!("skipping: no savegames found (set JADEFORGE_SAVE_DIR)");
+        return;
+    };
+    let mut test = launch_unopened(fixture.save_dir.clone(), 800.0);
+
+    let status =
+        find_node_with_text(&test, "Found 1 savegame").expect("the scan message is missing");
+    assert!(
+        status.layout().area.size.height > 20.0,
+        "the fixture path did not make the scan message wrap"
+    );
+    let before = find_node_with_text(&test, "Overview")
+        .expect("the tab bar is missing")
+        .layout()
+        .area
+        .origin
+        .y;
+
+    assert!(
+        click_text(&mut test, "Level "),
+        "the savegame row is missing"
+    );
+    let after = find_node_with_text(&test, "Overview")
+        .expect("the tab bar is missing")
+        .layout()
+        .area
+        .origin
+        .y;
+
+    assert!(
+        (after - before).abs() < 0.5,
+        "the tab bar moved by {} px when the status message shrank",
+        after - before
+    );
+}
+
+#[test]
+fn switching_tabs_does_not_move_the_tab_bar() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found (set JADEFORGE_SAVE_DIR)");
+        return;
+    };
+    let mut test = launch_unopened(fixture.save_dir.clone(), 800.0);
+
+    let character_before = find_label_exact(&test, "Character")
+        .expect("the Character tab is missing")
+        .layout()
+        .area
+        .origin
+        .x;
+    let styles_before = find_label_exact(&test, "Styles")
+        .expect("the Styles tab is missing")
+        .layout()
+        .area
+        .origin
+        .x;
+
+    assert!(click_label_exact(&mut test, "Character"));
+
+    let character_after = find_label_exact(&test, "Character")
+        .expect("the Character tab is missing")
+        .layout()
+        .area
+        .origin
+        .x;
+    let styles_after = find_label_exact(&test, "Styles")
+        .expect("the Styles tab is missing")
+        .layout()
+        .area
+        .origin
+        .x;
+
+    assert!(
+        (character_after - character_before).abs() < 0.5,
+        "the active tab moved by {} px",
+        character_after - character_before
+    );
+    assert!(
+        (styles_after - styles_before).abs() < 0.5,
+        "the following tabs moved by {} px",
+        styles_after - styles_before
+    );
+}
+
+#[test]
+fn sorting_does_not_move_the_sort_buttons() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found (set JADEFORGE_SAVE_DIR)");
+        return;
+    };
+    let mut test = launch_unopened(fixture.save_dir.clone(), 800.0);
+
+    let level_before = find_label_exact(&test, "Level")
+        .expect("the Level sort button is missing")
+        .layout()
+        .area
+        .origin
+        .x;
+
+    // Flipping the direction only changes the arrow glyph.
+    assert!(click_label_exact(&mut test, "Name ↑"));
+    let level_after_flip = find_label_exact(&test, "Level")
+        .expect("the Level sort button is missing")
+        .layout()
+        .area
+        .origin
+        .x;
+    assert!(
+        (level_after_flip - level_before).abs() < 0.5,
+        "the sort buttons moved by {} px when the arrow flipped",
+        level_after_flip - level_before
+    );
+
+    // Moving the arrow to another column changes both neighbouring widths.
+    assert!(click_label_exact(&mut test, "Played"));
+    let level_after_move = find_label_exact(&test, "Level")
+        .expect("the Level sort button is missing")
+        .layout()
+        .area
+        .origin
+        .x;
+    assert!(
+        (level_after_move - level_before).abs() < 0.5,
+        "the sort buttons moved by {} px when the arrow changed column",
+        level_after_move - level_before
+    );
+}
+
+/// Focuses the alignment input by clicking below its label and types an
+/// invalid value into it.
+fn focus_alignment_input(test: &mut TestingRunner) {
+    let label = find_label_exact(test, "ALIGNMENT").expect("the alignment field is missing");
+    let area = label.layout().area;
+    let point = CursorPoint::new(
+        f64::from(area.origin.x) + 10.0,
+        f64::from(area.origin.y) + f64::from(area.size.height) + 20.0,
+    );
+    test.move_cursor(point);
+    test.sync_and_update();
+    test.click_cursor(point);
+    test.sync_and_update();
+    test.write_text("x");
+    test.sync_and_update();
+}
+
+#[test]
+fn editing_the_alignment_does_not_move_the_character_cards() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found (set JADEFORGE_SAVE_DIR)");
+        return;
+    };
+    // At this width the valid hint and the invalid hint used to need different
+    // numbers of lines.
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 700.0, 900.0);
+    assert!(
+        click_text(&mut test, "Level "),
+        "the savegame row is missing"
+    );
+    assert!(click_label_exact(&mut test, "Character"));
+
+    assert!(
+        find_node_with_text(&test, "the game starts at").is_some(),
+        "the alignment hint is missing"
+    );
+    let vitals_before = find_label_exact(&test, "Vitals")
+        .expect("the Vitals card is missing")
+        .layout()
+        .area
+        .origin
+        .y;
+
+    focus_alignment_input(&mut test);
+    assert!(
+        find_node_with_text(&test, "Alignment is a number").is_some(),
+        "the alignment input was not focused"
+    );
+    let vitals_after = find_label_exact(&test, "Vitals")
+        .expect("the Vitals card is missing")
+        .layout()
+        .area
+        .origin
+        .y;
+
+    assert!(
+        (vitals_after - vitals_before).abs() < 0.5,
+        "the cards below the hint moved by {} px while typing",
+        vitals_after - vitals_before
     );
 }
 
@@ -336,7 +653,7 @@ fn style_upgrades_are_bought_and_removed_in_steps() {
     }
     let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
     assert!(session.open(0));
-    let Some(style) = session.styles.first().cloned() else {
+    let Some(style) = session.styles().first().cloned() else {
         eprintln!("skipping: the test savegame has no styles");
         return;
     };
@@ -364,10 +681,10 @@ fn style_upgrades_are_bought_and_removed_in_steps() {
     assert!(
         session.change_upgrade(style.struct_index, third),
         "{}",
-        session.message.text
+        session.message().text
     );
-    let after = session
-        .styles
+    let styles = session.styles();
+    let after = styles
         .iter()
         .find(|candidate| candidate.struct_index == style.struct_index)
         .expect("style");
@@ -385,10 +702,10 @@ fn style_upgrades_are_bought_and_removed_in_steps() {
     assert!(
         session.change_upgrade(style.struct_index, first),
         "{}",
-        session.message.text
+        session.message().text
     );
-    let restored = session
-        .styles
+    let styles = session.styles();
+    let restored = styles
         .iter()
         .find(|candidate| candidate.struct_index == style.struct_index)
         .expect("style");
@@ -446,23 +763,26 @@ fn clicking_an_upgrade_orb_changes_the_style() {
 
 #[test]
 fn every_saved_style_mask_fits_its_slot_table() {
-    let Some(dir) = save_dir() else {
+    let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
         return;
     };
+    // With a real corpus, walk all of it; the copied fixture contains only the
+    // smallest savegame, which may have no upgrades.
+    let dir = save_dir_from_env().unwrap_or_else(|| fixture.save_dir.clone());
     let mut session = jadeforge_gui::Session::with_directory(&dir);
-    if session.entries.is_empty() {
+    if session.entries().is_empty() {
         eprintln!("skipping: no savegames");
         return;
     }
     let mut checked = 0_usize;
-    for index in 0..session.entries.len() {
+    for index in 0..session.entries().len() {
         if !session.open(index) {
             continue;
         }
-        for style in &session.styles {
+        for style in session.styles().iter() {
             let Some(choices) = session
-                .game
+                .game()
                 .as_ref()
                 .and_then(|game| game.style_choices(style.style_id))
             else {
@@ -474,7 +794,7 @@ fn every_saved_style_mask_fits_its_slot_table() {
                     assert!(
                         usize::from(slot) < slots,
                         "{}: bit {} outside {slots} slots",
-                        session.entries[index].label,
+                        session.entries()[index].label,
                         slot + 1
                     );
                     checked += 1;
@@ -495,15 +815,15 @@ fn gems_can_be_moved_and_removed() {
     let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
     assert!(session.open(0));
     let socketed = session
-        .gems
+        .gems()
         .iter()
         .filter(|gem| gem.location == jadeforge_core::GemLocation::Amulet)
         .count();
     let sockets = session
-        .amulet
+        .amulet()
         .map_or(0, |amulet| usize::from(amulet.sockets));
     let Some(gem) = session
-        .gems
+        .gems()
         .iter()
         .find(|gem| gem.location == jadeforge_core::GemLocation::Amulet || socketed < sockets)
         .cloned()
@@ -513,8 +833,8 @@ fn gems_can_be_moved_and_removed() {
     };
     let before = gem.location;
     session.move_gem(gem.struct_index);
-    let moved = session
-        .gems
+    let gems = session.gems();
+    let moved = gems
         .iter()
         .find(|candidate| candidate.struct_index == gem.struct_index)
         .expect("gem");
@@ -522,7 +842,7 @@ fn gems_can_be_moved_and_removed() {
     session.remove_gem(gem.struct_index);
     assert!(
         session
-            .gems
+            .gems()
             .iter()
             .all(|candidate| candidate.struct_index != gem.struct_index)
     );
@@ -545,14 +865,14 @@ fn predefined_gems_can_be_added() {
         eprintln!("skipping: no predefined gems");
         return;
     }
-    let before = session.gems.len();
+    let before = session.gems().len();
     let (item_id, name, _) = available[0].clone();
     session.add_gem(item_id);
-    assert_eq!(session.gems.len(), before + 1);
+    assert_eq!(session.gems().len(), before + 1);
     assert!(
-        session.gems.iter().any(|gem| gem.name == name),
+        session.gems().iter().any(|gem| gem.name == name),
         "{}",
-        session.message.text
+        session.message().text
     );
 }
 
@@ -709,13 +1029,17 @@ fn form_edits_apply_in_memory_without_a_message() {
     };
     let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
     assert!(session.open(0));
-    let character = session.character.clone().expect("character");
+    let character = session.character().expect("character").clone();
     let mut form = jadeforge_gui::CharacterForm::from_character(&character);
     form.level = "9".to_owned();
-    let before = session.message.text.clone();
+    let before = session.message().text.clone();
     assert!(session.apply_form_silently(&form));
     assert!(session.is_dirty());
-    assert_eq!(session.message.text, before, "auto-apply must stay silent");
+    assert_eq!(
+        session.message().text,
+        before,
+        "auto-apply must stay silent"
+    );
 }
 
 fn scroll_offset(test: &TestingRunner) -> f32 {
@@ -892,9 +1216,9 @@ fn unsaved_changes_are_protected() {
         return;
     };
     let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
-    assert_eq!(session.entries.len(), 1);
+    assert_eq!(session.entries().len(), 1);
     assert!(session.open(0));
-    let character = session.character.clone().expect("character");
+    let character = session.character().expect("character").clone();
     let mut form = jadeforge_gui::CharacterForm::from_character(&character);
     form.level = "9".to_owned();
     session.apply(&form).expect("apply");
@@ -902,12 +1226,16 @@ fn unsaved_changes_are_protected() {
 
     // Scanning another folder must not throw the changes away.
     session.set_directory(std::env::temp_dir());
-    assert_eq!(session.directory, fixture.save_dir, "folder changed anyway");
+    assert_eq!(
+        session.directory(),
+        fixture.save_dir,
+        "folder changed anyway"
+    );
     assert!(session.is_dirty(), "the changes were dropped");
     assert!(
-        session.message.text.contains("unsaved"),
+        session.message().text.contains("unsaved"),
         "{}",
-        session.message.text
+        session.message().text
     );
 
     session.revert().expect("revert");

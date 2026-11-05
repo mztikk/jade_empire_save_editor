@@ -12,9 +12,18 @@ use crate::error::{Error, Result};
 
 impl Gff {
     /// Serializes the block back into its on-disk representation.
+    ///
+    /// Errors use `"write"` as the block name. Callers that know the block name
+    /// should use [`Gff::to_bytes_named`] so the error names the block.
     #[allow(clippy::too_many_lines)] // the writer mirrors the on-disk layout
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        self.validate("write")?;
+        self.to_bytes_named("write")
+    }
+
+    /// Serializes the block and names it in validation errors.
+    #[allow(clippy::too_many_lines)] // the writer mirrors the on-disk layout
+    pub fn to_bytes_named(&self, block: &str) -> Result<Vec<u8>> {
+        self.validate(block)?;
 
         let struct_count = self.structs.len();
         let field_count = self.field_count();
@@ -55,8 +64,12 @@ impl Gff {
                     offset
                 };
             } else {
+                let name = self
+                    .labels
+                    .get(field.label as usize)
+                    .map_or("<unknown label>", String::as_str);
                 data_words[index] = field.value.encode_inline().ok_or_else(|| {
-                    Error::Corrupt(format!("field {} cannot be encoded", field.label))
+                    Error::Corrupt(format!("{block}: field {name:?} cannot be encoded"))
                 })?;
             }
         }

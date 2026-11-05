@@ -25,4 +25,4 @@ pub use jadeforge_gff as gff;
 pub use jadeforge_gff::{Field, FieldPath, Gff, LocString, Struct, Value};
 pub use save::{Block, SaveGame, SaveOptions};
 pub use screenshot::SaveImage;
-pub use styles::{MAX_STYLE_LEVEL, Style};
+pub use styles::{MAX_STYLE_LEVEL, Style, StyleIdentity};

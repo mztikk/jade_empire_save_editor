@@ -177,7 +177,15 @@ impl Form {
     }
 
     /// True when the inputs differ from the character in the savegame.
+    ///
+    /// Comparison goes through the parser, not through the raw strings: `10.0`
+    /// and `10` describe the same health value, and a leading zero in a level is
+    /// not invalid input. A form that cannot be parsed at all is reported as
+    /// different so navigation stays blocked until it is fixed.
     pub fn differs_from(&self, character: &jadeforge_core::Character) -> bool {
-        self.read() != CharacterForm::from_character(character)
+        match self.read().to_character(character) {
+            Ok(parsed) => parsed != *character,
+            Err(_) => true,
+        }
     }
 }

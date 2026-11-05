@@ -46,78 +46,20 @@ fn styles_keep_their_mask_in_sync_with_the_level() {
         eprintln!("skipping: no savegames");
         return;
     }
-    let mut save = SaveGame::open(&files[0]).expect("open");
+    let save = SaveGame::open(&files[0]).expect("open");
     let styles = save.styles().expect("styles");
     if styles.is_empty() {
         eprintln!("skipping: savegame has no styles");
         return;
     }
-    let target = &styles[0];
-    for level in [1_u8, 3, target.level.max(2), 1] {
-        save.set_style_level(target.struct_index, level)
-            .expect("set level");
-        let updated = save
-            .styles()
-            .expect("styles")
-            .into_iter()
-            .find(|style| style.struct_index == target.struct_index)
-            .expect("style");
-        assert_eq!(updated.level, level);
-        assert_eq!(updated.upgrades(), u32::from(level - 1));
+    for style in styles {
+        assert_eq!(
+            u32::from(style.level),
+            1 + style.mask.count_ones(),
+            "style {} has an inconsistent level and mask",
+            style.style_id
+        );
     }
-    assert!(save.set_style_level(target.struct_index, 0).is_err());
-}
-
-#[test]
-fn upgrading_a_style_sets_the_right_bit_and_level() {
-    let Some(dir) = save_dir() else {
-        eprintln!("skipping: no savegames found");
-        return;
-    };
-    let files = save_files(&dir);
-    if files.is_empty() {
-        eprintln!("skipping: no savegames");
-        return;
-    }
-    let mut save = SaveGame::open(&files[0]).expect("open");
-    let styles = save.styles().expect("styles");
-    if styles.is_empty() {
-        eprintln!("skipping: savegame has no styles");
-        return;
-    }
-    let target = &styles[0];
-    let index = target.struct_index;
-    let before = save
-        .styles()
-        .expect("styles")
-        .into_iter()
-        .find(|style| style.struct_index == index)
-        .expect("style");
-    // Row 30 is a tier the sample savegames do not have, so the mask changes.
-    let slot = 30_u16;
-    let mask = save.set_style_slot(index, slot, true).expect("upgrade");
-    assert_ne!(mask, before.mask, "the bit was already set");
-    let after = save
-        .styles()
-        .expect("styles")
-        .into_iter()
-        .find(|style| style.struct_index == index)
-        .expect("style");
-    assert_eq!(after.mask, mask);
-    assert_eq!(u32::from(after.level), 1 + mask.count_ones());
-    assert_eq!(after.mask & (1 << (slot - 1)), 1 << (slot - 1));
-
-    save.set_style_slot(index, slot, false).expect("downgrade");
-    let restored = save
-        .styles()
-        .expect("styles")
-        .into_iter()
-        .find(|style| style.struct_index == index)
-        .expect("style");
-    assert_eq!(restored.mask, before.mask);
-    assert_eq!(restored.level, before.level);
-    assert!(save.set_style_slot(index, 0, true).is_err());
-    assert!(save.set_style_slot(index, 65, true).is_err());
 }
 
 #[test]
@@ -143,9 +85,27 @@ fn adding_and_removing_a_style_survives_a_save() {
     }
     let before = styles.len();
     let template = styles[0].struct_index;
-    let index = save.add_style(template, 7, 18444).expect("add style");
+    let identity = jadeforge_core::StyleIdentity {
+        style_id: 7,
+        name_ref: 18_444,
+        desc_ref: None,
+        icon: None,
+        weapon: None,
+        weapon_count: 0,
+    };
+    let index = save.add_style(template, &identity).expect("add style");
     assert_eq!(save.styles().expect("styles").len(), before + 1);
-    save.set_style_level(index, 4).expect("level");
+    save.set_style_family_slot(index, &[1, 2, 3, 4], 3)
+        .expect("upgrade");
+    assert_eq!(
+        save.styles()
+            .expect("styles")
+            .into_iter()
+            .find(|style| style.struct_index == index)
+            .expect("added")
+            .level,
+        4
+    );
     save.save(SaveOptions { backup: false }).expect("save");
 
     let mut reloaded = SaveGame::open(&target).expect("reopen");
@@ -210,6 +170,7 @@ fn screenshots_are_decoded() {
         return;
     };
     let files = save_files(&dir);
+    let mut decoded = 0_usize;
     for file in files.iter().take(5) {
         match SaveImage::load(file) {
             Ok(image) => {
@@ -218,9 +179,10 @@ fn screenshots_are_decoded() {
                     image.rgba.len(),
                     image.width as usize * image.height as usize * 4
                 );
-                return;
+                decoded += 1;
             }
             Err(error) => eprintln!("cannot load screenshot of {}: {error}", file.display()),
         }
     }
+    assert!(decoded > 0, "no screenshot could be decoded");
 }

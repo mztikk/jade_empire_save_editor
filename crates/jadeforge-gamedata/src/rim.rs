@@ -51,14 +51,32 @@ impl RimArchive {
             path: path.clone(),
             source,
         })?;
-        if data.len() < 20 || &data[..4] != b"RIM " {
+        if data.len() < 20 || &data[..8] != b"RIM V1.0" {
             return Err(Error::Archive(format!(
-                "{} is not a RIM archive",
+                "{} is not a RIM V1.0 archive",
                 path.display()
             )));
         }
         let count = u32::from_le_bytes([data[12], data[13], data[14], data[15]]) as usize;
         let table = u32::from_le_bytes([data[16], data[17], data[18], data[19]]) as usize;
+        if table < 20 {
+            return Err(Error::Archive(format!(
+                "{} has an entry table inside its header",
+                path.display()
+            )));
+        }
+        let table_size = count
+            .checked_mul(32)
+            .ok_or_else(|| Error::Archive(format!("{} has too many entries", path.display())))?;
+        let table_end = table
+            .checked_add(table_size)
+            .ok_or_else(|| Error::Archive(format!("{} entry table overflows", path.display())))?;
+        if table_end > data.len() {
+            return Err(Error::Archive(format!(
+                "{} ends in the middle of its entry table",
+                path.display()
+            )));
+        }
         let mut entries = Vec::with_capacity(count);
         for index in 0..count {
             let base = table + index * 32;
@@ -140,7 +158,25 @@ mod tests {
         let path = std::env::temp_dir().join(format!("jadeforge-rim-{}", std::process::id()));
         std::fs::write(&path, b"not an archive").expect("write");
         let error = RimArchive::open(&path).expect_err("must fail");
-        assert!(error.to_string().contains("RIM archive"));
+        assert!(error.to_string().contains("RIM"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_hostile_entry_counts_and_versions() {
+        let path = std::env::temp_dir().join(format!("jadeforge-rim-count-{}", std::process::id()));
+        let mut data = Vec::new();
+        data.extend_from_slice(b"RIM V1.0");
+        data.extend_from_slice(&0_u32.to_le_bytes());
+        data.extend_from_slice(&u32::MAX.to_le_bytes());
+        data.extend_from_slice(&20_u32.to_le_bytes());
+        std::fs::write(&path, &data).expect("write");
+        assert!(RimArchive::open(&path).is_err());
+
+        let mut old = b"RIM V2.0".to_vec();
+        old.resize(20, 0);
+        std::fs::write(&path, &old).expect("write");
+        assert!(RimArchive::open(&path).is_err());
         let _ = std::fs::remove_file(path);
     }
 }

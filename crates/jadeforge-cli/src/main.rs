@@ -1,7 +1,19 @@
 //! Command line interface for `JadeForge`.
 
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+
+macro_rules! out {
+    ($($arg:tt)*) => {
+        write_stdout(format_args!($($arg)*))?
+    };
+}
+
+fn write_stdout(arguments: std::fmt::Arguments<'_>) -> Result<(), Error> {
+    let mut stdout = std::io::stdout().lock();
+    writeln!(stdout, "{arguments}").map_err(|error| Error::io("<stdout>", error))
+}
 
 use clap::{Parser, Subcommand};
 use jadeforge_core::gff::Value;
@@ -41,7 +53,10 @@ enum Command {
         /// Dotted field path, for example `PlayerCreature.Stats.Gold`.
         path: String,
     },
-    /// Change a field of a block.
+    /// Change a field of a block (raw write, no typed range checks).
+    ///
+    /// This is the debugging escape hatch. The desktop editor and the typed
+    /// commands range check values; `set` writes whatever the field can hold.
     Set {
         /// Path of the block, for example `save.sav`.
         block: String,
@@ -64,6 +79,10 @@ enum Command {
         /// Optional dotted path that is dumped instead of the whole block.
         #[arg(long)]
         path: Option<String>,
+        /// Emit JSON. This is the only output format; the flag exists so that
+        /// documented `dump --json` commands keep working.
+        #[arg(long)]
+        json: bool,
     },
     /// Verify that a savegame can be parsed and written again.
     Verify,
@@ -90,6 +109,11 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
+        Err(Error::Io { source, .. }) if source.kind() == std::io::ErrorKind::BrokenPipe => {
+            // `jadeforge-cli dump | head` is a normal way to inspect a large
+            // export; a closed pipe is not an application error.
+            ExitCode::SUCCESS
+        }
         Err(error) => {
             eprintln!("error: {error}");
             ExitCode::FAILURE
@@ -114,7 +138,11 @@ fn run(cli: Cli) -> Result<(), Error> {
             dry_run,
             no_backup,
         } => set(&path, &block, &field, &value, dry_run, no_backup),
-        Command::Dump { block, path: field } => dump(&path, &block, field.as_deref()),
+        Command::Dump {
+            block,
+            path: field,
+            json: _,
+        } => dump(&path, &block, field.as_deref()),
         Command::Verify => verify(&path),
         Command::AddItem {
             item_id,
@@ -149,38 +177,44 @@ fn resolve_save_path(path: Option<&Path>) -> Result<PathBuf, Error> {
 
 fn info(path: &Path) -> Result<(), Error> {
     let save = SaveGame::open(path)?;
-    println!("Savegame: {}", path.display());
-    println!("Blocks:   {}", save.blocks().len());
+    out!("Savegame: {}", path.display());
+    out!("Blocks:   {}", save.blocks().len());
     let character = save.character()?;
-    println!("Name:     {}", character.name);
-    println!("Level:    {}", character.level);
-    println!("XP:       {}", character.experience);
+    out!("Name:     {}", character.name);
+    out!("Level:    {}", character.level);
+    out!("XP:       {}", character.experience);
     if let Some(gold) = character.gold {
-        println!("Gold:     {gold}");
+        out!("Gold:     {gold}");
     }
-    println!("Chapter:  {}", character.chapter);
-    println!("Playtime: {}", format_duration(character.time_played));
-    println!(
+    out!("Chapter:  {}", character.chapter);
+    out!("Playtime: {}", format_duration(character.time_played));
+    out!(
         "Health:   {:.0} / {}",
-        character.health, character.health_max
+        character.health,
+        character.health_max
     );
-    println!("Chi:      {:.0} / {}", character.chi, character.chi_max);
-    println!("Focus:    {:.0} / {}", character.focus, character.focus_max);
-    println!(
+    out!("Chi:      {:.0} / {}", character.chi, character.chi_max);
+    out!("Focus:    {:.0} / {}", character.focus, character.focus_max);
+    out!(
         "Body {}  Mind {}  Spirit {}",
-        character.body, character.mind, character.spirit
+        character.body,
+        character.mind,
+        character.spirit
     );
-    println!(
+    out!(
         "Charm {}  Intuition {}  Intimidate {}",
-        character.charm, character.intuition, character.intimidate
+        character.charm,
+        character.intuition,
+        character.intimidate
     );
     if character.attribute_points > 0 {
-        println!("Unspent attribute points: {}", character.attribute_points);
+        out!("Unspent attribute points: {}", character.attribute_points);
     }
     if let Some(location) = locate_player(&save) {
-        println!(
+        out!(
             "Player:   {} (prefix {:?})",
-            location.block, location.prefix
+            location.block,
+            location.prefix
         );
     }
     Ok(())
@@ -189,7 +223,7 @@ fn info(path: &Path) -> Result<(), Error> {
 fn blocks(path: &Path) -> Result<(), Error> {
     let save = SaveGame::open(path)?;
     for (index, block) in save.blocks().iter().enumerate() {
-        println!(
+        out!(
             "{index:3}  {:22}  structs {:5}  fields {:6}  labels {:4}",
             block.name,
             block.gff().structs.len(),
@@ -203,7 +237,7 @@ fn blocks(path: &Path) -> Result<(), Error> {
 fn character(path: &Path) -> Result<(), Error> {
     let save = SaveGame::open(path)?;
     let character = save.character()?;
-    println!("{character:#?}");
+    out!("{character:#?}");
     Ok(())
 }
 
@@ -211,9 +245,12 @@ fn items(path: &Path) -> Result<(), Error> {
     let save = SaveGame::open(path)?;
     let game = GameData::discover(path);
     let items = save.items()?;
-    println!(
+    out!(
         "{:<32} {:>6} {:<12} {:>5}",
-        "name", "id", "category", "count"
+        "name",
+        "id",
+        "category",
+        "count"
     );
     for item in items {
         let info = game.as_ref().and_then(|game| game.item(item.item_id));
@@ -224,9 +261,12 @@ fn items(path: &Path) -> Result<(), Error> {
         let category = info
             .and_then(|info| info.category.clone())
             .unwrap_or_else(|| format!("type {}", item.kind));
-        println!(
+        out!(
             "{:<32} {:>6} {:<12} {:>5}",
-            name, item.item_id, category, item.count
+            name,
+            item.item_id,
+            category,
+            item.count
         );
     }
     Ok(())
@@ -236,7 +276,7 @@ fn styles(path: &Path) -> Result<(), Error> {
     let save = SaveGame::open(path)?;
     let game = GameData::discover(path);
     let styles = save.styles()?;
-    println!("{:<32} {:>6} {:>5}", "name", "level", "id");
+    out!("{:<32} {:>6} {:>5}", "name", "level", "id");
     for style in styles {
         let name = game
             .as_ref()
@@ -245,7 +285,7 @@ fn styles(path: &Path) -> Result<(), Error> {
                 || format!("<style {}>", style.style_id),
                 |info| info.name.clone(),
             );
-        println!("{:<32} {:>6} {:>5}", name, style.level, style.style_id);
+        out!("{:<32} {:>6} {:>5}", name, style.level, style.style_id);
     }
     Ok(())
 }
@@ -253,12 +293,14 @@ fn styles(path: &Path) -> Result<(), Error> {
 fn companions(path: &Path) -> Result<(), Error> {
     let save = SaveGame::open(path)?;
     let henchmen = save.henchmen()?;
-    println!("{:<16} {:>6} {:>10}", "template", "level", "available");
+    out!("{:<16} {:>6} {:>10}", "template", "level", "available");
     for henchman in henchmen {
         let available = if henchman.available { "yes" } else { "no" };
-        println!(
+        out!(
             "{:<16} {:>6} {:>10}",
-            henchman.resref, henchman.level, available
+            henchman.resref,
+            henchman.level,
+            available
         );
     }
     Ok(())
@@ -270,7 +312,7 @@ fn get(path: &Path, block_name: &str, field_path: &str) -> Result<(), Error> {
         .block(block_name)
         .ok_or_else(|| Error::Corrupt(format!("block {block_name:?} does not exist")))?;
     let field = block.gff().get(field_path)?;
-    println!(
+    out!(
         "{field_path} = {} (type {})",
         format_value(&field.value),
         field.value.type_name()
@@ -296,14 +338,14 @@ fn set(
     let before = format_value(&current.value);
     gff.set(field_path, value.clone())?;
     if dry_run {
-        println!(
+        out!(
             "{block_name}:{field_path}: {before} -> {} (dry run)",
             format_value(&value)
         );
         return Ok(());
     }
     save.save(SaveOptions { backup: !no_backup })?;
-    println!(
+    out!(
         "{block_name}:{field_path}: {before} -> {}",
         format_value(&value)
     );
@@ -325,14 +367,14 @@ fn dump(path: &Path, block_name: &str, field_path: Option<&str>) -> Result<(), E
     };
     let text = serde_json::to_string_pretty(&value)
         .map_err(|error| Error::Corrupt(format!("cannot render JSON: {error}")))?;
-    println!("{text}");
+    out!("{text}");
     Ok(())
 }
 
 fn verify(path: &Path) -> Result<(), Error> {
     let save = SaveGame::open(path)?;
     save.verify()?;
-    println!(
+    out!(
         "ok: {} blocks, {} bytes",
         save.blocks().len(),
         save.to_bytes()?.len()
@@ -349,13 +391,13 @@ fn add_item(
     no_backup: bool,
 ) -> Result<(), Error> {
     let mut save = SaveGame::open(path)?;
+    let index = save.add_item(item_id, kind, count)?;
     if dry_run {
-        println!("would add item {item_id} (type {kind}, count {count})");
+        out!("would add item {item_id} (type {kind}, count {count}) as struct {index} (dry run)");
         return Ok(());
     }
-    let index = save.add_item(item_id, kind, count)?;
     save.save(SaveOptions { backup: !no_backup })?;
-    println!("added item {item_id} (type {kind}, count {count}) as struct {index}");
+    out!("added item {item_id} (type {kind}, count {count}) as struct {index}");
     Ok(())
 }
 

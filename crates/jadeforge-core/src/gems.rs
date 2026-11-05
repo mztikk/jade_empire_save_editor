@@ -1,12 +1,17 @@
 //! Gems carried by the player and socketed into the amulet.
 //!
 //! Inventory gems live in `PlayerCreature.Gems`, amulet gems in
-//! `PlayerCreature.Amulet.OpenGemsList`; both lists point at structs shaped
-//! `{ Gem: { ItemID, GemsEffectList[] } }`. Moving a gem only changes which list
-//! references the struct, so the gem itself is never rewritten.
+//! `PlayerCreature.Amulet.OpenGemsList`. The amulet list is a fixed array of
+//! seven socket entries; a socket is empty when its entry has no `Gem` field (or
+//! points at a gem without an `ItemID` and effects). Moving a gem therefore
+//! swaps the entry between the two lists instead of changing the list length.
 
 use crate::error::{Error, Result};
+use crate::gff::{Gff, Struct, Value};
 use crate::save::SaveGame;
+
+/// Number of socket entries the game keeps in `Amulet.OpenGemsList`.
+pub const AMULET_SOCKET_SLOTS: usize = 7;
 
 /// Which list references a gem.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,7 +38,7 @@ pub struct GemEffect {
 /// One gem.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Gem {
-    /// Index of the struct that stores the gem.
+    /// Index of the struct that stores the gem entry.
     pub struct_index: usize,
     /// Item id, a row in `items.2da` of category `gems`.
     pub item_id: u16,
@@ -79,22 +84,7 @@ impl SaveGame {
         let block = self
             .block(location.block)
             .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
-        let gff = block.gff();
-        let tier_field = gff.get(format!("{}Amulet.Type", location.prefix));
-        let has_active = gff.get(format!("{}Amulet.Active", location.prefix)).is_ok();
-        if tier_field.is_err() && !has_active {
-            return Ok(None);
-        }
-        let tier = tier_field
-            .ok()
-            .and_then(|field| field.value.as_u64())
-            .and_then(|value| u8::try_from(value).ok())
-            .unwrap_or(1)
-            .clamp(1, 4);
-        Ok(Some(AmuletInfo {
-            tier,
-            sockets: sockets_for_tier(tier),
-        }))
+        Ok(amulet_in(block.gff(), location.prefix))
     }
 
     /// Reads the gems of the player.
@@ -103,46 +93,7 @@ impl SaveGame {
         let block = self
             .block(location.block)
             .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
-        let gff = block.gff();
-        let mut gems = Vec::new();
-        for (path, place) in [
-            (format!("{}Gems", location.prefix), GemLocation::Inventory),
-            (
-                format!("{}Amulet.OpenGemsList", location.prefix),
-                GemLocation::Amulet,
-            ),
-        ] {
-            let Ok(field) = gff.get(&path) else {
-                continue;
-            };
-            let Some(indices) = field.value.as_list() else {
-                continue;
-            };
-            for index in indices {
-                let Some(entry) = gff.struct_at(*index) else {
-                    continue;
-                };
-                let gem_struct = entry
-                    .fields
-                    .iter()
-                    .find(|field| gff.label_name(field.label) == Some("Gem"))
-                    .and_then(|field| match field.value {
-                        crate::gff::Value::Struct(inner) => gff.struct_at(inner),
-                        _ => None,
-                    })
-                    .unwrap_or(entry);
-                let item_id = label_number(gff, gem_struct, "ItemID")
-                    .and_then(|value| u16::try_from(value).ok())
-                    .unwrap_or(0);
-                gems.push(Gem {
-                    struct_index: *index,
-                    item_id,
-                    location: place,
-                    effects: read_effects(gff, gem_struct),
-                });
-            }
-        }
-        Ok(gems)
+        Ok(gems_in(block.gff(), location.prefix))
     }
 
     /// Adds a gem with the given predefined effects to the inventory.
@@ -152,129 +103,272 @@ impl SaveGame {
     ///
     /// # Errors
     ///
-    /// Returns an error when the player block or the gem list cannot be
-    /// written.
+    /// Returns an error when the duration is invalid, the player block or the
+    /// gem list cannot be written.
     pub fn add_gem(
         &mut self,
         item_id: u16,
         effects: &[(u32, u32)],
         duration: f32,
     ) -> Result<usize> {
-        let location = self.player_location()?;
-        let block = self
-            .block_mut(location.block)
-            .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
-        let gff = block.gff_mut();
-        let list_path = format!("{}Gems", location.prefix);
-        if gff.get(&list_path).is_err() {
-            gff.add(&list_path, crate::gff::Value::List(Vec::new()))?;
+        if !duration.is_finite() || duration < 0.0 {
+            return Err(Error::OutOfRange {
+                path: "gem duration".to_owned(),
+                value: duration.to_string(),
+                min: "0".to_owned(),
+                max: "finite seconds".to_owned(),
+            });
         }
-        let mut effect_indices = Vec::new();
-        for (kind, value) in effects {
-            let index = gff.push_struct(0);
-            gff.add_field(index, "GemsEffectType", crate::gff::Value::DWord(*kind))?;
-            gff.add_field(index, "GemsEffectValue", crate::gff::Value::DWord(*value))?;
-            gff.add_field(index, "GemsEffectCurVal", crate::gff::Value::DWord(*value))?;
-            gff.add_field(
-                index,
-                "GemsEffectDurati",
-                crate::gff::Value::Float(duration),
-            )?;
-            effect_indices.push(index);
-        }
-        let gem = gff.push_struct(0);
-        gff.add_field(gem, "ItemID", crate::gff::Value::Word(item_id))?;
-        gff.add_field(
-            gem,
-            "GemsEffectList",
-            crate::gff::Value::List(effect_indices),
-        )?;
-        let entry = gff.push_struct(0);
-        gff.add_field(entry, "Gem", crate::gff::Value::Struct(gem))?;
-        let list = gff
-            .get_mut(&list_path)?
-            .value
-            .as_list_mut()
-            .ok_or_else(|| Error::Corrupt(format!("{list_path} is not a list")))?;
-        list.push(entry);
-        Ok(entry)
+        let entry = self.edit_player_gff(|gff, prefix| {
+            let list_path = format!("{prefix}Gems");
+            match gff.get(&list_path) {
+                Ok(field) if field.value.as_list().is_none() => {
+                    return Err(Error::TypeMismatch {
+                        path: list_path,
+                        expected: "a list",
+                        actual: field.value.type_name(),
+                    });
+                }
+                Ok(_) => {}
+                Err(_) => gff.add(&list_path, Value::List(Vec::new()))?,
+            }
+
+            let mut effect_indices = Vec::with_capacity(effects.len());
+            for (kind, value) in effects {
+                let index = gff.push_struct(0);
+                gff.add_field(index, "GemsEffectType", Value::DWord(*kind))?;
+                gff.add_field(index, "GemsEffectValue", Value::DWord(*value))?;
+                gff.add_field(index, "GemsEffectCurVal", Value::DWord(*value))?;
+                gff.add_field(index, "GemsEffectDurati", Value::Float(duration))?;
+                effect_indices.push(index);
+            }
+            let gem = gff.push_struct(0);
+            gff.add_field(gem, "ItemID", Value::Word(item_id))?;
+            gff.add_field(gem, "GemsEffectList", Value::List(effect_indices))?;
+            let entry = gff.push_struct(0);
+            gff.add_field(entry, "Gem", Value::Struct(gem))?;
+            list_mut(gff, &list_path)?.push(entry);
+            Ok(Some(entry))
+        })?;
+        entry.ok_or_else(|| Error::Corrupt("the gem was not added".to_owned()))
     }
 
     /// Moves a gem to the other list and returns its new location.
+    ///
+    /// The amulet list always keeps exactly seven entries. Socketing uses the
+    /// first unlocked empty placeholder; moving a gem out replaces its entry
+    /// with an empty placeholder. A malformed or full amulet is an error and
+    /// leaves the savegame untouched.
     pub fn move_gem(&mut self, struct_index: usize) -> Result<GemLocation> {
-        let current = self.gem_location(struct_index)?;
-        let target = match current {
-            GemLocation::Inventory => "Amulet.OpenGemsList",
-            GemLocation::Amulet => "Gems",
-        };
-        let source = match current {
-            GemLocation::Inventory => "Gems",
-            GemLocation::Amulet => "Amulet.OpenGemsList",
-        };
-        let location = self.player_location()?;
-        let block = self
-            .block_mut(location.block)
-            .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
-        let gff = block.gff_mut();
-        let source_path = format!("{}{source}", location.prefix);
-        let target_path = format!("{}{target}", location.prefix);
-        list_mut(gff, &source_path)?.retain(|candidate| *candidate != struct_index);
-        if gff.get(&target_path).is_err() {
-            gff.add(&target_path, crate::gff::Value::List(Vec::new()))?;
-        }
-        list_mut(gff, &target_path)?.push(struct_index);
-        Ok(match current {
-            GemLocation::Inventory => GemLocation::Amulet,
-            GemLocation::Amulet => GemLocation::Inventory,
-        })
+        let result = self.edit_player_gff(|gff, prefix| {
+            let current = gem_location_in(gff, prefix, struct_index).ok_or_else(|| {
+                Error::Corrupt(format!("gem struct {struct_index} is in neither list"))
+            })?;
+            match current {
+                GemLocation::Inventory => {
+                    let amulet = amulet_in(gff, prefix).ok_or_else(|| Error::OutOfRange {
+                        path: "gem socket".to_owned(),
+                        value: struct_index.to_string(),
+                        min: "an unlocked amulet".to_owned(),
+                        max: "an unlocked amulet".to_owned(),
+                    })?;
+                    let source_path = format!("{prefix}Gems");
+                    let target_path = format!("{prefix}Amulet.OpenGemsList");
+                    let source = gem_list(gff, &source_path)?;
+                    let source_position = source
+                        .iter()
+                        .position(|candidate| *candidate == struct_index)
+                        .ok_or_else(|| {
+                            Error::Corrupt(format!(
+                                "gem struct {struct_index} is not in the inventory"
+                            ))
+                        })?;
+                    let target = gem_list(gff, &target_path)?;
+                    if target.len() != AMULET_SOCKET_SLOTS {
+                        return Err(Error::Corrupt(format!(
+                            "{target_path} has {} entries, expected {AMULET_SOCKET_SLOTS}",
+                            target.len()
+                        )));
+                    }
+                    let slot = usize::from(amulet.sockets);
+                    let Some(position) = target
+                        .iter()
+                        .take(slot)
+                        .position(|entry| is_empty_socket(gff, *entry))
+                    else {
+                        return Err(Error::OutOfRange {
+                            path: "gem socket".to_owned(),
+                            value: struct_index.to_string(),
+                            min: "a free socket".to_owned(),
+                            max: format!("{slot} unlocked sockets"),
+                        });
+                    };
+                    list_mut(gff, &source_path)?.remove(source_position);
+                    list_mut(gff, &target_path)?[position] = struct_index;
+                    Ok(Some(GemLocation::Amulet))
+                }
+                GemLocation::Amulet => {
+                    let source_path = format!("{prefix}Amulet.OpenGemsList");
+                    let target_path = format!("{prefix}Gems");
+                    let source = gem_list(gff, &source_path)?;
+                    let source_position = source
+                        .iter()
+                        .position(|candidate| *candidate == struct_index)
+                        .ok_or_else(|| {
+                            Error::Corrupt(format!("gem struct {struct_index} is not socketed"))
+                        })?;
+                    if source.len() != AMULET_SOCKET_SLOTS {
+                        return Err(Error::Corrupt(format!(
+                            "{source_path} has {} entries, expected {AMULET_SOCKET_SLOTS}",
+                            source.len()
+                        )));
+                    }
+                    if let Ok(field) = gff.get(&target_path) {
+                        if field.value.as_list().is_none() {
+                            return Err(Error::TypeMismatch {
+                                path: target_path,
+                                expected: "a list",
+                                actual: field.value.type_name(),
+                            });
+                        }
+                    } else {
+                        gff.add(&target_path, Value::List(Vec::new()))?;
+                    }
+                    let empty = gff.push_struct(0);
+                    list_mut(gff, &target_path)?.push(struct_index);
+                    list_mut(gff, &source_path)?[source_position] = empty;
+                    Ok(Some(GemLocation::Inventory))
+                }
+            }
+        })?;
+        result.ok_or_else(|| Error::Corrupt("the gem was not moved".to_owned()))
     }
 
     /// Removes a gem from whichever list references it.
+    ///
+    /// A socketed gem leaves an empty socket placeholder behind so the amulet
+    /// list keeps its seven entries.
     pub fn remove_gem(&mut self, struct_index: usize) -> Result<()> {
-        let current = self.gem_location(struct_index)?;
-        let path = match current {
-            GemLocation::Inventory => "Gems",
-            GemLocation::Amulet => "Amulet.OpenGemsList",
-        };
-        let location = self.player_location()?;
-        let block = self
-            .block_mut(location.block)
-            .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
-        let gff = block.gff_mut();
-        list_mut(gff, &format!("{}{path}", location.prefix))?
-            .retain(|candidate| *candidate != struct_index);
-        Ok(())
-    }
-
-    fn gem_location(&self, struct_index: usize) -> Result<GemLocation> {
-        let location = self.player_location()?;
-        let block = self
-            .block(location.block)
-            .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
-        let gff = block.gff();
-        for (path, place) in [
-            (format!("{}Gems", location.prefix), GemLocation::Inventory),
-            (
-                format!("{}Amulet.OpenGemsList", location.prefix),
-                GemLocation::Amulet,
-            ),
-        ] {
-            if gff
-                .get(&path)
-                .ok()
-                .and_then(|field| field.value.as_list())
-                .is_some_and(|list| list.contains(&struct_index))
-            {
-                return Ok(place);
+        let result = self.edit_player_gff(|gff, prefix| {
+            let current = gem_location_in(gff, prefix, struct_index).ok_or_else(|| {
+                Error::Corrupt(format!("gem struct {struct_index} is in neither list"))
+            })?;
+            match current {
+                GemLocation::Inventory => {
+                    let path = format!("{prefix}Gems");
+                    list_mut(gff, &path)?.retain(|candidate| *candidate != struct_index);
+                }
+                GemLocation::Amulet => {
+                    let path = format!("{prefix}Amulet.OpenGemsList");
+                    let list = gem_list(gff, &path)?;
+                    if list.len() != AMULET_SOCKET_SLOTS {
+                        return Err(Error::Corrupt(format!(
+                            "{path} has {} entries, expected {AMULET_SOCKET_SLOTS}",
+                            list.len()
+                        )));
+                    }
+                    let position = list
+                        .iter()
+                        .position(|candidate| *candidate == struct_index)
+                        .ok_or_else(|| {
+                            Error::Corrupt(format!("gem struct {struct_index} is not socketed"))
+                        })?;
+                    let empty = gff.push_struct(0);
+                    list_mut(gff, &path)?[position] = empty;
+                }
             }
-        }
-        Err(Error::Corrupt(format!(
-            "gem struct {struct_index} is in neither list"
-        )))
+            Ok(Some(()))
+        })?;
+        result.ok_or_else(|| Error::Corrupt("the gem was not removed".to_owned()))
     }
 }
 
-fn list_mut<'a>(gff: &'a mut crate::gff::Gff, path: &str) -> Result<&'a mut Vec<usize>> {
+/// Reads the amulet state from a block.
+fn amulet_in(gff: &Gff, prefix: &str) -> Option<AmuletInfo> {
+    let tier_field = gff.get(format!("{prefix}Amulet.Type"));
+    let has_active = gff.get(format!("{prefix}Amulet.Active")).is_ok();
+    if tier_field.is_err() && !has_active {
+        return None;
+    }
+    let tier = tier_field
+        .ok()
+        .and_then(|field| field.value.as_u64())
+        .and_then(|value| u8::try_from(value).ok())
+        .unwrap_or(1)
+        .clamp(1, 4);
+    Some(AmuletInfo {
+        tier,
+        sockets: sockets_for_tier(tier),
+    })
+}
+
+/// Reads all gems from a block.
+fn gems_in(gff: &Gff, prefix: &str) -> Vec<Gem> {
+    let mut gems = Vec::new();
+    for (path, place) in [
+        (format!("{prefix}Gems"), GemLocation::Inventory),
+        (format!("{prefix}Amulet.OpenGemsList"), GemLocation::Amulet),
+    ] {
+        let Ok(field) = gff.get(&path) else {
+            continue;
+        };
+        let Some(indices) = field.value.as_list() else {
+            continue;
+        };
+        for index in indices {
+            let Some(entry) = gff.struct_at(*index) else {
+                continue;
+            };
+            let gem_struct = entry
+                .fields
+                .iter()
+                .find(|field| gff.label_name(field.label) == Some("Gem"))
+                .and_then(|field| match field.value {
+                    Value::Struct(inner) => gff.struct_at(inner),
+                    _ => None,
+                })
+                .unwrap_or(entry);
+            let item_id = label_number(gff, gem_struct, "ItemID")
+                .and_then(|value| u16::try_from(value).ok())
+                .unwrap_or(0);
+            gems.push(Gem {
+                struct_index: *index,
+                item_id,
+                location: place,
+                effects: read_effects(gff, gem_struct),
+            });
+        }
+    }
+    gems
+}
+
+fn gem_location_in(gff: &Gff, prefix: &str, struct_index: usize) -> Option<GemLocation> {
+    for (path, place) in [
+        (format!("{prefix}Gems"), GemLocation::Inventory),
+        (format!("{prefix}Amulet.OpenGemsList"), GemLocation::Amulet),
+    ] {
+        if gff
+            .get(&path)
+            .ok()
+            .and_then(|field| field.value.as_list())
+            .is_some_and(|list| list.contains(&struct_index))
+        {
+            return Some(place);
+        }
+    }
+    None
+}
+
+fn gem_list<'a>(gff: &'a Gff, path: &str) -> Result<&'a [usize]> {
+    let field = gff.get(path)?;
+    field.value.as_list().ok_or_else(|| Error::TypeMismatch {
+        path: path.to_owned(),
+        expected: "a list",
+        actual: field.value.type_name(),
+    })
+}
+
+fn list_mut<'a>(gff: &'a mut Gff, path: &str) -> Result<&'a mut Vec<usize>> {
     let field = gff.get_mut(path)?;
     let actual = field.value.type_name();
     field
@@ -283,13 +377,35 @@ fn list_mut<'a>(gff: &'a mut crate::gff::Gff, path: &str) -> Result<&'a mut Vec<
         .ok_or_else(|| Error::Corrupt(format!("{path} is not a list ({actual})")))
 }
 
-fn read_effects(gff: &crate::gff::Gff, gem: &crate::gff::Struct) -> Vec<GemEffect> {
-    let Some(list) = gem
+/// True when an amulet entry is an empty socket placeholder.
+fn is_empty_socket(gff: &Gff, entry_index: usize) -> bool {
+    let Some(entry) = gff.struct_at(entry_index) else {
+        return true;
+    };
+    if entry.fields.is_empty() {
+        return true;
+    }
+    let gem = nested_gem(gff, entry).unwrap_or(entry);
+    let item_id = label_number(gff, gem, "ItemID").unwrap_or(0);
+    let has_effects = label_field(gff, gem, "GemsEffectList")
+        .and_then(Value::as_list)
+        .is_some_and(|effects| !effects.is_empty());
+    item_id == 0 && !has_effects
+}
+
+fn nested_gem<'a>(gff: &'a Gff, entry: &'a Struct) -> Option<&'a Struct> {
+    entry
         .fields
         .iter()
-        .find(|field| gff.label_name(field.label) == Some("GemsEffectList"))
-        .and_then(|field| field.value.as_list())
-    else {
+        .find(|field| gff.label_name(field.label) == Some("Gem"))
+        .and_then(|field| match field.value {
+            Value::Struct(inner) => gff.struct_at(inner),
+            _ => None,
+        })
+}
+
+fn read_effects(gff: &Gff, gem: &Struct) -> Vec<GemEffect> {
+    let Some(list) = label_field(gff, gem, "GemsEffectList").and_then(Value::as_list) else {
         return Vec::new();
     };
     let mut effects = Vec::new();
@@ -307,11 +423,7 @@ fn read_effects(gff: &crate::gff::Gff, gem: &crate::gff::Struct) -> Vec<GemEffec
     effects
 }
 
-fn label_field<'a>(
-    gff: &crate::gff::Gff,
-    structure: &'a crate::gff::Struct,
-    label: &str,
-) -> Option<&'a crate::gff::Value> {
+fn label_field<'a>(gff: &Gff, structure: &'a Struct, label: &str) -> Option<&'a Value> {
     structure
         .fields
         .iter()
@@ -319,18 +431,18 @@ fn label_field<'a>(
         .map(|field| &field.value)
 }
 
-fn number(gff: &crate::gff::Gff, structure: &crate::gff::Struct, label: &str) -> Option<i32> {
+fn number(gff: &Gff, structure: &Struct, label: &str) -> Option<i32> {
     label_field(gff, structure, label)
-        .and_then(crate::gff::Value::as_i64)
+        .and_then(Value::as_i64)
         .and_then(|value| i32::try_from(value).ok())
 }
 
-fn label_number(gff: &crate::gff::Gff, structure: &crate::gff::Struct, label: &str) -> Option<i64> {
-    label_field(gff, structure, label).and_then(crate::gff::Value::as_i64)
+fn label_number(gff: &Gff, structure: &Struct, label: &str) -> Option<i64> {
+    label_field(gff, structure, label).and_then(Value::as_i64)
 }
 
-fn float(gff: &crate::gff::Gff, structure: &crate::gff::Struct, label: &str) -> Option<f32> {
-    label_field(gff, structure, label).and_then(crate::gff::Value::as_f32)
+fn float(gff: &Gff, structure: &Struct, label: &str) -> Option<f32> {
+    label_field(gff, structure, label).and_then(Value::as_f32)
 }
 
 #[cfg(test)]

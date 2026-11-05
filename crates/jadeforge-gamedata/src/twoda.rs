@@ -16,6 +16,12 @@ use std::collections::HashMap;
 
 use crate::error::{Error, Result};
 
+/// Hard cap on a 2DA row number.
+///
+/// Row labels are untrusted 64 bit numbers in the text format. Without a bound
+/// a two line table can ask for a multi-gigabyte `Vec`.
+const MAX_ROW_INDEX: usize = 100_000;
+
 /// One row of a 2DA table.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Row {
@@ -82,7 +88,9 @@ impl TwoDa {
     /// Returns [`Error::TwoDa`] when the signature or the structure is invalid.
     pub fn parse_binary(data: &[u8]) -> Result<Self> {
         if data.len() < 10 || &data[..9] != b"2DA V2.b\n" {
-            return Err(Error::TwoDa("not a binary 2DA table".to_owned()));
+            return Err(Error::TwoDa(
+                "not a 2DA V2.b table (bad signature or version)".to_owned(),
+            ));
         }
         let mut position = 9;
         let mut columns: Vec<String> = Vec::new();
@@ -101,6 +109,7 @@ impl TwoDa {
         position += 1;
         let row_count = read_u32(data, position)? as usize;
         position += 4;
+        validate_row_count(row_count, data.len().saturating_sub(position))?;
         let mut labels: Vec<String> = Vec::with_capacity(row_count);
         for _ in 0..row_count {
             let end = find_byte(data, position, b'\t')?;
@@ -111,15 +120,32 @@ impl TwoDa {
             );
             position = end + 1;
         }
-        let cell_count = row_count.saturating_mul(columns.len());
+        let cell_count = row_count
+            .checked_mul(columns.len())
+            .ok_or_else(|| Error::TwoDa("2DA cell count overflows".to_owned()))?;
+        if cell_count > data.len() / 2 {
+            return Err(Error::TwoDa(format!(
+                "{cell_count} cells do not fit in the {} byte table",
+                data.len()
+            )));
+        }
         let mut offsets: Vec<u16> = Vec::with_capacity(cell_count);
         for _ in 0..cell_count {
             offsets.push(read_u16(data, position)?);
             position += 2;
         }
-        let _cells_size = read_u16(data, position)?;
+        let cells_size = usize::from(read_u16(data, position)?);
         position += 2;
         let cell_base = position;
+        let cell_end = cell_base
+            .checked_add(cells_size)
+            .ok_or_else(|| Error::TwoDa("2DA string pool overflows".to_owned()))?;
+        if cell_end > data.len() {
+            return Err(Error::TwoDa(format!(
+                "2DA string pool ends at {cell_end}, beyond the {} byte table",
+                data.len()
+            )));
+        }
 
         let mut column_index = HashMap::new();
         for (index, column) in columns.iter().enumerate() {
@@ -135,10 +161,20 @@ impl TwoDa {
             let mut values: Vec<Option<String>> = Vec::with_capacity(width);
             for column in 0..width {
                 let offset = usize::from(offsets[row_number * width + column]);
-                values.push(binary_cell(data, cell_base + offset));
+                values.push(binary_cell(data, cell_base, cells_size, offset)?);
             }
             let row = Row { values };
-            let index = label.parse::<usize>().unwrap_or(row_number);
+            let index = match label.parse::<usize>() {
+                Ok(index) => {
+                    if index > MAX_ROW_INDEX {
+                        return Err(Error::TwoDa(format!(
+                            "row label {index} is above the {MAX_ROW_INDEX} row limit"
+                        )));
+                    }
+                    index
+                }
+                Err(_) => row_number,
+            };
             if table.rows.len() <= index {
                 table.rows.resize(index + 1, None);
             }
@@ -158,10 +194,17 @@ impl TwoDa {
                 "missing 2DA signature, found {signature:?}"
             )));
         }
-        if signature_parts.next() == Some("V2.b") {
-            return Err(Error::TwoDa(
-                "binary 2DA tables are not supported".to_owned(),
-            ));
+        match signature_parts.next() {
+            Some("V2.0") => {}
+            Some("V2.b") => {
+                return Err(Error::TwoDa(
+                    "binary 2DA tables are not supported".to_owned(),
+                ));
+            }
+            Some(version) => {
+                return Err(Error::TwoDa(format!("unsupported 2DA version {version:?}")));
+            }
+            None => return Err(Error::TwoDa("2DA version is missing".to_owned())),
         }
 
         // The second line holds default values that we do not need, the third
@@ -186,7 +229,12 @@ impl TwoDa {
                 continue;
             }
             let index: usize = match tokens[0].parse() {
-                Ok(index) => index,
+                Ok(index) if index <= MAX_ROW_INDEX => index,
+                Ok(index) => {
+                    return Err(Error::TwoDa(format!(
+                        "row label {index} is above the {MAX_ROW_INDEX} row limit"
+                    )));
+                }
                 Err(_) => continue,
             };
             let mut values: Vec<Option<String>> = tokens
@@ -281,15 +329,50 @@ fn read_u32(data: &[u8], position: usize) -> Result<u32> {
     Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
-/// Reads a NUL terminated cell from the string pool.
-fn binary_cell(data: &[u8], start: usize) -> Option<String> {
-    let end = find_byte(data, start, 0).ok()?;
-    let text = std::str::from_utf8(&data[start..end]).ok()?;
-    if text.is_empty() || text == "****" {
-        None
-    } else {
-        Some(text.to_owned())
+/// Reads a NUL terminated cell from the declared string pool.
+fn binary_cell(
+    data: &[u8],
+    pool_start: usize,
+    pool_size: usize,
+    offset: usize,
+) -> Result<Option<String>> {
+    if offset >= pool_size {
+        return Err(Error::TwoDa(format!(
+            "cell offset {offset} is outside the {pool_size} byte string pool"
+        )));
     }
+    let start = pool_start + offset;
+    let end = start
+        .checked_add(pool_size - offset)
+        .ok_or_else(|| Error::TwoDa("cell end overflows".to_owned()))?;
+    let pool = &data[start..end];
+    let Some(length) = pool.iter().position(|byte| *byte == 0) else {
+        return Err(Error::TwoDa(format!(
+            "cell at offset {offset} is not NUL terminated in its string pool"
+        )));
+    };
+    let text = std::str::from_utf8(&pool[..length])
+        .map_err(|error| Error::TwoDa(format!("cell at offset {offset} is not UTF-8: {error}")))?;
+    if text.is_empty() || text == "****" {
+        Ok(None)
+    } else {
+        Ok(Some(text.to_owned()))
+    }
+}
+
+/// Validates a binary header's row count against the remaining bytes.
+fn validate_row_count(row_count: usize, remaining: usize) -> Result<()> {
+    if row_count > MAX_ROW_INDEX {
+        return Err(Error::TwoDa(format!(
+            "binary 2DA row count {row_count} is above the {MAX_ROW_INDEX} row limit"
+        )));
+    }
+    if row_count > remaining {
+        return Err(Error::TwoDa(format!(
+            "binary 2DA row count {row_count} does not fit in {remaining} remaining bytes"
+        )));
+    }
+    Ok(())
 }
 
 /// Splits a 2DA line into tokens, honouring double quotes.
@@ -356,6 +439,51 @@ mod tests {
             vec!["0", "two words", "three"]
         );
     }
+
+    #[test]
+    fn row_accessors_handle_types_and_empty_cells() {
+        let table = TwoDa::parse(
+            "2DA V2.0\n\nA B C D\n0 10 -3 1.5 \"\"\n1 4294967296 9223372036854775808 x\n",
+        )
+        .expect("parse");
+        let row = table.row(0).expect("row");
+        assert_eq!(row.uint(0), Some(10));
+        assert_eq!(row.u32(0), Some(10));
+        assert_eq!(row.int(1), Some(-3));
+        assert_eq!(row.float(2), Some(1.5));
+        assert_eq!(row.cell(3), Some(""));
+        assert!(row.is_empty(3));
+        assert!(row.is_empty(9));
+        assert_eq!(row.cell(9), None);
+
+        let row = table.row(1).expect("row");
+        assert_eq!(row.uint(0), Some(4_294_967_296));
+        assert_eq!(row.u32(0), None);
+        assert_eq!(row.int(1), None);
+        assert_eq!(row.float(2), None);
+        assert!(!row.is_empty(0));
+    }
+
+    #[test]
+    fn parser_skips_blank_and_non_numeric_rows() {
+        let table =
+            TwoDa::parse("2DA V2.0\n\nA B\n0 one 1\n\nnot-a-row 2\n1 two 2\n").expect("parse");
+        assert_eq!(table.len(), 2);
+        assert_eq!(table.cell(0, "A"), Some("one"));
+        assert_eq!(table.cell(1, "A"), Some("two"));
+    }
+
+    #[test]
+    fn parser_rejects_an_empty_header() {
+        assert!(TwoDa::parse("2DA V2.0\n\n\n").is_err());
+    }
+
+    #[test]
+    fn parser_rejects_hostile_row_numbers_and_versions() {
+        assert!(TwoDa::parse("2DA V2.0\n\nA\n18446744073709551615 x\n").is_err());
+        assert!(TwoDa::parse("2DA V2.0\n\nA\n4294967295 x\n").is_err());
+        assert!(TwoDa::parse("2DA V1.0\n\nA\n0 x\n").is_err());
+    }
 }
 
 #[cfg(test)]
@@ -372,7 +500,7 @@ mod binary_tests {
         data.extend_from_slice(b"0\t");
         data.extend_from_slice(&0_u16.to_le_bytes());
         data.extend_from_slice(&6_u16.to_le_bytes());
-        data.extend_from_slice(&0_u16.to_le_bytes());
+        data.extend_from_slice(&8_u16.to_le_bytes());
         data.extend_from_slice(b"sword\0");
         data.extend_from_slice(b"5\0");
         data
@@ -390,5 +518,19 @@ mod binary_tests {
     fn rejects_foreign_data() {
         assert!(TwoDa::parse_binary(b"2DA V2.0\n").is_err());
         assert!(TwoDa::parse_binary(b"nonsense").is_err());
+    }
+
+    #[test]
+    fn rejects_hostile_counts_and_out_of_pool_offsets() {
+        let mut data = b"2DA V2.b\nlabel\t".to_vec();
+        data.push(0);
+        data.extend_from_slice(&u32::MAX.to_le_bytes());
+        assert!(TwoDa::parse_binary(&data).is_err());
+
+        let mut sample = sample();
+        // The first cell offset sits directly after the row label.
+        let offset = sample.len() - 10;
+        sample[offset..offset + 2].copy_from_slice(&99_u16.to_le_bytes());
+        assert!(TwoDa::parse_binary(&sample).is_err());
     }
 }

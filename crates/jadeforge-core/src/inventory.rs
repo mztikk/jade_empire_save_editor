@@ -45,31 +45,12 @@ impl SaveGame {
                 actual: field.value.type_name(),
             });
         };
-        let mut items = Vec::with_capacity(elements.len());
-        for element in elements {
-            let Some(structure) = gff.struct_at(*element) else {
-                return Err(Error::Corrupt(format!(
-                    "the item list references the missing struct {element}"
-                )));
-            };
-            let number = |name: &str| -> Option<u64> {
-                structure
-                    .fields
-                    .iter()
-                    .find(|field| gff.label_name(field.label) == Some(name))
-                    .and_then(|field| field.value.as_u64())
-            };
-            items.push(Item {
-                struct_index: *element,
-                item_id: number("ItemId").map_or(0, |value| value as u16),
-                count: number("Count").map_or(1, |value| value as u8),
-                kind: number("Type").map_or(0, |value| value as u8),
-            });
-        }
-        Ok(items)
+        read_items_from(gff, elements)
     }
 
     /// Changes the stack size of an item.
+    ///
+    /// A no-op does not dirty the savegame.
     pub fn set_item_count(&mut self, struct_index: usize, count: u8) -> Result<()> {
         if count == 0 {
             return Err(Error::OutOfRange {
@@ -79,35 +60,48 @@ impl SaveGame {
                 max: u8::MAX.to_string(),
             });
         }
-        let location = self.player_location()?;
-        let block = self
-            .block_mut(location.block)
-            .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
-        let gff = block.gff_mut();
-        let position = gff
-            .struct_at(struct_index)
-            .ok_or_else(|| Error::Corrupt(format!("struct {struct_index} does not exist")))?
-            .fields
-            .iter()
-            .position(|field| gff.label_name(field.label) == Some("Count"))
-            .ok_or_else(|| Error::FieldNotFound {
-                path: format!("item {struct_index} Count"),
-            })?;
-        let field = &mut gff
-            .struct_at_mut(struct_index)
-            .ok_or_else(|| Error::Corrupt(format!("struct {struct_index} does not exist")))?
-            .fields[position];
-        match field.value {
-            Value::Byte(_) => field.value = Value::Byte(count),
-            Value::Word(_) => field.value = Value::Word(u16::from(count)),
-            _ => {
+        let path = self.item_list_path()?;
+        let result = self.edit_player_gff(|gff, _prefix| {
+            let list = gff.get(&path)?;
+            if list.value.as_list().is_none() {
                 return Err(Error::TypeMismatch {
-                    path: format!("item {struct_index} Count"),
-                    expected: "a byte or word",
-                    actual: field.value.type_name(),
+                    path: path.clone(),
+                    expected: "a list",
+                    actual: list.value.type_name(),
                 });
             }
-        }
+            let structure = gff
+                .struct_at(struct_index)
+                .ok_or_else(|| Error::Corrupt(format!("struct {struct_index} does not exist")))?;
+            let position = structure
+                .fields
+                .iter()
+                .position(|field| gff.label_name(field.label) == Some("Count"))
+                .ok_or_else(|| Error::FieldNotFound {
+                    path: format!("item {struct_index} Count"),
+                })?;
+            let field = &structure.fields[position];
+            let replacement = match field.type_id {
+                0 => Value::Byte(count),
+                2 => Value::Word(u16::from(count)),
+                _ => {
+                    return Err(Error::TypeMismatch {
+                        path: format!("item {struct_index} Count"),
+                        expected: "a byte or word",
+                        actual: field.value.type_name(),
+                    });
+                }
+            };
+            if field.value == replacement {
+                return Ok(None);
+            }
+            gff.struct_at_mut(struct_index)
+                .and_then(|structure| structure.fields.get_mut(position))
+                .ok_or_else(|| Error::Corrupt(format!("struct {struct_index} does not exist")))?
+                .value = replacement;
+            Ok(Some(()))
+        })?;
+        let _ = result;
         Ok(())
     }
 
@@ -115,19 +109,14 @@ impl SaveGame {
     ///
     /// The struct itself is left in the file as an orphan; the engine only
     /// follows the references of the item list, so this is safe and avoids
-    /// renumbering every other struct.
+    /// renumbering every other struct. A failed or no-op removal does not dirty
+    /// the savegame.
     pub fn remove_item(&mut self, struct_index: usize) -> Result<bool> {
         let path = self.item_list_path()?;
-        let location = self.player_location()?;
-        let block = self
-            .block_mut(location.block)
-            .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
-        let was_modified = block.is_modified();
-        let removed = {
-            let gff = block.gff_mut();
-            let field = gff.get_mut(&path)?;
-            let actual = field.value.type_name();
-            let elements = field
+        let removed = self.edit_player_gff(|gff, _prefix| {
+            let list = gff.get_mut(&path)?;
+            let actual = list.value.type_name();
+            let elements = list
                 .value
                 .as_list_mut()
                 .ok_or_else(|| Error::TypeMismatch {
@@ -137,18 +126,20 @@ impl SaveGame {
                 })?;
             let before = elements.len();
             elements.retain(|element| *element != struct_index);
-            elements.len() != before
-        };
-        if !removed && !was_modified {
-            block.mark_clean();
-        }
-        Ok(removed)
+            if elements.len() == before {
+                Ok(None)
+            } else {
+                Ok(Some(true))
+            }
+        })?;
+        Ok(removed.unwrap_or(false))
     }
 
     /// Adds a new item stack to the inventory.
     ///
     /// The item struct is appended to the block; the label table is reused so
-    /// no new labels are introduced.
+    /// no new labels are introduced. A missing or malformed item list is an
+    /// error and leaves the savegame untouched.
     pub fn add_item(&mut self, item_id: u16, kind: u8, count: u8) -> Result<usize> {
         if count == 0 {
             return Err(Error::OutOfRange {
@@ -159,27 +150,28 @@ impl SaveGame {
             });
         }
         let path = self.item_list_path()?;
-        let location = self.player_location()?;
-        let block = self
-            .block_mut(location.block)
-            .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
-        let gff = block.gff_mut();
-        let struct_index = gff.push_struct(0);
-        gff.add_field(struct_index, "Count", Value::Byte(count))?;
-        gff.add_field(struct_index, "ItemId", Value::Word(item_id))?;
-        gff.add_field(struct_index, "Type", Value::Byte(kind))?;
-        let field = gff.get_mut(&path)?;
-        let actual = field.value.type_name();
-        let elements = field
-            .value
-            .as_list_mut()
-            .ok_or_else(|| Error::TypeMismatch {
-                path: path.clone(),
-                expected: "a list",
-                actual,
-            })?;
-        elements.push(struct_index);
-        Ok(struct_index)
+        let index = self.edit_player_gff(|gff, _prefix| {
+            let list = gff.get(&path)?;
+            if list.value.as_list().is_none() {
+                return Err(Error::TypeMismatch {
+                    path: path.clone(),
+                    expected: "a list",
+                    actual: list.value.type_name(),
+                });
+            }
+            let struct_index = gff.push_struct(0);
+            gff.add_field(struct_index, "Count", Value::Byte(count))?;
+            gff.add_field(struct_index, "ItemId", Value::Word(item_id))?;
+            gff.add_field(struct_index, "Type", Value::Byte(kind))?;
+            let list = gff.get_mut(&path)?;
+            let elements = list
+                .value
+                .as_list_mut()
+                .ok_or_else(|| Error::Corrupt(format!("{path} is not a list")))?;
+            elements.push(struct_index);
+            Ok(Some(struct_index))
+        })?;
+        index.ok_or_else(|| Error::Corrupt("the item was not added".to_owned()))
     }
 }
 
@@ -193,23 +185,45 @@ pub fn read_items(gff: &Gff, list_path: &str) -> Result<Vec<Item>> {
         expected: "a list",
         actual: field.value.type_name(),
     })?;
+    read_items_from(gff, elements)
+}
+
+fn read_items_from(gff: &Gff, elements: &[usize]) -> Result<Vec<Item>> {
     let mut items = Vec::with_capacity(elements.len());
     for element in elements {
         let structure = gff
             .struct_at(*element)
             .ok_or_else(|| Error::Corrupt(format!("missing struct {element}")))?;
-        let number = |name: &str| -> Option<u64> {
+        let number = |name: &str| -> Option<&Value> {
             structure
                 .fields
                 .iter()
                 .find(|field| gff.label_name(field.label) == Some(name))
-                .and_then(|field| field.value.as_u64())
+                .map(|field| &field.value)
+        };
+        let item_id = match number("ItemId").and_then(Value::as_u64) {
+            Some(value) => u16::try_from(value).map_err(|_| {
+                Error::Corrupt(format!("item struct {element} has an out-of-range ItemId"))
+            })?,
+            None => 0,
+        };
+        let count = match number("Count").and_then(Value::as_u64) {
+            Some(value) => u8::try_from(value).map_err(|_| {
+                Error::Corrupt(format!("item struct {element} has an out-of-range Count"))
+            })?,
+            None => 1,
+        };
+        let kind = match number("Type").and_then(Value::as_u64) {
+            Some(value) => u8::try_from(value).map_err(|_| {
+                Error::Corrupt(format!("item struct {element} has an out-of-range Type"))
+            })?,
+            None => 0,
         };
         items.push(Item {
             struct_index: *element,
-            item_id: number("ItemId").map_or(0, |value| value as u16),
-            count: number("Count").map_or(1, |value| value as u8),
-            kind: number("Type").map_or(0, |value| value as u8),
+            item_id,
+            count,
+            kind,
         });
     }
     Ok(items)

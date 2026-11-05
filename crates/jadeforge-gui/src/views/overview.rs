@@ -26,7 +26,7 @@ pub fn view(
     let file_size = ctx.session.borrow().file_size();
     let (game_text, game_ok) = {
         let session = ctx.session.borrow();
-        match &session.game_status {
+        match session.game_status() {
             GameStatus::Loaded {
                 items,
                 styles,
@@ -87,6 +87,7 @@ pub fn view(
                         .text(character.name.clone())
                         .font_size(26.)
                         .font_weight(FontWeight::BOLD)
+                        .max_lines(1)
                         .color(theme::TEXT),
                 )
                 .child(

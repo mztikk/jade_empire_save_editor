@@ -6,7 +6,7 @@
 //! that block.
 
 use crate::error::{Error, Result};
-use crate::gff::{Field, Gff, Value};
+use crate::gff::{Gff, Value};
 use crate::save::{GLOBAL_BLOCK, POLYPLAYER_BLOCK, SaveGame};
 
 /// Alignment value the engine starts every character with.
@@ -88,21 +88,21 @@ pub struct PlayerLocation {
 /// Finds the block and the path prefix that hold the player creature.
 #[must_use]
 pub fn locate_player(save: &SaveGame) -> Option<PlayerLocation> {
-    if let Ok(block) = save.global_block() {
-        if player_at(block.gff(), "PlayerCreature.").is_some() {
-            return Some(PlayerLocation {
-                block: GLOBAL_BLOCK,
-                prefix: "PlayerCreature.",
-            });
-        }
+    if let Ok(block) = save.global_block()
+        && player_at(block.gff(), "PlayerCreature.").is_some()
+    {
+        return Some(PlayerLocation {
+            block: GLOBAL_BLOCK,
+            prefix: "PlayerCreature.",
+        });
     }
-    if let Some(block) = save.block(POLYPLAYER_BLOCK) {
-        if player_at(block.gff(), "").is_some() {
-            return Some(PlayerLocation {
-                block: POLYPLAYER_BLOCK,
-                prefix: "",
-            });
-        }
+    if let Some(block) = save.block(POLYPLAYER_BLOCK)
+        && player_at(block.gff(), "").is_some()
+    {
+        return Some(PlayerLocation {
+            block: POLYPLAYER_BLOCK,
+            prefix: "",
+        });
     }
     None
 }
@@ -130,98 +130,177 @@ impl SaveGame {
             .block(location.block)
             .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
         let mut character = Character::read(block.gff(), location.prefix)?;
-        if location.block != GLOBAL_BLOCK {
-            if let Ok(global) = self.global_block() {
-                character.read_global(global.gff());
-            }
+        if location.block != GLOBAL_BLOCK
+            && let Ok(global) = self.global_block()
+        {
+            character.read_global(global.gff());
         }
         Ok(character)
     }
 
     /// Writes the editable character data and returns the fields that changed.
     ///
-    /// Only values that differ from the savegame are touched, so an untouched
-    /// character produces no changes at all.
+    /// Both blocks are edited on working copies and committed only after every
+    /// write succeeded. A rejected value therefore leaves the whole savegame
+    /// untouched, even when the character and campaign live in different blocks.
     pub fn apply_character(&mut self, character: &Character) -> Result<Vec<Change>> {
         let location = self.player_location()?;
-        let mut changes = {
-            let block = self
-                .block_mut(location.block)
-                .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
-            // Edit a copy first: if any value is rejected the savegame must stay
-            // untouched instead of keeping half of the new values.
-            let mut working = block.gff().clone();
-            let changes = character.write(&mut working, location.prefix)?;
-            if !changes.is_empty() {
-                *block.gff_mut() = working;
-            }
-            changes
-        };
-        if let Some(block) = self.block_mut(GLOBAL_BLOCK) {
-            let was_modified = block.is_modified();
-            let global_changes = character.write_global(block.gff_mut())?;
-            if global_changes.is_empty() && !was_modified {
-                block.mark_clean();
+        let player_name = location.block;
+        let same_block = player_name == GLOBAL_BLOCK;
+
+        let player_original = self
+            .block(player_name)
+            .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?
+            .gff()
+            .clone();
+        let mut player_working = player_original;
+        let mut changes = character.write(&mut player_working, location.prefix)?;
+
+        if same_block {
+            let global_changes = character.write_global(&mut player_working)?;
+            if !changes.is_empty() || !global_changes.is_empty() {
+                let block = self
+                    .block_mut(player_name)
+                    .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
+                *block.gff_mut() = player_working;
             }
             changes.extend(global_changes);
+            return Ok(changes);
         }
+
+        let global_original = self.block(GLOBAL_BLOCK).map(|block| {
+            let was_modified = block.is_modified();
+            (block.gff().clone(), was_modified)
+        });
+        let mut global_changes = Vec::new();
+        let mut global_working = None;
+        if let Some((working, _)) = global_original.clone() {
+            let mut working = working;
+            global_changes = character.write_global(&mut working)?;
+            global_working = Some(working);
+        }
+
+        if !changes.is_empty() {
+            let block = self
+                .block_mut(player_name)
+                .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
+            *block.gff_mut() = player_working;
+        }
+        if let (Some(working), Some((_, was_modified))) = (global_working, global_original) {
+            if !global_changes.is_empty() {
+                let block = self
+                    .block_mut(GLOBAL_BLOCK)
+                    .ok_or_else(|| Error::Corrupt("campaign block vanished".to_owned()))?;
+                *block.gff_mut() = working;
+            } else if !was_modified && let Some(block) = self.block_mut(GLOBAL_BLOCK) {
+                block.mark_clean();
+            }
+        }
+        changes.extend(global_changes);
         Ok(changes)
     }
 }
 
 impl Character {
     /// Reads the character from a GFF block.
+    ///
+    /// Numeric fields are read through checked conversions. A value that does
+    /// not fit the typed model is an error rather than a silent truncation, so
+    /// an unchanged apply can never rewrite a wider value into a narrower one.
     pub fn read(gff: &Gff, prefix: &str) -> Result<Self> {
         let path = |suffix: &str| format!("{prefix}{suffix}");
-        let read = |suffix: &str| -> Option<&Field> { gff.get(path(suffix)).ok() };
+        let number = |suffix: &str| unsigned_field(gff, &path(suffix));
+        let float = |suffix: &str| float_field(gff, &path(suffix));
 
-        let number =
-            |suffix: &str| -> Option<u64> { read(suffix).and_then(|field| field.value.as_u64()) };
-        let float =
-            |suffix: &str| -> Option<f32> { read(suffix).and_then(|field| field.value.as_f32()) };
-        let signed =
-            |suffix: &str| -> Option<i64> { read(suffix).and_then(|field| field.value.as_i64()) };
+        let health = float("Stats.Health")?.unwrap_or(0.0);
+        let chi = float("Stats.Chi")?.unwrap_or(0.0);
+        let focus = float("Stats.Focus.STAT_CUR")?.unwrap_or(0.0);
 
-        let health = float("Stats.Health").unwrap_or(0.0);
-        let chi = float("Stats.Chi").unwrap_or(0.0);
-        let focus = float("Stats.Focus.STAT_CUR").unwrap_or(0.0);
+        let name = match optional_field(gff, &path("FirstName"))? {
+            Some(value) => value.as_str().unwrap_or_default().to_owned(),
+            None => String::new(),
+        };
+        let level = match number("Level")? {
+            Some(value) => u8::try_from(value)
+                .map_err(|_| narrow_error(&path("Level"), value, "an 8 bit level"))?,
+            None => 1,
+        };
+        let experience = match number("CurrentXP")? {
+            Some(value) => u32::try_from(value)
+                .map_err(|_| narrow_error(&path("CurrentXP"), value, "32 bit experience"))?,
+            None => 0,
+        };
+        let gold = match number("Stats.Gold")? {
+            Some(value) => Some(
+                u32::try_from(value)
+                    .map_err(|_| narrow_error(&path("Stats.Gold"), value, "32 bit gold"))?,
+            ),
+            None => None,
+        };
+        let attribute_points = match number("Stats.UnassignedPts")? {
+            Some(value) => u32::try_from(value)
+                .map_err(|_| narrow_error(&path("Stats.UnassignedPts"), value, "32 bit points"))?,
+            None => 0,
+        };
+        let health_max = match number("Stats.HealthBase")? {
+            Some(value) => u32::try_from(value)
+                .map_err(|_| narrow_error(&path("Stats.HealthBase"), value, "32 bit health"))?,
+            None => health.max(0.0) as u32,
+        };
+        let chi_max = match number("Stats.ChiBase")? {
+            Some(value) => u32::try_from(value)
+                .map_err(|_| narrow_error(&path("Stats.ChiBase"), value, "32 bit chi"))?,
+            None => chi.max(0.0) as u32,
+        };
+        let focus_max = float("Stats.Focus.STAT_MAX")?.unwrap_or(focus);
+        let body = checked_u32(gff, &path("Stats.Body"), 0)?;
+        let mind = checked_u32(gff, &path("Stats.Mind"), 0)?;
+        let spirit = checked_u32(gff, &path("Stats.Spirit"), 0)?;
+        let charm = checked_i32(gff, &path("Stats.Charm"), 0)?;
+        let intuition = checked_i32(gff, &path("Stats.Intuition"), 0)?;
+        let intimidate = checked_i32(gff, &path("Stats.Intimidate"), 0)?;
+        let alignment = checked_i32(
+            gff,
+            &path("Stats.Alignment"),
+            i32::try_from(DEFAULT_ALIGNMENT).unwrap_or(0),
+        )?;
+        let appearance = checked_i32(gff, &path("Stats.Appearance"), 0)?;
+        let chapter = checked_u32(gff, "Campaign.Chapter", 0)?;
+        let time_played = optional_field(gff, "Campaign.TimePlayed")?
+            .map(|value| {
+                value.as_u64().ok_or_else(|| {
+                    Error::Corrupt(
+                        "field \"Campaign.TimePlayed\" is not a non-negative number".to_owned(),
+                    )
+                })
+            })
+            .transpose()?
+            .unwrap_or(0);
+        let kills = checked_u32(gff, &path("Progress.Kills"), 0)?;
 
         Ok(Self {
-            name: read("FirstName")
-                .and_then(|field| field.value.as_str())
-                .unwrap_or_default()
-                .to_owned(),
-            level: number("Level").map_or(1, |value| u8::try_from(value).unwrap_or(1)),
-            experience: number("CurrentXP").map_or(0, |value| u32::try_from(value).unwrap_or(0)),
-            gold: number("Stats.Gold").map(|value| u32::try_from(value).unwrap_or(u32::MAX)),
-            attribute_points: number("Stats.UnassignedPts")
-                .map_or(0, |value| u32::try_from(value).unwrap_or(0)),
+            name,
+            level,
+            experience,
+            gold,
+            attribute_points,
             health,
-            health_max: number("Stats.HealthBase")
-                .map_or(health.max(0.0) as u32, |value| value as u32),
+            health_max,
             chi,
-            chi_max: number("Stats.ChiBase").map_or(chi.max(0.0) as u32, |value| value as u32),
+            chi_max,
             focus,
-            focus_max: float("Stats.Focus.STAT_MAX").unwrap_or(focus),
-            body: number("Stats.Body").unwrap_or(0) as u32,
-            mind: number("Stats.Mind").unwrap_or(0) as u32,
-            spirit: number("Stats.Spirit").unwrap_or(0) as u32,
-            charm: signed("Stats.Charm").unwrap_or(0) as i32,
-            intuition: signed("Stats.Intuition").unwrap_or(0) as i32,
-            intimidate: signed("Stats.Intimidate").unwrap_or(0) as i32,
-            alignment: signed("Stats.Alignment").unwrap_or(DEFAULT_ALIGNMENT) as i32,
-            appearance: signed("Stats.Appearance").unwrap_or(0) as i32,
-            chapter: gff
-                .get("Campaign.Chapter")
-                .ok()
-                .and_then(|field| field.value.as_u64())
-                .unwrap_or(0) as u32,
-            time_played: gff
-                .get("Campaign.TimePlayed")
-                .ok()
-                .and_then(|field| field.value.as_u64())
-                .unwrap_or(0),
-            kills: number("Progress.Kills").unwrap_or(0) as u32,
+            focus_max,
+            body,
+            mind,
+            spirit,
+            charm,
+            intuition,
+            intimidate,
+            alignment,
+            appearance,
+            chapter,
+            time_played,
+            kills,
         })
     }
 
@@ -301,7 +380,7 @@ impl Character {
                 gff,
                 &path("Stats.Gold"),
                 i64::from(gold),
-                false,
+                true,
                 &mut changes,
             )?;
         }
@@ -412,20 +491,81 @@ impl Character {
             false,
             &mut changes,
         )?;
-        if let Ok(field) = gff.get("Campaign.TimePlayed") {
-            if let Value::DWord64(before) = field.value {
-                if before != self.time_played {
-                    gff.set("Campaign.TimePlayed", Value::DWord64(self.time_played))?;
-                    changes.push(Change {
-                        field: "Campaign.TimePlayed".to_owned(),
-                        before: before.to_string(),
-                        after: self.time_played.to_string(),
-                    });
-                }
-            }
+        if let Ok(field) = gff.get("Campaign.TimePlayed")
+            && let Value::DWord64(before) = field.value
+            && before != self.time_played
+        {
+            gff.set("Campaign.TimePlayed", Value::DWord64(self.time_played))?;
+            changes.push(Change {
+                field: "Campaign.TimePlayed".to_owned(),
+                before: before.to_string(),
+                after: self.time_played.to_string(),
+            });
         }
         Ok(changes)
     }
+}
+
+fn optional_field<'a>(gff: &'a Gff, path: &str) -> Result<Option<&'a Value>> {
+    match gff.get(path) {
+        Ok(field) => Ok(Some(&field.value)),
+        Err(jadeforge_gff::Error::FieldNotFound { .. }) => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn unsigned_field(gff: &Gff, path: &str) -> Result<Option<u64>> {
+    optional_field(gff, path)?
+        .map(|value| {
+            value.as_u64().ok_or_else(|| {
+                Error::Corrupt(format!("field {path:?} is not a non-negative number"))
+            })
+        })
+        .transpose()
+}
+
+fn signed_field(gff: &Gff, path: &str) -> Result<Option<i64>> {
+    optional_field(gff, path)?
+        .map(|value| {
+            value
+                .as_i64()
+                .ok_or_else(|| Error::Corrupt(format!("field {path:?} is not an integer")))
+        })
+        .transpose()
+}
+
+fn float_field(gff: &Gff, path: &str) -> Result<Option<f32>> {
+    optional_field(gff, path)?
+        .map(|value| {
+            value
+                .as_f32()
+                .ok_or_else(|| Error::Corrupt(format!("field {path:?} is not a number")))
+        })
+        .transpose()
+}
+
+fn checked_u32(gff: &Gff, path: &str, default: u32) -> Result<u32> {
+    match unsigned_field(gff, path)? {
+        Some(value) => {
+            u32::try_from(value).map_err(|_| narrow_error(path, value, "a 32 bit value"))
+        }
+        None => Ok(default),
+    }
+}
+
+fn checked_i32(gff: &Gff, path: &str, default: i32) -> Result<i32> {
+    match signed_field(gff, path)? {
+        Some(value) => {
+            i32::try_from(value).map_err(|_| narrow_error(path, value, "a 32 bit value"))
+        }
+        None => Ok(default),
+    }
+}
+
+fn narrow_error(path: &str, value: impl std::fmt::Display, target: &str) -> Error {
+    Error::Corrupt(format!(
+        "field {path:?} value {value} does not fit in {target}"
+    ))
 }
 
 fn check_unsigned(name: &str, value: u64, min: u64, max: u64) -> Result<()> {
@@ -453,7 +593,7 @@ fn check_signed(name: &str, value: i64, min: i64, max: i64) -> Result<()> {
 }
 
 fn check_name(name: &str) -> Result<()> {
-    if name.len() > 64 || name.chars().any(char::is_control) {
+    if name.chars().count() > 64 || name.chars().any(char::is_control) {
         return Err(Error::OutOfRange {
             path: "name".to_owned(),
             value: name.to_owned(),
@@ -489,7 +629,8 @@ fn set_number(
 ) -> Result<()> {
     let Ok(field) = gff.get(path) else {
         if create && value != 0 {
-            gff.add(path, Value::DWord(value as u32))?;
+            let gold = u32::try_from(value).map_err(|_| out_of_range(path, value))?;
+            gff.add(path, Value::DWord(gold))?;
             changes.push(Change {
                 field: path.to_owned(),
                 before: "<missing>".to_owned(),
@@ -508,7 +649,7 @@ fn set_number(
         3 => Value::Short(i16::try_from(value).map_err(|_| out_of_range(path, value))?),
         4 => Value::DWord(u32::try_from(value).map_err(|_| out_of_range(path, value))?),
         5 => Value::Int(i32::try_from(value).map_err(|_| out_of_range(path, value))?),
-        6 => Value::DWord64(value as u64),
+        6 => Value::DWord64(u64::try_from(value).map_err(|_| out_of_range(path, value))?),
         7 => Value::Int64(value),
         _ => {
             return Err(Error::TypeMismatch {
@@ -552,7 +693,7 @@ fn set_float(gff: &mut Gff, path: &str, value: f32, changes: &mut Vec<Change>) -
 }
 
 fn set_text(gff: &mut Gff, path: &str, value: &str, changes: &mut Vec<Change>) -> Result<()> {
-    if value.len() > 64 || value.chars().any(char::is_control) {
+    if value.chars().count() > 64 || value.chars().any(char::is_control) {
         return Err(Error::OutOfRange {
             path: path.to_owned(),
             value: value.to_owned(),

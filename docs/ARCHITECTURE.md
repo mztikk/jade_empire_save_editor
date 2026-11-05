@@ -52,7 +52,7 @@ savegame container and the typed editing model.
 | `styles` | fighting styles: names, levels, upgrade masks, add/remove |
 | `henchmen` | companions: level and availability |
 | `screenshot` | `SaveImage.tga` decoder (TGA 24/32 bit, RLE and raw) |
-| `json` | JSON export used by `jadeforge dump --json`; the only JSON surface |
+| `json` | JSON export used by `jadeforge-cli dump --json`; the only JSON surface |
 | `error` | one error enum with context, wrapping the GFF layer's error |
 
 ### Data flow
@@ -66,7 +66,7 @@ save.sac ──parse──▶ SaveGame { blocks: [Block { gff, span, modified }]
                           │
         apply_character() mutates the GFF tree of one block
                           │
- save_to(): verify() ─▶ to_bytes() ─▶ temp file ─▶ fsync ─▶ rename
+ save_to(): verify() ─▶ conflict check ─▶ exclusive temp ─▶ fsync ─▶ rename ─▶ directory fsync
 ```
 
 Blocks keep the byte range they occupy in the original file. `SaveGame::to_bytes`
@@ -75,20 +75,30 @@ edited, which is what makes "open and save" byte identical and keeps diffs
 minimal.
 
 Before anything is written, `SaveGame::verify` re-parses the produced bytes and
-compares every struct and label. A mismatch aborts the save.
+compares every block name, version, root, label and struct. A mismatch aborts
+the save. The cheap domain invariants are checked as well: the amulet list keeps
+its seven slots, socketed gems fit the tier, and a style level matches its mask.
 
 ### Safety model
 
 1. Parsing is strict: bad magic, out-of-range offsets, unknown field types and
    inconsistent block sizes are errors, never "best effort".
 2. Edits are range checked (`level` 1..=255, health 0..=1_000_000, names at most
-   64 printable characters, ...).
+   64 characters, ...) and typed editors run on a working copy, so a rejected
+   edit leaves the savegame and its dirty flag untouched.
 3. Only fields that actually change are touched; `apply_character` returns the
    list of changes so callers can show a diff.
-4. Saving verifies the full round trip first.
-5. The new file is written to a temporary sibling and moved into place, so an
-   interrupted save can never truncate the original.
-6. A timestamped backup is created next to the savegame by default.
+4. Saving verifies the full round trip and the domain invariants first.
+5. The new file is written to an exclusive temporary sibling with the original
+   permissions, fsynced and moved into place; the parent directory is fsynced
+   too, so an interrupted save cannot truncate the original.
+6. Backups use unique nanosecond/counter names, are written to a temporary file
+   and renamed, and a pre-existing file or symlink is never followed or
+   overwritten.
+7. The file identity (size, mtime, inode on Unix) is recorded at open time; a
+   savegame that changed underneath the editor is reported as a conflict
+   instead of overwritten. Saving through a symlink keeps the link and writes
+   through to its target.
 
 ## `jadeforge-gamedata`
 
@@ -98,20 +108,26 @@ Names live in the installation, not in the savegame. The crate reads
 * text 2DA tables from `override/` and binary `2DA V2.b` tables from the RIM
   archives (`items.2da`, `gems.2da`, `effects.2da`, `stylesuperlist.2da`, ...).
 
-`GameData::discover` walks up from the save folder (`JADEFORGE_GAME_DIR`
-overrides) and resolves items, styles and style upgrades once, caching the
-decoded names. `StyleAdvance.2da` supplies the effect, cost and description of a slot, while
+`GameData::discover_result` walks up from the save folder (relative paths are
+anchored at the current directory first; `JADEFORGE_GAME_DIR` overrides) and
+resolves items, styles and style upgrades once, caching the decoded names. A
+found-but-unreadable installation is reported instead of being hidden as
+"missing"; a broken `dialog.tlk` falls back to `dialogf.tlk`. `StyleAdvance.2da` supplies the effect, cost and description of a slot, while
 the style's own `<Style>LV.2da` table defines the purchasable slots: bit *i* of
 `StyleLevelInfo` is slot `i+1`, and the slot points at an advance row.
 `stylesuperlist.StyleData` selects a row of `styledata.2da`, whose `levelup2da`
 column names the table. Those tables (and `gems.2da`, `effects.2da`) live in
-`data/miniglobal-a.rim` as binary `2DA V2.b` resources, so the crate has a `rim`
-reader and a binary 2DA parser; `override/` text tables take precedence
-(case-insensitive lookup, lossy decoding), which is what makes mods work. Styles
+`data/miniglobal-a.rim` and `data/globalunload-a.rim` as binary `2DA V2.b`
+resources; both archives are searched. `override/` text tables take precedence
+(case-insensitive lookup, lossy decoding), which is what makes mods work. RIM
+and text/binary 2DA versions are validated, row numbers and allocations are
+bounded, and every cell lookup is confined to the declared string pool. Styles
 without a level-up table are read-only in the editor.
 `tests/modded.rs` builds a small modded installation and asserts the resolution.
-`search_items` powers the item picker. Every table is optional: without the game
-files the UI falls back to numeric ids.
+`search_items` powers the item picker, ranking prefix matches first. Every table
+is optional: without the game files the UI falls back to numeric ids. A file
+that exists but cannot be parsed is collected in `GameData::warnings` and shown
+when the savegame is opened instead of being reported as "missing".
 
 ## `jadeforge-cli`
 
@@ -121,9 +137,12 @@ serves as an end-to-end test target (see `crates/jadeforge-cli/tests`).
 
 ## `jadeforge-session`
 
-UI independent state and behaviour of the desktop application. `session` scans
+UI independent state and behaviour of the desktop application. The `Session`
+fields are private; views use read-only accessors such as `items()`, `gems()`
+and `message()`. UI actions return the typed `SessionError`; form parsing returns `FormError`. `session` scans
 the save folder, holds the opened savegame, applies form edits, searches the
-item database and saves or reverts; `config` is the small TOML settings file
+item database and saves or reverts; the row/message model lives in
+`session/model.rs`, the editable form in `session/form.rs`; `config` is the small TOML settings file
 (save folder and list sorting; old `key=value` files are still read). The crate
 depends on `jadeforge-core` and `jadeforge-gamedata` but on no windowing
 toolkit, so its tests run on every platform without the GUI system libraries.
@@ -136,7 +155,7 @@ Freya 0.4 application with a small, explicit structure:
 
 | module | responsibility |
 | --- | --- |
-| `app` | the shell: header, save list with screenshot, tabs, action bar |
+| `app/` | root component (`mod.rs`), header/preview/footer (`shell.rs`), save list and sort controls (`sidebar.rs`), tab bar (`navigation.rs`) |
 | `dialog` | the native folder dialog (`rfd`) with a test seam for the headless suite |
 | `theme` | palette and the Freya component theme (dark surfaces, gold accents) |
 | `app::HoverKey` | one shared hover state for save, item, style rows and upgrade orbs |
@@ -164,9 +183,9 @@ The GUI is tested headlessly through `freya-testing`: the real component tree is
 rendered off-screen, a savegame is opened by clicking it, tabs are switched, a
 style level is raised, an item is searched and added, the pagination of the item
 database is exercised, a broken savegame is reported and the rendered frames are
-checked. The tests build
-a miniature installation (talk table + two 2DA files + one savegame) in a
-temporary folder. `cargo run -p jadeforge-gui --example snapshot -- <dir> <png>
+checked. The fixture uses `JADEFORGE_SAVE_DIR` when it is set and otherwise
+builds a complete synthetic savegame and installation in a temporary folder, so
+the suite runs in CI without the retail game. `cargo run -p jadeforge-gui --example snapshot -- <dir> <png>
 [TAB|all] [--height N] [--query TEXT]` produces the screenshots used in the
 documentation.
 
@@ -175,38 +194,43 @@ documentation.
 Opening the window must not wait for the savegame corpus. The sequence is:
 
 1. `Session::empty(directory)` builds the shell without opening any savegame and
-   loads the game data (13 ms on the retail install).
+   loads the game data (a few milliseconds on the retail install).
 2. The first frame renders with the "Scanning for savegames…" message.
 3. `app_with_directory` starts a `use_future` task. It spawns a worker thread
    running `Session::scan_entries` and awaits the result through a futures
    channel, so the Freya executor is never blocked by file I/O.
-4. The future calls `Session::apply_entries` and bumps the revision; the list
-   and the "Found 89 savegames" message appear.
+4. The future calls `Session::apply_entries_for` with the directory and scan
+   token it started from. Stale results for a folder the user has already left
+   are discarded, then the revision is bumped and the list appears.
 5. If the worker dies, `Session::report_scan_failure` replaces the pending
    message instead of leaving the UI waiting forever.
 
 `SaveGame::metadata` and `Gff::selected_fields` keep the scan cheap: only
 `PlayerCreature.FirstName`, `PlayerCreature.Level` and `Campaign.TimePlayed`
 are decoded, not the tens of thousands of fields in the PlayerCreature block.
-On the 89-savegame corpus this is 140 ms instead of 1.87 s for the full
-character parse, and `tests/metadata.rs` checks every save against
-`Character::read`.
+On the 89-savegame corpus this was measured at about 39 ms warm (the earlier
+140 ms figure was a cold-cache run) instead of 1.87 s for the full character
+parse, and `tests/metadata.rs` checks every save against `Character::read`.
 
-Directory changes still scan synchronously (140 ms); they happen on an explicit
-user action and use the same `scan_entries`/`apply_entries` path as the
+Directory changes still scan synchronously (about 27 ms warm); they happen on an
+explicit user action and use the same `scan_entries`/`apply_entries` path as the
 background scan, so the messages cannot diverge.
 
 ## Test strategy
 
 | layer | file | needs the game? |
 | --- | --- | --- |
-| GFF unit tests | `crates/jadeforge-gff/src/path.rs` | no |
+| GFF parser/codec/helpers | `crates/jadeforge-gff/src/*`, `tests/*` | no |
 | session unit tests | `crates/jadeforge-session/src/session.rs`, `config.rs` | no |
-| synthetic savegames | `crates/jadeforge-core/tests/synthetic.rs` | no |
-| real savegames | `tests/roundtrip.rs`, `tests/rewrite.rs`, `tests/editing.rs` | yes, skipped otherwise |
+| synthetic savegames | `crates/jadeforge-core/tests/*` | no |
+| real savegames | `tests/roundtrip.rs`, `tests/rewrite.rs`, `tests/editing.rs`, `tests/gems.rs` | yes, skipped otherwise |
 | CLI end to end | `crates/jadeforge-cli/tests/cli.rs` | synthetic |
 | game data | `crates/jadeforge-gamedata/tests/real_data.rs` | yes, skipped otherwise |
-| UI | `crates/jadeforge-gui/tests/ui.rs` | yes (saves + game files), skipped otherwise |
+| game data synthetic | `crates/jadeforge-gamedata/tests/synthetic.rs` | no |
+| mutation pass | `crates/jadeforge-gff/tests/mutations.rs`, `crates/jadeforge-gamedata/tests/mutations.rs` | no |
+| fuzz targets | `fuzz/` (`cargo-fuzz`, not a workspace member) | no |
+| benchmark | `crates/jadeforge-core/benches/save_corpus.rs` | optional corpus |
+| UI | `crates/jadeforge-gui/tests/ui.rs` | synthetic by default, real corpus when set |
 
 Tests that need the game look for `JADEFORGE_SAVE_DIR` and skip with a note when
 it is not set, so CI stays green on machines without Jade Empire.
@@ -216,7 +240,7 @@ it is not set, so CI stays green on machines without Jade Empire.
 Deliberately small:
 
 * `clap` for the CLI,
-* `serde_json`, only for the `jadeforge dump --json` export (never for settings or
+* `serde_json`, only for the `jadeforge-cli dump --json` export (never for settings or
   internal data flow),
 * `thiserror` for errors,
 * `serde` and `toml` for the settings file,
