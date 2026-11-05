@@ -51,9 +51,10 @@ accent.
   space and can make the row grow. `assert_compact_action_rows` in
   `tests/ui.rs` checks both the vertical pitch and the right edge of action
   labels; extend it when adding a new list action.
-- The sidebar save preview is deliberately a fixed 160x160, aspect-preserving
+- The sidebar save preview is deliberately a fixed 120x120, aspect-preserving
   image. Do not make it fill the responsive sidebar: that is what caused the
-  zoom/crop regression. The UI test asserts both dimensions.
+  zoom/crop regression. The UI test asserts both dimensions, and the 900x700
+  minimum-window test asserts that at least four save rows remain visible.
 - Focus rings must reserve their space even when unfocused; otherwise keyboard
   navigation moves tabs, sort controls and rows. `AccessibleButton` always
   carries a transparent 1.5 px border and only recolours it on focus.

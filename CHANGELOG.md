@@ -33,7 +33,12 @@ All notable changes are documented here. The format follows
 - Character reads reject wider or negative values instead of truncating, and
   player/campaign edits are committed only after every write succeeds.
 - Missing optional character fields (notably gold) are created on edit; numeric
-  edits preserve the saved field type.
+  edits preserve the saved field type. Saves that already lack a gold field no
+  longer open with a false "invalid character input" badge, and the form keeps
+  the field absent until a value is entered.
+- Revert and Remove item/style/gem ask before discarding or deleting, and the
+  last fighting style can no longer be removed because JadeForge needs an
+  existing style as a template for learning another.
 - Style upgrades use the style's real slot table and a gap-free family prefix;
   new styles preserve field types and caller identity.
 - Session scan results are tied to their directory, stale scans are discarded,
@@ -44,11 +49,15 @@ All notable changes are documented here. The format follows
 - The close button asks before discarding unsaved changes.
 - Accessibility: raised muted-text contrast, accessible names for tabs, sort
   controls, savegame rows and item/style rows, and keyboard activation for all
-  of them.
-- UI layout: compact list rows with controls inside the card, a fixed 160x160
-  aspect-preserving save preview, correct singular/plural count labels, and
-  headless geometry tests for row pitch, control bounds, preview size and every
-  tab at 900/1600 px.
+  of them. Static page text now has AccessKit values, card/section titles and
+  empty-state headings are headings, the status line is a live region, tabs
+  expose selected state, and the save list is a single Tab stop with list-box
+  roles, selected options and arrow-key navigation. Expanded rows and upgrade
+  orbs expose their state, and headless regression tests cover the tree.
+- UI layout: compact list rows with controls inside the card, a fixed 120x120
+  aspect-preserving save preview, correct singular/plural count labels, a
+  900x700 minimum window, and headless geometry tests for row pitch, control
+  bounds, preview size and every tab at 900/1600 px.
 - Stability: stable keys on dynamic rows, tab content and preview subtrees, plus
   a repeated tab-switch regression test, to avoid the Freya 0.4 diff panic seen
   when switching Gems -> Inventory on a large save.
@@ -59,6 +68,9 @@ All notable changes are documented here. The format follows
   jade gem in the icon and the game's setting. The palette tests now enforce the
   jade hue and WCAG AA contrast for accent text and for text on accent surfaces.
   The style upgrade orbs keep their golden, in-game look.
+- The supported minimum window is 900x700 (was 900x600), and the sidebar
+  preview is 120x120 (was 160x160), so the save browser keeps several rows
+  visible at the smallest size.
 - `just install-desktop` now depends on `just install`, so a Linux install is
   one command for the binary, launcher entry and hicolor icons.
 - Workspace MSRV is 1.88; the dependency graph was updated to remove the

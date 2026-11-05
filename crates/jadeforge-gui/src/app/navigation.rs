@@ -26,8 +26,7 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
                         Color::TRANSPARENT
                     })
                     .child(
-                        label()
-                            .text(candidate.label())
+                        crate::widgets::a11y_text(candidate.label())
                             .font_size(12.)
                             .max_lines(1)
                             // Keep the weight constant: bold text is wider,
@@ -40,6 +39,8 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
                             }),
                     ),
             )
+            .role(AccessibilityRole::Tab)
+            .selected(is_active)
             .key(candidate.index())
             .into_element(),
         );
@@ -56,6 +57,7 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
                 .spacing(4.)
                 .content(Content::wrap_spacing(4.))
                 .padding(Gaps::new(10., 18., 8., 18.))
+                .a11y_role(AccessibilityRole::TabList)
                 .children(buttons)
                 .into_element(),
         )

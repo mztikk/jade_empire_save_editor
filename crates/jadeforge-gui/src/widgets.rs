@@ -8,6 +8,27 @@ use freya::prelude::*;
 
 use crate::theme;
 
+/// A text label that is also exposed to assistive technology.
+///
+/// Freya 0.4 gives a label the `Label` role but does not fill its AccessKit
+/// `value`, and AccessKit does not use `label` as the name for that role. Every
+/// visible string therefore goes through this helper: the same text is both the
+/// rendered content and the screen-reader value.
+pub fn a11y_text(content: impl Into<String>) -> Label {
+    let content = content.into();
+    let value = content.clone();
+    let name = content.clone();
+    // Keying by the rendered text makes a changed label a new accessibility
+    // node. Freya's AT-SPI adapter does not refresh the name of an existing
+    // label when only its value changes, so this keeps counts, status messages
+    // and values current for screen readers.
+    let key = content.clone();
+    label().text(content).key(key).a11y_builder(move |node| {
+        node.set_value(value);
+        node.set_label(name);
+    })
+}
+
 /// A card with a title, an optional hint and a vertical body.
 pub fn card(title: &'static str, hint: Option<String>, children: Vec<Element>) -> Element {
     let mut body = rect()
@@ -24,16 +45,16 @@ pub fn card(title: &'static str, hint: Option<String>, children: Vec<Element>) -
                 .spacing(10.)
                 .content(Content::Flex)
                 .child(
-                    label()
-                        .text(title)
+                    a11y_text(title)
+                        .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
                         .font_size(15.)
                         .font_weight(FontWeight::BOLD)
                         .color(theme::TEXT),
                 )
                 .child(rect().width(Size::flex(1.0)))
                 .child(hint.map_or_else(
-                    || label().text("").font_size(11.),
-                    |hint| label().text(hint).font_size(11.).color(theme::DIM),
+                    || a11y_text("").font_size(11.),
+                    |hint| a11y_text(hint).font_size(11.).color(theme::DIM),
                 )),
         );
     for child in children {
@@ -59,9 +80,13 @@ pub fn field(label_text: &'static str, input: impl IntoElement, width: f32) -> E
         .vertical()
         .spacing(6.)
         .width(Size::px(width))
+        // Freya 0.4 has no Input::label API yet. Naming the field group at
+        // least gives a screen reader the caption before it reaches the input's
+        // own value; the true label association is an upstream follow-up.
+        .a11y_role(AccessibilityRole::Group)
+        .a11y_alt(label_text)
         .child(
-            label()
-                .text(label_text)
+            a11y_text(label_text)
                 .font_size(10.)
                 .font_weight(FontWeight::BOLD)
                 .color(theme::DIM),
@@ -76,10 +101,9 @@ pub fn stat(label_text: &'static str, value: String) -> Element {
         .vertical()
         .spacing(2.)
         .width(Size::px(120.))
-        .child(label().text(label_text).font_size(10.).color(theme::DIM))
+        .child(a11y_text(label_text).font_size(10.).color(theme::DIM))
         .child(
-            label()
-                .text(value)
+            a11y_text(value)
                 .font_size(18.)
                 .font_weight(FontWeight::BOLD)
                 .color(theme::TEXT),
@@ -93,7 +117,7 @@ pub fn badge(text: impl Into<String>, fill: Color, text_color: Color) -> Element
         .padding(Gaps::new_symmetric(2., 8.))
         .background(fill)
         .corner_radius(99.)
-        .child(label().text(text.into()).font_size(10.).color(text_color))
+        .child(a11y_text(text.into()).font_size(10.).color(text_color))
         .into_element()
 }
 
@@ -108,8 +132,7 @@ pub fn divider() -> Element {
 
 /// Small muted explanatory text.
 pub fn hint(text: impl Into<String>) -> Element {
-    label()
-        .text(text.into())
+    a11y_text(text.into())
         .font_size(11.)
         .color(theme::DIM)
         .into_element()
@@ -117,8 +140,8 @@ pub fn hint(text: impl Into<String>) -> Element {
 
 /// A section label inside a card.
 pub fn section_label(text: &'static str) -> Element {
-    label()
-        .text(text)
+    a11y_text(text)
+        .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
         .font_size(10.)
         .font_weight(FontWeight::BOLD)
         .color(theme::DIM)
@@ -133,8 +156,7 @@ pub fn label_row(label_text: impl Into<String>, trailing: impl IntoElement) -> E
         .spacing(10.)
         .content(Content::Flex)
         .child(
-            label()
-                .text(label_text.into())
+            a11y_text(label_text.into())
                 .font_size(12.)
                 .color(theme::MUTED),
         )
@@ -149,6 +171,7 @@ pub fn details(description: Option<&str>) -> Option<Element> {
         .map(str::trim)
         .filter(|text| !text.is_empty())
         .map(|text| {
+            let value = text.to_owned();
             rect()
                 .width(Size::fill())
                 .padding(Gaps::new(2., 10., 6., 10.))
@@ -158,6 +181,7 @@ pub fn details(description: Option<&str>) -> Option<Element> {
                         .max_lines(5)
                         .font_size(11.)
                         .color(theme::MUTED)
+                        .a11y_builder(move |node| node.set_value(value))
                         .span(text.to_owned()),
                 )
                 .into_element()
@@ -222,7 +246,13 @@ where
         let focused = focus() == Focus::Keyboard;
         let mut expanded = self.expanded;
         let id = self.id;
-        let accessible = format!("{}, {}", self.name, self.subtitle);
+        let is_expanded = *expanded.read() == Some(id);
+        let accessible = format!(
+            "{}, {}, {}",
+            self.name,
+            self.subtitle,
+            if is_expanded { "expanded" } else { "collapsed" }
+        );
         rect()
             .vertical()
             .spacing(1.)
@@ -238,22 +268,22 @@ where
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::Button)
             .a11y_alt(accessible)
+            .a11y_builder(move |node| node.set_expanded(is_expanded))
             .on_pointer_enter(|_| Cursor::set(CursorIcon::Pointer))
             .on_pointer_leave(|_| Cursor::set(CursorIcon::default()))
             .on_all_press(move |_| {
+                a11y_id.request_focus();
                 let current = *expanded.read();
                 *expanded.write() = if current == Some(id) { None } else { Some(id) };
             })
             .child(
-                label()
-                    .text(self.name.clone())
+                a11y_text(self.name.clone())
                     .font_size(self.font_size)
                     .max_lines(1)
                     .color(theme::TEXT),
             )
             .child(
-                label()
-                    .text(self.subtitle.clone())
+                a11y_text(self.subtitle.clone())
                     .font_size(10.)
                     .color(theme::DIM),
             )
@@ -272,7 +302,7 @@ pub fn label_grid(rows: Vec<(String, Element)>) -> Element {
                 .spacing(12.)
                 .content(Content::Flex)
                 .padding(Gaps::new_symmetric(8., 0.))
-                .child(label().text(name).font_size(12.).color(theme::MUTED))
+                .child(a11y_text(name).font_size(12.).color(theme::MUTED))
                 .child(rect().width(Size::flex(1.0)))
                 .child(value)
                 .into_element()
@@ -324,6 +354,9 @@ pub struct AccessibleButton {
     action: Action,
     content: Element,
     fill_width: bool,
+    role: AccessibilityRole,
+    selected: bool,
+    focusable: bool,
     key: DiffKey,
 }
 
@@ -335,6 +368,9 @@ impl AccessibleButton {
             action,
             content: content.into(),
             fill_width: false,
+            role: AccessibilityRole::Button,
+            selected: false,
+            focusable: true,
             key: DiffKey::None,
         }
     }
@@ -343,6 +379,28 @@ impl AccessibleButton {
     #[must_use]
     pub fn fill_width(mut self) -> Self {
         self.fill_width = true;
+        self
+    }
+
+    /// Uses a more specific accessibility role, for example `Tab` or
+    /// `ListBoxOption`.
+    #[must_use]
+    pub fn role(mut self, role: AccessibilityRole) -> Self {
+        self.role = role;
+        self
+    }
+
+    /// Exposes the selected state of a tab or list option.
+    #[must_use]
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
+        self
+    }
+
+    /// Makes the node reachable by keyboard focus.
+    #[must_use]
+    pub fn focusable(mut self, focusable: bool) -> Self {
+        self.focusable = focusable;
         self
     }
 }
@@ -359,12 +417,17 @@ impl Component for AccessibleButton {
         let focus = use_focus(a11y_id);
         let focused = focus() == Focus::Keyboard;
         let action = self.action.clone();
+        let selected = self.selected;
         let mut button = rect()
             .a11y_id(a11y_id)
-            .a11y_focusable(true)
-            .a11y_role(AccessibilityRole::Button)
+            .a11y_focusable(self.focusable)
+            .a11y_role(self.role)
             .a11y_alt(self.label.clone())
-            .on_all_press(move |_| action.call())
+            .a11y_builder(move |node| node.set_selected(selected))
+            .on_all_press(move |_| {
+                a11y_id.request_focus();
+                action.call();
+            })
             .on_pointer_enter(|_| Cursor::set(CursorIcon::Pointer))
             .on_pointer_leave(|_| Cursor::set(CursorIcon::default()))
             // Reserve the focus ring even when unfocused, so tabbing through

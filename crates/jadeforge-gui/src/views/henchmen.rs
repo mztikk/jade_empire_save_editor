@@ -64,6 +64,8 @@ fn henchman_row(ctx: &Ctx, henchman: &HenchRow) -> Element {
         .horizontal()
         .width(Size::fill())
         .key(index)
+        .a11y_role(AccessibilityRole::Group)
+        .a11y_alt(format!("{} companion", henchman.name))
         .spacing(10.)
         .content(Content::Flex)
         .padding(Gaps::new_symmetric(6., 10.))
@@ -75,15 +77,13 @@ fn henchman_row(ctx: &Ctx, henchman: &HenchRow) -> Element {
                 .spacing(1.)
                 .width(Size::flex(1.0))
                 .child(
-                    label()
-                        .text(henchman.name.clone())
+                    widgets::a11y_text(henchman.name.clone())
                         .font_size(13.)
                         .max_lines(1)
                         .color(theme::TEXT),
                 )
                 .child(
-                    label()
-                        .text(henchman.resref.clone())
+                    widgets::a11y_text(henchman.resref.clone())
                         .font_size(10.)
                         .color(theme::DIM),
                 ),
@@ -95,8 +95,7 @@ fn henchman_row(ctx: &Ctx, henchman: &HenchRow) -> Element {
         })
         .child(Button::new().compact().flat().child("−").on_press(lower))
         .child(
-            label()
-                .text(format!("Lv {level}"))
+            widgets::a11y_text(format!("Lv {level}"))
                 .font_size(12.)
                 .width(Size::px(46.))
                 .text_align(TextAlign::Center)
