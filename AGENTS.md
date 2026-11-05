@@ -78,6 +78,16 @@ cargo commands above remain canonical.
     assumed time or context limits. If a complete implementation is genuinely
     impractical, say so explicitly and ask before reducing scope. A shortcut is
     only acceptable when the request itself asks for one.
+11. **Research before assuming.** For unfamiliar APIs, dependency choices,
+    version-sensitive behaviour and external failure modes, consult the
+    primary sources before implementing: docs.rs, crates.io, the upstream
+    GitHub repository (release notes and issues), and the exact source of the
+    pinned version under `~/.cargo/registry`. Local source tells you what
+    compiles; docs and issues tell you the intended pattern and known
+    pitfalls. Do not rely on memory for a library API, and do not pick a
+    dependency merely because it is familiar. Cite the URLs you used in the
+    answer. Searching and reading documentation is part of the work, not
+    optional overhead.
 
 ## Code style
 
