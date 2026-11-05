@@ -77,7 +77,7 @@ cli *args:
 #
 # x86-64 Linux and Windows build twice, into the same folder: `jadeforge` and
 # `jadeforge-cli` with the x86-64-v3 ISA (AVX2, Haswell/Zen 2+), plus
-# `jadeforge-baseline` and `jadeforge-cli-baseline` for older CPUs. macOS
+# `jadeforge-generic-cpu` and `jadeforge-cli-generic-cpu` for older CPUs. macOS
 # builds once, because the Intel binary must also run under Rosetta (no AVX2).
 publish-target target:
     @case "{{ target }}" in \
@@ -98,14 +98,14 @@ publish-target target:
     dual=0; case "{{ target }}" in x86_64-unknown-linux-gnu|x86_64-pc-windows-msvc) dual=1 ;; esac; \
     out="dist/jadeforge-{{ version }}-{{ target }}"; \
     mkdir -p "$out"; \
-    rm -f "$out/jadeforge{{ exe }}" "$out/jadeforge-baseline{{ exe }}" \
-        "$out/jadeforge-cli{{ exe }}" "$out/jadeforge-cli-baseline{{ exe }}" \
+    rm -f "$out/jadeforge{{ exe }}" "$out/jadeforge-generic-cpu{{ exe }}" \
+        "$out/jadeforge-cli{{ exe }}" "$out/jadeforge-cli-generic-cpu{{ exe }}" \
         "$out/jadeforge-gui{{ exe }}"; \
     cp "target/{{ target }}/dist/jadeforge{{ exe }}" "$out/"; \
     cp "target/{{ target }}/dist/jadeforge-cli{{ exe }}" "$out/"; \
     if [ "$dual" = 1 ]; then \
-        cp "target/baseline/{{ target }}/dist/jadeforge{{ exe }}" "$out/jadeforge-baseline{{ exe }}"; \
-        cp "target/baseline/{{ target }}/dist/jadeforge-cli{{ exe }}" "$out/jadeforge-cli-baseline{{ exe }}"; \
+        cp "target/baseline/{{ target }}/dist/jadeforge{{ exe }}" "$out/jadeforge-generic-cpu{{ exe }}"; \
+        cp "target/baseline/{{ target }}/dist/jadeforge-cli{{ exe }}" "$out/jadeforge-cli-generic-cpu{{ exe }}"; \
     fi; \
     cp LICENSE README.md "$out/"; \
     echo "publish: staged $out/"
@@ -150,16 +150,16 @@ publish-linux:
     host=$(rustc -vV | sed -n 's/^host: //p'); \
     out="dist/jadeforge-$version-$host"; \
     mkdir -p "$out"; \
-    rm -f "$out/jadeforge" "$out/jadeforge-baseline" \
-        "$out/jadeforge-cli" "$out/jadeforge-cli-baseline" \
+    rm -f "$out/jadeforge" "$out/jadeforge-generic-cpu" \
+        "$out/jadeforge-cli" "$out/jadeforge-cli-generic-cpu" \
         "$out/jadeforge-gui"; \
     cp "target/podman/dist/jadeforge" "$out/"; \
     cp "target/podman/dist/jadeforge-cli" "$out/"; \
-    cp "target/podman-baseline/dist/jadeforge" "$out/jadeforge-baseline"; \
-    cp "target/podman-baseline/dist/jadeforge-cli" "$out/jadeforge-cli-baseline"; \
+    cp "target/podman-baseline/dist/jadeforge" "$out/jadeforge-generic-cpu"; \
+    cp "target/podman-baseline/dist/jadeforge-cli" "$out/jadeforge-cli-generic-cpu"; \
     cp LICENSE README.md "$out/"; \
     ci/check-glibc.sh "$out/jadeforge" 2.35; \
-    ci/check-glibc.sh "$out/jadeforge-baseline" 2.35; \
+    ci/check-glibc.sh "$out/jadeforge-generic-cpu" 2.35; \
     echo "publish-linux: staged $out/"
 
 # Remove all build artifacts: the cargo target directory and the staged

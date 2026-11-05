@@ -40,7 +40,7 @@ and `just publish` builds the fat-LTO distribution binaries.
 `just publish-linux` builds the SteamOS-compatible Linux binaries (glibc 2.35) in
 a rootless Podman container. Linux/Windows x86-64 releases ship both the
 `x86-64-v3` binaries (`jadeforge`, `jadeforge-cli`) and baseline fallbacks
-(`jadeforge-baseline`, `jadeforge-cli-baseline`) in the same folder. `just coverage` runs
+(`jadeforge-generic-cpu`, `jadeforge-cli-generic-cpu`) in the same folder. `just coverage` runs
 `cargo llvm-cov nextest` and writes `coverage/lcov.info` and `coverage/html` (see
 [docs/COVERAGE.md](docs/COVERAGE.md) for the current numbers and the plan). The
 cargo commands above remain canonical.
