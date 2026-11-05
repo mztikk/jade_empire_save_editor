@@ -863,6 +863,9 @@ fn resolve_write_target(target: &Path) -> Result<PathBuf> {
 
 /// Syncs the containing directory after a rename, on platforms where that is
 /// meaningful.
+// Windows has no directory fsync; keeping the same Result signature lets the
+// save path call this unconditionally.
+#[cfg_attr(not(unix), allow(clippy::unnecessary_wraps))]
 fn sync_parent(path: &Path) -> Result<()> {
     #[cfg(unix)]
     {

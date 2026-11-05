@@ -106,10 +106,13 @@ pub(super) const STATUS_LINE_HEIGHT: f32 = 13.;
 /// otherwise grow the header and push every tab down when they appear or pass.
 pub(super) const STATUS_HEIGHT: f32 = STATUS_LINE_HEIGHT * 2.;
 
-/// Width of the sort direction arrow at font size 10, including the space
-/// before it. Inactive sort buttons reserve this width with an empty spacer so
-/// they do not move when the arrow changes column.
-pub(super) const SORT_ARROW_WIDTH: f32 = 11.;
+/// Width of the fixed sort-direction arrow slot, in logical pixels.
+///
+/// Every sort button reserves the slot, active or not, so changing the sort key
+/// or direction cannot move the neighbouring buttons. The glyph itself is
+/// platform-font dependent, which is why the slot is fixed rather than measured
+/// from the active label.
+pub(super) const SORT_ARROW_WIDTH: f32 = 16.;
 
 /// The tabs of the editor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
