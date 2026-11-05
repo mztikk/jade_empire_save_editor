@@ -649,8 +649,20 @@ impl Session {
     /// Creates a session for a specific directory.
     #[must_use]
     pub fn with_directory(directory: impl Into<PathBuf>) -> Self {
+        let mut session = Self::empty(directory);
+        session.scan();
+        session
+    }
+
+    /// Creates a session without scanning the directory.
+    ///
+    /// The UI shows its first frame immediately and calls [`Session::scan`]
+    /// afterwards, so opening the window does not wait for every savegame.
+    #[must_use]
+    pub fn empty(directory: impl Into<PathBuf>) -> Self {
+        let directory = directory.into();
         let mut session = Self {
-            directory: directory.into(),
+            directory,
             entries: Vec::new(),
             selected: None,
             save: None,
@@ -663,10 +675,10 @@ impl Session {
             game: None,
             game_status: GameStatus::Missing,
             preview: None,
-            message: Message::info("Select a savegame to start editing."),
+            message: Message::info("Scanning for savegames…"),
             preview_generation: 0,
         };
-        session.scan();
+        session.load_game_data();
         session
     }
 
