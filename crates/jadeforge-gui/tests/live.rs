@@ -43,6 +43,12 @@ fn main() -> std::process::ExitCode {
 
 #[cfg(not(target_os = "linux"))]
 fn main() -> std::process::ExitCode {
+    if std::env::args().any(|argument| argument == "--list") {
+        // Nextest enumerates harness-less targets; one runner is one test.
+        // Printing the skip message here corrupts the test list.
+        println!("windowed: test");
+        return std::process::ExitCode::SUCCESS;
+    }
     println!("skipping the windowed UI tests: Wayland testing is implemented for Linux only");
     std::process::ExitCode::SUCCESS
 }

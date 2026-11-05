@@ -28,9 +28,9 @@ pushes to `main`, pull requests, tags and manual dispatches.
 - `publish` (non-PR only): builds the fat-LTO binaries with `just publish` on
   Linux and Windows, stages the Windows icon and the Linux `share/` tree,
   checks the glibc baseline on Linux, writes `THIRD_PARTY_NOTICES.txt`, the
-  dependency inventory, a CycloneDX `sbom.cdx.json` and a GitHub
-  build-provenance attestation, and uploads the staged folders as per-OS
-  artifacts. macOS is not in the release matrix yet and the published binaries
+  dependency inventory, a CycloneDX `sbom.cdx.json` and, for public
+  repositories, a GitHub build-provenance attestation, and uploads the staged
+  folders as per-OS artifacts. macOS is not in the release matrix yet and the published binaries
   are unsigned; see [Release signing](#release-signing). Windows also runs the
   headless UI tests.
 - `release` (tags only): downloads the per-OS artifacts, zips every staged
@@ -109,8 +109,9 @@ exercised against the real credentials.
 4. Verify the four Linux binaries with `ci/check-glibc.sh` against 2.35.
 5. Verify the release contains one `.zip` per platform (the Linux `share/`
    tree is inside the Linux archive), one `SHA256SUMS`, `THIRD_PARTY_NOTICES.txt`,
-   `cargo-metadata.json`, `sbom.cdx.json`, the provenance attestation and the
-   Skia licence when present; `sha256sum -c SHA256SUMS` must pass.
+   `cargo-metadata.json`, `sbom.cdx.json`, the provenance attestation when the
+   repository is public and the Skia licence when present;
+   `sha256sum -c SHA256SUMS` must pass.
 6. Verify the icons on the real artifacts: the Windows `.exe` in Explorer and
    the Linux hicolor files resolving `Icon=jadeforge`.
 7. This release is unsigned: state that in the notes. Signing is a follow-up
