@@ -60,11 +60,21 @@ fn player_block(item: bool) -> (Gff, Option<usize>) {
 }
 
 fn container(gff: &Gff) -> Vec<u8> {
+    container_named(gff, "save.sav")
+}
+
+fn container_named(gff: &Gff, name: &str) -> Vec<u8> {
     let block = gff.to_bytes().expect("serialize block");
+    let mut name = name.as_bytes().to_vec();
+    name.push(0);
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&1_u32.to_le_bytes());
-    bytes.extend_from_slice(&9_u32.to_le_bytes());
-    bytes.extend_from_slice(b"save.sav\0");
+    bytes.extend_from_slice(
+        &u32::try_from(name.len())
+            .expect("name length")
+            .to_le_bytes(),
+    );
+    bytes.extend_from_slice(&name);
     bytes.extend_from_slice(
         &u32::try_from(block.len())
             .expect("block size")
@@ -187,6 +197,47 @@ fn malformed_containers_are_rejected() {
     assert!(SaveGame::parse("x".into(), bytes).is_err());
 
     assert!(SaveGame::open("/definitely/not/a/save.sac").is_err());
+}
+
+#[test]
+fn metadata_reads_the_player_without_a_full_parse() {
+    let dir = std::env::temp_dir().join(format!(
+        "jadeforge-metadata-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos())
+    ));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let target = dir.join("save.sac");
+    let (gff, _) = player_block(false);
+    std::fs::write(&target, container(&gff)).expect("write save");
+    let metadata = SaveGame::metadata(&target).expect("metadata");
+    assert_eq!(metadata.name, "Boundary");
+    assert_eq!(metadata.level, 3);
+    // Older releases store the character in polyplayer.sav instead.
+    let mut polyplayer = Gff {
+        version: *b"V3.2",
+        labels: Vec::new(),
+        structs: Vec::new(),
+        root: 0,
+    };
+    let root = polyplayer.push_struct(u32::MAX);
+    polyplayer
+        .add_field(root, "FirstName", Value::String("Old Save".to_owned()))
+        .expect("name");
+    polyplayer
+        .add_field(root, "Level", Value::Word(7))
+        .expect("level");
+    std::fs::write(&target, container_named(&polyplayer, "polyplayer.sav"))
+        .expect("write polyplayer save");
+    let metadata = SaveGame::metadata(&target).expect("polyplayer metadata");
+    assert_eq!(metadata.name, "Old Save");
+    assert_eq!(metadata.level, 7);
+
+    std::fs::write(&target, b"not a savegame").expect("write broken save");
+    assert!(SaveGame::metadata(&target).is_err());
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]

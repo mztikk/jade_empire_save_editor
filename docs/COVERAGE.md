@@ -22,16 +22,16 @@ just coverage
 
 | metric | covered |
 | --- | --- |
-| lines | **6 977 / 8 433 = 82.7 %** |
-| functions | **689 / 987 = 69.8 %** |
+| lines | **7 015 / 8 436 = 83.2 %** |
+| functions | **691 / 987 = 70.0 %** |
 
 | crate | lines | functions |
 | --- | --- | --- |
 | `jadeforge-gamedata` | 93.6 % | 90.1 % |
-| `jadeforge-gui` | 87.8 % | 66.1 % |
-| `jadeforge-core` | 77.6 % | 62.5 % |
+| `jadeforge-gui` | 88.0 % | 66.7 % |
+| `jadeforge-core` | 78.3 % | 62.9 % |
 | `jadeforge-session` | 78.3 % | 78.8 % |
-| `jadeforge-gff` | 80.0 % | 59.2 % |
+| `jadeforge-gff` | 81.3 % | 59.5 % |
 | `jadeforge-cli` | 68.3 % | 55.3 % |
 
 Notes:
@@ -51,7 +51,7 @@ Notes:
 | `gamedata/src/rim.rs` | 95.0 % | done |
 | `cli/src/main.rs` | 68.3 % | `add_item`, `verify` failure and argument errors |
 | `core/src/henchmen.rs` | 69.7 % | list/field error paths |
-| `core/src/save.rs` | 69.8 % | metadata, verification and write-failure paths |
+| `core/src/save.rs` | 71.9 % | verification and write-failure paths |
 | `gff/src/value.rs` | 72.8 % | uncommon decode branches |
 | `gamedata/src/talktable.rs` | 92.1 % | done |
 | `session/src/session.rs` | 76.7 % | failure paths (config, form, save/revert) |
@@ -72,7 +72,7 @@ Notes:
 
 | milestone | overall lines | core | session | gff | cli | gui | gamedata |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| now | 82.7 % | 77.6 % | 78.3 % | 80.0 % | 68.3 % | 87.8 % | 93.6 % |
+| now | 83.2 % | 78.3 % | 78.3 % | 81.3 % | 68.3 % | 88.0 % | 93.6 % |
 | phase 1 | **85 %** | 82 % | 82 % | 82 % | 78 % | 89 % | 92 % |
 | phase 2 | **88 %** | 86 % | 86 % | 86 % | 84 % | 90 % | 94 % |
 

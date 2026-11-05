@@ -54,6 +54,30 @@ fn selected_fields_decode_only_the_requested_paths() {
     assert_eq!(selected[0], Some(Value::DWord(7)));
     assert_eq!(selected[1], None);
     assert_eq!(selected[2], Some(Value::Byte(1)));
+
+    let mut with_list = empty_block();
+    let element = with_list.push_struct(0);
+    with_list
+        .add_field(element, "Element", Value::Byte(9))
+        .expect("element");
+    with_list
+        .add_field(0, "Items", Value::List(vec![element]))
+        .expect("list");
+    let bytes = with_list.to_bytes().expect("serialize");
+    let selected = Gff::selected_fields("selected", &bytes, &["Items"]).expect("list");
+    assert_eq!(selected[0], Some(Value::List(vec![element])));
+}
+
+#[test]
+fn selected_fields_reject_malformed_blocks() {
+    assert!(Gff::selected_fields("empty", &[], &["A"]).is_err());
+    assert!(Gff::selected_fields("magic", b"NOPE", &["A"]).is_err());
+    let bytes = single_field("A", Value::Byte(1))
+        .to_bytes()
+        .expect("serialize");
+    let mut truncated = bytes.clone();
+    truncated.truncate(8);
+    assert!(Gff::selected_fields("truncated", &truncated, &["A"]).is_err());
 }
 
 #[test]

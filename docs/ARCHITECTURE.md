@@ -170,6 +170,32 @@ temporary folder. `cargo run -p jadeforge-gui --example snapshot -- <dir> <png>
 [TAB|all] [--height N] [--query TEXT]` produces the screenshots used in the
 documentation.
 
+## Startup path
+
+Opening the window must not wait for the savegame corpus. The sequence is:
+
+1. `Session::empty(directory)` builds the shell without opening any savegame and
+   loads the game data (13 ms on the retail install).
+2. The first frame renders with the "Scanning for savegames…" message.
+3. `app_with_directory` starts a `use_future` task. It spawns a worker thread
+   running `Session::scan_entries` and awaits the result through a futures
+   channel, so the Freya executor is never blocked by file I/O.
+4. The future calls `Session::apply_entries` and bumps the revision; the list
+   and the "Found 89 savegames" message appear.
+5. If the worker dies, `Session::report_scan_failure` replaces the pending
+   message instead of leaving the UI waiting forever.
+
+`SaveGame::metadata` and `Gff::selected_fields` keep the scan cheap: only
+`PlayerCreature.FirstName`, `PlayerCreature.Level` and `Campaign.TimePlayed`
+are decoded, not the tens of thousands of fields in the PlayerCreature block.
+On the 89-savegame corpus this is 140 ms instead of 1.87 s for the full
+character parse, and `tests/metadata.rs` checks every save against
+`Character::read`.
+
+Directory changes still scan synchronously (140 ms); they happen on an explicit
+user action and use the same `scan_entries`/`apply_entries` path as the
+background scan, so the messages cannot diverge.
+
 ## Test strategy
 
 | layer | file | needs the game? |
@@ -195,4 +221,6 @@ Deliberately small:
 * `thiserror` for errors,
 * `serde` and `toml` for the settings file,
 * `freya` for the GUI,
-* `freya-testing` (dev only) for headless UI tests.
+* `freya-testing` (dev only) for headless UI tests,
+* `futures-channel` for the one-shot hand-off from the scan worker to the GUI
+  future.
