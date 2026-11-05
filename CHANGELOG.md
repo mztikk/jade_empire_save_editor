@@ -19,6 +19,9 @@ All notable changes are documented here. The format follows
   The suite is opt-in, runs in a real Wayland desktop session (or a desktop VM)
   and is not part of CI; the existing `freya-testing` suite stays the fast,
   exhaustive feedback loop. See [docs/LIVE-UI.md](docs/LIVE-UI.md).
+- A durable [UI review status](docs/UI-REVIEW.md) recording the completed P0
+  release blockers and linking the tracked P1/P2/P3 follow-up work and the
+  upstream accessibility blockers.
 
 ### Fixed
 
