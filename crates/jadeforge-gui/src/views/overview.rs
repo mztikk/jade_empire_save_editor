@@ -64,6 +64,8 @@ pub fn view(
                 .height(Size::px(164.))
                 .corner_radius(12.)
                 .sampling_mode(SamplingMode::Bilinear)
+                .aspect_ratio(AspectRatio::Min)
+                .image_cover(ImageCover::Center)
                 .into_element()
         },
     );

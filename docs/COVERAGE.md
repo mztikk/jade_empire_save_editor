@@ -28,10 +28,10 @@ env -u JADEFORGE_SAVE_DIR -u JADEFORGE_GAME_DIR -u JADEFORGE_CONFIG_DIR \
 
 | metric | full corpus | no game data |
 | --- | --- | --- |
-| lines | **15 835 / 17 777 = 89.1 %** | **15 865 / 17 777 = 89.2 %** |
-| functions | **940 / 1 213 = 77.5 %** | **945 / 1 213 = 77.9 %** |
-| regions | **9 607 / 10 724 = 89.6 %** | **9 625 / 10 724 = 89.8 %** |
-| tests run | 280 | 280 |
+| lines | **15 849 / 17 782 = 89.1 %** | **15 871 / 17 782 = 89.3 %** |
+| functions | **942 / 1 213 = 77.7 %** | **945 / 1 213 = 77.9 %** |
+| regions | **9 620 / 10 729 = 89.7 %** | **9 632 / 10 729 = 89.8 %** |
+| tests run | 281 | 281 |
 
 Several crates keep unit tests inside `src/`, so those test lines are part of
 the totals above. The previous non-test-only table was measured with a smaller
@@ -51,7 +51,7 @@ Notes:
 - Branch coverage is not collected; the report is line/function/region based.
 - No test is `#[ignore]`d. Real-corpus tests return early without
   `JADEFORGE_SAVE_DIR`, while the GUI suite builds its synthetic fixture and
-  still runs all 29 headless tests. `nextest` reports 280 run and 0 skipped in
+  still runs all 30 headless tests. `nextest` reports 281 run and 0 skipped in
   both modes.
 - GUI numbers are inflated by declarative view code that runs on every render.
   Treat GUI coverage as a regression signal, not as a quality target.
@@ -151,7 +151,7 @@ Notes:
 
 | milestone | full corpus | no game data | core | session | cli | gui | gamedata |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| now | 89.1 % | 89.2 % | 83.6 % | 92.3 % | 89.8 % | 90.0 % | 95.8 % |
+| now | 89.1 % | 89.3 % | 83.6 % | 92.3 % | 89.8 % | 90.0 % | 95.8 % |
 | phase 1 | **90 %** | **90 %** | 85 % | 93 % | 91 % | 91 % | 96 % |
 | phase 2 | **92 %** | **92 %** | 88 % | 94 % | 93 % | 93 % | 97 % |
 

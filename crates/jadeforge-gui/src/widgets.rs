@@ -207,7 +207,7 @@ where
         rect()
             .vertical()
             .spacing(1.)
-            .width(Size::fill())
+            .width(Size::flex(1.0))
             .padding(Gaps::new_symmetric(6., 6.))
             .corner_radius(4.)
             .border(if focused {
