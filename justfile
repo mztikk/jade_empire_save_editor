@@ -74,7 +74,9 @@ cli *args:
     cargo run -q -p jadeforge-cli -- {{ args }}
 
 # Build and stage the fat-LTO binaries for one target triple.
-publish-target target:
+# x86-64 Linux/Windows default to the x86-64-v3 ISA (AVX2, Haswell/Zen 2+);
+# pass `baseline` as the second argument for a maximally compatible build.
+publish-target target cpu="v3":
     @case "{{ target }}" in \
         *-{{ target_system }}*) ;; \
         *) echo "publish: {{ target }} is not buildable on {{ os() }}"; exit 1 ;; \
@@ -83,16 +85,24 @@ publish-target target:
         && ! rustup target list --installed 2>/dev/null | grep -Fxq '{{ target }}'; then \
         rustup target add {{ target }}; \
     fi
-    cargo build --locked --profile dist --target {{ target }} -p jadeforge-gui -p jadeforge-cli
-    mkdir -p "dist/jadeforge-{{ version }}-{{ target }}"
-    # Remove artifacts from before the binary rename.
-    rm -f "dist/jadeforge-{{ version }}-{{ target }}/jadeforge{{ exe }}" \
-        "dist/jadeforge-{{ version }}-{{ target }}/jadeforge-gui{{ exe }}" \
-        "dist/jadeforge-{{ version }}-{{ target }}/jadeforge-cli{{ exe }}"
-    cp "target/{{ target }}/dist/jadeforge-cli{{ exe }}" "dist/jadeforge-{{ version }}-{{ target }}/"
-    cp "target/{{ target }}/dist/jadeforge{{ exe }}" "dist/jadeforge-{{ version }}-{{ target }}/"
-    cp LICENSE README.md "dist/jadeforge-{{ version }}-{{ target }}/"
-    @echo "publish: staged dist/jadeforge-{{ version }}-{{ target }}/"
+    @case "{{ target }}" in \
+        x86_64-unknown-linux-gnu|x86_64-pc-windows-msvc) \
+            case "{{ cpu }}" in \
+                v3) rust_flags="-C target-cpu=x86-64-v3" ;; \
+                baseline) rust_flags="" ;; \
+                *) echo "publish: cpu must be v3 or baseline"; exit 1 ;; \
+            esac ;; \
+        *) rust_flags="" ;; \
+    esac; \
+    RUSTFLAGS="$rust_flags" cargo build --locked --profile dist --target {{ target }} -p jadeforge-gui -p jadeforge-cli
+    suffix=""; case "{{ cpu }}" in baseline) suffix="-baseline" ;; esac; \
+    out="dist/jadeforge-{{ version }}-{{ target }}$suffix"; \
+    mkdir -p "$out"; \
+    rm -f "$out/jadeforge{{ exe }}" "$out/jadeforge-gui{{ exe }}" "$out/jadeforge-cli{{ exe }}"; \
+    cp "target/{{ target }}/dist/jadeforge-cli{{ exe }}" "$out/"; \
+    cp "target/{{ target }}/dist/jadeforge{{ exe }}" "$out/"; \
+    cp LICENSE README.md "$out/"; \
+    echo "publish: staged $out/"
 
 # Build the fat-LTO binaries for every target this host can build.
 [linux]
@@ -100,10 +110,20 @@ publish: (publish-target host)
     @echo "publish: skipped Windows: it needs a Windows host (Visual C++ for Skia)"
     @echo "publish: skipped macOS: it needs the Apple SDK on a macOS host"
 
+# Same as publish, but without the x86-64-v3 ISA (for pre-2013 CPUs).
+[linux]
+publish-baseline: (publish-target host "baseline")
+    @echo "publish-baseline: skipped Windows and macOS (see publish)"
+
 # Build the fat-LTO binaries for every target this host can build.
 [macos]
 publish: (publish-target "aarch64-apple-darwin") (publish-target "x86_64-apple-darwin")
     @echo "publish: skipped Windows: it needs a Windows host (Visual C++ for Skia)"
+
+# Same as publish, but without the x86-64-v3 ISA (for pre-2013 CPUs).
+[macos]
+publish-baseline: (publish-target "aarch64-apple-darwin" "baseline") (publish-target "x86_64-apple-darwin" "baseline")
+    @echo "publish-baseline: skipped Windows (see publish)"
 
 # Build the fat-LTO binaries for every target this host can build.
 [windows]
@@ -111,19 +131,27 @@ publish: (publish-target host)
     @echo "publish: skipped macOS: it needs the Apple SDK on a macOS host"
 
 # Build SteamOS/Steam Deck-compatible Linux binaries with rootless podman.
-publish-linux:
+# Defaults to x86-64-v3; `just publish-linux baseline` targets older CPUs.
+publish-linux cpu="v3":
     @command -v podman >/dev/null 2>&1 || { \
         echo "publish-linux needs rootless podman (https://podman.io)"; exit 1; \
     }
     podman build -t jadeforge-build:22.04 -f ci/Containerfile .
+    case "{{ cpu }}" in \
+        v3) rust_flags="-C target-cpu=x86-64-v3" ;; \
+        baseline) rust_flags="" ;; \
+        *) echo "publish-linux: cpu must be v3 or baseline"; exit 1 ;; \
+    esac; \
     podman run --rm -v "$PWD":/src -w /src \
         -e CARGO_TARGET_DIR=/src/target/podman \
+        -e RUSTFLAGS="$rust_flags" \
         -v jadeforge-cargo-registry:/root/.cargo/registry \
         jadeforge-build:22.04 cargo build --locked --profile dist \
         -p jadeforge-gui -p jadeforge-cli
     version=$(awk -F'"' '/^version = / { print $2; exit }' Cargo.toml); \
     host=$(rustc -vV | sed -n 's/^host: //p'); \
-    out="dist/jadeforge-$version-$host"; \
+    suffix=""; case "{{ cpu }}" in baseline) suffix="-baseline" ;; esac; \
+    out="dist/jadeforge-$version-$host$suffix"; \
     mkdir -p "$out"; \
     rm -f "$out/jadeforge" "$out/jadeforge-gui" "$out/jadeforge-cli"; \
     cp "target/podman/dist/jadeforge" "$out/"; \

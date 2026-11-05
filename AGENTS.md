@@ -38,7 +38,9 @@ The same commands are available through `just` (see the `justfile`): `just
 check` runs formatting, clippy and the tests, `just snapshot …` renders the UI,
 and `just publish` builds the fat-LTO distribution binaries.
 `just publish-linux` builds the SteamOS-compatible Linux binaries (glibc 2.35) in
-a rootless Podman container. `just coverage` runs
+a rootless Podman container. Linux/Windows x86-64 builds default to
+`x86-64-v3` (AVX2); use `just publish-baseline` or `just publish-linux baseline`
+for pre-2013 CPUs (artifact folder suffixed `-baseline`). `just coverage` runs
 `cargo llvm-cov nextest` and writes `coverage/lcov.info` and `coverage/html` (see
 [docs/COVERAGE.md](docs/COVERAGE.md) for the current numbers and the plan). The
 cargo commands above remain canonical.
