@@ -29,7 +29,7 @@ Expect nextest's `Summary ... 122 tests run: 122 passed, 0 skipped` (the number
 grows over time; skips are fine when the game or savegames are absent). Nextest
 captures stdout, so the `round tripped 89 savegames` / `rewrote 962 blocks` lines
 are only printed with `--no-capture` or on failure. The UI suite is the 24
-headless `jadeforge-gui` tests. A different count is fine on another machine, "skipping" is
+headless tests of the `jadeforge-gui` crate. A different count is fine on another machine, "skipping" is
 not (it means the variables did not reach the tests).
 
 ## Manual checks

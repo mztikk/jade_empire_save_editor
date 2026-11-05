@@ -85,8 +85,12 @@ publish-target target:
     fi
     cargo build --locked --profile dist --target {{ target }} -p jadeforge-gui -p jadeforge-cli
     mkdir -p "dist/jadeforge-{{ version }}-{{ target }}"
+    # Remove artifacts from before the binary rename.
+    rm -f "dist/jadeforge-{{ version }}-{{ target }}/jadeforge{{ exe }}" \
+        "dist/jadeforge-{{ version }}-{{ target }}/jadeforge-gui{{ exe }}" \
+        "dist/jadeforge-{{ version }}-{{ target }}/jadeforge-cli{{ exe }}"
+    cp "target/{{ target }}/dist/jadeforge-cli{{ exe }}" "dist/jadeforge-{{ version }}-{{ target }}/"
     cp "target/{{ target }}/dist/jadeforge{{ exe }}" "dist/jadeforge-{{ version }}-{{ target }}/"
-    cp "target/{{ target }}/dist/jadeforge-gui{{ exe }}" "dist/jadeforge-{{ version }}-{{ target }}/"
     cp LICENSE README.md "dist/jadeforge-{{ version }}-{{ target }}/"
     @echo "publish: staged dist/jadeforge-{{ version }}-{{ target }}/"
 

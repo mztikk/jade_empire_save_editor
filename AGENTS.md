@@ -163,7 +163,7 @@ documentation, not ground truth — verify against the game files where possible
 ## Adding an editable field
 
 1. Find the field: `cargo run -p jadeforge-cli -- "<SAVE_DIR>" dump save.sav --path PlayerCreature`
-   or search the label list with `jadeforge blocks` / `jadeforge dump`.
+   or search the label list with `jadeforge-cli blocks` / `jadeforge-cli dump`.
 2. Add it to `crates/jadeforge-core/src/character.rs`
    (`Character`, `Character::read`, `Character::write`) with a range check and a
    path that is relative to the player block.
@@ -231,7 +231,7 @@ documentation, not ground truth — verify against the game files where possible
 | `crates/jadeforge-gff` | GFF block reader/writer, dotted field paths |
 | `crates/jadeforge-session` | UI independent session state and settings (no Freya) |
 | `crates/jadeforge-gamedata` | talk table and 2DA readers, names for items and styles |
-| `crates/jadeforge-cli` | `jadeforge` command line tool |
+| `crates/jadeforge-cli` | `jadeforge-cli` command line tool |
 | `crates/jadeforge-gui` | Freya application: `app` (shell), `views` (tabs), `theme`, `widgets` |
 | `docs/FORMAT.md` | savegame format reference |
 | `docs/ARCHITECTURE.md` | crate layout, data flow, safety model |

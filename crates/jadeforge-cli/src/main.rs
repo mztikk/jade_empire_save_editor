@@ -10,7 +10,7 @@ use jadeforge_gamedata::GameData;
 
 /// `JadeForge` - a save editor for Jade Empire.
 #[derive(Debug, Parser)]
-#[command(name = "jadeforge", version, about, long_about = None)]
+#[command(name = "jadeforge-cli", version, about, long_about = None)]
 struct Cli {
     /// Savegame file (`save.sac`) or the folder that contains it.
     #[arg(global = true, value_name = "SAVE")]
