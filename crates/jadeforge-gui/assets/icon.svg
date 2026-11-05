@@ -1,0 +1,126 @@
+<!-- JadeForge application icon. The artwork group is scaled 1.18x and centred in the tile; edit that transform to change the breathing room. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>JadeForge</title>
+  <desc>A steel cross-peen hammer striking a faceted jade gem, with gold forge sparks, on a dark rounded tile.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0.9" y2="1">
+    <stop offset="0" stop-color="#29323f"/>
+    <stop offset="0.45" stop-color="#151a22"/>
+    <stop offset="1" stop-color="#090b0f"/>
+  </linearGradient>
+  <radialGradient id="glow" cx="0.5" cy="0.44" r="0.62">
+    <stop offset="0" stop-color="#70b08d" stop-opacity="0.20"/>
+    <stop offset="0.55" stop-color="#70b08d" stop-opacity="0.07"/>
+    <stop offset="1" stop-color="#70b08d" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="0.2" y2="1">
+    <stop offset="0" stop-color="#f8e2ae"/>
+    <stop offset="0.42" stop-color="#e2b35c"/>
+    <stop offset="1" stop-color="#a96f27"/>
+  </linearGradient>
+  <linearGradient id="gold_hot" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff3cf"/>
+    <stop offset="0.5" stop-color="#f1c779"/>
+    <stop offset="1" stop-color="#c48a35"/>
+  </linearGradient>
+  <linearGradient id="jade" x1="0.15" y1="0" x2="0.85" y2="1">
+    <stop offset="0" stop-color="#b9eccd"/>
+    <stop offset="0.32" stop-color="#7fc09b"/>
+    <stop offset="0.7" stop-color="#4d9372"/>
+    <stop offset="1" stop-color="#2b5f4a"/>
+  </linearGradient>
+  <linearGradient id="jade_deep" x1="0.2" y1="0" x2="0.8" y2="1">
+    <stop offset="0" stop-color="#6cb491"/>
+    <stop offset="0.6" stop-color="#37795d"/>
+    <stop offset="1" stop-color="#1d4a39"/>
+  </linearGradient>
+  <radialGradient id="jade_shade" cx="0.5" cy="0.5" r="0.5">
+    <stop offset="0.58" stop-color="#0a2b20" stop-opacity="0"/>
+    <stop offset="1" stop-color="#0a2b20" stop-opacity="0.42"/>
+  </radialGradient>
+  <linearGradient id="jade_tile" x1="0.1" y1="0" x2="0.9" y2="1">
+    <stop offset="0" stop-color="#3f9475"/>
+    <stop offset="0.45" stop-color="#226a51"/>
+    <stop offset="1" stop-color="#0e3427"/>
+  </linearGradient>
+  <linearGradient id="stone" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#f2f6fb"/>
+    <stop offset="1" stop-color="#b8c2cf"/>
+  </linearGradient>
+  <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#eef3f9"/>
+    <stop offset="0.45" stop-color="#a7b2c0"/>
+    <stop offset="1" stop-color="#525d6c"/>
+  </linearGradient>
+  <linearGradient id="wood" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#8a5a32"/>
+    <stop offset="0.5" stop-color="#6b4426"/>
+    <stop offset="1" stop-color="#4a2e18"/>
+  </linearGradient>
+  <filter id="drop" x="-40%" y="-40%" width="180%" height="180%">
+    <feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#000000" flood-opacity="0.55"/>
+  </filter>
+  <filter id="drop_small" x="-40%" y="-40%" width="180%" height="180%">
+    <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#000000" flood-opacity="0.5"/>
+  </filter>
+  <filter id="glow_gold" x="-120%" y="-120%" width="340%" height="340%">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="10" result="b"/>
+    <feFlood flood-color="#f1c779" flood-opacity="0.55" result="c"/>
+    <feComposite in="c" in2="b" operator="in" result="g"/>
+    <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="blur24"><feGaussianBlur stdDeviation="24"/></filter>
+  <mask id="hole">
+    <rect width="512" height="512" fill="#ffffff"/>
+    <circle cx="256" cy="256" r="78" fill="#000000"/>
+  </mask>
+  <mask id="crescent">
+    <rect width="512" height="512" fill="#ffffff"/>
+    <path d="M 120 60 L 392 60 L 392 300 C 392 420 120 420 120 300 Z" fill="#000000"/>
+  </mask>
+</defs>
+
+<rect width="512" height="512" rx="112" fill="url(#bg)"/>
+<rect width="512" height="512" rx="112" fill="url(#glow)"/>
+<rect x="2" y="2" width="508" height="508" rx="110" fill="none" stroke="url(#gold)" stroke-opacity="0.34" stroke-width="3"/>
+<rect x="20" y="20" width="472" height="472" rx="94" fill="none" stroke="#ffffff" stroke-opacity="0.045" stroke-width="2"/>
+<g transform="translate(256 256) scale(1.18) translate(-275.5 -267.5)">
+
+<g transform="translate(312 186) rotate(-45) scale(0.82)">
+  <g filter="url(#drop_small)">
+    <rect x="-15" y="26" width="30" height="164" rx="15" fill="url(#wood)" stroke="#2b1a0a" stroke-opacity="0.5" stroke-width="3"/>
+    <rect x="-15" y="96" width="30" height="10" fill="#d9b26a" opacity="0.65"/>
+    <rect x="-15" y="120" width="30" height="10" fill="#d9b26a" opacity="0.65"/>
+    <rect x="-15" y="144" width="30" height="10" fill="#d9b26a" opacity="0.65"/>
+    <path d="M -100 -42 L 34 -42 Q 50 -42 56 -28 L 100 -16 L 100 16 L 56 28 Q 50 42 34 42 L -100 42 Z"
+          fill="url(#steel)" stroke="#1d242d" stroke-opacity="0.6" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M -100 -42 L -84 -42 L -84 42 L -100 42 Z" fill="#7c8795" opacity="0.9"/>
+    <rect x="-22" y="-42" width="26" height="84" fill="url(#gold)" opacity="0.9"/>
+    <path d="M -86 -28 L 26 -28" stroke="#ffffff" stroke-opacity="0.45" stroke-width="9" stroke-linecap="round"/>
+    <ellipse cx="4" cy="0" rx="10" ry="13" fill="#3a2a12" opacity="0.9"/>
+  </g>
+</g>
+
+<g filter="url(#drop)">
+  <path d="M 160 270 L 300 270 L 340 320 L 230 432 L 120 320 Z" fill="url(#jade_deep)"
+        stroke="url(#gold)" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M 160 270 L 300 270 L 230 320 Z" fill="url(#jade)"/>
+  <path d="M 160 270 L 120 320 L 230 320 Z" fill="#63a988"/>
+  <path d="M 300 270 L 340 320 L 230 320 Z" fill="#357a5e"/>
+  <path d="M 120 320 L 230 320 L 230 432 Z" fill="#2c6a51"/>
+  <path d="M 230 320 L 340 320 L 230 432 Z" fill="#1f5440"/>
+  <path d="M 160 270 L 300 270" stroke="#d5f5e3" stroke-opacity="0.7" stroke-width="4" stroke-linecap="round"/>
+</g>
+
+<g filter="url(#glow_gold)">
+  <path d="M 240 242 C 244.84 259.16 244.84 259.16 262 264 C 244.84 268.84 244.84 268.84 240 286 C 235.16 268.84 235.16 268.84 218 264 C 235.16 259.16 235.16 259.16 240 242 Z" fill="url(#gold_hot)" opacity="1.0"/>
+  <path d="M 180 227 C 181.98 234.02 181.98 234.02 189 236 C 181.98 237.98 181.98 237.98 180 245 C 178.02 237.98 178.02 237.98 171 236 C 178.02 234.02 178.02 234.02 180 227 Z" fill="url(#gold_hot)" opacity="0.75"/>
+  <path d="M 310 234 C 311.76 240.24 311.76 240.24 318 242 C 311.76 243.76 311.76 243.76 310 250 C 308.24 243.76 308.24 243.76 302 242 C 308.24 240.24 308.24 240.24 310 234 Z" fill="url(#gold_hot)" opacity="0.7"/>
+  <path d="M 186 308 C 187.76 314.24 187.76 314.24 194 316 C 187.76 317.76 187.76 317.76 186 324 C 184.24 317.76 184.24 317.76 178 316 C 184.24 314.24 184.24 314.24 186 308 Z" fill="url(#gold_hot)" opacity="0.65"/>
+  <path d="M 300 320 C 301.32 324.68 301.32 324.68 306 326 C 301.32 327.32 301.32 327.32 300 332 C 298.68 327.32 298.68 327.32 294 326 C 298.68 324.68 298.68 324.68 300 320 Z" fill="url(#gold_hot)" opacity="0.55"/>
+  <path d="M 276 205 C 277.1 208.9 277.1 208.9 281 210 C 277.1 211.1 277.1 211.1 276 215 C 274.9 211.1 274.9 211.1 271 210 C 274.9 208.9 274.9 208.9 276 205 Z" fill="url(#gold_hot)" opacity="0.5"/>
+</g>
+<circle cx="166" cy="280" r="4" fill="#f8e2ae" opacity="0.7"/>
+<circle cx="330" cy="292" r="3" fill="#f8e2ae" opacity="0.6"/>
+<circle cx="210" cy="206" r="3" fill="#f8e2ae" opacity="0.55"/>
+</g></svg>

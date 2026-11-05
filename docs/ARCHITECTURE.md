@@ -162,6 +162,7 @@ Freya 0.4 application with a small, explicit structure:
 | `widgets` | cards, fields, badges, dividers |
 | `views` | one module per tab (overview, character, styles, inventory, companions); item and style rows expand to show the game's description |
 | `form` | the text input states of the character sheet |
+| `assets/` | icon master (`icon.svg`) and the generated PNG/ICO/ICNS set; `ICON_PNG` embeds the 256 px PNG |
 
 The shell renders the session and forwards input. The savegame list has its own
 filter and sort (`session::visible_entries`, natural ordering so `Auto 2` comes
@@ -169,6 +170,14 @@ before `Auto 10`). The folder dialog is the operating system's own, wrapped in
 `dialog` so the headless tests can answer it. The layout is fluid: the sidebar uses a
 percentage width with a minimum, tab labels never wrap, and wide rows wrap
 instead of clipping.
+
+The window icon is embedded with `ICON_PNG` and passed to
+`WindowConfig::with_icon`; `with_app_id("jadeforge")` matches the Linux desktop
+entry so Wayland compositors can resolve the hicolor icon. `build.rs` embeds the
+same mark in Windows executables through `winresource`, and
+`ci/macos-bundle.sh` wraps the macOS binary in `JadeForge.app` so the Dock can
+show the ICNS. `assets/README.md` documents the generated files and
+`just icons`.
 
 There are no hardcoded installation paths anywhere. The folder comes from
 `JADEFORGE_SAVE_DIR`, the settings file or the native folder dialog, in that order.

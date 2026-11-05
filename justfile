@@ -79,6 +79,22 @@ cli *args:
 install:
     RUSTFLAGS="-C target-cpu=native" cargo install --path crates/jadeforge-gui --locked --profile dist --force
 
+# Regenerate the PNG, ICO and ICNS application icon assets from assets/icon.svg.
+icons:
+    python3 ci/icons.py
+
+# Install the Linux launcher entry and hicolor icons for the current user, so
+# Wayland compositors can find the icon by app id. Expects `jadeforge` on PATH.
+[linux]
+install-desktop:
+    install -Dm644 crates/jadeforge-gui/assets/linux/jadeforge.desktop "$HOME/.local/share/applications/jadeforge.desktop"
+    for size in 16 24 32 48 64 128 256 512; do \
+        install -Dm644 "crates/jadeforge-gui/assets/icon-$size.png" \
+            "$HOME/.local/share/icons/hicolor/${size}x${size}/apps/jadeforge.png"; \
+    done
+    @if command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database "$HOME/.local/share/applications" || true; fi
+    @if command -v gtk-update-icon-cache >/dev/null 2>&1; then gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" || true; fi
+
 # Build and stage the fat-LTO binaries for one target triple.
 #
 # x86-64 Linux and Windows build twice, into the same folder: `jadeforge` and
@@ -115,6 +131,10 @@ publish-target target:
         cp "target/baseline/{{ target }}/dist/jadeforge-cli{{ exe }}" "$out/jadeforge-cli-generic-cpu{{ exe }}"; \
     fi; \
     cp LICENSE README.md "$out/"; \
+    case "{{ target }}" in \
+        *-linux-*) ci/stage-linux-desktop.sh "$out" ;; \
+        *-apple-darwin) ci/macos-bundle.sh "$out/JadeForge.app" "$out/jadeforge" "{{ version }}" ;; \
+    esac; \
     ci/notices.sh "$out" >/dev/null; \
     echo "publish: staged $out/"
 
@@ -167,6 +187,7 @@ publish-linux:
     cp "target/podman-baseline/dist/jadeforge" "$out/jadeforge-generic-cpu"; \
     cp "target/podman-baseline/dist/jadeforge-cli" "$out/jadeforge-cli-generic-cpu"; \
     cp LICENSE README.md "$out/"; \
+    ci/stage-linux-desktop.sh "$out"; \
     ci/notices.sh "$out" >/dev/null; \
     ci/check-glibc.sh "$out/jadeforge" 2.35; \
     ci/check-glibc.sh "$out/jadeforge-generic-cpu" 2.35; \

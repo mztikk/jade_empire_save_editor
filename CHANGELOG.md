@@ -6,6 +6,14 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Application icon: a steel hammer striking a jade gem on the dark tile. The
+  icon is embedded as the window icon and committed as SVG/PNG/ICO/ICNS assets.
+  Windows executables embed the ICO, macOS releases stage a `JadeForge.app`
+  bundle with the ICNS, and Linux releases include the desktop entry and
+  hicolor icons for Wayland launchers.
+
 ### Fixed
 
 - Gem moves now preserve the fixed seven-entry amulet socket list, keep gems
