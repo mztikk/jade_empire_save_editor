@@ -247,7 +247,7 @@ pub fn view(
                     } else {
                         theme::SURFACE_ACTIVE
                     },
-                    if game_ok { theme::JADE } else { theme::ACCENT },
+                    if game_ok { theme::JADE } else { theme::WARNING },
                 ))
                 .into_element(),
             widgets::hint(game_text),

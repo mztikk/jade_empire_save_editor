@@ -55,6 +55,10 @@ All notable changes are documented here. The format follows
 
 ### Changed
 
+- The UI accent is jade green instead of gold, matching the editor's name, the
+  jade gem in the icon and the game's setting. The palette tests now enforce the
+  jade hue and WCAG AA contrast for accent text and for text on accent surfaces.
+  The style upgrade orbs keep their golden, in-game look.
 - `just install-desktop` now depends on `just install`, so a Linux install is
   one command for the binary, launcher entry and hicolor icons.
 - Workspace MSRV is 1.88; the dependency graph was updated to remove the

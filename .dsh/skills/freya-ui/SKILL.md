@@ -28,9 +28,14 @@ from `dark_theme()` and then:
    `input`, `flat_input`, `scrollbar` and `tooltip` component themes.
 
 The palette is unit tested: every surface must stay dark (`luminance < 0.25`),
-the accent must be warm, and component surfaces must never be white. If a
+the accent must be jade green (green dominant, with more blue than red) and meet
+WCAG AA on every surface, and component surfaces must never be white. If a
 component looks wrong, the fix belongs in `theme.rs`, not in a one-off
 `.background()` on a widget.
+
+The style upgrade orbs are the one deliberate gold exception: they mimic the
+game's level-up screen and use `theme::ORB`, so do not repaint them with the
+accent.
 
 ## Layout rules learned the hard way
 
