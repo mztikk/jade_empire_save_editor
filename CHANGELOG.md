@@ -31,6 +31,10 @@ All notable changes are documented here. The format follows
 - Accessibility: raised muted-text contrast, accessible names for tabs, sort
   controls, savegame rows and item/style rows, and keyboard activation for all
   of them.
+- UI layout: compact list rows with controls inside the card, a fixed 160x160
+  aspect-preserving save preview, correct singular/plural count labels, and
+  headless geometry tests for row pitch, control bounds, preview size and every
+  tab at 900/1600 px.
 
 ### Changed
 

@@ -32,7 +32,10 @@ pub(super) fn header(
         MessageKind::Error => theme::DANGER,
     };
     let (game_text, game_color) = match game_status {
-        GameStatus::Loaded { items, .. } => (format!("{items} items loaded"), theme::JADE),
+        GameStatus::Loaded { items, .. } => (
+            crate::widgets::plural(*items, "item", "items") + " loaded",
+            theme::JADE,
+        ),
         GameStatus::Missing => ("game data not found".to_owned(), theme::DIM),
         GameStatus::Error(_) => ("game data unreadable".to_owned(), theme::DANGER),
     };

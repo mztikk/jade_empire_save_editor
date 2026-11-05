@@ -81,8 +81,11 @@ pub fn view(
                     label()
                         .text(match (browsing, shown == matching) {
                             (true, _) => format!("{shown} of {matching}"),
-                            (false, true) => format!("{matching} matches"),
-                            (false, false) => format!("{shown} of {matching} matches"),
+                            (false, true) => crate::widgets::plural(matching, "match", "matches"),
+                            (false, false) => format!(
+                                "{shown} of {}",
+                                crate::widgets::plural(matching, "match", "matches")
+                            ),
                         })
                         .font_size(10.)
                         .color(theme::DIM),

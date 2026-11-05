@@ -163,6 +163,12 @@ pub fn details(description: Option<&str>) -> Option<Element> {
         })
 }
 
+/// Formats a count with the correct singular or plural noun.
+#[must_use]
+pub fn plural(count: usize, singular: &str, plural: &str) -> String {
+    format!("{count} {}", if count == 1 { singular } else { plural })
+}
+
 /// Name block that expands a description when pressed.
 pub fn expanding_name<T>(
     id: T,
@@ -340,13 +346,33 @@ impl Component for AccessibleButton {
             .on_all_press(move |_| action.call())
             .on_pointer_enter(|_| Cursor::set(CursorIcon::Pointer))
             .on_pointer_leave(|_| Cursor::set(CursorIcon::default()))
+            // Reserve the focus ring even when unfocused, so tabbing through
+            // the shell never shifts tabs, sort controls or savegame rows.
+            .border(
+                Border::new()
+                    .fill(if focused {
+                        theme::TEXT
+                    } else {
+                        Color::TRANSPARENT
+                    })
+                    .width(1.5),
+            )
             .child(self.content.clone());
         if self.fill_width {
             button = button.width(Size::fill());
         }
-        if focused {
-            button = button.border(Border::new().fill(theme::TEXT).width(1.5));
-        }
         button.into_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plural;
+
+    #[test]
+    fn plural_counts_use_the_singular_only_for_one() {
+        assert_eq!(plural(0, "effect", "effects"), "0 effects");
+        assert_eq!(plural(1, "effect", "effects"), "1 effect");
+        assert_eq!(plural(2, "stack", "stacks"), "2 stacks");
     }
 }

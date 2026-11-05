@@ -244,7 +244,11 @@ documentation, not ground truth — verify against the game files where possible
   the fix.
 - Prefer small, focused tests over one giant test.
 - UI changes should be verified with the headless runner
-  (`cargo nextest run -p jadeforge-gui`) or the snapshot example.
+  (`cargo nextest run -p jadeforge-gui`) and the snapshot example at 900,
+  1280 and 1600 px. Any new list row with trailing controls needs a geometry
+  test (`assert_compact_action_rows`): the controls must stay inside the card
+  and the row pitch must stay compact. Every tab must render at both narrow and
+  wide widths.
 - UI tests isolate the settings file through a thread-local override
   (`jadeforge_session::config::ensure_test_path`), so a developer's remembered
   sort order or save folder can never influence them. Keep it that way; do not

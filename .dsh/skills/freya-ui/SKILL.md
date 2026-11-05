@@ -41,6 +41,17 @@ component looks wrong, the fix belongs in `theme.rs`, not in a one-off
   `Content::Flex` + `Size::flex(1.0)`.
 - Rows that must stay one line high need an explicit height; otherwise a fill
   child grows them.
+- In a horizontal action row, the expanding name/content block must use
+  `Size::flex(1.0)`, never `Size::fill()`. A fill child consumes the controls'
+  space and can make the row grow. `assert_compact_action_rows` in
+  `tests/ui.rs` checks both the vertical pitch and the right edge of action
+  labels; extend it when adding a new list action.
+- The sidebar save preview is deliberately a fixed 160x160, aspect-preserving
+  image. Do not make it fill the responsive sidebar: that is what caused the
+  zoom/crop regression. The UI test asserts both dimensions.
+- Focus rings must reserve their space even when unfocused; otherwise keyboard
+  navigation moves tabs, sort controls and rows. `AccessibleButton` always
+  carries a transparent 1.5 px border and only recolours it on focus.
 - No layout shifts: anything whose size changes with its content gets a fixed
   slot instead of natural sizing. The save preview and its placeholder share one
   height, status messages reserve their maximum lines, selection bars and arrow
@@ -69,6 +80,7 @@ cargo test -p jadeforge-gui                 # headless UI tests
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/ui.png all
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/inv.png Inventory --height 1900 --query "Drachen"
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/small.png Overview --width 900 --height 600
+cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/wide.png all --width 1600 --height 900
 ```
 
 Check narrow windows too: rows with `spacing` overflow silently at 900 px unless
