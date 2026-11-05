@@ -389,11 +389,13 @@ impl Gff {
         end(field_data_offset, field_data_size, "field data")?;
         end(field_indices_offset, field_indices_size, "field indices")?;
         end(list_indices_offset, list_indices_size, "list indices")?;
-        if list_indices_offset + list_indices_size != bytes.len() {
+        let block_size = list_indices_offset
+            .checked_add(list_indices_size)
+            .ok_or_else(|| err("section offsets overflow".to_owned()))?;
+        if block_size != bytes.len() {
             return Err(err(format!(
-                "block size is {} but the sections end at {}",
-                bytes.len(),
-                list_indices_offset + list_indices_size
+                "block size is {} but the sections end at {block_size}",
+                bytes.len()
             )));
         }
         let mut labels = Vec::with_capacity(label_count);
