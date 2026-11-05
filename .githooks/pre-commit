@@ -1,0 +1,18 @@
+#!/bin/sh
+# Refuse direct commits on the integration branches. Every task gets its own
+# branch from origin/main; see AGENTS.md ("Branch workflow"). `just setup`
+# points core.hooksPath at this directory.
+set -eu
+
+branch=$(git symbolic-ref --quiet --short HEAD || true)
+
+case "$branch" in
+main | master)
+    echo "pre-commit: direct commits on '$branch' are disabled." >&2
+    echo "pre-commit: start a task branch with: just start <type>/<slug>" >&2
+    echo "pre-commit: see AGENTS.md rule 14." >&2
+    exit 1
+    ;;
+esac
+
+exit 0

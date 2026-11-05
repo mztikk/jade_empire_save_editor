@@ -1,6 +1,9 @@
 # JadeForge task runner. `just` lists the recipes and `just check` runs the
 # quality gate from AGENTS.md. The plain cargo commands keep working.
 #
+# Every task runs on its own branch: `just setup` once per clone,
+# `just start <type>/<slug>` to begin and `just finish` before handing over.
+#
 # Recipes run through bash with `-e -o pipefail` (Git Bash on Windows). Tests
 # that need real savegames read JADEFORGE_SAVE_DIR, e.g.
 # `JADEFORGE_SAVE_DIR="$HOME/games/Jade Empire/Save" just test`.
@@ -17,6 +20,23 @@ target_system := if os() == "macos" { "darwin" } else { os() }
 # List the recipes.
 default:
     @just --list
+
+# Install the tracked git hooks (once per clone). The pre-commit hook refuses
+# direct commits on main; see AGENTS.md "Branch workflow".
+setup:
+    git config --local core.hooksPath .githooks
+    @printf 'setup: core.hooksPath=%s\n' "$(git config --local core.hooksPath)"
+
+# Start a task branch from the latest origin/main. The name must look like
+# <type>/<slug>; the worktree must be clean so no work follows you across.
+start branch:
+    ci/git-workflow.sh start {{quote(branch)}}
+
+# Fail unless the task is finished: not on main, nothing uncommitted and at
+# least one commit beyond origin/main. This is the hand-over guard, not the
+# quality gate; run `just check` first.
+finish:
+    ci/git-workflow.sh finish
 
 # Build the whole workspace in debug mode.
 build:
