@@ -26,6 +26,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Git workflow
         run: ci/test-git-workflow.sh
+      - name: Release scripts
+        run: |
+          ci/test-assemble-release.sh
+          ci/test-publish-release.sh
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
@@ -170,7 +174,6 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [formatting, test, msrv, gui, audit]
     permissions:
-      contents: write
       id-token: write
       attestations: write
     strategy:
@@ -234,11 +237,6 @@ jobs:
         run: |
           ci/notices.sh dist
           ci/sbom.sh dist
-      - name: Checksums
-        shell: bash
-        run: |
-          cd dist
-          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
       - name: Headless UI tests
         if: runner.os != 'Linux'
         run: cargo nextest run --locked -p jadeforge-gui
@@ -252,16 +250,27 @@ jobs:
         uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
         with:
           subject-path: 'dist/**/*'
-      - name: Attach to the GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
+
+  release:
+    name: release
+    # The build jobs upload their staged folders as artifacts; this job turns
+    # them into download packages and publishes the GitHub release. Main pushes
+    # stop after the artifacts, so only a tag creates a release.
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: jadeforge-*
+          merge-multiple: true
+          path: dist
+      - name: Assemble release assets
+        run: ci/assemble-release.sh dist "$GITHUB_REF_NAME"
+      - name: Create and publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          shopt -s nullglob
-          files=(dist/*/* dist/*.txt dist/*.json dist/*.zip dist/LICENSE_SKIA dist/SHA256SUMS)
-          existing=()
-          for file in "${files[@]}"; do
-            [ -e "$file" ] && existing+=("$file")
-          done
-          gh release upload "$GITHUB_REF_NAME" "${existing[@]}" --clobber
+        run: ci/publish-release.sh "$GITHUB_REF_NAME" dist

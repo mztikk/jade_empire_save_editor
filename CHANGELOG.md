@@ -85,6 +85,9 @@ All notable changes are documented here. The format follows
 - Release CI builds Linux and Windows only: macOS is out of the publish matrix
   until its bundle can be signed and notarised, and the published binaries are
   unsigned for now.
+- Tag builds now assemble one zip per platform, a single `SHA256SUMS` and a
+  GitHub release from the matching changelog section, instead of every build
+  job attaching its staged files itself.
 - Split the GUI shell into `app/mod.rs`, `app/shell.rs`, `app/sidebar.rs` and
   `app/navigation.rs`; split the session row model and character form into
   `session/model.rs` and `session/form.rs`. Session state is private behind
