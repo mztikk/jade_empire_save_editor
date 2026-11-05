@@ -853,7 +853,7 @@ fn broken_savegames_are_reported() {
         1.0,
     );
     test.sync_and_update();
-    wait_for_text(&mut test, "cannot be read");
+    wait_for_text(&mut test, "ZZ Broken Save");
 
     let scan = find_label_text(&test, "cannot be read").expect("scan warning");
     assert!(scan.contains("1 of them"), "{scan}");

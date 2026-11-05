@@ -705,6 +705,40 @@ impl Session {
         self.scan();
     }
 
+    /// Replaces the entry list with the result of [`Session::scan_entries`].
+    pub fn apply_entries(&mut self, entries: Vec<SaveEntry>) {
+        let total = entries.len();
+        let broken = entries.iter().filter(|entry| entry.error.is_some()).count();
+        self.entries = entries;
+        let plural = if total == 1 { "" } else { "s" };
+        let directory = self.directory.display();
+        self.message = if total == 0 {
+            Message::info(format!("No savegames found in {directory}."))
+        } else if broken == 0 {
+            Message::success(format!("Found {total} savegame{plural} in {directory}."))
+        } else if broken == total {
+            Message::error(format!(
+                "Found {total} savegame{plural} in {directory}, but none of them can be read."
+            ))
+        } else {
+            Message::error(format!(
+                "Found {total} savegame{plural} in {directory}, {broken} of them cannot be read."
+            ))
+        };
+    }
+
+    /// Describes every savegame in `directory` without touching session state.
+    ///
+    /// Intended for a background thread; pass the result to
+    /// [`Session::apply_entries`].
+    #[must_use]
+    pub fn scan_entries(directory: &Path) -> Vec<SaveEntry> {
+        save_folders(directory)
+            .iter()
+            .map(|path| describe(path))
+            .collect()
+    }
+
     /// Scans the directory for savegames and loads the game data.
     pub fn scan(&mut self) {
         self.entries.clear();
@@ -1543,6 +1577,21 @@ impl Session {
             entry.time_played = character.time_played;
         }
     }
+}
+
+fn save_folders(directory: &Path) -> Vec<PathBuf> {
+    if directory.join("save.sac").is_file() {
+        return vec![directory.to_path_buf()];
+    }
+    let mut candidates: Vec<PathBuf> = std::fs::read_dir(directory)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.join("save.sac").is_file())
+        .collect();
+    candidates.sort();
+    candidates
 }
 
 fn describe(folder: &Path) -> SaveEntry {

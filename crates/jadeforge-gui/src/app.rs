@@ -126,20 +126,27 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let session: Rc<RefCell<Session>> =
         use_hook(move || Rc::new(RefCell::new(Session::empty(directory))));
     let revision = use_state(|| 0_u32);
-    // The directory listing loads after the first frame; scanning 89 savegames
-    // synchronously here used to delay startup by ~340 ms.
-    let scanned = use_hook(|| Rc::new(std::cell::Cell::new(false)));
-    {
+    // Scan savegames on a worker thread; the future applies the result and
+    // bumps the revision, so the first frame never waits for the scan.
+    let scan = use_future({
         let session = session.clone();
-        use_side_effect(move || {
+        move || {
+            let session = session.clone();
             let mut revision = revision;
-            if scanned.replace(true) {
-                return;
+            async move {
+                let directory = session.borrow().directory.clone();
+                let (tx, rx) = futures_channel::oneshot::channel();
+                std::thread::spawn(move || {
+                    let _ = tx.send(Session::scan_entries(&directory));
+                });
+                if let Ok(entries) = rx.await {
+                    session.borrow_mut().apply_entries(entries);
+                    *revision.write() += 1;
+                }
             }
-            session.borrow_mut().scan();
-            *revision.write() += 1;
-        });
-    }
+        }
+    });
+    let _ = scan.state();
     let form = Form::new();
     let directory_state = use_state(|| session.borrow().directory.display().to_string());
     let tab = use_state(|| Tab::Overview);
