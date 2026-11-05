@@ -25,7 +25,7 @@ JADEFORGE_GAME_DIR="/path/to/Jade Empire" \
 JADEFORGE_CONFIG_DIR="$(mktemp -d)" cargo nextest run --workspace
 ```
 
-Expect nextest's `Summary ... 281 tests run: 281 passed, 0 skipped` with a real
+Expect nextest's `Summary ... 285 tests run: 285 passed, 0 skipped` with a real
 corpus (the number grows over time; skips are fine when the game or savegames
 are absent). Nextest captures stdout, so the `round tripped 89 savegames` /
 `rewrote 962 blocks` lines are only printed with `--no-capture` or on failure.

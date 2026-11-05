@@ -236,6 +236,32 @@ fn find_paragraph(test: &TestingRunner, needle: &str) -> Option<freya_testing::T
 }
 
 #[test]
+fn every_tab_renders_at_narrow_and_wide_sizes() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    for width in [900.0, 1600.0] {
+        let mut test = launch_unopened_at(fixture.save_dir.clone(), width, 900.0);
+        assert!(click_text(&mut test, "Level "), "savegame did not open");
+        for (tab, heading) in [
+            ("Overview", "At a glance"),
+            ("Character", "Identity"),
+            ("Styles", "Fighting styles"),
+            ("Inventory", "Inventory"),
+            ("Gems", "Amulet"),
+            ("Companions", "Companions"),
+        ] {
+            assert!(click_text(&mut test, tab), "tab {tab} is missing");
+            assert!(
+                find_label_text(&test, heading).is_some(),
+                "tab {tab} did not render at {width}px"
+            );
+        }
+    }
+}
+
+#[test]
 fn savegames_are_listed_and_can_be_opened() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found (set JADEFORGE_SAVE_DIR)");
@@ -608,6 +634,46 @@ fn exact_label_nodes(test: &TestingRunner, wanted: &str) -> Vec<freya_testing::T
     })
 }
 
+fn assert_compact_action_rows(test: &TestingRunner, action: &str, width: f32) {
+    let actions = exact_label_nodes(test, action);
+    if actions.len() < 2 {
+        return;
+    }
+    let mut ys: Vec<f32> = actions
+        .iter()
+        .map(|node| node.layout().area.origin.y)
+        .collect();
+    ys.sort_by(f32::total_cmp);
+    for pair in ys.windows(2) {
+        assert!(
+            pair[1] - pair[0] < 80.0,
+            "rows are {} px apart; the name block consumed the row",
+            pair[1] - pair[0]
+        );
+    }
+    for node in &actions {
+        let area = node.layout().area;
+        assert!(
+            area.origin.x + area.size.width < width - 10.0,
+            "the row controls run off the card at x={}",
+            area.origin.x
+        );
+    }
+}
+
+#[test]
+fn gem_and_companion_rows_stay_compact_and_inside_the_card() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_text(&mut test, "Gems"));
+    assert_compact_action_rows(&test, "Add", 1400.0);
+    assert!(click_text(&mut test, "Companions"));
+    assert_compact_action_rows(&test, "Hide", 1400.0);
+}
+
 #[test]
 fn style_rows_stay_compact_and_inside_the_card() {
     let Some(fixture) = Fixture::create() else {
@@ -616,32 +682,20 @@ fn style_rows_stay_compact_and_inside_the_card() {
     };
     let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
     assert!(click_text(&mut test, "Styles"));
+    assert_compact_action_rows(&test, "Remove", 1400.0);
+    assert_compact_action_rows(&test, "Learn", 1400.0);
+}
 
-    let removes = exact_label_nodes(&test, "Remove");
-    if removes.len() < 2 {
-        eprintln!("skipping: fewer than two learned styles");
+#[test]
+fn inventory_rows_stay_compact_and_inside_the_card() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
         return;
-    }
-    let mut ys: Vec<f32> = removes
-        .iter()
-        .map(|node| node.layout().area.origin.y)
-        .collect();
-    ys.sort_by(f32::total_cmp);
-    for pair in ys.windows(2) {
-        assert!(
-            pair[1] - pair[0] < 80.0,
-            "style rows are {} px apart; the name block consumed the row",
-            pair[1] - pair[0]
-        );
-    }
-    for node in &removes {
-        let area = node.layout().area;
-        assert!(
-            area.origin.x + area.size.width < 1270.0,
-            "the row controls run off the card at x={}",
-            area.origin.x
-        );
-    }
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_text(&mut test, "Inventory"));
+    assert_compact_action_rows(&test, "Remove", 1400.0);
+    assert_compact_action_rows(&test, "Add", 1400.0);
 }
 
 fn count_labels(test: &TestingRunner) -> usize {

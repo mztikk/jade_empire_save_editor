@@ -195,6 +195,7 @@ fn block() -> Gff {
     let progress = gff.push_struct(0);
     let campaign = gff.push_struct(0);
     let item = gff.push_struct(0);
+    let other_item = gff.push_struct(0);
     let style = gff.push_struct(0);
     let other_style = gff.push_struct(0);
     let henchmen = gff.push_struct(0);
@@ -243,10 +244,18 @@ fn block() -> Gff {
     add(&mut gff, stats, "Appearance", Value::Int(4));
     add(&mut gff, progress, "Kills", Value::DWord(42));
 
-    add(&mut gff, player, "ItemList", Value::List(vec![item]));
+    add(
+        &mut gff,
+        player,
+        "ItemList",
+        Value::List(vec![item, other_item]),
+    );
     add(&mut gff, item, "Count", Value::Byte(5));
     add(&mut gff, item, "ItemId", Value::Word(42));
     add(&mut gff, item, "Type", Value::Byte(6));
+    add(&mut gff, other_item, "Count", Value::Byte(1));
+    add(&mut gff, other_item, "ItemId", Value::Word(0));
+    add(&mut gff, other_item, "Type", Value::Byte(5));
 
     add(
         &mut gff,

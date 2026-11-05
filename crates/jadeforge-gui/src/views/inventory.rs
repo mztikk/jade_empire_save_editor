@@ -73,8 +73,10 @@ pub fn view(
                     label()
                         .text(match (browsing, shown == total) {
                             (true, _) => format!("{shown} of {total}"),
-                            (false, true) => format!("{total} matches"),
-                            (false, false) => format!("{shown} of {total} matches"),
+                            (false, true) => widgets::plural(total, "match", "matches"),
+                            (false, false) => {
+                                format!("{shown} of {}", widgets::plural(total, "match", "matches"))
+                            }
                         })
                         .font_size(10.)
                         .color(theme::DIM),
@@ -115,7 +117,7 @@ pub fn view(
 
     widgets::card(
         "Inventory",
-        Some(format!("{} stacks", items.len())),
+        Some(widgets::plural(items.len(), "stack", "stacks")),
         children,
     )
 }

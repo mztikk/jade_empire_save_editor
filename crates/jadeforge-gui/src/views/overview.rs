@@ -161,7 +161,7 @@ pub fn view(
             (
                 "Inventory".to_owned(),
                 label()
-                    .text(format!("{item_count} stacks"))
+                    .text(widgets::plural(item_count, "stack", "stacks"))
                     .font_size(13.)
                     .color(theme::TEXT)
                     .into_element(),

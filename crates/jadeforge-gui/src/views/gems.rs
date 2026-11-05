@@ -93,7 +93,7 @@ pub fn view(
                 .child(rect().width(Size::flex(1.0)))
                 .child(
                     label()
-                        .text(format!("{effects} effects"))
+                        .text(widgets::plural(*effects, "effect", "effects"))
                         .font_size(10.)
                         .color(theme::DIM),
                 )
@@ -130,7 +130,10 @@ pub fn view(
                 .content(Content::Flex)
                 .child(
                     label()
-                        .text(format!("{shown} of {} gems", matching.len()))
+                        .text(format!(
+                            "{shown} of {}",
+                            widgets::plural(matching.len(), "gem", "gems")
+                        ))
                         .font_size(10.)
                         .color(theme::DIM),
                 )
@@ -186,7 +189,7 @@ pub fn view(
         .child(add_card)
         .child(widgets::card(
             "Inventory",
-            Some(format!("{} gems", inventory_rows.len())),
+            Some(widgets::plural(inventory_rows.len(), "gem", "gems")),
             vec![
                 rect()
                     .vertical()
