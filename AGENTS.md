@@ -71,6 +71,13 @@ cargo commands above remain canonical.
 9. **Treat the game installation as read only.** `jadeforge-gamedata` only
    reads `dialog.tlk` and the 2DA tables; it must never open a file for writing
    and the editor must keep working when those files are absent.
+10. **Never take the cheapest path.** Implement the full request, including
+    tests, documentation and follow-through, instead of the smallest change
+    that merely appears to work. Do not silently drop scope, park a requested
+    item, leave TODOs or placeholders, or defer part of the work because of
+    assumed time or context limits. If a complete implementation is genuinely
+    impractical, say so explicitly and ask before reducing scope. A shortcut is
+    only acceptable when the request itself asks for one.
 
 ## Code style
 
