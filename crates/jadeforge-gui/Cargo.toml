@@ -24,6 +24,7 @@ path = "tests/live.rs"
 harness = false
 
 [dependencies]
+accesskit = "0.24.1"
 futures-channel = "0.3"
 jadeforge-core.workspace = true
 jadeforge-session.workspace = true

@@ -23,6 +23,8 @@ enum Answer {
 thread_local! {
     /// Answer the next dialog call instead of opening a native dialog.
     static NEXT_PICK: RefCell<Option<Answer>> = const { RefCell::new(None) };
+    /// Answer the next confirmation instead of opening a native dialog.
+    static NEXT_CONFIRM: RefCell<Option<bool>> = const { RefCell::new(None) };
 }
 
 /// Answers the next [`pick_folder`] call with `path`.
@@ -54,6 +56,36 @@ pub fn pick_folder(start: Option<&Path>) -> Option<PathBuf> {
     dialog.pick_folder()
 }
 
+/// Answers the next [`confirm`] call with `confirmed`.
+///
+/// Test seam: destructive actions must not open a native modal in the headless
+/// suite.
+#[doc(hidden)]
+pub fn set_next_confirm_for_tests(confirmed: bool) {
+    NEXT_CONFIRM.with(|slot| *slot.borrow_mut() = Some(confirmed));
+}
+
+/// Asks for confirmation of a destructive action.
+///
+/// Returns `true` only when the user explicitly confirms. The native Yes/No
+/// dialog is modal; the headless suite replaces it through
+/// [`set_next_confirm_for_tests`].
+#[must_use]
+pub fn confirm(title: &str, description: &str) -> bool {
+    if let Some(confirmed) = NEXT_CONFIRM.with(|slot| slot.borrow_mut().take()) {
+        return confirmed;
+    }
+    matches!(
+        rfd::MessageDialog::new()
+            .set_title(title)
+            .set_description(description)
+            .set_buttons(rfd::MessageButtons::YesNo)
+            .set_level(rfd::MessageLevel::Warning)
+            .show(),
+        rfd::MessageDialogResult::Yes
+    )
+}
+
 /// Folder the dialog should start in: the current one, else the home folder.
 #[must_use]
 pub fn start_directory(current: &str) -> Option<PathBuf> {
@@ -78,6 +110,14 @@ mod tests {
         // The queue is empty now; the next call would open the real dialog, so
         // only assert that the seam was consumed.
         let consumed = NEXT_PICK.with(|slot| slot.borrow().is_none());
+        assert!(consumed);
+    }
+
+    #[test]
+    fn confirmation_answers_are_consumed_once() {
+        set_next_confirm_for_tests(false);
+        assert!(!confirm("Remove", "Remove the item?"));
+        let consumed = NEXT_CONFIRM.with(|slot| slot.borrow().is_none());
         assert!(consumed);
     }
 }

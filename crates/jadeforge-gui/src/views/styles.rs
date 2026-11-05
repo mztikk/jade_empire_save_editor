@@ -78,17 +78,16 @@ pub fn view(
                 }))
                 .child(rect().width(Size::flex(1.0)))
                 .child(
-                    label()
-                        .text(match (browsing, shown == matching) {
-                            (true, _) => format!("{shown} of {matching}"),
-                            (false, true) => crate::widgets::plural(matching, "match", "matches"),
-                            (false, false) => format!(
-                                "{shown} of {}",
-                                crate::widgets::plural(matching, "match", "matches")
-                            ),
-                        })
-                        .font_size(10.)
-                        .color(theme::DIM),
+                    widgets::a11y_text(match (browsing, shown == matching) {
+                        (true, _) => format!("{shown} of {matching}"),
+                        (false, true) => crate::widgets::plural(matching, "match", "matches"),
+                        (false, false) => format!(
+                            "{shown} of {}",
+                            crate::widgets::plural(matching, "match", "matches")
+                        ),
+                    })
+                    .font_size(10.)
+                    .color(theme::DIM),
                 );
             if shown < matching {
                 heading = heading.child(
@@ -141,7 +140,18 @@ fn style_row(
     let level = style.level;
     let remove = {
         let ctx = ctx.clone();
-        move |_| ctx.run(|session| session.remove_style(index))
+        let name = style.name.clone();
+        move |_| {
+            if !crate::dialog::confirm(
+                "Remove style?",
+                &format!(
+                    "Remove {name} from the fighting styles? You can still press Revert before saving."
+                ),
+            ) {
+                return;
+            }
+            ctx.run(|session| session.remove_style(index));
+        }
     };
 
     let subtitle = style_subtitle(style.style_id, &style.label)
@@ -152,6 +162,8 @@ fn style_row(
         .vertical()
         .width(Size::fill())
         .key(style.struct_index)
+        .a11y_role(AccessibilityRole::Group)
+        .a11y_alt(format!("{} style", style.name))
         .background(if is_hovered {
             theme::SURFACE_HOVER
         } else {
@@ -184,8 +196,7 @@ fn style_row(
                     style_badge_color(style.kind),
                 ))
                 .child(
-                    label()
-                        .text(format!("Lv {level}"))
+                    widgets::a11y_text(format!("Lv {level}"))
                         .font_size(12.)
                         .width(Size::px(46.))
                         .text_align(TextAlign::Center)
@@ -245,7 +256,13 @@ fn upgrade_panel(
         if family != Some(upgrade.family.as_str()) {
             family = Some(upgrade.family.as_str());
         }
-        chips.push(upgrade_chip(ctx, style.struct_index, upgrade, hovered));
+        chips.push(upgrade_chip(
+            ctx,
+            style.struct_index,
+            &style.name,
+            upgrade,
+            hovered,
+        ));
     }
     if let Some(family) = family {
         rows.push(upgrade_row(family, chips));
@@ -271,8 +288,7 @@ fn upgrade_row(family: &str, chips: Vec<Element>) -> Element {
         .spacing(6.)
         .content(Content::Flex)
         .child(
-            label()
-                .text(family_title(family))
+            widgets::a11y_text(family_title(family))
                 .font_size(11.)
                 .width(Size::px(120.))
                 .color(theme::MUTED),
@@ -301,6 +317,7 @@ struct UpgradeOrb {
     session: SharedSession,
     revision: State<u32>,
     struct_index: usize,
+    style_name: String,
     upgrade: StyleUpgrade,
     hovered: State<Option<HoverKey>>,
     key: DiffKey,
@@ -354,7 +371,20 @@ impl Component for UpgradeOrb {
             .a11y_id(a11y_id)
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::Button)
-            .a11y_alt(format!("tier {}", self.upgrade.tier))
+            .a11y_alt(format!(
+                "{}, {} tier {}, {}",
+                self.style_name,
+                family_title(&self.upgrade.family),
+                self.upgrade.tier,
+                if taken { "owned" } else { "available" }
+            ))
+            .a11y_builder(move |node| {
+                node.set_toggled(if taken {
+                    accesskit::Toggled::True
+                } else {
+                    accesskit::Toggled::False
+                });
+            })
             .on_pointer_enter(move |_| {
                 Cursor::set(CursorIcon::Pointer);
                 *hovered.write() = Some(key);
@@ -366,6 +396,7 @@ impl Component for UpgradeOrb {
                 }
             })
             .on_all_press(move |_| {
+                a11y_id.request_focus();
                 session.0.borrow_mut().change_upgrade(struct_index, slot);
                 *revision.write() += 1;
             })
@@ -377,6 +408,7 @@ impl Component for UpgradeOrb {
 fn upgrade_chip(
     ctx: &Ctx,
     struct_index: usize,
+    style_name: &str,
     upgrade: &StyleUpgrade,
     hovered: State<Option<HoverKey>>,
 ) -> Element {
@@ -384,6 +416,7 @@ fn upgrade_chip(
         session: SharedSession(ctx.session.clone()),
         revision: ctx.revision,
         struct_index,
+        style_name: style_name.to_owned(),
         upgrade: upgrade.clone(),
         hovered,
         key: DiffKey::None,
@@ -441,6 +474,8 @@ fn learn_row(
         .vertical()
         .width(Size::fill())
         .key(suggestion.style_id)
+        .a11y_role(AccessibilityRole::Group)
+        .a11y_alt(format!("{} style", suggestion.name))
         .background(if is_hovered {
             theme::SURFACE
         } else {

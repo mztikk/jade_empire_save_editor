@@ -44,7 +44,13 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
                     Input::new(form.experience).width(Size::fill()),
                     150.,
                 ),
-                widgets::field("GOLD", Input::new(form.gold).width(Size::fill()), 150.),
+                widgets::field(
+                    "GOLD",
+                    Input::new(form.gold)
+                        .placeholder("not set")
+                        .width(Size::fill()),
+                    150.,
+                ),
                 widgets::field("CHAPTER", Input::new(form.chapter).width(Size::fill()), 90.),
                 widgets::field("KILLS", Input::new(form.kills).width(Size::fill()), 90.),
             ]),
@@ -144,24 +150,21 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
         vec![
             widgets::label_row(
                 "Name",
-                label()
-                    .text(character.name.clone())
+                widgets::a11y_text(character.name.clone())
                     .font_size(13.)
                     .color(theme::TEXT),
             ),
             widgets::divider(),
             widgets::label_row(
                 "Level",
-                label()
-                    .text(character.level.to_string())
+                widgets::a11y_text(character.level.to_string())
                     .font_size(13.)
                     .color(theme::TEXT),
             ),
             widgets::divider(),
             widgets::label_row(
                 "Play time",
-                label()
-                    .text(crate::session::format::duration(character.time_played))
+                widgets::a11y_text(crate::session::format::duration(character.time_played))
                     .font_size(13.)
                     .color(theme::TEXT),
             ),
@@ -188,8 +191,7 @@ fn alignment_note(text: String) -> Element {
         .height(Size::px(ALIGNMENT_HINT_HEIGHT))
         .main_align(Alignment::Center)
         .child(
-            label()
-                .text(text)
+            widgets::a11y_text(text)
                 .font_size(11.)
                 .max_lines(2)
                 .color(theme::DIM),

@@ -81,20 +81,20 @@ pub fn view(
                 .horizontal()
                 .width(Size::fill())
                 .key(item_id)
+                .a11y_role(AccessibilityRole::Group)
+                .a11y_alt(format!("{name} gem"))
                 .spacing(10.)
                 .content(Content::Flex)
                 .padding(Gaps::new_symmetric(4., 8.))
                 .child(
-                    label()
-                        .text(name.clone())
+                    widgets::a11y_text(name.clone())
                         .font_size(12.)
                         .max_lines(1)
                         .color(theme::TEXT),
                 )
                 .child(rect().width(Size::flex(1.0)))
                 .child(
-                    label()
-                        .text(widgets::plural(*effects, "effect", "effects"))
+                    widgets::a11y_text(widgets::plural(*effects, "effect", "effects"))
                         .font_size(10.)
                         .color(theme::DIM),
                 )
@@ -130,13 +130,12 @@ pub fn view(
                 .spacing(8.)
                 .content(Content::Flex)
                 .child(
-                    label()
-                        .text(format!(
-                            "{shown} of {}",
-                            widgets::plural(matching.len(), "gem", "gems")
-                        ))
-                        .font_size(10.)
-                        .color(theme::DIM),
+                    widgets::a11y_text(format!(
+                        "{shown} of {}",
+                        widgets::plural(matching.len(), "gem", "gems")
+                    ))
+                    .font_size(10.)
+                    .color(theme::DIM),
                 )
                 .child(rect().width(Size::flex(1.0)))
                 .child(
@@ -218,6 +217,8 @@ fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool, can_move: bool, has_amulet: 
         .horizontal()
         .width(Size::fill())
         .key(index)
+        .a11y_role(AccessibilityRole::Group)
+        .a11y_alt(format!("{} gem", gem.name))
         .spacing(10.)
         .content(Content::Flex)
         .padding(Gaps::new_symmetric(6., 10.))
@@ -229,22 +230,20 @@ fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool, can_move: bool, has_amulet: 
                 .spacing(1.)
                 .width(Size::flex(1.0))
                 .child(
-                    label()
-                        .text(gem.name.clone())
+                    widgets::a11y_text(gem.name.clone())
                         .font_size(13.)
                         .max_lines(1)
                         .color(if gem.empty { theme::DIM } else { theme::TEXT }),
                 )
                 .child(
-                    label()
-                        .text(if gem.effects.is_empty() {
-                            "no effects".to_owned()
-                        } else {
-                            gem.effects.join(" · ")
-                        })
-                        .font_size(10.)
-                        .max_lines(2)
-                        .color(theme::DIM),
+                    widgets::a11y_text(if gem.effects.is_empty() {
+                        "no effects".to_owned()
+                    } else {
+                        gem.effects.join(" · ")
+                    })
+                    .font_size(10.)
+                    .max_lines(2)
+                    .color(theme::DIM),
                 ),
         );
     if !gem.empty {
@@ -260,22 +259,30 @@ fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool, can_move: bool, has_amulet: 
             );
         } else {
             row = row.child(
-                label()
-                    .text(if has_amulet {
-                        "Amulet full"
-                    } else {
-                        "No amulet yet"
-                    })
-                    .font_size(10.)
-                    .color(theme::DIM),
+                widgets::a11y_text(if has_amulet {
+                    "Amulet full"
+                } else {
+                    "No amulet yet"
+                })
+                .font_size(10.)
+                .color(theme::DIM),
             );
         }
+        let remove_name = gem.name.clone();
         row = row.child(
             Button::new()
                 .compact()
                 .flat()
                 .child("Remove")
-                .on_press(move |_| remove_ctx.run(|session| session.remove_gem(index))),
+                .on_press(move |_| {
+                    if !crate::dialog::confirm(
+                        "Remove gem?",
+                        &format!("Remove {remove_name}? You can still press Revert before saving."),
+                    ) {
+                        return;
+                    }
+                    remove_ctx.run(|session| session.remove_gem(index));
+                }),
         );
     }
     row.into_element()

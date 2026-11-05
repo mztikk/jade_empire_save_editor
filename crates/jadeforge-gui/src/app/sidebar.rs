@@ -23,6 +23,7 @@ pub(super) fn sidebar(
     entries: &[SaveEntry],
     visible: &[usize],
     selected: Option<usize>,
+    focus: State<usize>,
     preview: Option<ImageHandle>,
     character: Option<&Character>,
     form_differs: bool,
@@ -31,34 +32,45 @@ pub(super) fn sidebar(
     hovered: State<Option<HoverKey>>,
     sync: Rc<dyn Fn()>,
 ) -> Element {
+    let open = OpenSave::new({
+        let ctx = ctx.clone();
+        let sync = sync.clone();
+        move |index| {
+            if form_differs && selected != Some(index) {
+                ctx.run(|session| {
+                    session
+                        .set_error("Fix the invalid character fields before switching savegames.");
+                });
+                return;
+            }
+            ctx.run(|session| {
+                session.open(index);
+            });
+            sync();
+        }
+    });
+
+    let focus_index = *focus.read();
+    let focused_index = if visible.contains(&focus_index) {
+        Some(focus_index)
+    } else {
+        visible.first().copied()
+    };
     let mut rows: Vec<Element> = Vec::new();
     for &index in visible {
         let entry = &entries[index];
-        let ctx = ctx.clone();
-        let sync = sync.clone();
         let is_selected = selected == Some(index);
+        let is_focused = focused_index == Some(index);
         let is_hovered = *hovered.read() == Some(HoverKey::Save(index));
         let broken = entry.error.is_some();
         let summary = entry.summary();
         let title = entry.label.clone();
         let accessible = format!("{title}, {summary}");
-        let action = Action::new({
-            let ctx = ctx.clone();
-            let sync = sync.clone();
-            move || {
-                if form_differs && selected != Some(index) {
-                    ctx.run(|session| {
-                        session.set_error(
-                            "Fix the invalid character fields before switching savegames.",
-                        );
-                    });
-                    return;
-                }
-                ctx.run(|session| {
-                    session.open(index);
-                });
-                sync();
-            }
+        let open_for_row = open.clone();
+        let mut focus_for_row = focus;
+        let action = Action::new(move || {
+            *focus_for_row.write() = index;
+            open_for_row.call(index);
         });
         rows.push(
             AccessibleButton::new(
@@ -71,7 +83,7 @@ pub(super) fn sidebar(
                     .corner_radius(8.)
                     .background(if is_selected {
                         theme::SURFACE_ACTIVE
-                    } else if is_hovered {
+                    } else if is_hovered || is_focused {
                         theme::SURFACE_HOVER
                     } else {
                         theme::SURFACE
@@ -105,16 +117,22 @@ pub(super) fn sidebar(
                             .spacing(2.)
                             .padding(Gaps::new_symmetric(7., 10.))
                             .child(
-                                label()
-                                    .text(title)
+                                crate::widgets::a11y_text(title)
                                     .font_size(12.)
                                     .max_lines(1)
                                     .color(if broken { theme::DANGER } else { theme::TEXT }),
                             )
-                            .child(label().text(summary).font_size(10.).color(theme::DIM)),
+                            .child(
+                                crate::widgets::a11y_text(summary)
+                                    .font_size(10.)
+                                    .color(theme::DIM),
+                            ),
                     )
                     .into_element(),
             )
+            .role(AccessibilityRole::ListBoxOption)
+            .selected(is_selected)
+            .focusable(false)
             .fill_width()
             .key(index)
             .into_element(),
@@ -125,14 +143,13 @@ pub(super) fn sidebar(
             rect()
                 .padding(Gaps::new_all(12.))
                 .child(
-                    label()
-                        .text(if entries.is_empty() {
-                            "No savegames in this folder."
-                        } else {
-                            "No savegame matches this filter."
-                        })
-                        .font_size(11.)
-                        .color(theme::DIM),
+                    crate::widgets::a11y_text(if entries.is_empty() {
+                        "No savegames in this folder."
+                    } else {
+                        "No savegame matches this filter."
+                    })
+                    .font_size(11.)
+                    .color(theme::DIM),
                 )
                 .into_element(),
         );
@@ -171,25 +188,28 @@ pub(super) fn sidebar(
                 .vertical()
                 .spacing(1.)
                 .child(
-                    label()
-                        .text(title)
+                    crate::widgets::a11y_text(title)
+                        .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
                         .font_size(15.)
                         .font_weight(FontWeight::BOLD)
                         .max_lines(1)
                         .color(theme::TEXT),
                 )
-                .child(label().text(subtitle).font_size(10.).color(theme::DIM)),
+                .child(
+                    crate::widgets::a11y_text(subtitle)
+                        .font_size(10.)
+                        .color(theme::DIM),
+                ),
         )
         .child(
-            label()
-                .text(if visible.len() == entries.len() {
-                    format!("SAVEGAMES ({})", entries.len())
-                } else {
-                    format!("SAVEGAMES ({} of {})", visible.len(), entries.len())
-                })
-                .font_size(10.)
-                .font_weight(FontWeight::BOLD)
-                .color(theme::DIM),
+            crate::widgets::a11y_text(if visible.len() == entries.len() {
+                format!("SAVEGAMES ({})", entries.len())
+            } else {
+                format!("SAVEGAMES ({} of {})", visible.len(), entries.len())
+            })
+            .font_size(10.)
+            .font_weight(FontWeight::BOLD)
+            .color(theme::DIM),
         )
         .child(
             Input::new(query)
@@ -203,14 +223,115 @@ pub(super) fn sidebar(
                 .width(Size::fill())
                 .height(Size::flex(1.0))
                 .child(
-                    rect()
-                        .vertical()
-                        .width(Size::fill())
-                        .spacing(4.)
-                        .children(rows),
+                    SaveList {
+                        rows,
+                        visible: Rc::new(visible.to_vec()),
+                        focus,
+                        open,
+                        key: DiffKey::None,
+                    }
+                    .key("save-list")
+                    .into_element(),
                 ),
         )
         .into_element()
+}
+
+/// Opens a savegame by index; shared by the rows, the list box and Enter.
+#[derive(Clone)]
+struct OpenSave(Rc<dyn Fn(usize)>);
+
+impl PartialEq for OpenSave {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl OpenSave {
+    fn new(action: impl Fn(usize) + 'static) -> Self {
+        Self(Rc::new(action))
+    }
+
+    fn call(&self, index: usize) {
+        (self.0)(index);
+    }
+}
+
+/// The accessible save list: one focusable list box with roving visual focus.
+#[derive(PartialEq)]
+struct SaveList {
+    rows: Vec<Element>,
+    visible: Rc<Vec<usize>>,
+    focus: State<usize>,
+    open: OpenSave,
+    key: DiffKey,
+}
+
+impl KeyExt for SaveList {
+    fn write_key(&mut self) -> &mut DiffKey {
+        &mut self.key
+    }
+}
+
+impl Component for SaveList {
+    fn render(&self) -> impl IntoElement {
+        let a11y_id = use_a11y();
+        let focus_state = use_focus(a11y_id);
+        let is_focused = focus_state() == Focus::Keyboard;
+        let mut focus = self.focus;
+        let visible = self.visible.clone();
+        let open = self.open.clone();
+        let _ = *focus.read();
+
+        rect()
+            .vertical()
+            .width(Size::fill())
+            .spacing(4.)
+            .a11y_id(a11y_id)
+            .a11y_focusable(true)
+            .a11y_role(AccessibilityRole::ListBox)
+            .a11y_alt("Savegames")
+            .border(
+                Border::new()
+                    .fill(if is_focused {
+                        theme::TEXT
+                    } else {
+                        Color::TRANSPARENT
+                    })
+                    .width(1.5),
+            )
+            .on_pointer_press(move |_| a11y_id.request_focus())
+            .on_key_down(move |event: Event<KeyboardEventData>| {
+                let current = *focus.read();
+                let current = if visible.contains(&current) {
+                    current
+                } else {
+                    visible.first().copied().unwrap_or(0)
+                };
+                let position = visible.iter().position(|candidate| *candidate == current);
+                let target = match event.key {
+                    Key::Named(NamedKey::ArrowDown) => position.map_or_else(
+                        || visible.first().copied(),
+                        |position| visible.get(position + 1).copied(),
+                    ),
+                    Key::Named(NamedKey::ArrowUp) => position
+                        .and_then(|position| position.checked_sub(1))
+                        .and_then(|position| visible.get(position).copied()),
+                    Key::Named(NamedKey::Home) => visible.first().copied(),
+                    Key::Named(NamedKey::End) => visible.last().copied(),
+                    Key::Named(NamedKey::Enter) => {
+                        open.call(current);
+                        None
+                    }
+                    _ => None,
+                };
+                if let Some(target) = target {
+                    *focus.write() = target;
+                }
+            })
+            .children(self.rows.clone())
+            .into_element()
+    }
 }
 
 /// Sort buttons for the savegame list; pressing the active one flips the order.
@@ -254,8 +375,7 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                 rect()
                     .horizontal()
                     .child(
-                        label()
-                            .text(key.label())
+                        crate::widgets::a11y_text(key.label())
                             .font_size(10.)
                             .color(if is_active { theme::ACCENT } else { theme::DIM }),
                     )
@@ -269,9 +389,11 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                             .height(Size::px(12.))
                             .center()
                             .child(if is_active {
-                                label().text(arrow).font_size(10.).color(theme::ACCENT)
+                                crate::widgets::a11y_text(arrow)
+                                    .font_size(10.)
+                                    .color(theme::ACCENT)
                             } else {
-                                label().text("").font_size(10.)
+                                crate::widgets::a11y_text("").font_size(10.)
                             }),
                     ),
             )
@@ -285,8 +407,7 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
         .spacing(10.)
         .content(Content::Flex)
         .child(
-            label()
-                .text("SORT")
+            crate::widgets::a11y_text("SORT")
                 .font_size(10.)
                 .font_weight(FontWeight::BOLD)
                 .color(theme::DIM),
