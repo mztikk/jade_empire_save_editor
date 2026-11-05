@@ -146,17 +146,19 @@ needs the Apple SDK. The command skips those targets elsewhere with a notice.
 `just publish-target <triple>` builds and stages a single target, for example
 `aarch64-unknown-linux-gnu` when an ARM64 cross compiler is installed.
 
-The macOS folders contain `JadeForge.app` next to the bare binaries; the bundle
-carries the `.icns` so Finder and the Dock show the icon. Windows executables
-embed the `.ico`. Linux folders contain `share/applications/jadeforge.desktop`
-and `share/icons/hicolor/...`; install the CPU-appropriate binary as
-`jadeforge` in a directory on `PATH`, then copy `share/` into `~/.local/share`
-so Wayland launchers resolve the icon.
+A local macOS build (`just publish` on a Mac) stages `JadeForge.app` next to the
+bare binaries; the bundle carries the `.icns` so Finder and the Dock show the
+icon. Windows executables embed the `.ico`. Linux folders contain
+`share/applications/jadeforge.desktop` and `share/icons/hicolor/...`; install
+the CPU-appropriate binary as `jadeforge` in a directory on `PATH`, then copy
+`share/` into `~/.local/share` so Wayland launchers resolve the icon.
 
-The [CI workflow](.github/workflows/ci.yml) runs `just publish` on Linux,
-Windows and macOS, stages third-party notices, checksums, an SBOM and build
-provenance (and signs/notarises when the platform secrets are configured), and
-uploads the staged folders as per-OS artifacts; pull requests skip that job.
+The [CI workflow](.github/workflows/ci.yml) runs `just publish` on Linux and
+Windows, stages third-party notices, checksums, an SBOM and build provenance,
+and uploads the staged folders as per-OS artifacts; pull requests skip that job.
+macOS is not in the release matrix yet, because the bundle has to be signed and
+notarised first, and the published binaries are unsigned for now, so Windows
+SmartScreen warns about an unknown publisher.
 
 The `just` shortcuts are optional; the cargo commands above remain the
 canonical ones. `just check` runs the formatting, clippy and test gate,
