@@ -79,19 +79,19 @@ cargo build --release
 
 The binaries are then at:
 
-- `target/release/jadeforge-gui` – desktop application
-- `target/release/jadeforge` – command line tool
+- `target/release/jadeforge` – desktop application
+- `target/release/jadeforge-cli` – command line tool
 
 Run them directly:
 
 ```sh
-./target/release/jadeforge-gui
+./target/release/jadeforge
 ```
 
 or start the CLI against a save folder:
 
 ```sh
-./target/release/jadeforge info "/path/to/Jade Empire/Save/Auto 56 - 16h 22min - level 15"
+./target/release/jadeforge-cli info "/path/to/Jade Empire/Save/Auto 56 - 16h 22min - level 15"
 ```
 
 ### Distribution builds
@@ -124,7 +124,7 @@ canonical ones. `just check` runs the formatting, clippy and test gate and
 
 ## Using the desktop application
 
-1. Start `jadeforge-gui`.
+1. Start `jadeforge`.
 2. Pick your Jade Empire `Save` folder with **Browse…** (the native dialog, or
    type the path) and
    press **Scan**. JadeForge has no built-in guess where the game is installed:
@@ -176,7 +176,7 @@ names. Nothing in the game folder is ever written.
 ## Using the command line tool
 
 ```sh
-jadeforge [SAVE] <COMMAND>
+jadeforge-cli [SAVE] <COMMAND>
 
 Commands:
   info                      Print a summary of a savegame
@@ -198,20 +198,20 @@ Examples:
 
 ```sh
 # Show the character of one savegame
-jadeforge "/path/to/Save/Auto 56 - 16h 22min - level 15" info
+jadeforge-cli "/path/to/Save/Auto 56 - 16h 22min - level 15" info
 
 # Show the learned styles and the inventory with names
-jadeforge save.sac styles
-jadeforge save.sac items
+jadeforge-cli save.sac styles
+jadeforge-cli save.sac items
 
 # Give the character gold
-jadeforge save.sac set save.sav PlayerCreature.Stats.Gold 999999
+jadeforge-cli save.sac set save.sav PlayerCreature.Stats.Gold 999999
 
 # Inspect the raw structure
-jadeforge save.sac dump save.sav --path PlayerCreature.Stats
+jadeforge-cli save.sac dump save.sav --path PlayerCreature.Stats
 
 # Verify a savegame without touching it
-jadeforge save.sac verify
+jadeforge-cli save.sac verify
 ```
 
 ## Where are my savegames?

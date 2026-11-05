@@ -130,7 +130,7 @@ jobs:
       - name: Check glibc baseline
         if: runner.os == 'Linux'
         run: |
-          for binary in dist/jadeforge-*/jadeforge dist/jadeforge-*/jadeforge-gui; do
+          for binary in dist/jadeforge-*/jadeforge dist/jadeforge-*/jadeforge-cli; do
             ci/check-glibc.sh "$binary" 2.35
           done
       - name: Headless UI tests

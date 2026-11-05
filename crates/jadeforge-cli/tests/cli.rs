@@ -112,7 +112,7 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_jadeforge"))
+        Command::new(env!("CARGO_BIN_EXE_jadeforge-cli"))
             .arg(&self.save)
             .args(args)
             .output()
@@ -239,7 +239,7 @@ fn bad_inputs_exit_with_an_error() {
     let output = fixture.run(&["set", "save.sav", "PlayerCreature.Level", "not-a-number"]);
     assert!(!output.status.success());
 
-    let output = Command::new(env!("CARGO_BIN_EXE_jadeforge"))
+    let output = Command::new(env!("CARGO_BIN_EXE_jadeforge-cli"))
         .arg(fixture.dir.join("nope.sac"))
         .arg("info")
         .output()
@@ -251,7 +251,7 @@ fn bad_inputs_exit_with_an_error() {
 #[test]
 fn directory_argument_resolves_to_save_sac() {
     let fixture = Fixture::new();
-    let output = Command::new(env!("CARGO_BIN_EXE_jadeforge"))
+    let output = Command::new(env!("CARGO_BIN_EXE_jadeforge-cli"))
         .arg(fixture.dir.to_str().expect("utf8 path"))
         .arg("blocks")
         .output()
@@ -262,7 +262,7 @@ fn directory_argument_resolves_to_save_sac() {
 
 #[test]
 fn missing_save_argument_fails() {
-    let output = Command::new(env!("CARGO_BIN_EXE_jadeforge"))
+    let output = Command::new(env!("CARGO_BIN_EXE_jadeforge-cli"))
         .arg("definitely-not-a-save")
         .arg("info")
         .output()
