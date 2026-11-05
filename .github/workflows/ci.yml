@@ -250,6 +250,8 @@ jobs:
           path: dist/
           if-no-files-found: error
       - name: Attest build provenance
+        # GitHub only offers artifact attestations for public repositories.
+        if: github.event.repository.private == false
         uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
         with:
           subject-path: 'dist/**/*'
