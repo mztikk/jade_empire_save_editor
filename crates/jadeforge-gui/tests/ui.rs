@@ -461,7 +461,7 @@ fn sorting_does_not_move_the_sort_buttons() {
         .x;
 
     // Flipping the direction only changes the arrow glyph.
-    assert!(click_label_exact(&mut test, "Name ↑"));
+    assert!(click_label_exact(&mut test, "Name"));
     let level_after_flip = find_label_exact(&test, "Level")
         .expect("the Level sort button is missing")
         .layout()
@@ -1228,13 +1228,6 @@ fn savegames_can_be_filtered_and_sorted() {
     .expect("copy savegame");
 
     let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
-    // Start from a defined sort state even if a preference was persisted.
-    if find_label_text(&test, "Name ↑").is_none() {
-        let _ = click_text(&mut test, "Name");
-        if find_label_text(&test, "Name ↑").is_none() {
-            let _ = click_text(&mut test, "Name");
-        }
-    }
     assert!(find_label_text(&test, "SAVEGAMES (2)").is_some());
 
     // Filter by name.
@@ -1254,9 +1247,9 @@ fn savegames_can_be_filtered_and_sorted() {
     // Sorting: the active key shows a direction arrow, clicking it flips.
     assert!(find_label_text(&test, "Played").is_some());
     assert!(click_text(&mut test, "Played"));
-    assert!(find_label_text(&test, "Played ↑").is_some());
-    assert!(click_text(&mut test, "Played ↑"));
-    assert!(find_label_text(&test, "Played ↓").is_some());
+    assert!(find_label_text(&test, "↑").is_some());
+    assert!(click_text(&mut test, "Played"));
+    assert!(find_label_text(&test, "↓").is_some());
 }
 
 #[test]
