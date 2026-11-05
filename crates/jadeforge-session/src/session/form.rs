@@ -41,7 +41,11 @@ pub struct CharacterForm {
     pub level: String,
     /// Experience points.
     pub experience: String,
-    /// Gold.
+    /// Gold, or empty when the savegame has no gold field.
+    ///
+    /// The field is optional in the format; keeping it empty preserves the
+    /// absence instead of silently materialising `Some(0)` and making the form
+    /// differ from an untouched savegame.
     pub gold: String,
     /// Unspent attribute points.
     pub attribute_points: String,
@@ -87,7 +91,9 @@ impl CharacterForm {
             name: character.name.clone(),
             level: character.level.to_string(),
             experience: character.experience.to_string(),
-            gold: character.gold.unwrap_or(0).to_string(),
+            gold: character
+                .gold
+                .map_or_else(String::new, |gold| gold.to_string()),
             attribute_points: character.attribute_points.to_string(),
             health: format::exact(character.health),
             health_max: character.health_max.to_string(),
@@ -114,7 +120,16 @@ impl CharacterForm {
         character.name.clone_from(&self.name);
         character.level = parse::<u8>("level", &self.level)?;
         character.experience = parse::<u32>("experience", &self.experience)?;
-        character.gold = Some(parse::<u32>("gold", &self.gold)?);
+        character.gold = if self.gold.trim().is_empty() {
+            if base.gold.is_some() {
+                return Err(FormError(
+                    "gold: a value is required because this savegame has a gold field".to_owned(),
+                ));
+            }
+            None
+        } else {
+            Some(parse::<u32>("gold", &self.gold)?)
+        };
         character.attribute_points = parse::<u32>("attribute points", &self.attribute_points)?;
         character.health = parse_float("health", &self.health)?;
         character.health_max = parse::<u32>("maximum health", &self.health_max)?;

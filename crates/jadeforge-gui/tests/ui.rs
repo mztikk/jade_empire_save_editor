@@ -351,10 +351,38 @@ fn opening_a_save_does_not_move_the_sidebar() {
     );
     let image_area = image.layout().area;
     assert!(
-        image_area.size.height <= 160.5 && (image_area.size.width - 160.0).abs() < 0.5,
-        "the screenshot is {}x{} px; it must stay a fixed 160x160 square",
+        image_area.size.height <= 120.5 && (image_area.size.width - 120.0).abs() < 0.5,
+        "the screenshot is {}x{} px; it must stay a fixed 120x120 square",
         image_area.size.width,
         image_area.size.height
+    );
+}
+
+#[test]
+fn the_save_browser_stays_usable_at_the_minimum_window_size() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    // The fixture has one save; a few copies make the list browser test the
+    // real situation (the retail corpus has 89).
+    for suffix in 2..=6 {
+        let folder = fixture.save_dir.join(format!("Test Save {suffix}"));
+        std::fs::create_dir_all(&folder).expect("create extra save folder");
+        std::fs::copy(
+            fixture.save_dir.join("Test Save").join("save.sac"),
+            folder.join("save.sac"),
+        )
+        .expect("copy savegame");
+    }
+
+    let test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    let fourth = find_label_exact(&test, "Test Save 4").expect("the fourth save row is missing");
+    let footer = find_label_exact(&test, "Save to disk").expect("the footer is missing");
+    let fourth_area = fourth.layout().area;
+    assert!(
+        fourth_area.origin.y + fourth_area.size.height < footer.layout().area.origin.y,
+        "only three save rows fit at the supported 900x700 minimum"
     );
 }
 
@@ -1253,6 +1281,59 @@ fn savegames_can_be_filtered_and_sorted() {
 }
 
 #[test]
+fn reverting_asks_before_discarding_changes() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1000.0);
+    assert!(click_text(&mut test, "Character"));
+    assert!(click_text(&mut test, "+1 point"));
+    for _ in 0..3 {
+        test.sync_and_update();
+    }
+    assert!(find_label_text(&test, "unsaved changes").is_some());
+
+    jadeforge_gui::dialog::set_next_confirm_for_tests(false);
+    assert!(click_text(&mut test, "Revert"));
+    assert!(
+        find_label_text(&test, "unsaved changes").is_some(),
+        "canceling Revert must keep the unsaved changes"
+    );
+
+    jadeforge_gui::dialog::set_next_confirm_for_tests(true);
+    assert!(click_text(&mut test, "Revert"));
+    assert!(
+        find_label_text(&test, "all changes saved").is_some(),
+        "confirming Revert must reload the savegame"
+    );
+}
+
+#[test]
+fn removing_an_item_asks_for_confirmation() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(click_text(&mut test, "Inventory"));
+
+    jadeforge_gui::dialog::set_next_confirm_for_tests(false);
+    assert!(click_text(&mut test, "Remove"));
+    assert!(
+        find_label_text(&test, "Removed").is_none(),
+        "canceling the confirmation must keep the item"
+    );
+
+    jadeforge_gui::dialog::set_next_confirm_for_tests(true);
+    assert!(click_text(&mut test, "Remove"));
+    assert!(
+        find_label_text(&test, "Removed").is_some(),
+        "confirming the removal must remove the item"
+    );
+}
+
+#[test]
 fn the_browse_button_uses_the_folder_dialog() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
@@ -1353,4 +1434,242 @@ fn unsaved_changes_are_protected() {
 
     session.revert().expect("revert");
     assert!(!session.is_dirty());
+}
+
+fn a11y_role(node: &freya_testing::TestingNode) -> String {
+    let element = node.element();
+    format!("{:?}", element.accessibility().builder.role())
+}
+
+fn a11y_value(node: &freya_testing::TestingNode) -> Option<String> {
+    let element = node.element();
+    element
+        .accessibility()
+        .builder
+        .value()
+        .map(std::string::ToString::to_string)
+}
+
+fn a11y_label(node: &freya_testing::TestingNode) -> Option<String> {
+    let element = node.element();
+    element
+        .accessibility()
+        .builder
+        .label()
+        .map(std::string::ToString::to_string)
+}
+
+fn a11y_selected(node: &freya_testing::TestingNode) -> bool {
+    let element = node.element();
+    element
+        .accessibility()
+        .builder
+        .is_selected()
+        .unwrap_or(false)
+}
+
+fn a11y_focusable(node: &freya_testing::TestingNode) -> bool {
+    let element = node.element();
+    element.accessibility().a11y_focusable.is_enabled()
+}
+
+fn a11y_live(node: &freya_testing::TestingNode) -> String {
+    let element = node.element();
+    format!("{:?}", element.accessibility().builder.live())
+}
+
+#[test]
+fn static_text_is_exposed_to_assistive_technology() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1000.0);
+    assert!(click_text(&mut test, "Character"));
+
+    for text in [
+        "JadeForge",
+        "SAVE FOLDER",
+        "SAVEGAMES (1)",
+        "all changes saved",
+        "Identity",
+        "NAME",
+        "LEVEL",
+        "GOLD",
+    ] {
+        let node = find_label_exact(&test, text).unwrap_or_else(|| panic!("missing {text:?}"));
+        assert_eq!(
+            a11y_value(&node).as_deref(),
+            Some(text),
+            "the static label {text:?} has no accessible value"
+        );
+    }
+
+    let identity = find_label_exact(&test, "Identity").expect("Identity heading");
+    assert_eq!(a11y_role(&identity), "Heading");
+
+    let status = find_node_with_text(&test, "Opened Test Save").expect("status message");
+    assert_eq!(a11y_role(&status), "Status");
+    assert_ne!(a11y_live(&status), "Off", "the status is not a live region");
+
+    let name_group = test.find_many(|node, _| {
+        (a11y_role(&node) == "Group" && a11y_label(&node).is_some_and(|label| label == "NAME"))
+            .then_some(node)
+    });
+    assert_eq!(
+        name_group.len(),
+        1,
+        "the NAME field has no accessible group"
+    );
+}
+
+#[test]
+fn tabs_and_the_save_list_expose_roles_states_and_focus() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let test = launch_sized(fixture.save_dir.clone(), 1000.0);
+
+    let tabs = test.find_many(|node, _| (a11y_role(&node) == "Tab").then_some(node));
+    assert_eq!(tabs.len(), 6, "expected six tab buttons");
+    assert_eq!(
+        tabs.iter().filter(|node| a11y_selected(node)).count(),
+        1,
+        "exactly one tab must be selected"
+    );
+    let tab_list = test.find_many(|node, _| (a11y_role(&node) == "TabList").then_some(node));
+    assert_eq!(tab_list.len(), 1, "missing the tab list role");
+
+    let options = test.find_many(|node, _| (a11y_role(&node) == "ListBoxOption").then_some(node));
+    assert_eq!(options.len(), 1, "expected one save option");
+    assert_eq!(
+        options.iter().filter(|node| a11y_selected(node)).count(),
+        1,
+        "the opened save must be selected"
+    );
+    let list_boxes = test.find_many(|node, _| (a11y_role(&node) == "ListBox").then_some(node));
+    assert_eq!(list_boxes.len(), 1, "missing the list box role");
+    assert_eq!(
+        list_boxes
+            .iter()
+            .filter(|node| a11y_focusable(node))
+            .count(),
+        1,
+        "the save list must be exactly one tab stop"
+    );
+    assert_eq!(
+        options.iter().filter(|node| a11y_focusable(node)).count(),
+        0,
+        "individual options must not add to the Tab order"
+    );
+    assert!(
+        a11y_label(&options[0])
+            .as_deref()
+            .is_some_and(|label| label.contains("Test Save")),
+        "the save option lost its accessible name"
+    );
+}
+
+#[test]
+fn the_save_list_keeps_one_tab_stop_with_many_saves() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    for suffix in 2..=4 {
+        let folder = fixture.save_dir.join(format!("Test Save {suffix}"));
+        std::fs::create_dir_all(&folder).expect("create extra save folder");
+        std::fs::copy(
+            fixture.save_dir.join("Test Save").join("save.sac"),
+            folder.join("save.sac"),
+        )
+        .expect("copy savegame");
+    }
+    let test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    let options = test.find_many(|node, _| (a11y_role(&node) == "ListBoxOption").then_some(node));
+    assert_eq!(options.len(), 4);
+    let list_boxes = test.find_many(|node, _| (a11y_role(&node) == "ListBox").then_some(node));
+    assert_eq!(list_boxes.len(), 1);
+    assert_eq!(
+        list_boxes
+            .iter()
+            .filter(|node| a11y_focusable(node))
+            .count(),
+        1,
+        "the list box must be one tab stop"
+    );
+    assert_eq!(
+        options.iter().filter(|node| a11y_focusable(node)).count(),
+        0,
+        "a list box must not put every row in the Tab order"
+    );
+}
+
+#[test]
+fn arrow_keys_move_the_save_list_focus() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    for suffix in 2..=3 {
+        let folder = fixture.save_dir.join(format!("Test Save {suffix}"));
+        std::fs::create_dir_all(&folder).expect("create extra save folder");
+        std::fs::copy(
+            fixture.save_dir.join("Test Save").join("save.sac"),
+            folder.join("save.sac"),
+        )
+        .expect("copy savegame");
+    }
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    assert!(
+        click_text(&mut test, "Test Save"),
+        "could not focus the save list"
+    );
+    test.press_key(Key::Named(NamedKey::ArrowDown));
+    test.sync_and_update();
+
+    test.press_key(Key::Named(NamedKey::Enter));
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "Opened Test Save 2").is_some(),
+        "Enter did not open the row that received keyboard focus"
+    );
+}
+
+#[test]
+fn a_save_without_gold_opens_without_an_invalid_form() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    // Remove the optional gold field from the copied fixture, then save it
+    // back. This is the shape of the two retail saves that used to open as
+    // invalid and could not be switched or rescanned.
+    {
+        let path = fixture.save_dir.join("Test Save").join("save.sac");
+        let mut save = jadeforge_core::SaveGame::open(&path).expect("open fixture save");
+        save.block_mut("save.sav")
+            .expect("save block")
+            .gff_mut()
+            .remove("PlayerCreature.Stats.Gold")
+            .expect("remove gold");
+        save.save(jadeforge_core::SaveOptions { backup: false })
+            .expect("save fixture without gold");
+    }
+
+    let mut test = launch_sized(fixture.save_dir.clone(), 1000.0);
+    assert!(
+        find_label_text(&test, "invalid character input").is_none(),
+        "a save without gold was marked invalid"
+    );
+    assert!(
+        find_label_text(&test, "Character fields contain invalid values").is_none(),
+        "the footer reported an invalid form"
+    );
+    assert!(click_text(&mut test, "Character"));
+    assert!(
+        find_paragraph(&test, "not set").is_some(),
+        "the absent gold field should show its placeholder"
+    );
 }

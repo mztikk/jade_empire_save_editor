@@ -31,6 +31,10 @@ pub(super) fn header(
         MessageKind::Success => theme::SUCCESS,
         MessageKind::Error => theme::DANGER,
     };
+    let status_live = match message.kind {
+        MessageKind::Error => accesskit::Live::Assertive,
+        MessageKind::Info | MessageKind::Success => accesskit::Live::Polite,
+    };
     let (game_text, game_color) = match game_status {
         GameStatus::Loaded { items, .. } => (
             crate::widgets::plural(*items, "item", "items") + " loaded",
@@ -70,15 +74,13 @@ pub(super) fn header(
                 .spacing(12.)
                 .content(Content::Flex)
                 .child(
-                    label()
-                        .text(super::WINDOW_TITLE)
+                    crate::widgets::a11y_text(super::WINDOW_TITLE)
                         .font_size(22.)
                         .font_weight(FontWeight::BOLD)
                         .color(theme::ACCENT),
                 )
                 .child(
-                    label()
-                        .text("Jade Empire save editor")
+                    crate::widgets::a11y_text("Jade Empire save editor")
                         .font_size(11.)
                         .color(theme::DIM),
                 )
@@ -103,8 +105,7 @@ pub(super) fn header(
                 .spacing(10.)
                 .content(Content::Flex)
                 .child(
-                    label()
-                        .text("SAVE FOLDER")
+                    crate::widgets::a11y_text("SAVE FOLDER")
                         .font_size(10.)
                         .font_weight(FontWeight::BOLD)
                         .color(theme::DIM),
@@ -147,8 +148,11 @@ pub(super) fn header(
                 .height(Size::px(STATUS_HEIGHT))
                 .main_align(Alignment::Center)
                 .child(
-                    label()
-                        .text(message.text.clone())
+                    crate::widgets::a11y_text(message.text.clone())
+                        .a11y_builder(move |node| {
+                            node.set_role(AccessibilityRole::Status);
+                            node.set_live(status_live);
+                        })
                         .font_size(11.)
                         .max_lines(2)
                         .color(status_color),
@@ -196,12 +200,9 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
             )
             .into_element(),
         None => frame
-            .background(theme::SURFACE)
-            .corner_radius(10.)
             .child(
-                content.child(
-                    label()
-                        .text(message)
+                content.background(theme::SURFACE).corner_radius(10.).child(
+                    crate::widgets::a11y_text(message)
                         .font_size(10.)
                         .color(theme::DIM)
                         .key("save-preview-placeholder"),
@@ -238,6 +239,14 @@ pub(super) fn footer(
         let ctx = ctx.clone();
         let sync = sync.clone();
         move |_| {
+            if dirty
+                && !crate::dialog::confirm(
+                    "Discard changes?",
+                    "Reload the savegame from disk and discard every change that is only in memory?",
+                )
+            {
+                return;
+            }
             ctx.run(|session| {
                 let _ = session.revert();
             });
@@ -256,16 +265,21 @@ pub(super) fn footer(
         .child(Button::new().flat().child("Revert").on_press(revert))
         .child(rect().width(Size::flex(1.0)))
         .child(
-            label()
-                .text(if form_differs {
-                    "Character fields contain invalid values, they are not applied."
-                } else if dirty {
-                    "Changes are only in memory until you save."
-                } else {
-                    "Nothing to save."
-                })
-                .font_size(10.)
-                .color(if dirty { theme::ACCENT } else { theme::DIM }),
+            crate::widgets::a11y_text(if form_differs {
+                "Character fields contain invalid values, they are not applied."
+            } else if dirty {
+                "Changes are only in memory until you save."
+            } else {
+                "Nothing to save."
+            })
+            .font_size(10.)
+            .color(if form_differs {
+                theme::WARNING
+            } else if dirty {
+                theme::ACCENT
+            } else {
+                theme::DIM
+            }),
         )
         .into_element()
 }
@@ -282,20 +296,23 @@ pub(super) fn empty_state(savegames: usize) -> Element {
         .spacing(8.)
         .padding(Gaps::new_all(28.))
         .child(
-            label()
-                .text("No savegame selected")
+            crate::widgets::a11y_text("No savegame selected")
+                .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
                 .font_size(20.)
                 .font_weight(FontWeight::BOLD)
                 .color(theme::TEXT),
         )
-        .child(label().text(text).font_size(12.).color(theme::MUTED))
         .child(
-            label()
-                .text(
-                    "JadeForge never writes a savegame without verifying it and keeping a backup.",
-                )
-                .font_size(11.)
-                .color(theme::DIM),
+            crate::widgets::a11y_text(text)
+                .font_size(12.)
+                .color(theme::MUTED),
+        )
+        .child(
+            crate::widgets::a11y_text(
+                "JadeForge never writes a savegame without verifying it and keeping a backup.",
+            )
+            .font_size(11.)
+            .color(theme::DIM),
         )
         .into_element()
 }
