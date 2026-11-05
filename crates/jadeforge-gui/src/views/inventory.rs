@@ -70,16 +70,15 @@ pub fn view(
                 }))
                 .child(rect().width(Size::flex(1.0)))
                 .child(
-                    label()
-                        .text(match (browsing, shown == total) {
-                            (true, _) => format!("{shown} of {total}"),
-                            (false, true) => widgets::plural(total, "match", "matches"),
-                            (false, false) => {
-                                format!("{shown} of {}", widgets::plural(total, "match", "matches"))
-                            }
-                        })
-                        .font_size(10.)
-                        .color(theme::DIM),
+                    widgets::a11y_text(match (browsing, shown == total) {
+                        (true, _) => format!("{shown} of {total}"),
+                        (false, true) => widgets::plural(total, "match", "matches"),
+                        (false, false) => {
+                            format!("{shown} of {}", widgets::plural(total, "match", "matches"))
+                        }
+                    })
+                    .font_size(10.)
+                    .color(theme::DIM),
                 );
             if shown < total {
                 heading = heading.child(
@@ -155,7 +154,18 @@ fn item_row(
     let remove = {
         let ctx = ctx.clone();
         let index = item.struct_index;
-        move |_| ctx.run(|session| session.remove_item(index))
+        let name = item.name.clone();
+        move |_| {
+            if !crate::dialog::confirm(
+                "Remove item?",
+                &format!(
+                    "Remove {name} from the inventory? You can still press Revert before saving."
+                ),
+            ) {
+                return;
+            }
+            ctx.run(|session| session.remove_item(index));
+        }
     };
     let is_expanded = *expanded.read() == Some(item.struct_index);
 
@@ -163,6 +173,8 @@ fn item_row(
         .vertical()
         .width(Size::fill())
         .key(item.struct_index)
+        .a11y_role(AccessibilityRole::Group)
+        .a11y_alt(format!("{} item", item.name))
         .background(if is_hovered {
             theme::SURFACE_HOVER
         } else {
@@ -191,8 +203,7 @@ fn item_row(
                 ))
                 .child(Button::new().compact().flat().child("−").on_press(minus))
                 .child(
-                    label()
-                        .text(item.count.to_string())
+                    widgets::a11y_text(item.count.to_string())
                         .font_size(13.)
                         .width(Size::px(30.))
                         .text_align(TextAlign::Center),
@@ -236,6 +247,8 @@ fn suggestion_row(
         .vertical()
         .width(Size::fill())
         .key(suggestion.item_id)
+        .a11y_role(AccessibilityRole::Group)
+        .a11y_alt(format!("{} item", suggestion.name))
         .background(if is_hovered {
             theme::SURFACE
         } else {

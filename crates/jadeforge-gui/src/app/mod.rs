@@ -89,11 +89,10 @@ pub fn ui_is_dirty() -> bool {
 
 /// Height of the savegame preview slot, in logical pixels.
 ///
-/// The placeholder and the loaded screenshot must share this height. The
-/// screenshot is square, so [`AspectRatio::Max`] crops it into a banner of
-/// exactly this height; a different placeholder height would reflow the whole
-/// sidebar when a savegame is selected.
-pub(super) const PREVIEW_HEIGHT: f32 = 160.;
+/// The placeholder and the loaded screenshot share this square, so selecting a
+/// savegame never reflows the sidebar. Keep it small enough that the save list
+/// remains usable at the 900x700 minimum window size.
+pub(super) const PREVIEW_HEIGHT: f32 = 120.;
 
 /// Height of one line of the header status message.
 ///
@@ -186,7 +185,7 @@ where
         .with_icon(LaunchConfig::window_icon(ICON_PNG))
         .with_app_id(APP_ID)
         .with_size(1180.0, 760.0)
-        .with_min_size(900.0, 600.0)
+        .with_min_size(900.0, 700.0)
         .with_on_close(|_, _| {
             if !ui_is_dirty() {
                 return CloseDecision::Close;
@@ -259,6 +258,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let expanded_suggestion = use_state(|| None::<u16>);
     let expanded_style = use_state(|| None::<u16>);
     let save_query = use_state(String::new);
+    let save_focus = use_state(|| 0_usize);
     let save_sort = use_state(|| {
         let config = crate::config::Config::load();
         let sort = config
@@ -450,6 +450,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         &entries,
         &visible,
         selected,
+        save_focus,
         preview_handle,
         character.as_ref(),
         form_differs,

@@ -55,7 +55,11 @@ pub fn view(
                 .center()
                 .background(theme::SURFACE)
                 .corner_radius(12.)
-                .child(label().text("no\nimage").font_size(11.).color(theme::DIM))
+                .child(
+                    widgets::a11y_text("no\nimage")
+                        .font_size(11.)
+                        .color(theme::DIM),
+                )
                 .into_element()
         },
         |handle| {
@@ -85,8 +89,8 @@ pub fn view(
                 .vertical()
                 .spacing(8.)
                 .child(
-                    label()
-                        .text(character.name.clone())
+                    widgets::a11y_text(character.name.clone())
+                        .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
                         .font_size(26.)
                         .font_weight(FontWeight::BOLD)
                         .max_lines(1)
@@ -109,15 +113,14 @@ pub fn view(
                         .child(widgets::badge(alignment, theme::SURFACE, theme::JADE)),
                 )
                 .child(
-                    label()
-                        .text(format!(
-                            "{} played · {} kills · {} experience",
-                            format::duration(character.time_played),
-                            character.kills,
-                            format::amount(character.experience)
-                        ))
-                        .font_size(12.)
-                        .color(theme::MUTED),
+                    widgets::a11y_text(format!(
+                        "{} played · {} kills · {} experience",
+                        format::duration(character.time_played),
+                        character.kills,
+                        format::amount(character.experience)
+                    ))
+                    .font_size(12.)
+                    .color(theme::MUTED),
                 )
                 .child(
                     rect()
@@ -160,24 +163,21 @@ pub fn view(
         vec![widgets::label_grid(vec![
             (
                 "Inventory".to_owned(),
-                label()
-                    .text(widgets::plural(item_count, "stack", "stacks"))
+                widgets::a11y_text(widgets::plural(item_count, "stack", "stacks"))
                     .font_size(13.)
                     .color(theme::TEXT)
                     .into_element(),
             ),
             (
                 "Styles".to_owned(),
-                label()
-                    .text(format!("{style_count} learned"))
+                widgets::a11y_text(format!("{style_count} learned"))
                     .font_size(13.)
                     .color(theme::TEXT)
                     .into_element(),
             ),
             (
                 "Unspent attribute points".to_owned(),
-                label()
-                    .text(character.attribute_points.to_string())
+                widgets::a11y_text(character.attribute_points.to_string())
                     .font_size(13.)
                     .color(if character.attribute_points > 0 {
                         theme::ACCENT
@@ -188,25 +188,23 @@ pub fn view(
             ),
             (
                 "Body / Mind / Spirit".to_owned(),
-                label()
-                    .text(format!(
-                        "{} / {} / {}",
-                        character.body, character.mind, character.spirit
-                    ))
-                    .font_size(13.)
-                    .color(theme::TEXT)
-                    .into_element(),
+                widgets::a11y_text(format!(
+                    "{} / {} / {}",
+                    character.body, character.mind, character.spirit
+                ))
+                .font_size(13.)
+                .color(theme::TEXT)
+                .into_element(),
             ),
             (
                 "Charm / Intuition / Intimidate".to_owned(),
-                label()
-                    .text(format!(
-                        "{} / {} / {}",
-                        character.charm, character.intuition, character.intimidate
-                    ))
-                    .font_size(13.)
-                    .color(theme::TEXT)
-                    .into_element(),
+                widgets::a11y_text(format!(
+                    "{} / {} / {}",
+                    character.charm, character.intuition, character.intimidate
+                ))
+                .font_size(13.)
+                .color(theme::TEXT)
+                .into_element(),
             ),
         ])],
     );
@@ -217,26 +215,24 @@ pub fn view(
         vec![
             widgets::label_row(
                 "File",
-                label().text(path).font_size(12.).color(theme::MUTED),
+                widgets::a11y_text(path).font_size(12.).color(theme::MUTED),
             ),
             widgets::divider(),
             widgets::label_row(
                 "Contents",
-                label()
-                    .text(format!(
-                        "{block_count} blocks · {}",
-                        file_size.map_or_else(|| "unknown size".to_owned(), format::bytes)
-                    ))
-                    .font_size(12.)
-                    .color(theme::MUTED),
+                widgets::a11y_text(format!(
+                    "{block_count} blocks · {}",
+                    file_size.map_or_else(|| "unknown size".to_owned(), format::bytes)
+                ))
+                .font_size(12.)
+                .color(theme::MUTED),
             ),
             widgets::divider(),
             rect()
                 .horizontal()
                 .spacing(8.)
                 .child(
-                    label()
-                        .text(if game_ok { "Game data" } else { "Notice" })
+                    widgets::a11y_text(if game_ok { "Game data" } else { "Notice" })
                         .font_size(12.)
                         .color(theme::MUTED),
                 )

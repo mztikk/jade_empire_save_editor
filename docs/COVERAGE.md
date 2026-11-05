@@ -31,7 +31,7 @@ env -u JADEFORGE_SAVE_DIR -u JADEFORGE_GAME_DIR -u JADEFORGE_CONFIG_DIR \
 | lines | **15 954 / 17 898 = 89.1 %** | **15 980 / 17 898 = 89.3 %** |
 | functions | **946 / 1 218 = 77.7 %** | **950 / 1 218 = 78.0 %** |
 | regions | **9 674 / 10 789 = 89.7 %** | **9 691 / 10 789 = 89.8 %** |
-| tests run | 286 | 286 |
+| tests run | 306 | 306 |
 
 Several crates keep unit tests inside `src/`, so those test lines are part of
 the totals above. The previous non-test-only table was measured with a smaller
@@ -51,8 +51,8 @@ Notes:
 - Branch coverage is not collected; the report is line/function/region based.
 - No test is `#[ignore]`d. Real-corpus tests return early without
   `JADEFORGE_SAVE_DIR`, while the GUI suite builds its synthetic fixture and
-  still runs all 34 headless tests. `nextest` reports 286 run and 0 skipped in
-  both modes.
+  still runs all 42 headless tests. `nextest` reports 306 run; the only skip
+  is the opt-in windowed suite.
 - GUI numbers are inflated by declarative view code that runs on every render.
   Treat GUI coverage as a regression signal, not as a quality target.
 - The full-corpus GUI number is lower because the real-corpus fixture copies the
@@ -131,12 +131,15 @@ Notes:
 ### 1. Remaining GUI interaction paths
 
 - The synthetic fixture now covers the gem rows, both move directions, removal,
-  the effect text, seven-socket hint, item search/add and pagination. Add
-  footer Save/Revert, invalid-form preservation, companion buttons and
-  inventory count/remove interactions to close the remaining view branches.
-- Add a headless accessibility assertion for the tab, sort and savegame-row
-  controls; the labels and keyboard activation are implemented, but
-  `freya-testing` does not expose the accessibility tree yet.
+  the effect text, seven-socket hint, item search/add, pagination, the Revert
+  confirmation and item-removal confirmation. Add invalid-form preservation,
+  companion buttons and inventory count interactions to close the remaining
+  view branches.
+- Headless accessibility assertions now cover static text values, headings,
+  live status, tab/list roles, selected and expanded states, and the single
+  Tab stop of the save list. Remaining: associate labels with `Input`s (needs a
+  Freya Input API), expose platform focus/click actions (Freya 0.4 ignores
+  `ActionRequested`), and give every repeated row action a contextual name.
 
 ### 2. Small error paths
 

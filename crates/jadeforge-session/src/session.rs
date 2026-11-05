@@ -1329,6 +1329,12 @@ impl Session {
         else {
             return;
         };
+        if self.styles.len() <= 1 {
+            self.message = Message::error(
+                "Keep at least one style: JadeForge needs an existing style as the layout template for learning one.",
+            );
+            return;
+        }
         let Some(save) = self.save.as_mut() else {
             return;
         };
@@ -1756,6 +1762,41 @@ mod tests {
     }
 
     #[test]
+    fn form_preserves_a_missing_gold_field() {
+        let mut character = character();
+        character.gold = None;
+        let form = CharacterForm::from_character(&character);
+        assert!(
+            form.gold.is_empty(),
+            "a missing gold field must stay empty, not become zero"
+        );
+        let parsed = form.to_character(&character).expect("parse");
+        assert_eq!(parsed, character);
+        // The GUI derives its invalid badge from this comparison. A missing
+        // gold field used to make every untouched Gold-less save look invalid.
+        assert_eq!(parsed.gold, None);
+    }
+
+    #[test]
+    fn form_can_create_a_missing_gold_field() {
+        let mut character = character();
+        character.gold = None;
+        let mut form = CharacterForm::from_character(&character);
+        form.gold = "7".to_owned();
+        let parsed = form.to_character(&character).expect("parse");
+        assert_eq!(parsed.gold, Some(7));
+    }
+
+    #[test]
+    fn form_rejects_clearing_an_existing_gold_field() {
+        let character = character();
+        let mut form = CharacterForm::from_character(&character);
+        form.gold.clear();
+        let error = form.to_character(&character).expect_err("cleared gold");
+        assert!(error.contains("gold"), "{error}");
+    }
+
+    #[test]
     fn empty_session_has_a_message() {
         let session = Session::with_directory("/definitely/not/a/save/directory");
         assert_eq!(session.entries.len(), 0, "no savegames expected here");
@@ -2100,16 +2141,39 @@ mod tests {
         empty.remove_gem(0);
     }
 
+    /// Adds a second row to the in-memory style list.
+    ///
+    /// The real save fixture has one style; the fake row is only there to get
+    /// past the "keep at least one" guard so the removal and error paths can be
+    /// exercised. The save and the row list intentionally diverge here.
+    fn add_fake_second_style(session: &mut Session) -> usize {
+        let real = session.styles[0].struct_index;
+        let mut fake = session.styles[0].clone();
+        fake.struct_index = usize::MAX;
+        fake.style_id = 22;
+        fake.name = "Other Style".to_owned();
+        Rc::make_mut(&mut session.styles).push(fake);
+        assert_eq!(session.styles.len(), 2);
+        real
+    }
+
     #[test]
-    fn style_actions_remove_and_report_errors() {
+    fn style_actions_keep_the_last_style_and_report_errors() {
         let (directory, mut session) = fixture();
         let index = session.styles[0].struct_index;
+        let before = session.styles.len();
         session.remove_style(index);
-        assert!(session.styles.is_empty());
+        assert_eq!(session.styles.len(), before, "the last style was removed");
+        assert!(session.message.text.contains("at least one"));
+
+        let (_, mut session) = fixture();
+        let index = add_fake_second_style(&mut session);
+        session.remove_style(index);
+        assert_eq!(session.styles.len(), 1);
         assert!(session.message.text.contains("Removed"));
 
         let (_, mut session) = fixture();
-        let index = session.styles[0].struct_index;
+        let index = add_fake_second_style(&mut session);
         session
             .save
             .as_mut()
@@ -2122,11 +2186,11 @@ mod tests {
         assert!(session.message.text.contains("already gone"));
 
         let (_, mut session) = fixture();
-        let index = session.styles[0].struct_index;
+        let index = add_fake_second_style(&mut session);
         set_field(&mut session, "PlayerCreature.Stats.Styles", Value::Byte(1));
         session.remove_style(index);
         assert!(session.message.text.contains("Cannot remove style"));
-        assert_eq!(session.styles.len(), 1);
+        assert_eq!(session.styles.len(), 2);
 
         let (_, mut session) = fixture();
         session.add_style(u16::MAX);

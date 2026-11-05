@@ -49,7 +49,7 @@ acceptable, not while a presentation is being recorded.
 - The application component is `jadeforge_gui::app_with_directory`, the same
   component the binary uses.
 - The window is built with `jadeforge_gui::app::window_config`, so the title,
-  icon, 1180x760 size, 900x600 minimum, application id and unsaved-changes close
+  icon, 1180x760 size, 900x700 minimum, application id and unsaved-changes close
   guard are the production ones. Tests only override the application id to a
   unique value so KWin can find the test window.
 - `freya_winit::launch` runs the actual winit event loop and the actual Skia/GL
