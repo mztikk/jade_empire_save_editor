@@ -52,6 +52,9 @@ the game does, verifies the result and keeps a backup of the original.
   and no installation path is baked into the program.
 - **Responsive layout** – the sidebar, tab bar and stat rows adapt down to small
   windows instead of clipping.
+- **Native icon** – the hammer-and-jade mark is embedded in the window and in
+  the Windows executable, staged as a macOS `.app` bundle, and installed with
+  the launcher entry and hicolor icons on Linux.
 - **Safe by design** – every write is verified by re-parsing the produced file,
   written atomically through an exclusive temporary file, and guarded by a
   unique backup. The original permissions are kept, a savegame that changed on
@@ -100,7 +103,8 @@ or start the CLI against a save folder:
 
 `just publish` builds both binaries with the `dist` profile — release
 optimisation with fat LTO — and stages them in
-`dist/jadeforge-<version>-<target>/` with the licence and README.
+`dist/jadeforge-<version>-<target>/` with the licence, README and the
+platform's icon files.
 
 The Linux binaries inside that folder have to be built against an older glibc
 than current distributions ship, otherwise they refuse to start on SteamOS /
@@ -141,6 +145,13 @@ prebuilt Skia libraries, and Windows additionally needs Visual C++ while macOS
 needs the Apple SDK. The command skips those targets elsewhere with a notice.
 `just publish-target <triple>` builds and stages a single target, for example
 `aarch64-unknown-linux-gnu` when an ARM64 cross compiler is installed.
+
+The macOS folders contain `JadeForge.app` next to the bare binaries; the bundle
+carries the `.icns` so Finder and the Dock show the icon. Windows executables
+embed the `.ico`. Linux folders contain `share/applications/jadeforge.desktop`
+and `share/icons/hicolor/...`; install the CPU-appropriate binary as
+`jadeforge` in a directory on `PATH`, then copy `share/` into `~/.local/share`
+so Wayland launchers resolve the icon.
 
 The [CI workflow](.github/workflows/ci.yml) runs `just publish` on Linux,
 Windows and macOS, stages third-party notices, checksums, an SBOM and build
@@ -292,6 +303,18 @@ This uses `-C target-cpu=native`, so the resulting binary can use every CPU
 feature the build host has; it is not portable to other machines. Use
 `just publish` / `just publish-linux` for distribution binaries. Skia is still
 the prebuilt library, so only the Rust code gets native code generation.
+
+On Linux, install the desktop entry and hicolor icons once so the launcher and
+Wayland compositors can resolve the icon by app id:
+
+```sh
+just install-desktop
+```
+
+This expects `jadeforge` on `PATH` (the location `just install` uses). The icon
+master lives in `crates/jadeforge-gui/assets/icon.svg`; `just icons` regenerates
+the PNG, ICO and ICNS files from it (needs `rsvg-convert`, ImageMagick and
+Python 3).
 
 Tests that need real savegames or the game data are skipped unless the files are
 available:

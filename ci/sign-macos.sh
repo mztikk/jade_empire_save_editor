@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sign and notarise the staged macOS binaries.
+# Sign and notarise the staged macOS binaries and app bundles.
 #
 # Requires a Developer ID Application certificate exported as a base64 PKCS#12
 # and the Apple notarisation credentials. The workflow only calls this when the
@@ -32,7 +32,9 @@ security import "$work/certificate.p12" -k "$keychain" \
 security set-key-partition-list -S apple-tool:,apple:,codesign: \
     -s -k "$keychain_password" "$keychain" >/dev/null
 
-for binary in "$dist"/jadeforge-*/*; do
+# Sign every Mach-O in the staged folders, including the copy inside the .app
+# bundle; the bare binaries stay usable from a terminal.
+while IFS= read -r -d '' binary; do
     [ -f "$binary" ] && [ -x "$binary" ] || continue
     case "$binary" in
         *.exe) continue ;;
@@ -41,6 +43,17 @@ for binary in "$dist"/jadeforge-*/*; do
     codesign --force --options runtime --timestamp \
         --sign "$MACOS_IDENTITY" "$binary"
     codesign --verify --strict --verbose=2 "$binary"
+done < <(find "$dist" -type f -print0)
+
+# A bundle has to be signed after its nested code. Signing the .app is what
+# seals Info.plist and the icon resource for Gatekeeper.
+shopt -s nullglob
+apps=("$dist"/jadeforge-*/*.app)
+for app in "${apps[@]}"; do
+    echo "signing bundle $app"
+    codesign --force --options runtime --timestamp \
+        --sign "$MACOS_IDENTITY" "$app"
+    codesign --verify --strict --verbose=2 "$app"
 done
 
 for folder in "$dist"/jadeforge-*/; do

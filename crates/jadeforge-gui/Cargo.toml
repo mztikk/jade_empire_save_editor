@@ -21,6 +21,11 @@ jadeforge-session.workspace = true
 freya = { workspace = true, features = ["engine"] }
 rfd.workspace = true
 
+[build-dependencies]
+# Embeds assets/jadeforge.ico in Windows executables. The build script skips
+# every other target, so this is only used by the Windows release.
+winresource = { version = "0.1", default-features = false }
+
 [lints]
 workspace = true
 

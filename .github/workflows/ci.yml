@@ -50,6 +50,9 @@ jobs:
           cargo nextest run --locked
           -p jadeforge-gff -p jadeforge-core -p jadeforge-session
           -p jadeforge-gamedata -p jadeforge-cli
+      - name: Windows icon resource
+        if: runner.os == 'Windows'
+        run: cargo check --locked -p jadeforge-gui
       - name: Doctests
         run: >-
           cargo test --locked --doc
@@ -129,6 +132,8 @@ jobs:
       - uses: taiki-e/install-action@96601b43a0a57b0296684a021efcfa250db2e2cc # nextest
       - name: Headless UI tests (synthetic fixture)
         run: cargo nextest run --locked -p jadeforge-gui
+      - name: Icon release staging
+        run: ci/test-icon-staging.sh
       - name: GUI doctests
         run: cargo test --locked -p jadeforge-gui --doc
       - name: Clippy

@@ -2,12 +2,15 @@
 
 use freya::prelude::*;
 use jadeforge_gui::app::app;
+use jadeforge_gui::{APP_ID, ICON_PNG};
 
 fn main() {
     launch(
         LaunchConfig::new().with_window(
             WindowConfig::new(app)
                 .with_title("JadeForge")
+                .with_icon(LaunchConfig::window_icon(ICON_PNG))
+                .with_app_id(APP_ID)
                 .with_size(1180.0, 760.0)
                 .with_min_size(900.0, 600.0)
                 .with_on_close(|_, _| {
