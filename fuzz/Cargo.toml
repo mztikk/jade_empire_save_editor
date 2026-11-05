@@ -1,0 +1,32 @@
+[package]
+name = "jadeforge-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+jadeforge-core = { path = "../crates/jadeforge-core" }
+jadeforge-gamedata = { path = "../crates/jadeforge-gamedata" }
+jadeforge-gff = { path = "../crates/jadeforge-gff" }
+
+[[bin]]
+name = "gff"
+path = "fuzz_targets/gff.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "save"
+path = "fuzz_targets/save.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "twoda"
+path = "fuzz_targets/twoda.rs"
+test = false
+doc = false

@@ -18,9 +18,20 @@ use freya::prelude::*;
 use freya_testing::TestingRunner;
 use jadeforge_gui::app_with_directory;
 
-const TABS: [&str; 5] = ["Overview", "Character", "Styles", "Inventory", "Companions"];
+const TABS: [&str; 6] = [
+    "Overview",
+    "Character",
+    "Styles",
+    "Inventory",
+    "Gems",
+    "Companions",
+];
 
+#[allow(clippy::too_many_lines)] // CLI argument handling and one render path
 fn main() {
+    // Keep the developer's remembered save folder and sort order out of the
+    // rendered documentation.
+    let _ = jadeforge_gui::config::ensure_test_path();
     let mut arguments = std::env::args().skip(1);
     let directory = PathBuf::from(
         arguments
@@ -76,16 +87,21 @@ fn main() {
     test.sync_and_update();
 
     // Open the first savegame so the screenshots show the editor.
-    if let Some(entry) = find_label(&test, "Level ") {
-        click(&mut test, &entry);
-    }
+    open_first_save(&mut test);
 
     match wanted.as_deref() {
         Some("all") => {
-            let _ = &query;
             for tab in TABS {
                 if let Some(node) = find_label(&test, tab) {
                     click(&mut test, &node);
+                }
+                if let Some(query) = &query
+                    && let Some(node) = find_paragraph(&test, "Filter ")
+                        .or_else(|| find_paragraph(&test, "Search "))
+                {
+                    click(&mut test, &node);
+                    test.write_text(query.clone());
+                    test.sync_and_update();
                 }
                 let stem = output
                     .file_stem()
@@ -108,14 +124,13 @@ fn main() {
             {
                 click(&mut test, &node);
             }
-            if let Some(query) = &query {
-                if let Some(node) =
+            if let Some(query) = &query
+                && let Some(node) =
                     find_paragraph(&test, "Filter ").or_else(|| find_paragraph(&test, "Search "))
-                {
-                    click(&mut test, &node);
-                    test.write_text(query.clone());
-                    test.sync_and_update();
-                }
+            {
+                click(&mut test, &node);
+                test.write_text(query.clone());
+                test.sync_and_update();
             }
             test.render_to_file(&output);
             println!("wrote {}", output.display());
@@ -125,6 +140,22 @@ fn main() {
             println!("wrote {}", output.display());
         }
     }
+}
+
+/// Waits for the background savegame scan and opens the first entry.
+///
+/// The scan runs on a worker thread, so the first frame never contains the
+/// list; clicking immediately would race it and snapshot the empty state.
+fn open_first_save(test: &mut TestingRunner) {
+    for _ in 0..500 {
+        if let Some(entry) = find_label(test, "Level ") {
+            click(test, &entry);
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        test.sync_and_update();
+    }
+    eprintln!("warning: no savegame was found; the snapshot shows the empty state");
 }
 
 fn find_paragraph(test: &TestingRunner, wanted: &str) -> Option<freya_testing::TestingNode> {

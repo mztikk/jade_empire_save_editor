@@ -1,0 +1,266 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  formatting:
+    name: formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  test:
+    name: gff, core, session, gamedata and cli (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+      - uses: taiki-e/install-action@96601b43a0a57b0296684a021efcfa250db2e2cc # nextest
+      - name: Test
+        run: >-
+          cargo nextest run --locked
+          -p jadeforge-gff -p jadeforge-core -p jadeforge-session
+          -p jadeforge-gamedata -p jadeforge-cli
+      - name: Doctests
+        run: >-
+          cargo test --locked --doc
+          -p jadeforge-gff -p jadeforge-core -p jadeforge-session
+          -p jadeforge-gamedata -p jadeforge-cli
+      - name: Clippy
+        run: >-
+          cargo clippy --locked
+          -p jadeforge-gff -p jadeforge-core -p jadeforge-session
+          -p jadeforge-gamedata -p jadeforge-cli
+          --all-targets -- -D warnings
+      - name: Documentation
+        run: >-
+          RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
+          -p jadeforge-gff -p jadeforge-core -p jadeforge-session
+          -p jadeforge-gamedata -p jadeforge-cli
+
+  msrv:
+    name: MSRV (1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.88.0
+      - name: Install GUI system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libx11-dev \
+            libxkbcommon-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxi-dev \
+            libwayland-dev \
+            libegl1-mesa-dev \
+            libgl1-mesa-dev \
+            libfontconfig1-dev \
+            libdbus-1-dev \
+            jq
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+        with:
+          key: msrv
+      - name: Check
+        run: >-
+          cargo check --locked
+          -p jadeforge-gff -p jadeforge-core -p jadeforge-session
+          -p jadeforge-gamedata -p jadeforge-cli -p jadeforge-gui
+
+  gui:
+    name: gui (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install GUI system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libx11-dev \
+            libxkbcommon-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxi-dev \
+            libwayland-dev \
+            libegl1-mesa-dev \
+            libgl1-mesa-dev \
+            libfontconfig1-dev \
+            libdbus-1-dev \
+            jq
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+      - uses: taiki-e/install-action@96601b43a0a57b0296684a021efcfa250db2e2cc # nextest
+      - name: Headless UI tests (synthetic fixture)
+        run: cargo nextest run --locked -p jadeforge-gui
+      - name: GUI doctests
+        run: cargo test --locked -p jadeforge-gui --doc
+      - name: Clippy
+        run: cargo clippy --locked -p jadeforge-gui --all-targets -- -D warnings
+      - name: Documentation
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps -p jadeforge-gui
+
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: taiki-e/install-action@96601b43a0a57b0296684a021efcfa250db2e2cc # nextest
+        with:
+          tool: cargo-audit
+      - run: cargo audit
+
+  publish:
+    name: publish (${{ matrix.os }})
+    # The fat-LTO builds are expensive; pull requests are covered by the jobs
+    # above. Push to main, tag a release, or use manual dispatch.
+    if: github.event_name != 'pull_request'
+    needs: [formatting, test, msrv, gui, audit]
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Build on 22.04 (glibc 2.35) so the binaries also start on SteamOS /
+        # Steam Deck and older LTS distributions.
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      # Skia statically links ICU, while accesskit_windows imports the system
+      # icuuc.dll through the windows crate; the symbols collide. Remove this
+      # once the dependency no longer pulls in Win32_Globalization.
+      RUSTFLAGS: ${{ startsWith(matrix.os, 'windows') && '-C link-arg=/FORCE:MULTIPLE' || '' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Put Git Bash on PATH
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:ProgramFiles\Git\bin"
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:ProgramFiles\Git\usr\bin"
+      - name: Install GUI system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libx11-dev \
+            libxkbcommon-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxi-dev \
+            libwayland-dev \
+            libegl1-mesa-dev \
+            libgl1-mesa-dev \
+            libfontconfig1-dev \
+            libdbus-1-dev \
+            jq
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+      - uses: taiki-e/install-action@96601b43a0a57b0296684a021efcfa250db2e2cc # nextest
+      - name: Build fat-LTO binaries
+        run: just publish
+      - name: Check glibc baseline
+        if: runner.os == 'Linux'
+        run: |
+          for binary in dist/jadeforge-*/jadeforge dist/jadeforge-*/jadeforge-cli \
+            dist/jadeforge-*/jadeforge-generic-cpu dist/jadeforge-*/jadeforge-cli-generic-cpu; do
+            ci/check-glibc.sh "$binary" 2.35
+          done
+      - name: Sign macOS binaries
+        if: runner.os == 'macOS' && env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_IDENTITY: ${{ secrets.MACOS_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: ci/sign-macos.sh dist
+      - name: Sign Windows binaries
+        if: runner.os == 'Windows' && env.WINDOWS_CERTIFICATE != ''
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: ./ci/sign-windows.ps1 -Dist dist
+      - name: Third-party notices, dependency inventory and SBOM
+        if: runner.os == 'Linux'
+        run: |
+          ci/notices.sh dist
+          ci/sbom.sh dist
+      - name: Checksums
+        shell: bash
+        run: |
+          cd dist
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+      - name: Headless UI tests
+        if: runner.os != 'Linux'
+        run: cargo nextest run --locked -p jadeforge-gui
+      - name: Upload binaries
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: jadeforge-${{ runner.os }}
+          path: dist/
+          if-no-files-found: error
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: 'dist/**/*'
+      - name: Attach to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(dist/*/* dist/*.txt dist/*.json dist/*.zip dist/LICENSE_SKIA dist/SHA256SUMS)
+          existing=()
+          for file in "${files[@]}"; do
+            [ -e "$file" ] && existing+=("$file")
+          done
+          gh release upload "$GITHUB_REF_NAME" "${existing[@]}" --clobber

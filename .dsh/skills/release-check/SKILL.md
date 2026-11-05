@@ -25,16 +25,19 @@ JADEFORGE_GAME_DIR="/path/to/Jade Empire" \
 JADEFORGE_CONFIG_DIR="$(mktemp -d)" cargo nextest run --workspace
 ```
 
-Expect nextest's `Summary ... 122 tests run: 122 passed, 0 skipped` (the number
-grows over time; skips are fine when the game or savegames are absent). Nextest
-captures stdout, so the `round tripped 89 savegames` / `rewrote 962 blocks` lines
-are only printed with `--no-capture` or on failure. The UI suite is the 24
-headless tests of the `jadeforge-gui` crate. A different count is fine on another machine, "skipping" is
-not (it means the variables did not reach the tests).
+Expect nextest's `Summary ... 280 tests run: 280 passed, 0 skipped` with a real
+corpus (the number grows over time; skips are fine when the game or savegames
+are absent). Nextest captures stdout, so the `round tripped 89 savegames` /
+`rewrote 962 blocks` lines are only printed with `--no-capture` or on failure.
+The UI suite is the 29 headless tests of the `jadeforge-gui` crate and builds a
+synthetic fixture when no installation is set, so it must not report "skipping"
+in CI. A different count is fine on another machine, "skipping" is not (it means
+the variables did not reach the tests).
 
 ## Manual checks
 
-1. `cargo build --release --workspace` succeeds.
+1. `cargo build --release --workspace` succeeds; `cargo check --locked -p ...`
+   also succeeds with the declared MSRV (1.88 in `Cargo.toml` and CI).
 2. `cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/ui.png all`
    renders every tab, not the empty state, and the images look sane. Regenerate
    `docs/screenshot*.png` when the layout changed.
@@ -66,6 +69,10 @@ not (it means the variables did not reach the tests).
 - Update the changelog section in the release notes (or `CHANGELOG.md` when one
   exists).
 - Tag with `vMAJOR.MINOR.PATCH` and push tags: `git push origin main --tags`.
-- Build artifacts are produced by `.github/workflows/ci.yml`; attach the
-  binaries of all three platforms to the release.
+- `.github/workflows/ci.yml` produces the binaries, `SHA256SUMS`,
+  `THIRD_PARTY_NOTICES.txt`, the dependency inventory, `sbom.cdx.json` and
+  the Skia licence;
+  attach all of them to the release.
+- Sign/notarise the macOS and Windows binaries when the platform credentials
+  are available (see `ci/README.md`); otherwise mark the release unsigned.
 - Never ship a build whose real-savegame tests were skipped.

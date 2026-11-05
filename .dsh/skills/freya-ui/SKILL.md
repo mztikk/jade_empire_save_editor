@@ -41,6 +41,12 @@ component looks wrong, the fix belongs in `theme.rs`, not in a one-off
   `Content::Flex` + `Size::flex(1.0)`.
 - Rows that must stay one line high need an explicit height; otherwise a fill
   child grows them.
+- No layout shifts: anything whose size changes with its content gets a fixed
+  slot instead of natural sizing. The save preview and its placeholder share one
+  height, status messages reserve their maximum lines, selection bars and arrow
+  columns keep their width when invisible, and the active tab keeps a constant
+  font weight. Cover it with a headless test that compares the position of an
+  element below the changing content.
 - Form fields wrap with `.content(Content::wrap_spacing(14.0))`.
 - Scroll views need a constrained parent (`Size::flex(1.0)` in a flex column).
 - Responsive sizes come from the layout, not from measuring the window: the

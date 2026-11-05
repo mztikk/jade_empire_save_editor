@@ -7,6 +7,12 @@ use crate::session::format;
 use crate::theme;
 use crate::widgets;
 
+/// Two lines of hint text at font size 11.
+///
+/// The hint changes between one and two lines while the alignment is typed;
+/// reserving both lines keeps the cards below it from jumping.
+const ALIGNMENT_HINT_HEIGHT: f32 = 26.;
+
 /// Explains the numeric alignment the way the game names it.
 #[must_use]
 pub fn alignment_hint(value: &str) -> String {
@@ -60,7 +66,7 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
                     170.,
                 ),
             ]),
-            widgets::hint(alignment_hint(&form.alignment.read())),
+            alignment_note(alignment_hint(&form.alignment.read())),
             rect()
                 .horizontal()
                 .spacing(8.)
@@ -170,6 +176,24 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
         .child(vitals)
         .child(attributes)
         .child(summary)
+        .into_element()
+}
+
+/// The alignment explanation in a fixed-height slot so typing cannot reflow
+/// the cards below it.
+fn alignment_note(text: String) -> Element {
+    rect()
+        .vertical()
+        .width(Size::fill())
+        .height(Size::px(ALIGNMENT_HINT_HEIGHT))
+        .main_align(Alignment::Center)
+        .child(
+            label()
+                .text(text)
+                .font_size(11.)
+                .max_lines(2)
+                .color(theme::DIM),
+        )
         .into_element()
 }
 

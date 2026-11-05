@@ -17,7 +17,7 @@ truth and must be updated whenever the understanding of the format changes.
 ## Commands
 
 ```sh
-cargo build --workspace                       # build everything
+cargo build --workspace                       # build everything (MSRV 1.88)
 cargo nextest run --workspace                 # all tests (cargo-nextest)
 cargo test --workspace --doc                  # doctests
 cargo clippy --workspace --all-targets -- -D warnings
@@ -39,7 +39,8 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 
 The same commands are available through `just` (see the `justfile`): `just
 check` runs formatting, clippy and the tests, `just snapshot …` renders the UI,
-and `just publish` builds the fat-LTO distribution binaries.
+and `just publish` builds the fat-LTO distribution binaries, stages checksums and
+third-party notices, and `just checksums` regenerates `dist/SHA256SUMS`.
 `just publish-linux` builds the SteamOS-compatible Linux binaries (glibc 2.35) in
 a rootless Podman container. Linux/Windows x86-64 releases ship both the
 `x86-64-v3` binaries (`jadeforge`, `jadeforge-cli`) and baseline fallbacks
@@ -47,6 +48,20 @@ a rootless Podman container. Linux/Windows x86-64 releases ship both the
 `cargo llvm-cov nextest` and writes `coverage/lcov.info` and `coverage/html` (see
 [docs/COVERAGE.md](docs/COVERAGE.md) for the current numbers and the plan). The
 cargo commands above remain canonical.
+
+## Editing files
+
+- Read a file before changing it, then make a targeted, literal edit rather than
+  rewriting it. Agent tooling mirrors this: `read` to inspect, `edit` to change,
+  and `write` only for a new file or a deliberate full rewrite. A targeted edit
+  fails when the context it expects is gone; a blind rewrite can silently drop
+  work.
+- Do not hand-rewrite tracked files through shell one-liners (`sed -i`, shell
+  redirection, `perl` or Python). They hide the change from review and can
+  over-match. Reserve shell-based editing for genuinely bulk or mechanical
+  transformations, such as the same substitution across many files. Even then,
+  keep the substitution exact, review `git diff`, and run the formatters and
+  tests.
 
 ## Non-negotiable rules
 
@@ -88,6 +103,15 @@ cargo commands above remain canonical.
     dependency merely because it is familiar. Cite the URLs you used in the
     answer. Searching and reading documentation is part of the work, not
     optional overhead.
+12. **Use the host toolchain; never install a substitute.** The host is
+    expected to already provide every required Rust toolchain, component,
+    system package and binary. Do not run `rustup toolchain install`,
+    `rustup component add`, `cargo install`, a system package manager, or create
+    temporary `CARGO_HOME`/`RUSTUP_HOME` directories, portable toolchains or
+    other workarounds to supply something that is missing. If a required tool
+    is absent or a command fails because of the environment, stop and ask the
+    user to install or provide it. Normal Cargo dependency resolution into the
+    host's cache is fine; bootstrapping a tool that should already exist is not.
 
 ## Code style
 
@@ -140,8 +164,9 @@ cargo commands above remain canonical.
 - A style's upgrade mask is not a counter and not row indexed: bit *i* is the
   *slot* `i + 1` of the style's `<Style>LV.2da` table, and each slot points at a
   `StyleAdvance` row for effect, cost and name. The level is `1 + popcount`.
-  `set_style_slot` must keep mask and level in sync; never write one without the
-  other. Do not go back to "bit = advance row - 1": it contradicts real saves.
+  `set_style_family_slot` writes the mask and the level together and validates
+  the family slots; never write one without the other. Do not go back to
+  "bit = advance row - 1": it contradicts real saves.
 - Upgrades are changed per family: clicking the tier *n* orb buys every missing
   tier up to *n*, clicking an owned orb removes it and everything above it. The
   mask of a family is therefore always a gap-free prefix; do not add a
@@ -224,9 +249,10 @@ documentation, not ground truth — verify against the game files where possible
   (`jadeforge_session::config::ensure_test_path`), so a developer's remembered
   sort order or save folder can never influence them. Keep it that way; do not
   read the real config from a test.
-- The UI fixture discovers the installation from `JADEFORGE_SAVE_DIR` (the same
-  `<game>/Save` walk-up the app uses) and hands it to the session through a
-  thread-local test root, so `JADEFORGE_GAME_DIR` is not required for the tests.
+- The UI fixture uses `JADEFORGE_SAVE_DIR` (the same `<game>/Save` walk-up the
+  app uses) when it is set and hands it to the session through a thread-local
+  test root. Without the variables it builds a synthetic savegame and game
+  installation, so the headless suite runs in CI instead of skipping.
 - A list the user cannot browse without typing a search is a bug: every picker
   shows its full contents and *additionally* offers a filter.
 - The same value is spelled the same way everywhere. Item rows and style rows
@@ -253,14 +279,14 @@ documentation, not ground truth — verify against the game files where possible
 | --- | --- |
 | `crates/jadeforge-core` | savegame container, character, inventory, styles, companions, screenshots |
 | `crates/jadeforge-gff` | GFF block reader/writer, dotted field paths |
-| `crates/jadeforge-session` | UI independent session state and settings (no Freya) |
+| `crates/jadeforge-session` | UI independent session state, form/model modules and settings (no Freya) |
 | `crates/jadeforge-gamedata` | talk table and 2DA readers, names for items and styles |
 | `crates/jadeforge-cli` | `jadeforge-cli` command line tool |
-| `crates/jadeforge-gui` | Freya application: `app` (shell), `views` (tabs), `theme`, `widgets` |
+| `crates/jadeforge-gui` | Freya application: `app/` (shell, sidebar, navigation), `views` (tabs), `theme`, `widgets` |
 | `docs/FORMAT.md` | savegame format reference |
 | `docs/ARCHITECTURE.md` | crate layout, data flow, safety model |
 | `.dsh/skills` | task-specific skills for working on this repository |
-| `ci/github-actions.yml` | GitHub Actions workflow (see `ci/README.md`) |
+| `.github/workflows/ci.yml` | GitHub Actions workflow (see `ci/README.md`) |
 | `justfile` | `just` shortcuts for the commands above (`just check`, `just coverage`, `just publish`) |
 | `docs/COVERAGE.md` | current coverage, the gaps and the plan to close them |
 | `SaveEditorDoc.md` | the original project brief |

@@ -9,8 +9,20 @@ use std::rc::Rc;
 
 use jadeforge_core::{
     AmuletInfo, Character, GemLocation, Henchman, Item, SaveGame, SaveImage, SaveOptions, Style,
+    StyleIdentity,
 };
 use jadeforge_gamedata::GameData;
+
+mod error;
+mod form;
+mod model;
+
+pub use error::SessionError;
+pub use form::{CharacterForm, FormError};
+pub use model::{
+    GameStatus, GemRow, HenchRow, ItemRow, ItemSuggestion, Message, MessageKind, Preview,
+    SaveEntry, StyleRow, StyleSuggestion, StyleUpgrade,
+};
 
 /// Folder to start with: the environment override, the last folder used, or
 /// nothing at all.
@@ -93,7 +105,7 @@ pub mod format {
         let digits = value.to_string();
         let mut out = String::new();
         for (index, character) in digits.chars().enumerate() {
-            if index > 0 && (digits.len() - index) % 3 == 0 {
+            if index > 0 && (digits.len() - index).is_multiple_of(3) {
                 out.push('\u{202f}');
             }
             out.push(character);
@@ -244,393 +256,44 @@ pub fn visible_entries(
     indices
 }
 
-/// One entry of the savegame list.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SaveEntry {
-    /// Folder that contains `save.sac`.
-    pub path: PathBuf,
-    /// Name shown in the list.
-    pub label: String,
-    /// Character name, when the savegame could be read.
-    pub character: Option<String>,
-    /// Character level.
-    pub level: Option<u8>,
-    /// Play time in microseconds.
-    pub time_played: u64,
-    /// Set when the savegame could not be read while scanning.
-    pub error: Option<String>,
-}
-
-impl SaveEntry {
-    /// One line summary of the savegame.
-    #[must_use]
-    pub fn summary(&self) -> String {
-        if self.error.is_some() {
-            return "Cannot be read".to_owned();
-        }
-        let level = self
-            .level
-            .map_or_else(|| "?".to_owned(), |level| level.to_string());
-        format!("Level {level} · {}", format::duration(self.time_played))
-    }
-}
-
-/// Severity of the status message shown in the header.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MessageKind {
-    /// Neutral information.
-    Info,
-    /// The last action succeeded.
-    Success,
-    /// The last action failed.
-    Error,
-}
-
-/// A status message.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Message {
-    /// Severity.
-    pub kind: MessageKind,
-    /// Text.
-    pub text: String,
-}
-
-impl Message {
-    /// Neutral message.
-    #[must_use]
-    pub fn info(text: impl Into<String>) -> Self {
-        Self {
-            kind: MessageKind::Info,
-            text: text.into(),
-        }
-    }
-
-    /// Success message.
-    #[must_use]
-    pub fn success(text: impl Into<String>) -> Self {
-        Self {
-            kind: MessageKind::Success,
-            text: text.into(),
-        }
-    }
-
-    /// Error message.
-    #[must_use]
-    pub fn error(text: impl Into<String>) -> Self {
-        Self {
-            kind: MessageKind::Error,
-            text: text.into(),
-        }
-    }
-}
-
-/// State of the optional game data.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GameStatus {
-    /// Game files are available and resolved.
-    Loaded {
-        /// Number of named items.
-        items: usize,
-        /// Number of named styles.
-        styles: usize,
-        /// Directory the data was read from.
-        root: PathBuf,
-    },
-    /// No game installation was found next to the savegames.
-    Missing,
-    /// A game installation was found but could not be read.
-    Error(String),
-}
-
-/// An item stack together with its display data.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ItemRow {
-    /// Index of the struct that stores the item.
-    pub struct_index: usize,
-    /// Item template id.
-    pub item_id: u16,
-    /// Stack size.
-    pub count: u8,
-    /// Item category as stored in the savegame.
-    pub kind: u8,
-    /// Display name.
-    pub name: String,
-    /// Category label, for example `weapons` or `gems`.
-    pub category: Option<String>,
-    /// Description from the game data.
-    pub description: Option<String>,
-}
-
-/// One purchasable slot of a style's level-up table.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StyleUpgrade {
-    /// 1-based slot in the style's level-up table; the toggle sets bit `slot - 1`.
-    pub slot: u16,
-    /// Row in `StyleAdvance.2da` the slot grants.
-    pub advance: u16,
-    /// Localized family name.
-    pub family: String,
-    /// Tier inside the family (1 based).
-    pub tier: u8,
-    /// Localized name.
-    pub name: String,
-    /// Short effect description, for example `Damage +25%`.
-    pub effect: String,
-    /// Style points the upgrade costs.
-    pub cost: u8,
-    /// Whether the player already owns it.
-    pub taken: bool,
-}
-
-/// A fighting style together with its display data.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StyleRow {
-    /// Index of the struct that stores the style.
-    pub struct_index: usize,
-    /// Row in `stylesuperlist.2da`.
-    pub style_id: u16,
-    /// Current level.
-    pub level: u8,
-    /// Display name.
-    pub name: String,
-    /// Internal template label, for example `Martial_Legendary_Strike`.
-    pub label: String,
-    /// Kind of style, for example `magic` or `support`.
-    pub kind: &'static str,
-    /// Description from the game data.
-    pub description: Option<String>,
-    /// Raw `StyleLevelInfo` upgrade mask.
-    pub mask: u64,
-    /// Upgrade choices that can be toggled for this style.
-    pub upgrades: Vec<StyleUpgrade>,
-}
-
-/// A style the player could learn.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StyleSuggestion {
-    /// Row in `stylesuperlist.2da`.
-    pub style_id: u16,
-    /// Localized name.
-    pub name: String,
-    /// Internal template label.
-    pub label: String,
-    /// Kind of style.
-    pub kind: &'static str,
-    /// Description from the game data.
-    pub description: Option<String>,
-}
-
-/// A gem together with display data.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GemRow {
-    /// Index of the struct that stores the gem.
-    pub struct_index: usize,
-    /// Display name from the item table.
-    pub name: String,
-    /// Readable effect lines, for example `+2 Body`.
-    pub effects: Vec<String>,
-    /// Empty amulet socket: no gem in it.
-    pub empty: bool,
-    /// Whether the gem is socketed or carried.
-    pub location: GemLocation,
-}
-
-/// A companion together with display data.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HenchRow {
-    /// Index of the struct that stores the companion.
-    pub struct_index: usize,
-    /// Creature template.
-    pub resref: String,
-    /// Display name.
-    pub name: String,
-    /// Companion level.
-    pub level: u8,
-    /// Whether the companion is selectable.
-    pub available: bool,
-}
-
-/// A search hit for the item picker.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ItemSuggestion {
-    /// Row in `items.2da`, usable as item id.
-    pub item_id: u16,
-    /// Display name.
-    pub name: String,
-    /// Category label.
-    pub category: String,
-    /// Value for the `Type` field of a new item struct.
-    pub save_type: u8,
-    /// Description from the game data.
-    pub description: Option<String>,
-}
-
-/// A decoded savegame screenshot.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Preview {
-    /// Width in pixels.
-    pub width: u32,
-    /// Height in pixels.
-    pub height: u32,
-    /// RGBA pixels.
-    pub rgba: Vec<u8>,
-    /// Bumped every time a new preview is loaded.
-    pub generation: u64,
-}
-
-/// The editable values of the character form.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct CharacterForm {
-    /// First name.
-    pub name: String,
-    /// Level.
-    pub level: String,
-    /// Experience points.
-    pub experience: String,
-    /// Gold.
-    pub gold: String,
-    /// Unspent attribute points.
-    pub attribute_points: String,
-    /// Current health.
-    pub health: String,
-    /// Maximum health.
-    pub health_max: String,
-    /// Current chi.
-    pub chi: String,
-    /// Maximum chi.
-    pub chi_max: String,
-    /// Current focus.
-    pub focus: String,
-    /// Maximum focus.
-    pub focus_max: String,
-    /// Body.
-    pub body: String,
-    /// Mind.
-    pub mind: String,
-    /// Spirit.
-    pub spirit: String,
-    /// Charm.
-    pub charm: String,
-    /// Intuition.
-    pub intuition: String,
-    /// Intimidate.
-    pub intimidate: String,
-    /// Alignment.
-    pub alignment: String,
-    /// Appearance index.
-    pub appearance: String,
-    /// Chapter.
-    pub chapter: String,
-    /// Kills.
-    pub kills: String,
-}
-
-impl CharacterForm {
-    /// Fills the form from a character.
-    #[must_use]
-    pub fn from_character(character: &Character) -> Self {
-        Self {
-            name: character.name.clone(),
-            level: character.level.to_string(),
-            experience: character.experience.to_string(),
-            gold: character.gold.unwrap_or(0).to_string(),
-            attribute_points: character.attribute_points.to_string(),
-            health: format::exact(character.health),
-            health_max: character.health_max.to_string(),
-            chi: format::exact(character.chi),
-            chi_max: character.chi_max.to_string(),
-            focus: format::exact(character.focus),
-            focus_max: format::exact(character.focus_max),
-            body: character.body.to_string(),
-            mind: character.mind.to_string(),
-            spirit: character.spirit.to_string(),
-            charm: character.charm.to_string(),
-            intuition: character.intuition.to_string(),
-            intimidate: character.intimidate.to_string(),
-            alignment: character.alignment.to_string(),
-            appearance: character.appearance.to_string(),
-            chapter: character.chapter.to_string(),
-            kills: character.kills.to_string(),
-        }
-    }
-
-    /// Builds a character by applying the form on top of a base character.
-    pub fn to_character(&self, base: &Character) -> Result<Character, String> {
-        let mut character = base.clone();
-        character.name.clone_from(&self.name);
-        character.level = parse::<u8>("level", &self.level)?;
-        character.experience = parse::<u32>("experience", &self.experience)?;
-        character.gold = Some(parse::<u32>("gold", &self.gold)?);
-        character.attribute_points = parse::<u32>("attribute points", &self.attribute_points)?;
-        character.health = parse_float("health", &self.health)?;
-        character.health_max = parse::<u32>("maximum health", &self.health_max)?;
-        character.chi = parse_float("chi", &self.chi)?;
-        character.chi_max = parse::<u32>("maximum chi", &self.chi_max)?;
-        character.focus = parse_float("focus", &self.focus)?;
-        character.focus_max = parse_float("maximum focus", &self.focus_max)?;
-        character.body = parse::<u32>("body", &self.body)?;
-        character.mind = parse::<u32>("mind", &self.mind)?;
-        character.spirit = parse::<u32>("spirit", &self.spirit)?;
-        character.charm = parse::<i32>("charm", &self.charm)?;
-        character.intuition = parse::<i32>("intuition", &self.intuition)?;
-        character.intimidate = parse::<i32>("intimidate", &self.intimidate)?;
-        character.alignment = parse::<i32>("alignment", &self.alignment)?;
-        character.appearance = parse::<i32>("appearance", &self.appearance)?;
-        character.chapter = parse::<u32>("chapter", &self.chapter)?;
-        character.kills = parse::<u32>("kills", &self.kills)?;
-        Ok(character)
-    }
-}
-
-fn parse<T: std::str::FromStr>(what: &str, raw: &str) -> Result<T, String> {
-    raw.trim()
-        .parse()
-        .map_err(|_| format!("{what}: {:?} is not a number", raw.trim()))
-}
-
-fn parse_float(what: &str, raw: &str) -> Result<f32, String> {
-    let value: f32 = raw
-        .trim()
-        .parse()
-        .map_err(|_| format!("{what}: {:?} is not a number", raw.trim()))?;
-    if value.is_finite() {
-        Ok(value)
-    } else {
-        Err(format!("{what}: {raw:?} is not a finite number"))
-    }
-}
-
 /// A loaded editing session.
 pub struct Session {
     /// Folder that is currently scanned.
-    pub directory: PathBuf,
+    pub(crate) directory: PathBuf,
     /// Savegames found in [`Session::directory`].
-    pub entries: Vec<SaveEntry>,
+    ///
+    /// Shared so rendering can borrow the list without copying it every frame.
+    pub(crate) entries: Rc<Vec<SaveEntry>>,
     /// Index into [`Session::entries`] of the opened savegame.
-    pub selected: Option<usize>,
+    pub(crate) selected: Option<usize>,
     /// The opened savegame.
-    pub save: Option<SaveGame>,
+    pub(crate) save: Option<SaveGame>,
     /// Character of the opened savegame.
-    pub character: Option<Character>,
+    pub(crate) character: Option<Character>,
     /// Inventory of the opened savegame.
-    pub items: Vec<ItemRow>,
+    pub(crate) items: Rc<Vec<ItemRow>>,
     /// Fighting styles of the opened savegame.
-    pub styles: Vec<StyleRow>,
+    pub(crate) styles: Rc<Vec<StyleRow>>,
     /// Companions of the opened savegame.
-    pub henchmen: Vec<HenchRow>,
+    pub(crate) henchmen: Rc<Vec<HenchRow>>,
     /// Gems of the opened savegame.
-    pub gems: Vec<GemRow>,
+    pub(crate) gems: Rc<Vec<GemRow>>,
     /// Amulet tier and unlocked sockets; `None` until the amulet is unlocked.
-    pub amulet: Option<AmuletInfo>,
+    pub(crate) amulet: Option<AmuletInfo>,
     /// Game data used for names.
-    pub game: Option<Rc<GameData>>,
+    pub(crate) game: Option<Rc<GameData>>,
     /// Human readable state of the game data.
-    pub game_status: GameStatus,
+    pub(crate) game_status: GameStatus,
     /// Screenshot of the opened savegame.
-    pub preview: Option<Preview>,
+    ///
+    /// Shared so rendering can clone the handle without copying the RGBA
+    /// buffer.
+    pub(crate) preview: Option<Rc<Preview>>,
     /// Status of the last action.
-    pub message: Message,
+    pub(crate) message: Message,
+    file_size: Option<u64>,
     preview_generation: u64,
+    scan_token: u64,
 }
 
 impl Default for Session {
@@ -663,20 +326,22 @@ impl Session {
         let directory = directory.into();
         let mut session = Self {
             directory,
-            entries: Vec::new(),
+            entries: Rc::new(Vec::new()),
             selected: None,
             save: None,
             character: None,
-            items: Vec::new(),
-            styles: Vec::new(),
-            henchmen: Vec::new(),
-            gems: Vec::new(),
+            items: Rc::new(Vec::new()),
+            styles: Rc::new(Vec::new()),
+            henchmen: Rc::new(Vec::new()),
+            gems: Rc::new(Vec::new()),
             amulet: None,
             game: None,
             game_status: GameStatus::Missing,
             preview: None,
             message: Message::info("Scanning for savegames…"),
+            file_size: None,
             preview_generation: 0,
+            scan_token: 0,
         };
         session.load_game_data();
         session
@@ -684,32 +349,37 @@ impl Session {
 
     /// Changes the directory and scans it.
     ///
-    /// Refuses to throw away unsaved changes.
-    pub fn set_directory(&mut self, directory: impl Into<PathBuf>) {
+    /// Refuses to throw away unsaved changes and reports whether the directory
+    /// was accepted, so the caller does not show a folder that was rejected.
+    pub fn set_directory(&mut self, directory: impl Into<PathBuf>) -> bool {
         let directory = directory.into();
         if self.is_dirty() {
             self.message = Message::info(
                 "This savegame has unsaved changes: save them or press Revert before scanning.",
             );
-            return;
+            return false;
         }
         self.directory = directory;
         self.persist_directory();
         self.selected = None;
         self.save = None;
         self.character = None;
-        self.items.clear();
-        self.styles.clear();
-        self.henchmen.clear();
+        Rc::make_mut(&mut self.items).clear();
+        Rc::make_mut(&mut self.styles).clear();
+        Rc::make_mut(&mut self.henchmen).clear();
+        Rc::make_mut(&mut self.gems).clear();
+        self.amulet = None;
         self.preview = None;
+        self.file_size = None;
         self.scan();
+        true
     }
 
     /// Replaces the entry list with the result of [`Session::scan_entries`].
     pub fn apply_entries(&mut self, entries: Vec<SaveEntry>) {
         let total = entries.len();
         let broken = entries.iter().filter(|entry| entry.error.is_some()).count();
-        self.entries = entries;
+        self.entries = Rc::new(entries);
         let plural = if total == 1 { "" } else { "s" };
         let directory = self.directory.display();
         self.message = if total == 0 {
@@ -741,14 +411,47 @@ impl Session {
 
     /// Scans the directory for savegames and loads the game data.
     pub fn scan(&mut self) {
+        self.scan_token = self.scan_token.wrapping_add(1);
         self.load_game_data();
         let entries = Self::scan_entries(&self.directory);
         self.apply_entries(entries);
     }
 
+    /// Token identifying the current scan. The GUI captures it before starting
+    /// a worker and uses it to discard a stale result.
+    #[must_use]
+    pub fn scan_token(&self) -> u64 {
+        self.scan_token
+    }
+
+    /// Applies a worker result only when it still belongs to the current
+    /// directory and scan generation.
+    pub fn apply_entries_for(
+        &mut self,
+        directory: &Path,
+        token: u64,
+        entries: Vec<SaveEntry>,
+    ) -> bool {
+        if self.directory != directory || self.scan_token != token {
+            return false;
+        }
+        self.apply_entries(entries);
+        true
+    }
+
+    /// Reports a failed background scan only when it still belongs to the
+    /// current directory and scan generation.
+    pub fn report_scan_failure_for(&mut self, directory: &Path, token: u64) -> bool {
+        if self.directory != directory || self.scan_token != token {
+            return false;
+        }
+        self.report_scan_failure();
+        true
+    }
+
     /// Reports that the background scan could not be completed.
     pub fn report_scan_failure(&mut self) {
-        self.entries.clear();
+        Rc::make_mut(&mut self.entries).clear();
         self.message = Message::error(format!(
             "Could not scan {}: the savegame reader stopped unexpectedly.",
             self.directory.display()
@@ -774,17 +477,28 @@ impl Session {
     }
 
     /// Loads the game installation that belongs to the save folder.
-    fn load_game_data(&mut self) {
-        if let Some(game) = GameData::discover(&self.directory) {
-            self.game_status = GameStatus::Loaded {
-                items: game.playable_item_count(),
-                styles: game.style_count(),
-                root: game.root().to_path_buf(),
-            };
-            self.game = Some(Rc::new(game));
-        } else {
-            self.game = None;
-            self.game_status = GameStatus::Missing;
+    fn load_game_data(&mut self) -> Vec<String> {
+        match GameData::discover_result(&self.directory) {
+            Ok(Some(game)) => {
+                self.game_status = GameStatus::Loaded {
+                    items: game.playable_item_count(),
+                    styles: game.style_count(),
+                    root: game.root().to_path_buf(),
+                };
+                let warnings = game.warnings().to_vec();
+                self.game = Some(Rc::new(game));
+                warnings
+            }
+            Ok(None) => {
+                self.game = None;
+                self.game_status = GameStatus::Missing;
+                Vec::new()
+            }
+            Err(error) => {
+                self.game = None;
+                self.game_status = GameStatus::Error(error.to_string());
+                vec![format!("game data: {error}")]
+            }
         }
     }
 
@@ -792,10 +506,26 @@ impl Session {
     ///
     /// Refuses to switch away from a savegame with unsaved changes.
     pub fn open(&mut self, index: usize) -> bool {
-        if self.is_dirty() && self.selected != Some(index) {
+        if self.selected == Some(index) {
+            // Clicking the row that is already open must not reload it: that
+            // would silently throw away unsaved edits.
+            return true;
+        }
+        if self.is_dirty() {
             self.message = Message::info(
                 "This savegame has unsaved changes: save them or press Revert first.",
             );
+            return false;
+        }
+        let Some(entry) = self.entries.get(index) else {
+            self.message = Message::error("That savegame no longer exists; scan the folder again.");
+            return false;
+        };
+        if let Some(error) = &entry.error {
+            self.message = Message::error(format!(
+                "Cannot open {}: the scan already found it unreadable: {error}",
+                entry.label
+            ));
             return false;
         }
         self.load(index)
@@ -809,16 +539,31 @@ impl Session {
         let path = entry.path.join("save.sac");
         match SaveGame::open(&path) {
             Ok(save) => {
+                self.file_size = std::fs::metadata(&path).ok().map(|meta| meta.len());
                 let label = entry.label.clone();
-                self.character = save.character().ok();
+                let mut warnings = Vec::new();
+                self.character = match save.character() {
+                    Ok(character) => Some(character),
+                    Err(error) => {
+                        warnings.push(format!("character: {error}"));
+                        None
+                    }
+                };
                 self.save = Some(save);
                 self.selected = Some(index);
-                self.rebuild_rows();
+                warnings.extend(self.rebuild_rows());
                 self.load_preview(&path);
                 if self.game.is_none() {
-                    self.load_game_data();
+                    warnings.extend(self.load_game_data());
                 }
-                self.message = Message::success(format!("Opened {label}."));
+                self.message = if warnings.is_empty() {
+                    Message::success(format!("Opened {label}."))
+                } else {
+                    Message::error(format!(
+                        "Opened {label}, but some sections could not be read: {}",
+                        warnings.join("; ")
+                    ))
+                };
                 true
             }
             Err(error) => {
@@ -830,46 +575,65 @@ impl Session {
 
     fn load_preview(&mut self, save_path: &Path) {
         self.preview_generation += 1;
-        self.preview = SaveImage::load(save_path).ok().map(|image| Preview {
-            width: image.width,
-            height: image.height,
-            rgba: image.rgba,
-            generation: self.preview_generation,
+        self.preview = SaveImage::load(save_path).ok().map(|image| {
+            Rc::new(Preview {
+                width: image.width,
+                height: image.height,
+                rgba: image.rgba,
+                generation: self.preview_generation,
+            })
         });
     }
 
     /// Re-reads items, styles and companions from the open savegame.
-    fn rebuild_rows(&mut self) {
-        let rows = self.build_rows();
-        if let Some(rows) = rows {
-            self.items = rows.0;
-            self.styles = rows.1;
-            self.henchmen = rows.2;
-        }
-        self.gems = self.build_gem_rows();
+    ///
+    /// Returns the section errors that were recovered from, so the UI can say
+    /// that a savegame opened with missing sections instead of pretending every
+    /// read succeeded.
+    fn rebuild_rows(&mut self) -> Vec<String> {
+        let (items, styles, henchmen, mut warnings) = self.build_rows();
+        self.items = Rc::new(items);
+        self.styles = Rc::new(styles);
+        self.henchmen = Rc::new(henchmen);
+        let (gems, gem_warnings) = self.build_gem_rows();
+        self.gems = Rc::new(gems);
+        warnings.extend(gem_warnings);
+        warnings
     }
 
-    fn build_rows(&self) -> Option<(Vec<ItemRow>, Vec<StyleRow>, Vec<HenchRow>)> {
-        let save = self.save.as_ref()?;
-        let items = save
-            .items()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|item| self.describe_item(&item))
-            .collect();
-        let styles = save
-            .styles()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|style| self.describe_style(&style))
-            .collect();
-        let henchmen = save
-            .henchmen()
-            .unwrap_or_default()
-            .into_iter()
-            .map(describe_henchman)
-            .collect();
-        Some((items, styles, henchmen))
+    fn build_rows(&self) -> (Vec<ItemRow>, Vec<StyleRow>, Vec<HenchRow>, Vec<String>) {
+        let Some(save) = self.save.as_ref() else {
+            return (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        };
+        let mut warnings = Vec::new();
+        let items = match save.items() {
+            Ok(items) => items
+                .into_iter()
+                .map(|item| self.describe_item(&item))
+                .collect(),
+            Err(error) => {
+                warnings.push(format!("items: {error}"));
+                Vec::new()
+            }
+        };
+        let styles = match save.styles() {
+            Ok(styles) => styles
+                .into_iter()
+                .map(|style| self.describe_style(&style))
+                .collect(),
+            Err(error) => {
+                warnings.push(format!("styles: {error}"));
+                Vec::new()
+            }
+        };
+        let henchmen = match save.henchmen() {
+            Ok(henchmen) => henchmen.into_iter().map(describe_henchman).collect(),
+            Err(error) => {
+                warnings.push(format!("companions: {error}"));
+                Vec::new()
+            }
+        };
+        (items, styles, henchmen, warnings)
     }
 
     fn describe_item(&self, item: &Item) -> ItemRow {
@@ -917,6 +681,90 @@ impl Session {
         self.save.as_ref().is_some_and(SaveGame::is_modified)
     }
 
+    /// Folder that is currently scanned.
+    #[must_use]
+    pub fn directory(&self) -> &Path {
+        &self.directory
+    }
+
+    /// Shared list of savegames found in the folder.
+    #[must_use]
+    pub fn entries(&self) -> Rc<Vec<SaveEntry>> {
+        Rc::clone(&self.entries)
+    }
+
+    /// Index of the opened savegame in [`Session::entries`].
+    #[must_use]
+    pub fn selected(&self) -> Option<usize> {
+        self.selected
+    }
+
+    /// The opened savegame, when a row was successfully opened.
+    #[must_use]
+    pub fn opened_save(&self) -> Option<&SaveGame> {
+        self.save.as_ref()
+    }
+
+    /// Character of the opened savegame.
+    #[must_use]
+    pub fn character(&self) -> Option<&Character> {
+        self.character.as_ref()
+    }
+
+    /// Shared inventory rows.
+    #[must_use]
+    pub fn items(&self) -> Rc<Vec<ItemRow>> {
+        Rc::clone(&self.items)
+    }
+
+    /// Shared style rows.
+    #[must_use]
+    pub fn styles(&self) -> Rc<Vec<StyleRow>> {
+        Rc::clone(&self.styles)
+    }
+
+    /// Shared companion rows.
+    #[must_use]
+    pub fn henchmen(&self) -> Rc<Vec<HenchRow>> {
+        Rc::clone(&self.henchmen)
+    }
+
+    /// Shared gem rows.
+    #[must_use]
+    pub fn gems(&self) -> Rc<Vec<GemRow>> {
+        Rc::clone(&self.gems)
+    }
+
+    /// Amulet tier and sockets, when the amulet is unlocked.
+    #[must_use]
+    pub fn amulet(&self) -> Option<AmuletInfo> {
+        self.amulet
+    }
+
+    /// Loaded game data, when an installation was found.
+    #[must_use]
+    pub fn game(&self) -> Option<&GameData> {
+        self.game.as_deref()
+    }
+
+    /// Human readable state of the game data.
+    #[must_use]
+    pub fn game_status(&self) -> &GameStatus {
+        &self.game_status
+    }
+
+    /// Shared screenshot of the opened savegame.
+    #[must_use]
+    pub fn preview(&self) -> Option<Rc<Preview>> {
+        self.preview.clone()
+    }
+
+    /// Status of the last action.
+    #[must_use]
+    pub fn message(&self) -> &Message {
+        &self.message
+    }
+
     /// Path of the opened savegame.
     #[must_use]
     pub fn current_path(&self) -> Option<PathBuf> {
@@ -934,18 +782,24 @@ impl Session {
     /// Size of the open savegame in bytes.
     #[must_use]
     pub fn file_size(&self) -> Option<u64> {
-        let path = self.current_path()?;
-        std::fs::metadata(path).ok().map(|meta| meta.len())
+        self.file_size
     }
 
     /// Applies the form to the in memory savegame.
-    pub fn apply(&mut self, form: &CharacterForm) -> Result<usize, String> {
+    pub fn apply(&mut self, form: &CharacterForm) -> Result<usize, SessionError> {
         let Some(base) = self.character.as_ref() else {
-            return Err("no savegame is open".to_owned());
+            return Err(SessionError::NoSavegame);
         };
-        let character = form.to_character(base)?;
+        let character = match form.to_character(base) {
+            Ok(character) => character,
+            Err(error) => {
+                self.message = Message::error(error.to_string());
+                return Err(SessionError::InvalidForm(error.to_string()));
+            }
+        };
         let Some(save) = self.save.as_mut() else {
-            return Err("no savegame is open".to_owned());
+            self.message = Message::error("no savegame is open");
+            return Err(SessionError::NoSavegame);
         };
         match save.apply_character(&character) {
             Ok(changes) => {
@@ -962,7 +816,7 @@ impl Session {
             }
             Err(error) => {
                 self.message = Message::error(error.to_string());
-                Err(error.to_string())
+                Err(SessionError::Save(error.to_string()))
             }
         }
     }
@@ -996,37 +850,38 @@ impl Session {
     }
 
     /// Writes the opened savegame back to disk.
-    pub fn save(&mut self) -> Result<PathBuf, String> {
+    pub fn save(&mut self) -> Result<PathBuf, SessionError> {
         let Some(save) = self.save.as_mut() else {
-            return Err("no savegame is open".to_owned());
+            return Err(SessionError::NoSavegame);
         };
         if !save.is_modified() {
             self.message = Message::info("Nothing was changed, not writing a file.");
-            return Err("nothing to save".to_owned());
+            return Err(SessionError::NothingToSave);
         }
         match save.save(SaveOptions { backup: true }) {
             Ok(path) => {
+                self.file_size = std::fs::metadata(&path).ok().map(|meta| meta.len());
                 self.message = Message::success(format!("Saved {}.", path.display()));
                 self.refresh_entry();
                 Ok(path)
             }
             Err(error) => {
                 self.message = Message::error(format!("Cannot save: {error}"));
-                Err(error.to_string())
+                Err(SessionError::Save(error.to_string()))
             }
         }
     }
 
     /// Discards all changes by reloading the file.
-    pub fn revert(&mut self) -> Result<(), String> {
+    pub fn revert(&mut self) -> Result<(), SessionError> {
         let Some(index) = self.selected else {
-            return Err("no savegame is open".to_owned());
+            return Err(SessionError::NoSavegame);
         };
         if self.load(index) {
             self.message = Message::info("Reloaded the savegame from disk.");
             Ok(())
         } else {
-            Err("cannot reload the savegame".to_owned())
+            Err(SessionError::CannotReload)
         }
     }
 
@@ -1054,8 +909,7 @@ impl Session {
         };
         match save.set_item_count(struct_index, new_count as u8) {
             Ok(()) => {
-                if let Some(item) = self
-                    .items
+                if let Some(item) = Rc::make_mut(&mut self.items)
                     .iter_mut()
                     .find(|item| item.struct_index == struct_index)
                 {
@@ -1068,17 +922,22 @@ impl Session {
     }
 
     /// Adds an item stack by its `items.2da` row.
-    pub fn add_item(&mut self, item_id: u16) -> Result<(), String> {
-        let (name, save_type) = self
-            .game
-            .as_ref()
-            .and_then(|game| game.item(item_id))
-            .map_or_else(
-                || (format!("Item {item_id}"), 8),
-                |info| (info.name.clone(), info.save_type.unwrap_or(8)),
-            );
+    pub fn add_item(&mut self, item_id: u16) -> Result<(), SessionError> {
+        let (name, save_type) =
+            if let Some(info) = self.game.as_ref().and_then(|game| game.item(item_id)) {
+                let Some(save_type) = info.save_type else {
+                    let error = format!("item {item_id} has no savegame category type");
+                    self.message = Message::error(error.clone());
+                    return Err(SessionError::Item(error));
+                };
+                (info.name.clone(), save_type)
+            } else {
+                // The CLI and older fixtures can add an id that is not in the
+                // current item table; the legacy generic type keeps that working.
+                (format!("Item {item_id}"), 8)
+            };
         let Some(save) = self.save.as_mut() else {
-            return Err("no savegame is open".to_owned());
+            return Err(SessionError::NoSavegame);
         };
         match save.add_item(item_id, save_type, 1) {
             Ok(_) => {
@@ -1088,7 +947,7 @@ impl Session {
             }
             Err(error) => {
                 self.message = Message::error(format!("Cannot add item: {error}"));
-                Err(error.to_string())
+                Err(SessionError::Item(error.to_string()))
             }
         }
     }
@@ -1108,7 +967,7 @@ impl Session {
         };
         match save.remove_item(struct_index) {
             Ok(true) => {
-                self.items.retain(|item| item.struct_index != struct_index);
+                Rc::make_mut(&mut self.items).retain(|item| item.struct_index != struct_index);
                 self.message = Message::success(format!("Removed {name}."));
             }
             Ok(false) => self.message = Message::info("The item was already gone."),
@@ -1126,28 +985,36 @@ impl Session {
             return (Vec::new(), 0);
         };
         let matches: Vec<&jadeforge_gamedata::ItemInfo> = if query.trim().is_empty() {
-            let mut all: Vec<&jadeforge_gamedata::ItemInfo> = game.playable_items().collect();
-            all.sort_by(|left, right| {
-                left.name
-                    .to_lowercase()
-                    .cmp(&right.name.to_lowercase())
+            let mut all: Vec<(&jadeforge_gamedata::ItemInfo, String)> = game
+                .playable_items()
+                .filter(|item| item.save_type.is_some())
+                .map(|item| (item, item.name.to_lowercase()))
+                .collect();
+            all.sort_by(|(left, left_name), (right, right_name)| {
+                left_name
+                    .cmp(right_name)
                     .then_with(|| left.id.cmp(&right.id))
             });
-            all
+            all.into_iter().map(|(item, _)| item).collect()
         } else {
             game.search_items(query, usize::MAX)
+                .into_iter()
+                .filter(|item| item.save_type.is_some())
+                .collect()
         };
         let total = matches.len();
         let rows: Vec<ItemSuggestion> = matches
             .into_iter()
-            .map(|item| ItemSuggestion {
-                item_id: item.id,
-                name: item.name.clone(),
-                category: item.category.clone().unwrap_or_else(|| "item".to_owned()),
-                save_type: item.save_type.unwrap_or(8),
-                description: item.description.clone(),
-            })
             .take(limit)
+            .filter_map(|item| {
+                Some(ItemSuggestion {
+                    item_id: item.id,
+                    name: item.name.clone(),
+                    category: item.category.clone().unwrap_or_else(|| "item".to_owned()),
+                    save_type: item.save_type?,
+                    description: item.description.clone(),
+                })
+            })
             .collect();
         (rows, total)
     }
@@ -1202,65 +1069,61 @@ impl Session {
             return false;
         };
         let taken = !clicked.taken;
-        let mut targets: Vec<u16> = style
+        let family_slots: Vec<u16> = style
             .upgrades
             .iter()
             .filter(|candidate| candidate.family == clicked.family)
-            .filter(|candidate| {
-                if taken {
-                    candidate.slot <= clicked.slot
-                } else {
-                    candidate.slot >= clicked.slot
-                }
-            })
             .map(|candidate| candidate.slot)
             .collect();
-        targets.sort_unstable();
-        let mut changed = 0_usize;
-        let mut error = None;
-        if let Some(save) = self.save.as_mut() {
-            for target in &targets {
-                match save.set_style_slot(struct_index, *target, taken) {
-                    Ok(_) => changed += 1,
-                    Err(failure) => {
-                        error = Some(failure);
-                        break;
-                    }
-                }
-            }
-        } else {
+        let Some(save) = self.save.as_mut() else {
             return false;
-        }
-        if let Some(error) = error {
-            self.rebuild_rows();
-            self.message = Message::error(format!("Cannot change the upgrade: {error}"));
-            return false;
-        }
-        self.rebuild_rows();
-        self.message = if changed == 0 {
-            Message::info("That upgrade is already in the requested state.")
-        } else {
-            let noun = if changed == 1 { "upgrade" } else { "upgrades" };
-            if taken {
-                Message::success(format!("Bought {changed} {noun}."))
-            } else {
-                Message::success(format!("Removed {changed} {noun}."))
-            }
         };
-        changed > 0
+        match save.set_style_family_slot(struct_index, &family_slots, slot) {
+            Ok(changed) => {
+                self.rebuild_rows();
+                self.message = if changed == 0 {
+                    Message::info("That upgrade is already in the requested state.")
+                } else {
+                    let noun = if changed == 1 { "upgrade" } else { "upgrades" };
+                    if taken {
+                        Message::success(format!("Bought {changed} {noun}."))
+                    } else {
+                        Message::success(format!("Removed {changed} {noun}."))
+                    }
+                };
+                changed > 0
+            }
+            Err(error) => {
+                self.rebuild_rows();
+                self.message = Message::error(format!("Cannot change the upgrade: {error}"));
+                false
+            }
+        }
     }
 
-    fn build_gem_rows(&mut self) -> Vec<GemRow> {
+    fn build_gem_rows(&mut self) -> (Vec<GemRow>, Vec<String>) {
         let Some(save) = self.save.as_ref() else {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         };
-        let Ok(gems) = save.gems() else {
-            return Vec::new();
+        let mut warnings = Vec::new();
+        let gems = match save.gems() {
+            Ok(gems) => gems,
+            Err(error) => {
+                warnings.push(format!("gems: {error}"));
+                Vec::new()
+            }
         };
-        let amulet = save.amulet().unwrap_or(None);
+        let amulet = match save.amulet() {
+            Ok(amulet) => amulet,
+            Err(error) => {
+                warnings.push(format!("amulet: {error}"));
+                None
+            }
+        };
         self.amulet = amulet;
         let mut seen_amulet = 0_usize;
-        gems.into_iter()
+        let rows: Vec<GemRow> = gems
+            .into_iter()
             .filter(|gem| {
                 if gem.location == GemLocation::Amulet {
                     let Some(amulet) = amulet else {
@@ -1308,7 +1171,8 @@ impl Session {
                     location: gem.location,
                 }
             })
-            .collect()
+            .collect();
+        (rows, warnings)
     }
 
     /// Gems that can be added, as `(item id, name, effect count)`.
@@ -1338,7 +1202,7 @@ impl Session {
         };
         match save.add_gem(item_id, &gem.effects, gem.duration) {
             Ok(_) => {
-                self.gems = self.build_gem_rows();
+                self.gems = Rc::new(self.build_gem_rows().0);
                 self.message = Message::success(format!("Added {}.", gem.name));
             }
             Err(error) => {
@@ -1354,7 +1218,7 @@ impl Session {
         };
         match save.move_gem(struct_index) {
             Ok(location) => {
-                self.gems = self.build_gem_rows();
+                self.gems = Rc::new(self.build_gem_rows().0);
                 self.message = Message::success(match location {
                     GemLocation::Amulet => "Gem socketed into the amulet.",
                     GemLocation::Inventory => "Gem moved to the inventory.",
@@ -1373,7 +1237,7 @@ impl Session {
         };
         match save.remove_gem(struct_index) {
             Ok(()) => {
-                self.gems = self.build_gem_rows();
+                self.gems = Rc::new(self.build_gem_rows().0);
                 self.message = Message::success("Gem removed.");
             }
             Err(error) => {
@@ -1421,11 +1285,11 @@ impl Session {
 
     /// Adds a style by its `stylesuperlist.2da` row.
     pub fn add_style(&mut self, style_id: u16) {
-        let Some((name, name_ref)) = self
+        let Some(info) = self
             .game
             .as_ref()
             .and_then(|game| game.style(style_id))
-            .map(|info| (info.name.clone(), info.name_ref))
+            .cloned()
         else {
             self.message = Message::error("Unknown style.");
             return;
@@ -1435,13 +1299,21 @@ impl Session {
                 Message::error("Learn a style first so JadeForge can copy the field layout.");
             return;
         };
+        let identity = StyleIdentity {
+            style_id,
+            name_ref: info.name_ref,
+            desc_ref: info.desc_ref,
+            icon: info.icon.clone(),
+            weapon: info.weapon.clone(),
+            weapon_count: info.weapon_count,
+        };
         let Some(save) = self.save.as_mut() else {
             return;
         };
-        match save.add_style(template, style_id, name_ref) {
+        match save.add_style(template, &identity) {
             Ok(_) => {
                 self.rebuild_rows();
-                self.message = Message::success(format!("Added {name}."));
+                self.message = Message::success(format!("Added {}.", info.name));
             }
             Err(error) => self.message = Message::error(format!("Cannot add style: {error}")),
         }
@@ -1462,8 +1334,7 @@ impl Session {
         };
         match save.remove_style(struct_index) {
             Ok(true) => {
-                self.styles
-                    .retain(|style| style.struct_index != struct_index);
+                Rc::make_mut(&mut self.styles).retain(|style| style.struct_index != struct_index);
                 self.message = Message::success(format!("Removed {name}."));
             }
             Ok(false) => self.message = Message::info("The style was already gone."),
@@ -1482,8 +1353,7 @@ impl Session {
         };
         match save.set_henchman_level(struct_index, level) {
             Ok(()) => {
-                if let Some(henchman) = self
-                    .henchmen
+                if let Some(henchman) = Rc::make_mut(&mut self.henchmen)
                     .iter_mut()
                     .find(|henchman| henchman.struct_index == struct_index)
                 {
@@ -1512,8 +1382,7 @@ impl Session {
         };
         match save.set_henchman_available(struct_index, !available) {
             Ok(()) => {
-                if let Some(henchman) = self
-                    .henchmen
+                if let Some(henchman) = Rc::make_mut(&mut self.henchmen)
                     .iter_mut()
                     .find(|henchman| henchman.struct_index == struct_index)
                 {
@@ -1545,7 +1414,7 @@ impl Session {
         let Some(character) = self.character.as_ref() else {
             return;
         };
-        if let Some(entry) = self.entries.get_mut(index) {
+        if let Some(entry) = Rc::make_mut(&mut self.entries).get_mut(index) {
             entry.character = Some(character.name.clone());
             entry.level = Some(character.level);
             entry.time_played = character.time_played;
@@ -1654,8 +1523,193 @@ pub fn henchman_name(resref: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::assert_is_empty)] // empty checks read better than an empty-slice comparison
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    use jadeforge_core::{Gff, Value};
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new(tag: &str) -> Self {
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_nanos());
+            let path = std::env::temp_dir().join(format!(
+                "jadeforge-session-{tag}-{}-{stamp}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&path).expect("create temp directory");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn add(gff: &mut Gff, structure: usize, label: &str, value: Value) {
+        gff.add_field(structure, label, value).expect("field");
+    }
+
+    #[allow(clippy::too_many_lines)] // one line per field reads best
+    fn fixture_gff() -> Gff {
+        let mut gff = Gff {
+            version: *b"V3.2",
+            labels: Vec::new(),
+            structs: Vec::new(),
+            root: 0,
+        };
+        let root = gff.push_struct(u32::MAX);
+        let player = gff.push_struct(0);
+        let stats = gff.push_struct(0);
+        let focus = gff.push_struct(0);
+        let progress = gff.push_struct(0);
+        let campaign = gff.push_struct(0);
+        let item = gff.push_struct(0);
+        let style = gff.push_struct(0);
+        let henchmen = gff.push_struct(0);
+        let hench = gff.push_struct(0);
+        let gem = gff.push_struct(0);
+        let effect = gff.push_struct(0);
+        let gem_entry = gff.push_struct(0);
+        let amulet = gff.push_struct(0);
+
+        add(&mut gff, root, "PlayerCreature", Value::Struct(player));
+        add(&mut gff, root, "Campaign", Value::Struct(campaign));
+        add(&mut gff, campaign, "Chapter", Value::DWord(2));
+        add(
+            &mut gff,
+            campaign,
+            "TimePlayed",
+            Value::DWord64(90_000_000_000),
+        );
+        add(
+            &mut gff,
+            player,
+            "FirstName",
+            Value::String("Test Hero".to_owned()),
+        );
+        add(&mut gff, player, "Level", Value::Byte(7));
+        add(&mut gff, player, "CurrentXP", Value::DWord(1234));
+        add(&mut gff, player, "Stats", Value::Struct(stats));
+        add(&mut gff, player, "Progress", Value::Struct(progress));
+        add(&mut gff, stats, "Gold", Value::DWord(99));
+        add(&mut gff, stats, "UnassignedPts", Value::DWord(2));
+        add(&mut gff, stats, "Health", Value::Float(120.0));
+        add(&mut gff, stats, "HealthBase", Value::DWord(150));
+        add(&mut gff, stats, "Chi", Value::Float(80.0));
+        add(&mut gff, stats, "ChiBase", Value::DWord(100));
+        add(&mut gff, stats, "Focus", Value::Struct(focus));
+        add(&mut gff, focus, "STAT_CUR", Value::Float(20.0));
+        add(&mut gff, focus, "STAT_MAX", Value::Float(30.0));
+        add(&mut gff, stats, "Body", Value::DWord(5));
+        add(&mut gff, stats, "Mind", Value::DWord(6));
+        add(&mut gff, stats, "Spirit", Value::DWord(7));
+        add(&mut gff, stats, "Charm", Value::Int(1));
+        add(&mut gff, stats, "Intuition", Value::Int(2));
+        add(&mut gff, stats, "Intimidate", Value::Int(3));
+        add(&mut gff, stats, "Alignment", Value::Int(500));
+        add(&mut gff, stats, "Appearance", Value::Int(4));
+        add(&mut gff, progress, "Kills", Value::DWord(42));
+
+        add(&mut gff, player, "ItemList", Value::List(vec![item]));
+        add(&mut gff, item, "Count", Value::Byte(5));
+        add(&mut gff, item, "ItemId", Value::Word(42));
+        add(&mut gff, item, "Type", Value::Byte(6));
+
+        add(&mut gff, stats, "Styles", Value::List(vec![style]));
+        add(&mut gff, style, "StyleId", Value::Word(21));
+        add(&mut gff, style, "StyleLevel", Value::Byte(1));
+        add(&mut gff, style, "StyleLevelInfo", Value::DWord64(0));
+        add(&mut gff, style, "NameRef", Value::DWord(7));
+        add(&mut gff, style, "DescRef", Value::DWord(8));
+        add(&mut gff, style, "IconRef", Value::ResRef("icon".to_owned()));
+        add(&mut gff, style, "TimeSpentInStyle", Value::Float(0.0));
+        add(&mut gff, style, "FirstLoad", Value::Byte(1));
+
+        add(&mut gff, player, "Henchmen", Value::Struct(henchmen));
+        add(&mut gff, henchmen, "HenchList", Value::List(vec![hench]));
+        add(
+            &mut gff,
+            hench,
+            "BaseResref",
+            Value::String("j00h_ho".to_owned()),
+        );
+        add(&mut gff, hench, "Level", Value::Byte(3));
+        add(&mut gff, hench, "Available", Value::Byte(1));
+        add(&mut gff, hench, "Available2", Value::Byte(1));
+        add(&mut gff, hench, "State", Value::Byte(0));
+        add(&mut gff, hench, "CombatTime", Value::Float(0.0));
+
+        add(&mut gff, player, "Gems", Value::List(vec![gem_entry]));
+        add(&mut gff, gem_entry, "Gem", Value::Struct(gem));
+        add(&mut gff, gem, "ItemID", Value::Word(77));
+        add(&mut gff, gem, "GemsEffectList", Value::List(vec![effect]));
+        add(&mut gff, effect, "GemsEffectType", Value::DWord(62));
+        add(&mut gff, effect, "GemsEffectValue", Value::DWord(2));
+        add(&mut gff, effect, "GemsEffectCurVal", Value::DWord(2));
+        add(&mut gff, effect, "GemsEffectDurati", Value::Float(0.0));
+
+        add(&mut gff, player, "Amulet", Value::Struct(amulet));
+        add(&mut gff, amulet, "Type", Value::Byte(2));
+        let slots: Vec<usize> = (0..7).map(|_| gff.push_struct(0)).collect();
+        add(&mut gff, amulet, "OpenGemsList", Value::List(slots));
+        gff
+    }
+
+    fn container(gff: &Gff) -> Vec<u8> {
+        let block = gff.to_bytes().expect("serialize block");
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&1_u32.to_le_bytes());
+        bytes.extend_from_slice(&9_u32.to_le_bytes());
+        bytes.extend_from_slice(b"save.sav\0");
+        bytes.extend_from_slice(
+            &u32::try_from(block.len())
+                .expect("block size")
+                .to_le_bytes(),
+        );
+        bytes.extend_from_slice(&block);
+        bytes
+    }
+
+    fn fixture() -> (TempDir, Session) {
+        let directory = TempDir::new("fixture");
+        fs::write(directory.path().join("save.sac"), container(&fixture_gff()))
+            .expect("write savegame");
+        let mut session = Session::with_directory(directory.path());
+        assert_eq!(session.entries.len(), 1, "{}", session.message.text);
+        assert!(session.open(0), "{}", session.message.text);
+        (directory, session)
+    }
+
+    fn form_for(session: &Session) -> CharacterForm {
+        CharacterForm::from_character(session.character.as_ref().expect("character"))
+    }
+
+    fn set_field(session: &mut Session, path: &str, value: Value) {
+        session
+            .save
+            .as_mut()
+            .expect("open savegame")
+            .block_mut("save.sav")
+            .expect("save block")
+            .gff_mut()
+            .get_mut(path)
+            .expect("field")
+            .value = value;
+    }
 
     fn character() -> Character {
         Character {
@@ -1802,5 +1856,421 @@ mod tests {
         session.report_scan_failure();
         assert!(session.message.text.contains("Could not scan"));
         let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn opening_a_fixture_exposes_rows_and_file_state() {
+        let (directory, session) = fixture();
+        assert_eq!(
+            session.current_path(),
+            Some(directory.path().join("save.sac"))
+        );
+        assert_eq!(session.block_count(), 1);
+        assert_eq!(
+            session.file_size(),
+            Some(
+                std::fs::metadata(directory.path().join("save.sac"))
+                    .expect("metadata")
+                    .len()
+            )
+        );
+        let character = session.character.as_ref().expect("character");
+        assert_eq!(character.name, "Test Hero");
+        assert_eq!(character.level, 7);
+        assert_eq!(character.time_played, 90_000_000_000);
+        assert_eq!(session.items.len(), 1);
+        assert_eq!(session.items[0].count, 5);
+        assert_eq!(session.styles.len(), 1);
+        assert_eq!(session.styles[0].level, 1);
+        assert_eq!(session.henchmen.len(), 1);
+        assert_eq!(session.henchmen[0].name, "Henpecked Hou");
+        assert_eq!(session.gems.len(), 6);
+        assert!(
+            session
+                .gems
+                .iter()
+                .any(|gem| !gem.empty && gem.location == GemLocation::Inventory)
+        );
+        assert_eq!(session.gems.iter().filter(|gem| gem.empty).count(), 5);
+        assert_eq!(session.amulet.expect("amulet").sockets, 5);
+        assert!(!session.is_dirty());
+        assert_eq!(session.message.kind, MessageKind::Success);
+    }
+
+    #[test]
+    fn save_writes_a_backup_and_revert_reloads_from_disk() {
+        let (directory, mut session) = fixture();
+        let mut form = form_for(&session);
+        form.level = "9".to_owned();
+        assert!(session.apply(&form).expect("apply") >= 1);
+        assert!(session.is_dirty());
+
+        let path = session.save().expect("save");
+        assert_eq!(path, directory.path().join("save.sac"));
+        assert!(!session.is_dirty());
+        assert!(
+            session.message.text.contains("Saved"),
+            "{}",
+            session.message.text
+        );
+        let backups = fs::read_dir(directory.path())
+            .expect("directory")
+            .flatten()
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .contains("jadeforge-backup")
+            })
+            .count();
+        assert_eq!(backups, 1);
+        assert_eq!(
+            SaveGame::open(&path)
+                .expect("reopen")
+                .character()
+                .expect("character")
+                .level,
+            9
+        );
+
+        let mut form = form_for(&session);
+        form.level = "10".to_owned();
+        assert!(session.apply(&form).expect("apply") >= 1);
+        session.revert().expect("revert");
+        assert_eq!(session.character.as_ref().expect("character").level, 9);
+        assert!(!session.is_dirty());
+        assert!(session.message.text.contains("Reloaded"));
+    }
+
+    #[test]
+    fn save_without_changes_and_without_a_savegame() {
+        let (directory, mut session) = fixture();
+        let error = session.save().expect_err("nothing to save");
+        assert!(error.contains("nothing to save"), "{error}");
+        assert!(session.message.text.contains("Nothing was changed"));
+        assert!(!session.is_dirty());
+
+        let mut empty = Session::empty(directory.path());
+        assert!(empty.save().is_err());
+        assert!(empty.revert().is_err());
+    }
+
+    #[test]
+    fn apply_and_apply_form_silently_cover_their_early_returns() {
+        let (directory, mut session) = fixture();
+        let form = form_for(&session);
+        assert_eq!(session.apply(&form).expect("apply unchanged"), 0);
+        assert!(
+            session.message.text.contains("Nothing to apply"),
+            "{}",
+            session.message.text
+        );
+        assert!(!session.is_dirty());
+
+        let mut invalid = form.clone();
+        invalid.level = "not a number".to_owned();
+        let error = session.apply(&invalid).expect_err("invalid form");
+        assert!(error.contains("level"), "{error}");
+        assert!(!session.is_dirty());
+        assert!(!session.apply_form_silently(&invalid));
+
+        let mut rejected = form.clone();
+        rejected.level = "0".to_owned();
+        let error = session.apply(&rejected).expect_err("rejected character");
+        assert!(error.contains("level"), "{error}");
+        assert_eq!(session.message.kind, MessageKind::Error);
+        assert!(!session.is_dirty());
+        assert!(!session.apply_form_silently(&rejected));
+
+        let mut changed = form.clone();
+        changed.level = "10".to_owned();
+        let message = session.message.text.clone();
+        assert!(session.apply_form_silently(&changed));
+        assert!(session.is_dirty());
+        assert_eq!(session.message.text, message);
+
+        let mut empty = Session::empty(directory.path());
+        assert!(empty.apply(&form).is_err());
+        assert!(!empty.apply_form_silently(&form));
+    }
+
+    #[test]
+    fn item_count_and_removal_actions_cover_all_branches() {
+        let (directory, mut session) = fixture();
+        let index = session.items[0].struct_index;
+        session.adjust_item_count(index, 1);
+        assert_eq!(session.items[0].count, 6);
+        assert!(!session.items[0].name.is_empty());
+        assert!(
+            session.message.text.contains("6 in the stack"),
+            "{}",
+            session.message.text
+        );
+
+        session.adjust_item_count(index, -100);
+        assert!(session.message.text.contains("at least one"));
+        assert_eq!(session.items[0].count, 6);
+        session.adjust_item_count(index, 300);
+        assert!(session.message.text.contains("more than 255"));
+        assert_eq!(session.items[0].count, 6);
+        let message = session.message.text.clone();
+        session.adjust_item_count(999, 1);
+        assert_eq!(session.message.text, message);
+
+        session.remove_item(index);
+        assert!(session.items.is_empty());
+        assert!(session.message.text.contains("Removed"));
+
+        let (_, mut session) = fixture();
+        let index = session.items[0].struct_index;
+        session
+            .save
+            .as_mut()
+            .expect("savegame")
+            .remove_item(index)
+            .expect("remove from save only");
+        let rows = session.items.len();
+        session.remove_item(index);
+        assert_eq!(session.items.len(), rows);
+        assert!(session.message.text.contains("already gone"));
+
+        let (_, mut session) = fixture();
+        let index = session.items[0].struct_index;
+        set_field(&mut session, "PlayerCreature.ItemList", Value::Byte(1));
+        session.remove_item(index);
+        assert!(session.message.text.contains("Cannot remove item"));
+
+        let (_, mut session) = fixture();
+        let before = session.items.len();
+        session.add_item(1234).expect("add item");
+        assert_eq!(session.items.len(), before + 1);
+        assert!(session.message.text.contains("Added"));
+        set_field(&mut session, "PlayerCreature.ItemList", Value::Byte(1));
+        assert!(session.add_item(5).is_err());
+        assert!(session.message.text.contains("Cannot add item"));
+
+        let mut empty = Session::empty(directory.path());
+        let message = empty.message.text.clone();
+        empty.remove_item(0);
+        assert_eq!(empty.message.text, message);
+        let error = empty.add_item(1).expect_err("add without a savegame");
+        assert!(error.contains("no savegame"), "{error}");
+    }
+
+    #[test]
+    fn gem_actions_move_remove_and_report_errors() {
+        let (directory, mut session) = fixture();
+        let index = session.gems[0].struct_index;
+        assert_eq!(session.gems[0].location, GemLocation::Inventory);
+        session.move_gem(index);
+        assert_eq!(session.gems[0].location, GemLocation::Amulet);
+        assert!(
+            session.message.text.contains("socketed"),
+            "{}",
+            session.message.text
+        );
+        session.move_gem(index);
+        assert_eq!(session.gems[0].location, GemLocation::Inventory);
+        assert!(
+            session.message.text.contains("inventory"),
+            "{}",
+            session.message.text
+        );
+        session.remove_gem(index);
+        assert!(
+            session.gems.iter().all(|row| row.empty),
+            "the amulet placeholders remain after removing the only gem"
+        );
+        assert!(session.message.text.contains("Gem removed"));
+
+        let (_, mut session) = fixture();
+        let rows = session.gems.len();
+        session.remove_gem(9999);
+        assert_eq!(session.gems.len(), rows);
+        assert!(session.message.text.contains("Cannot remove the gem"));
+
+        let (_, mut session) = fixture();
+        let rows = session.gems.len();
+        session.add_gem(u16::MAX);
+        assert_eq!(session.gems.len(), rows);
+        assert!(session.message.text.contains("not in the game data"));
+
+        let mut empty = Session::empty(directory.path());
+        empty.move_gem(0);
+        empty.remove_gem(0);
+    }
+
+    #[test]
+    fn style_actions_remove_and_report_errors() {
+        let (directory, mut session) = fixture();
+        let index = session.styles[0].struct_index;
+        session.remove_style(index);
+        assert!(session.styles.is_empty());
+        assert!(session.message.text.contains("Removed"));
+
+        let (_, mut session) = fixture();
+        let index = session.styles[0].struct_index;
+        session
+            .save
+            .as_mut()
+            .expect("savegame")
+            .remove_style(index)
+            .expect("remove from save only");
+        let rows = session.styles.len();
+        session.remove_style(index);
+        assert_eq!(session.styles.len(), rows);
+        assert!(session.message.text.contains("already gone"));
+
+        let (_, mut session) = fixture();
+        let index = session.styles[0].struct_index;
+        set_field(&mut session, "PlayerCreature.Stats.Styles", Value::Byte(1));
+        session.remove_style(index);
+        assert!(session.message.text.contains("Cannot remove style"));
+        assert_eq!(session.styles.len(), 1);
+
+        let (_, mut session) = fixture();
+        session.add_style(u16::MAX);
+        assert_eq!(session.styles.len(), 1);
+        assert!(session.message.text.contains("Unknown style"));
+
+        let mut empty = Session::empty(directory.path());
+        empty.remove_style(0);
+        empty.add_style(u16::MAX);
+    }
+
+    #[test]
+    fn henchman_actions_cover_bounds_and_toggle() {
+        let (_, mut session) = fixture();
+        let index = session.henchmen[0].struct_index;
+        session.set_henchman_level(index, 12);
+        assert_eq!(session.henchmen[0].level, 12);
+        assert!(
+            session.message.text.contains("level set to 12"),
+            "{}",
+            session.message.text
+        );
+
+        session.set_henchman_level(index, 0);
+        assert!(session.message.text.contains("1 to 60"));
+        assert_eq!(session.henchmen[0].level, 12);
+        session.set_henchman_level(index, 61);
+        assert!(session.message.text.contains("1 to 60"));
+        session.set_henchman_level(999, 12);
+        assert!(session.message.text.contains("Cannot change companion"));
+
+        assert!(session.henchmen[0].available);
+        session.toggle_henchman_available(index);
+        assert!(!session.henchmen[0].available);
+        assert!(
+            session.message.text.contains("unavailable"),
+            "{}",
+            session.message.text
+        );
+        session.toggle_henchman_available(index);
+        assert!(session.henchmen[0].available);
+        assert!(session.message.text.contains("available"));
+        let message = session.message.text.clone();
+        session.toggle_henchman_available(999);
+        assert_eq!(session.message.text, message);
+
+        let mut empty = Session::empty(std::env::temp_dir());
+        empty.set_henchman_level(0, 12);
+        empty.toggle_henchman_available(0);
+    }
+
+    #[test]
+    fn set_error_changes_the_message_kind() {
+        let (_, mut session) = fixture();
+        session.set_error("broken value");
+        assert_eq!(session.message.kind, MessageKind::Error);
+        assert_eq!(session.message.text, "broken value");
+    }
+
+    #[test]
+    fn set_directory_protects_unsaved_changes_and_scans_the_new_folder() {
+        crate::config::ensure_test_path();
+        let (directory, mut session) = fixture();
+        let other = TempDir::new("other");
+        let mut form = form_for(&session);
+        form.level = "9".to_owned();
+        session.apply(&form).expect("apply");
+        let original = session.directory.clone();
+
+        session.set_directory(other.path());
+        assert_eq!(session.directory, original);
+        assert!(
+            session.message.text.contains("unsaved"),
+            "{}",
+            session.message.text
+        );
+        assert!(session.is_dirty());
+
+        session.revert().expect("revert");
+        session.set_directory(other.path());
+        assert_eq!(session.directory, other.path().to_path_buf());
+        assert!(session.selected.is_none());
+        assert!(session.save.is_none());
+        assert!(
+            session.message.text.contains("No savegames"),
+            "{}",
+            session.message.text
+        );
+        assert!(directory.path().exists());
+    }
+    #[test]
+    fn opening_the_already_selected_save_keeps_unsaved_edits() {
+        let (_, mut session) = fixture();
+        let index = session.items[0].struct_index;
+        let before = session.items[0].count;
+        session.adjust_item_count(index, 1);
+        assert!(session.is_dirty());
+        let edited = session.items[0].count;
+
+        assert!(session.open(0), "{}", session.message.text);
+        assert!(session.is_dirty());
+        assert_eq!(session.items[0].count, edited);
+        assert_ne!(edited, before);
+    }
+
+    #[test]
+    fn stale_scan_results_are_discarded() {
+        let (directory, mut session) = fixture();
+        let token = session.scan_token();
+        let entries = Session::scan_entries(directory.path());
+        session.scan();
+        assert!(!session.apply_entries_for(directory.path(), token, entries));
+        assert!(!session.report_scan_failure_for(directory.path(), token));
+    }
+
+    #[test]
+    fn opening_a_save_with_a_broken_section_reports_it() {
+        let directory = TempDir::new("partial");
+        let mut gff = fixture_gff();
+        let field = gff.get_mut("PlayerCreature.ItemList").expect("item list");
+        field.type_id = 0;
+        field.value = Value::Byte(1);
+        fs::write(directory.path().join("save.sac"), container(&gff)).expect("write save");
+        let mut session = Session::with_directory(directory.path());
+        assert!(session.open(0), "{}", session.message.text);
+        assert_eq!(session.message.kind, MessageKind::Error);
+        assert!(
+            session.message.text.contains("items"),
+            "{}",
+            session.message.text
+        );
+        assert!(session.character.is_some());
+        assert!(session.items.is_empty());
+    }
+
+    #[test]
+    fn switching_directories_clears_gem_and_amulet_state() {
+        let (_, mut session) = fixture();
+        assert!(!session.gems.is_empty());
+        assert!(session.amulet.is_some());
+        let other = TempDir::new("other-empty");
+        session.set_directory(other.path());
+        assert!(session.gems.is_empty());
+        assert!(session.amulet.is_none());
+        assert!(session.save.is_none());
     }
 }

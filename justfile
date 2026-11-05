@@ -5,6 +5,7 @@
 # that need real savegames read JADEFORGE_SAVE_DIR, e.g.
 # `JADEFORGE_SAVE_DIR="$HOME/games/Jade Empire/Save" just test`.
 set shell := ["bash", "-e", "-o", "pipefail", "-c"]
+set positional-arguments
 
 # Workspace version and the triple rustc builds for. They name the
 # distribution folders and pick the native target.
@@ -57,13 +58,13 @@ strict:
 # Needs cargo-llvm-cov and llvm-tools-preview (or LLVM_COV/LLVM_PROFDATA).
 coverage *args:
     mkdir -p coverage
-    cargo llvm-cov nextest --workspace --summary-only \
-        --lcov --output-path coverage/lcov.info {{ args }}
+    cargo llvm-cov nextest --workspace {{ args }}
+    cargo llvm-cov report --lcov --output-path coverage/lcov.info
     cargo llvm-cov report --html --output-dir coverage
 
 # Render the UI into PNG files without opening a window.
 snapshot save_dir out="docs/screenshot.png" *args:
-    cargo run -q -p jadeforge-gui --example snapshot -- "{{ save_dir }}" "{{ out }}" {{ args }}
+    shift 2; cargo run -q -p jadeforge-gui --example snapshot -- "{{ save_dir }}" "{{ out }}" "$@"
 
 # Start the desktop application.
 run:
@@ -71,7 +72,7 @@ run:
 
 # Run the command line tool, e.g. `just cli info "<SAVE>"`.
 cli *args:
-    cargo run -q -p jadeforge-cli -- {{ args }}
+    cargo run -q -p jadeforge-cli -- "$@"
 
 # Install the GUI into ~/.cargo/bin, tuned for this machine's CPU. Not portable:
 # use `just publish` for binaries meant for other machines.
@@ -114,6 +115,7 @@ publish-target target:
         cp "target/baseline/{{ target }}/dist/jadeforge-cli{{ exe }}" "$out/jadeforge-cli-generic-cpu{{ exe }}"; \
     fi; \
     cp LICENSE README.md "$out/"; \
+    ci/notices.sh "$out" >/dev/null; \
     echo "publish: staged $out/"
 
 # Build the fat-LTO binaries for every target this host can build.
@@ -165,9 +167,23 @@ publish-linux:
     cp "target/podman-baseline/dist/jadeforge" "$out/jadeforge-generic-cpu"; \
     cp "target/podman-baseline/dist/jadeforge-cli" "$out/jadeforge-cli-generic-cpu"; \
     cp LICENSE README.md "$out/"; \
+    ci/notices.sh "$out" >/dev/null; \
     ci/check-glibc.sh "$out/jadeforge" 2.35; \
     ci/check-glibc.sh "$out/jadeforge-generic-cpu" 2.35; \
     echo "publish-linux: staged $out/"
+
+# Collect the licence inventory for the staged distribution.
+notices:
+    ci/notices.sh dist
+
+# Generate the CycloneDX SBOM for the staged distribution.
+sbom:
+    ci/sbom.sh dist
+
+# Write SHA-256 checksums for the staged distribution.
+checksums:
+    cd dist && find . -type f ! -name SHA256SUMS -print0 \
+        | sort -z | xargs -0 sha256sum > SHA256SUMS
 
 # Remove all build artifacts: the cargo target directory and the staged
 # distribution binaries in dist/.

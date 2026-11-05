@@ -22,9 +22,9 @@ pub const BORDER: Color = Color::from_rgb(44, 50, 62);
 /// Primary text.
 pub const TEXT: Color = Color::from_rgb(233, 237, 244);
 /// Secondary text.
-pub const MUTED: Color = Color::from_rgb(148, 157, 173);
+pub const MUTED: Color = Color::from_rgb(170, 180, 195);
 /// Disabled or very subtle text.
-pub const DIM: Color = Color::from_rgb(103, 112, 128);
+pub const DIM: Color = Color::from_rgb(145, 155, 170);
 /// Jade Empire gold, used for accents and primary actions.
 pub const ACCENT: Color = Color::from_rgb(226, 179, 92);
 /// Hovered accent.
@@ -34,7 +34,7 @@ pub const ON_ACCENT: Color = Color::from_rgb(26, 20, 7);
 /// Secondary accent (jade green).
 pub const JADE: Color = Color::from_rgb(112, 176, 141);
 /// Error colour.
-pub const DANGER: Color = Color::from_rgb(226, 106, 116);
+pub const DANGER: Color = Color::from_rgb(232, 120, 130);
 /// Success colour.
 pub const SUCCESS: Color = Color::from_rgb(126, 190, 143);
 
@@ -167,11 +167,32 @@ pub fn theme() -> Theme {
 mod tests {
     use super::*;
 
+    fn channel(value: f32) -> f32 {
+        let value = value / 255.0;
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
     fn luminance(color: Color) -> f32 {
-        (0.2126 * f32::from(color.r())
-            + 0.7152 * f32::from(color.g())
-            + 0.0722 * f32::from(color.b()))
-            / 255.0
+        0.2126 * channel(f32::from(color.r()))
+            + 0.7152 * channel(f32::from(color.g()))
+            + 0.0722 * channel(f32::from(color.b()))
+    }
+
+    fn contrast(foreground: Color, background: Color) -> f32 {
+        let (light, dark) = {
+            let foreground = luminance(foreground) + 0.05;
+            let background = luminance(background) + 0.05;
+            if foreground > background {
+                (foreground, background)
+            } else {
+                (background, foreground)
+            }
+        };
+        light / dark
     }
 
     #[test]
@@ -204,6 +225,32 @@ mod tests {
         let primary = colors.primary;
         assert!(primary.r() > primary.b(), "the accent should be warm");
         assert!(primary.r() > 180 && primary.b() < 150);
+    }
+
+    #[test]
+    fn readable_text_meets_wcag_aa_on_every_surface() {
+        for background in [BACKGROUND, PANEL, SURFACE, SURFACE_ACTIVE] {
+            assert!(
+                contrast(TEXT, background) >= 4.5,
+                "primary text fails on {background:?}"
+            );
+            assert!(
+                contrast(MUTED, background) >= 4.5,
+                "muted text fails on {background:?}"
+            );
+            assert!(
+                contrast(DIM, background) >= 4.5,
+                "dim text fails on {background:?}"
+            );
+            assert!(
+                contrast(DANGER, background) >= 4.5,
+                "danger text fails on {background:?}"
+            );
+            assert!(
+                contrast(SUCCESS, background) >= 4.5,
+                "success text fails on {background:?}"
+            );
+        }
     }
 
     #[test]

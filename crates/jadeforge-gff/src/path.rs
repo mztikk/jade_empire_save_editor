@@ -132,4 +132,19 @@ mod tests {
     fn rejects_double_dots() {
         assert!(FieldPath::parse("Stats..Gold").is_err());
     }
+
+    #[test]
+    fn rejects_a_missing_segment_name() {
+        assert!(FieldPath::parse("[0]").is_err());
+    }
+
+    #[test]
+    fn parent_is_none_for_a_single_segment() {
+        assert!(FieldPath::parse("Gold").expect("path").parent().is_none());
+        let parent = FieldPath::parse("Stats.Focus.STAT_CUR")
+            .expect("path")
+            .parent()
+            .expect("parent");
+        assert_eq!(parent.to_string(), "Stats.Focus");
+    }
 }

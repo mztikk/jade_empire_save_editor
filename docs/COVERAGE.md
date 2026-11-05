@@ -1,167 +1,173 @@
 # Code coverage
 
 Line and function coverage measured with `cargo llvm-cov nextest` over the whole
-workspace, including the tests that need real savegames and game data.
+workspace. Two numbers matter:
+
+- **full corpus** — with a real installation, so the tests that need savegames
+  and game data run;
+- **no game data** — what CI sees, because the real-data tests return early when
+  `JADEFORGE_SAVE_DIR`/`JADEFORGE_GAME_DIR` are unset.
+
+`just coverage` runs the suite once, prints the summary, and writes
+`coverage/lcov.info` (per-line records, usable for gating) plus
+`coverage/html/index.html`. Both are gitignored.
 
 ```sh
-# Real-savegame tests are skipped without these variables; the numbers below
-# were measured with a real installation.
+# Full corpus
 JADEFORGE_SAVE_DIR="$HOME/games/Jade Empire/Save" \
 JADEFORGE_GAME_DIR="$HOME/games/Jade Empire" \
 JADEFORGE_CONFIG_DIR="$(mktemp -d)" \
 just coverage
+
+# CI baseline: no game installation
+env -u JADEFORGE_SAVE_DIR -u JADEFORGE_GAME_DIR -u JADEFORGE_CONFIG_DIR \
+    just coverage
 ```
-
-`just coverage` writes:
-
-- a line/function summary to the terminal,
-- `coverage/lcov.info` for tooling,
-- `coverage/html/index.html` for browsing per file (gitignored).
 
 ## Baseline (2026-11-05)
 
-| metric | covered |
-| --- | --- |
-| lines | **7 015 / 8 436 = 83.2 %** |
-| functions | **691 / 987 = 70.0 %** |
-
-| crate | lines | functions |
+| metric | full corpus | no game data |
 | --- | --- | --- |
-| `jadeforge-gamedata` | 93.6 % | 90.1 % |
-| `jadeforge-gui` | 88.0 % | 66.7 % |
-| `jadeforge-core` | 78.3 % | 62.9 % |
-| `jadeforge-session` | 78.3 % | 78.8 % |
-| `jadeforge-gff` | 81.3 % | 59.5 % |
-| `jadeforge-cli` | 68.3 % | 55.3 % |
+| lines | **15 835 / 17 777 = 89.1 %** | **15 865 / 17 777 = 89.2 %** |
+| functions | **940 / 1 213 = 77.5 %** | **945 / 1 213 = 77.9 %** |
+| regions | **9 607 / 10 724 = 89.6 %** | **9 625 / 10 724 = 89.8 %** |
+| tests run | 280 | 280 |
+
+Several crates keep unit tests inside `src/`, so those test lines are part of
+the totals above. The previous non-test-only table was measured with a smaller
+suite and is not directly comparable, so it is not repeated here.
+
+| crate | full corpus | no game data |
+| --- | --- | --- |
+| `jadeforge-cli` | 89.8 % | 89.8 % |
+| `jadeforge-core` | 83.6 % | 83.1 % |
+| `jadeforge-gamedata` | 95.8 % | 95.6 % |
+| `jadeforge-gff` | 89.7 % | 89.7 % |
+| `jadeforge-gui` | 88.1 % | 90.0 % |
+| `jadeforge-session` | 92.3 % | 91.8 % |
 
 Notes:
 
-- Branch coverage is not collected; the report is line/function based.
+- Branch coverage is not collected; the report is line/function/region based.
+- No test is `#[ignore]`d. Real-corpus tests return early without
+  `JADEFORGE_SAVE_DIR`, while the GUI suite builds its synthetic fixture and
+  still runs all 29 headless tests. `nextest` reports 280 run and 0 skipped in
+  both modes.
 - GUI numbers are inflated by declarative view code that runs on every render.
   Treat GUI coverage as a regression signal, not as a quality target.
-- The CLI numbers are low because the integration tests call the libraries
-  directly, not the `jadeforge` binary.
+- The full-corpus GUI number is lower because the real-corpus fixture copies the
+  smallest savegame, which has no amulet; the synthetic no-game fixture exercises
+  the gem view.
+- CLI coverage is real binary coverage: the tests invoke
+  `CARGO_BIN_EXE_jadeforge-cli` and cover `add-item`, every editable field type
+  and the no-game-data fallbacks.
+- GFF and game-data coverage is now almost entirely synthetic: both crates are
+  above 95 % without a game installation.
 
 ## Where the gaps are
 
-| file | lines | why it matters |
-| --- | --- | --- |
-| `gui/src/views/gems.rs` | 61.2 % | gem actions and empty/error states are untested |
-| `core/src/inventory.rs` | 64.6 % | remaining type/count error branches |
-| `gamedata/src/rim.rs` | 95.0 % | done |
-| `cli/src/main.rs` | 68.3 % | `add_item`, `verify` failure and argument errors |
-| `core/src/henchmen.rs` | 69.7 % | list/field error paths |
-| `core/src/save.rs` | 71.9 % | verification and write-failure paths |
-| `gff/src/value.rs` | 72.8 % | uncommon decode branches |
-| `gamedata/src/talktable.rs` | 92.1 % | done |
-| `session/src/session.rs` | 76.7 % | failure paths (config, form, save/revert) |
+| file | full corpus | no game data | why it matters |
+| --- | ---: | ---: | --- |
+| `gui/src/views/gems.rs` | 59.2 % | 81.1 % | the real-corpus fixture has no amulet; the synthetic one does |
+| `gui/src/views/styles.rs` | 84.8 % | 82.4 % | all views need an opened savegame |
+| `gui/src/views/character.rs` | 100 % | 100 % | fully exercised by the synthetic save |
+| `gui/src/dialog.rs` | 63.2 % | 63.2 % | native folder dialog; not headless-testable |
+| `core/src/henchmen.rs` | 82.0 % | 82.0 % | the remaining lines are defensive/unreachable |
+| `core/src/screenshot.rs` | 79.8 % | 79.8 % | malformed TGA error paths |
+| `session/src/session.rs` | 92.3 % | 91.9 % | a few game-data helpers |
+| `gff/src/value.rs` | 94.6 % | 94.6 % | the remaining decode/accessor lines are unreachable or defensive |
+| `gff/src/lib.rs` | 88.9 % | 88.9 % | add/remove branches and duplicate-stack guards |
+| `gamedata/src/gamedata.rs` | 98.2 % | 98.2 % | stale test-root/env discovery and a non-UTF-8 filename branch |
 
 ## Recently completed
 
+- **Synthetic P0 suites.** Character range checks and typed writes, legacy
+  `polyplayer.sav`/campaign merging, inventory branches and `read_items`, gems,
+  styles and henchmen are built from synthetic GFF blocks. Core went from 51 %
+  to 91 % without game data; inventory is at 97 %.
+- **Session actions.** Save/backup/revert, apply/apply-silently, item count and
+  removal, gem move/remove, style removal, companion level/availability and
+  directory handling have unit tests with a synthetic savegame.
+- **CLI.** `add-item`, `--dry-run`, backups, zero count, missing item lists,
+  every `set` field type and the no-game-data fallbacks are covered.
+- **GFF codec and helpers.** All `Value` variants/accessors, field-data
+  decoding of every out-of-line type (including truncated, non-UTF-8 and
+  malformed locstring payloads), structural decode errors,
+  `selected_fields` failure modes, `find`/`find_mut`/`reachable`, mutation
+  errors and `validate`. GFF moved from 83 % to 96 %.
+- **Synthetic game-data resolver.** A complete temp installation now exercises
+  items, styles, level-up tables, advances, effects, gems, `dialogf.tlk`,
+  missing tables, invalid rows, `****` names and an `override`-falls-back-to-RIM
+  case. Game data moved from 74 % to 98 % without the game.
+- **Two decoder bugs found and fixed.** `Value::as_u64` now accepts `Int64`
+  (a `CurrentXP` stored as `Int64` read back as 0), and a 5-byte locstring no
+  longer panics on an unchecked `inner[4..8]` slice.
+- **Effect label fix.** `EFFECT_DAMAGEARMOR` now produces the documented
+  “Damage armor” instead of “Damagearmor”.
+- **`just coverage` fixed.** The old recipe passed `--summary-only` together
+  with `--lcov`, producing an lcov file with zero `DA:` records. It now runs
+  nextest for the summary and exports lcov/html with `cargo llvm-cov report`.
 - **Startup scan is asynchronous.** `Session::empty` renders the shell without
   parsing savegames; `use_future` runs `Session::scan_entries` on a worker and
   applies the result. A failed scan is reported instead of hanging on
-  "Scanning for savegames…".
+  “Scanning for savegames…”.
 - **Metadata fast path.** `SaveGame::metadata` walks the container and
   `Gff::selected_fields` decodes only `PlayerCreature.FirstName`,
   `PlayerCreature.Level` and `Campaign.TimePlayed`. On the 89-savegame corpus
-  this is 140 ms instead of 1.87 s for the full character parse, and
+  this is about 39 ms warm instead of 1.87 s for the full character parse, and
   `metadata_matches_the_full_character_parse` checks every save.
+- **Review remediation (2026-11-05).** Strict GFF layout/reference/allocation
+  checks and a decoded-data budget; transactional save/backup path with
+  conflict detection, exclusive temps, unique backups and permission
+  preservation; fixed seven-slot amulet model; checked character reads with
+  type-preserving writes; style family API that cannot create gaps; checked
+  TGA/JSON/game-data parses; scan tokens and preserved form input; synthetic UI
+  fixture so the headless suite runs without game data. The suite is now 280
+  tests. Deterministic mutation passes and the `fuzz/` cargo-fuzz targets cover
+  the remaining hostile-input surface.
+
+## Remaining plan
+
+### 1. Remaining GUI interaction paths
+
+- The synthetic fixture now covers the gem rows, both move directions, removal,
+  the effect text, seven-socket hint, item search/add and pagination. Add
+  footer Save/Revert, invalid-form preservation, companion buttons and
+  inventory count/remove interactions to close the remaining view branches.
+- Add a headless accessibility assertion for the tab, sort and savegame-row
+  controls; the labels and keyboard activation are implemented, but
+  `freya-testing` does not expose the accessibility tree yet.
+
+### 2. Small error paths
+
+- Screenshot: short TGA, zero pixels, colour mapped, unsupported type/depth,
+  truncated uncompressed/RLE packets, 8-bit greyscale.
+- JSON: duplicate labels, missing struct, depth > 64, remaining scalar arms and
+  non-finite floats.
+- Config: `ensure_test_path` reuse, unknown legacy keys, no-path `store`.
+- `GameData::discover` with a broken test root/stale environment fallback.
 
 ## Target
 
-| milestone | overall lines | core | session | gff | cli | gui | gamedata |
+| milestone | full corpus | no game data | core | session | cli | gui | gamedata |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| now | 83.2 % | 78.3 % | 78.3 % | 81.3 % | 68.3 % | 88.0 % | 93.6 % |
-| phase 1 | **85 %** | 82 % | 82 % | 82 % | 78 % | 89 % | 92 % |
-| phase 2 | **88 %** | 86 % | 86 % | 86 % | 84 % | 90 % | 94 % |
+| now | 89.1 % | 89.2 % | 83.6 % | 92.3 % | 89.8 % | 90.0 % | 95.8 % |
+| phase 1 | **90 %** | **90 %** | 85 % | 93 % | 91 % | 91 % | 96 % |
+| phase 2 | **92 %** | **92 %** | 88 % | 94 % | 93 % | 93 % | 97 % |
 
 Functions are tracked alongside but not gated until the line target is stable;
 the GUI number is a regression signal, not a target (declarative view code runs
 on every render).
 
-## Plan
-
-### 1. GUI gem flows (`views/gems.rs`, 61.2 %)
-
-- headless interactions: add a predefined gem, move both directions, remove,
-  empty amulet, no game data, filter with no match, Show more;
-- assert the visible row/effect text, not just the rendered frame.
-
-Expected: +60–80 covered lines, gui ≥ 89 %. This is the cheapest visible win
-and covers user-facing behaviour the other tests skip.
-
-### 2. Core inventory branches (`inventory.rs`, 64.6 %)
-
-- `Count` stored as word vs byte, non-numeric count field, missing `Count`
-  field, missing `ItemList`, `ItemList` that is not a list;
-- add/remove with a missing player block and with an item id of 0;
-- count boundaries around the error paths added in `errors.rs`.
-
-Expected: +40–60 lines, core ≥ 80 %.
-
-### 3. Core save and henchmen (`save.rs` 70.7 %, `henchmen.rs` 69.7 %)
-
-- save: verification failure on a block that cannot be rewritten, temporary
-  file failure (read-only directory), target without an existing file and
-  backup naming;
-- henchmen: missing `HenchList`, list that is not a list, missing fields
-  (defaults), level 0/61 rejected, availability flags.
-
-Expected: +40–60 lines, core ≥ 82 % together with item 2.
-
-### 4. Session failure paths (`session.rs`, 75.3 %)
-
-- config: invalid TOML, legacy fallback, failed store, missing directory;
-- form: every invalid field, applying an unchanged form, applying after an
-  error;
-- staging: scan/switch while dirty, revert with and without changes, save with
-  nothing to save;
-- gems/styles/items without game data and open failures.
-
-Expected: +50–70 lines, session ≥ 82 %.
-
-### 5. gff decode leftovers (partially done; `value.rs` 72.8 %, `lib.rs` 79.6 %)
-
-- type-tag/value mismatches (byte field holding a struct, etc.);
-- label table edge cases (16-byte label, duplicate labels, missing label);
-- offset/length overflow and the `fieldCount == 1` inline encoding;
-- list section with zero-count and repeated indices.
-
-Done: empty/repeated/zero lists and the 16-byte label are covered, plus the
-single-field inline struct. `gff` stays at 80.2 % and `value.rs` at 72.8 %; the
-remaining branches are exotic decode combinations that may not be reachable
-from real data. Finish these only with synthetic payloads and a comment saying
-which format rule they exercise.
-
-### 6. CLI leftovers (`main.rs`, 68.3 %)
-
-- `add_item` with `--dry-run`, real write + backup, zero count and a missing
-  item list;
-- `verify` on a corrupt savegame, unknown subcommand/help exit codes;
-- `set --no-backup`.
-
-Expected: +30–50 lines, cli ≥ 78 %.
-
-### 7. Game data error paths (done)
-
-- truncated RIM header/entry table, entry pointing beyond the archive, 2DA
-  payload with a bad signature;
-- truncated TLK header, entry offset beyond the data, zero-length strings;
-- these are synthetic files in `jadeforge-gamedata/tests` and need no game.
-
-`crates/jadeforge-gamedata/tests/errors.rs` builds RIM archives, TLK tables and
-2DA tables in memory and covers bad signatures/versions, truncated tables,
-counts that exceed the file, payload offsets beyond the archive, out-of-range
-strings and malformed text/binary 2DA input. `gamedata` moved from 89.6 % to
-**93.9 %**; `rim.rs` is at 95.0 % and `talktable.rs` at 92.1 %.
-
 ## Gating
 
 - Run `just coverage` twice above a milestone before making it blocking.
-- At 82.4 % now, add `--fail-under-lines 82` first; when phase 1 is reached,
-  replace it with `--fail-under-lines 85` and add per-crate checks in the CI
-  matrix (core/gff/session/cli) using the lcov file.
+- The no-game-data number is now the CI baseline: add
+  `cargo llvm-cov nextest --workspace --fail-under-lines 89` as a non-blocking
+  artifact job first, then make it blocking above the phase-1 milestone. The
+  full-corpus number is a local/nightly target, not a hosted-runner gate.
+- `coverage/lcov.info` contains per-line `DA:` records and can drive per-crate
+  checks from the CI matrix (core/gff/session/cli).
 - The HTML report and lcov are artifacts, not committed.
 
 ## Guardrails

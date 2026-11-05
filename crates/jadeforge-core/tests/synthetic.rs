@@ -209,8 +209,8 @@ fn broken_files_are_rejected() {
     let mut bytes = Vec::new();
     let payload = vec![0_u8; 64];
     bytes.extend_from_slice(&1_u32.to_le_bytes());
-    bytes.extend_from_slice(&8_u32.to_le_bytes());
-    bytes.extend_from_slice(b"save.sav");
+    bytes.extend_from_slice(&9_u32.to_le_bytes());
+    bytes.extend_from_slice(b"save.sav\0");
     bytes.extend_from_slice(&(payload.len() as u32).to_le_bytes());
     bytes.extend_from_slice(&payload);
     let error = SaveGame::parse("x".into(), bytes).expect_err("bad magic");

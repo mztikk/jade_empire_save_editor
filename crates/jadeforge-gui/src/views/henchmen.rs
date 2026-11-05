@@ -51,7 +51,9 @@ fn henchman_row(ctx: &Ctx, henchman: &HenchRow) -> Element {
     };
     let raise = {
         let ctx = ctx.clone();
-        move |_| ctx.run(|session| session.set_henchman_level(index, (level + 1).min(60)))
+        move |_| {
+            ctx.run(|session| session.set_henchman_level(index, level.saturating_add(1).min(60)));
+        }
     };
     let toggle = {
         let ctx = ctx.clone();

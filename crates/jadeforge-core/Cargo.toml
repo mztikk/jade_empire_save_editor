@@ -6,6 +6,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+authors.workspace = true
+homepage.workspace = true
+readme.workspace = true
 
 [dependencies]
 jadeforge-gff.workspace = true
@@ -14,3 +17,7 @@ serde_json.workspace = true
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "save_corpus"
+harness = false

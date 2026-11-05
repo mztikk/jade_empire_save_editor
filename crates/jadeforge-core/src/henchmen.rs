@@ -5,7 +5,7 @@
 //! AI should behave in combat.
 
 use crate::error::{Error, Result};
-use crate::gff::Value;
+use crate::gff::{Gff, Value};
 use crate::save::SaveGame;
 
 /// One companion of the player.
@@ -65,20 +65,18 @@ impl SaveGame {
                     .find(|field| gff.label_name(field.label) == Some(name))
                     .map(|field| &field.value)
             };
+            let level = checked_u8(value("Level"), &format!("henchman {element} Level"), 1, 1)?;
+            let state = checked_u8(value("State"), &format!("henchman {element} State"), 0, 0)?;
             henchmen.push(Henchman {
                 struct_index: *element,
                 resref: value("BaseResref")
                     .and_then(Value::as_str)
                     .unwrap_or_default()
                     .to_owned(),
-                level: value("Level")
-                    .and_then(Value::as_u64)
-                    .map_or(1, |level| level.clamp(1, 255) as u8),
+                level,
                 available: flag(value("Available")),
                 available2: flag(value("Available2")),
-                state: value("State")
-                    .and_then(Value::as_u64)
-                    .map_or(0, |state| state as u8),
+                state,
                 combat_time: value("CombatTime").and_then(Value::as_f32).unwrap_or(0.0),
             });
         }
@@ -101,8 +99,17 @@ impl SaveGame {
     /// Makes a companion available or unavailable.
     pub fn set_henchman_available(&mut self, struct_index: usize, available: bool) -> Result<()> {
         let flag = u64::from(available);
-        self.write_henchman_number(struct_index, "Available", flag)?;
-        self.write_henchman_number(struct_index, "Available2", flag)
+        let changed = self.edit_player_gff(|gff, _prefix| {
+            let first = write_henchman_number(gff, struct_index, "Available", flag)?;
+            let second = write_henchman_number(gff, struct_index, "Available2", flag)?;
+            if first || second {
+                Ok(Some(()))
+            } else {
+                Ok(None)
+            }
+        })?;
+        let _ = changed;
+        Ok(())
     }
 
     /// Sets the combat behaviour of a companion.
@@ -118,61 +125,117 @@ impl SaveGame {
         self.write_henchman_number(struct_index, "CombatMode", u64::from(mode))
     }
 
-    /// Writes a number into a henchman field, keeping the field's own type.
     fn write_henchman_number(
         &mut self,
         struct_index: usize,
         label: &str,
         value: u64,
     ) -> Result<()> {
-        let location = self.player_location()?;
-        let block = self
-            .block_mut(location.block)
-            .ok_or_else(|| Error::Corrupt("character block vanished".to_owned()))?;
-        let gff = block.gff_mut();
-        let label_index = gff.intern_label(label)?;
-        let existing = gff
-            .struct_at(struct_index)
-            .ok_or_else(|| Error::Corrupt(format!("struct {struct_index} does not exist")))?
-            .fields
-            .iter()
-            .find(|field| field.label == label_index)
-            .map(|field| field.type_id);
-        let replacement = match existing {
-            Some(0) => Value::Byte(u8::try_from(value).map_err(|_| out_of_range(label))?),
-            Some(2) => Value::Word(u16::try_from(value).map_err(|_| out_of_range(label))?),
-            Some(3) => Value::Short(i16::try_from(value).map_err(|_| out_of_range(label))?),
-            Some(5) => Value::Int(i32::try_from(value).map_err(|_| out_of_range(label))?),
-            Some(6) => Value::DWord64(value),
-            _ => Value::DWord(u32::try_from(value).map_err(|_| out_of_range(label))?),
-        };
-        if existing.is_some() {
-            let structure = gff.struct_at_mut(struct_index).ok_or_else(|| {
-                Error::Corrupt(format!("henchman struct {struct_index} does not exist"))
-            })?;
-            if let Some(field) = structure
-                .fields
-                .iter_mut()
-                .find(|field| field.label == label_index)
-            {
-                field.value = replacement;
+        let changed = self.edit_player_gff(|gff, _prefix| {
+            if write_henchman_number(gff, struct_index, label, value)? {
+                Ok(Some(()))
+            } else {
+                Ok(None)
             }
-        } else {
-            gff.add_field(struct_index, label, replacement)?;
-        }
+        })?;
+        let _ = changed;
         Ok(())
+    }
+}
+
+/// Writes a number into one henchman field, keeping its type tag.
+///
+/// Returns `true` when the value actually changed. The caller runs on a working
+/// copy, so a failure cannot dirty the savegame or leave a label behind.
+fn write_henchman_number(
+    gff: &mut Gff,
+    struct_index: usize,
+    label: &str,
+    value: u64,
+) -> Result<bool> {
+    let structure = gff
+        .struct_at(struct_index)
+        .ok_or_else(|| Error::Corrupt(format!("struct {struct_index} does not exist")))?;
+    let position = structure
+        .fields
+        .iter()
+        .position(|field| gff.label_name(field.label) == Some(label));
+    if let Some(position) = position {
+        let field = &structure.fields[position];
+        let current = field.value.as_u64().ok_or_else(|| Error::TypeMismatch {
+            path: format!("henchman {struct_index} {label}"),
+            expected: "a non-negative number",
+            actual: field.value.type_name(),
+        })?;
+        if current == value {
+            return Ok(false);
+        }
+        let replacement = number_value(field.type_id, value).map_err(|_| Error::TypeMismatch {
+            path: format!("henchman {struct_index} {label}"),
+            expected: "a numeric field type",
+            actual: field.value.type_name(),
+        })?;
+        gff.struct_at_mut(struct_index)
+            .and_then(|structure| structure.fields.get_mut(position))
+            .ok_or_else(|| Error::Corrupt(format!("struct {struct_index} does not exist")))?
+            .value = replacement;
+        Ok(true)
+    } else {
+        let value = u32::try_from(value).map_err(|_| Error::OutOfRange {
+            path: format!("henchman {struct_index} {label}"),
+            value: value.to_string(),
+            min: "0".to_owned(),
+            max: u32::MAX.to_string(),
+        })?;
+        gff.add_field(struct_index, label, Value::DWord(value))?;
+        Ok(true)
+    }
+}
+
+fn number_value(type_id: u32, value: u64) -> Result<Value> {
+    Ok(match type_id {
+        0 => Value::Byte(u8::try_from(value).map_err(|_| unsupported(type_id))?),
+        1 => Value::Char(i8::try_from(value).map_err(|_| unsupported(type_id))?),
+        2 => Value::Word(u16::try_from(value).map_err(|_| unsupported(type_id))?),
+        3 => Value::Short(i16::try_from(value).map_err(|_| unsupported(type_id))?),
+        4 => Value::DWord(u32::try_from(value).map_err(|_| unsupported(type_id))?),
+        5 => Value::Int(i32::try_from(value).map_err(|_| unsupported(type_id))?),
+        6 => Value::DWord64(value),
+        7 => Value::Int64(i64::try_from(value).map_err(|_| unsupported(type_id))?),
+        _ => return Err(unsupported(type_id)),
+    })
+}
+
+fn unsupported(type_id: u32) -> Error {
+    Error::TypeMismatch {
+        path: "henchman field".to_owned(),
+        expected: "a numeric field type",
+        actual: match type_id {
+            8 => "float",
+            9 => "double",
+            10 => "string",
+            _ => "non-numeric",
+        },
+    }
+}
+
+fn checked_u8(value: Option<&Value>, path: &str, default: u8, min: u8) -> Result<u8> {
+    match value {
+        Some(value) => {
+            let number = value
+                .as_u64()
+                .ok_or_else(|| Error::Corrupt(format!("field {path:?} is not a number")))?;
+            let number = u8::try_from(number)
+                .map_err(|_| Error::Corrupt(format!("field {path:?} is out of range")))?;
+            if number < min {
+                return Err(Error::Corrupt(format!("field {path:?} is out of range")));
+            }
+            Ok(number)
+        }
+        None => Ok(default),
     }
 }
 
 fn flag(value: Option<&Value>) -> bool {
     value.and_then(Value::as_u64).is_some_and(|flag| flag != 0)
-}
-
-fn out_of_range(label: &str) -> Error {
-    Error::OutOfRange {
-        path: format!("henchman {label}"),
-        value: "out of range".to_owned(),
-        min: "0".to_owned(),
-        max: u32::MAX.to_string(),
-    }
 }

@@ -19,10 +19,14 @@ pub struct LocString {
 
 impl LocString {
     /// Creates a string that only points into the talk table.
+    ///
+    /// `u32::MAX` is the format's "no reference" sentinel; it is stored as
+    /// `None` so that constructing this value cannot change the meaning on a
+    /// round trip.
     #[must_use]
     pub fn from_strref(strref: u32) -> Self {
         Self {
-            strref: Some(strref),
+            strref: (strref != u32::MAX).then_some(strref),
             text: None,
         }
     }
@@ -130,7 +134,12 @@ impl Value {
         }
     }
 
-    /// Returns the value as an unsigned 32 bit integer when it is numeric.
+    /// Returns the value as an unsigned 64 bit integer when it is a
+    /// non-negative numeric value.
+    ///
+    /// Negative signed values deliberately return `None`: a caller that stores
+    /// a negative number in an unsigned field is more likely to be looking at
+    /// damaged data than at a value that should wrap around.
     #[must_use]
     pub fn as_u64(&self) -> Option<u64> {
         match *self {
@@ -138,21 +147,24 @@ impl Value {
             Self::Word(v) => Some(u64::from(v)),
             Self::DWord(v) => Some(u64::from(v)),
             Self::DWord64(v) => Some(v),
-            Self::Char(v) => Some(v as u64),
-            Self::Short(v) => Some(v as u64),
-            Self::Int(v) => Some(v as u64),
+            Self::Char(v) => u64::try_from(v).ok(),
+            Self::Short(v) => u64::try_from(v).ok(),
+            Self::Int(v) => u64::try_from(v).ok(),
+            Self::Int64(v) => u64::try_from(v).ok(),
             _ => None,
         }
     }
 
     /// Returns the value as a signed 64 bit integer when it is numeric.
+    ///
+    /// Unsigned values above `i64::MAX` return `None` instead of wrapping.
     #[must_use]
     pub fn as_i64(&self) -> Option<i64> {
         match *self {
             Self::Byte(v) => Some(i64::from(v)),
             Self::Word(v) => Some(i64::from(v)),
             Self::DWord(v) => Some(i64::from(v)),
-            Self::DWord64(v) => Some(v as i64),
+            Self::DWord64(v) => i64::try_from(v).ok(),
             Self::Char(v) => Some(i64::from(v)),
             Self::Short(v) => Some(i64::from(v)),
             Self::Int(v) => Some(i64::from(v)),
@@ -234,12 +246,15 @@ impl Value {
             Self::DWord64(v) => v.to_le_bytes().to_vec(),
             Self::Int64(v) => v.to_le_bytes().to_vec(),
             Self::Double(v) => v.to_le_bytes().to_vec(),
-            Self::String(v) => encode_u32_string(v),
+            Self::String(v) => encode_u32_string(v)?,
             Self::ResRef(v) => {
                 let bytes = v.as_bytes();
+                // ResRefs are length prefixed with a single byte. Refuse an
+                // unrepresentable value instead of writing a length that does
+                // not describe the bytes that follow.
+                let length = u8::try_from(bytes.len()).ok()?;
                 let mut out = Vec::with_capacity(bytes.len() + 1);
-                // ResRefs are length prefixed with a single byte.
-                out.push(u8::try_from(bytes.len()).unwrap_or(u8::MAX));
+                out.push(length);
                 out.extend_from_slice(bytes);
                 out
             }
@@ -251,7 +266,7 @@ impl Value {
                     None => body.extend_from_slice(&u32::MAX.to_le_bytes()),
                 }
                 if let Some(text) = &v.text {
-                    body.extend_from_slice(&encode_u32_string(text));
+                    body.extend_from_slice(&encode_u32_string(text)?);
                 }
                 let total = u32::try_from(body.len()).ok()?;
                 out.extend_from_slice(&total.to_le_bytes());
@@ -360,13 +375,21 @@ impl Value {
                         .map_err(|_| err("locstring reference", start))?,
                 );
                 let text = if inner.len() > 4 {
-                    let len = u32::from_le_bytes(inner[4..8].try_into().map_err(|_| {
+                    let length_bytes = inner.get(4..8).ok_or_else(|| Error::Malformed {
+                        block: block.to_owned(),
+                        message: format!("localized string at {start} is truncated"),
+                    })?;
+                    let len = u32::from_le_bytes(length_bytes.try_into().map_err(|_| {
                         Error::Malformed {
                             block: block.to_owned(),
                             message: format!("localized string at {start} is truncated"),
                         }
                     })?) as usize;
-                    let bytes = inner.get(8..8 + len).ok_or_else(|| Error::Malformed {
+                    let end = 8_usize.checked_add(len).ok_or_else(|| Error::Malformed {
+                        block: block.to_owned(),
+                        message: format!("localized string text at {start} overflows"),
+                    })?;
+                    let bytes = inner.get(8..end).ok_or_else(|| Error::Malformed {
                         block: block.to_owned(),
                         message: format!("localized string text at {start} is truncated"),
                     })?;
@@ -513,12 +536,13 @@ impl PartialEq for Value {
 
 impl Eq for Value {}
 
-fn encode_u32_string(text: &str) -> Vec<u8> {
+fn encode_u32_string(text: &str) -> Option<Vec<u8>> {
     let bytes = text.as_bytes();
+    let length = u32::try_from(bytes.len()).ok()?;
     let mut out = Vec::with_capacity(bytes.len() + 4);
-    out.extend_from_slice(&u32::try_from(bytes.len()).unwrap_or(u32::MAX).to_le_bytes());
+    out.extend_from_slice(&length.to_le_bytes());
     out.extend_from_slice(bytes);
-    out
+    Some(out)
 }
 
 fn decode_text(bytes: &[u8], block: &str, offset: usize) -> Result<String> {
@@ -526,4 +550,200 @@ fn decode_text(bytes: &[u8], block: &str, offset: usize) -> Result<String> {
         block: block.to_owned(),
         message: format!("text at {offset} is not valid UTF-8"),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn decode(type_id: u32, offset: u32, data: &[u8]) -> Result<Value> {
+        Value::decode_field_data(type_id, offset, data, "test")
+    }
+
+    fn locstring(strref: u32, text: Option<&str>) -> Vec<u8> {
+        let mut inner = strref.to_le_bytes().to_vec();
+        if let Some(text) = text {
+            inner.extend_from_slice(
+                &u32::try_from(text.len())
+                    .expect("text length")
+                    .to_le_bytes(),
+            );
+            inner.extend_from_slice(text.as_bytes());
+        }
+        let mut data = u32::try_from(inner.len())
+            .expect("locstring size")
+            .to_le_bytes()
+            .to_vec();
+        data.extend_from_slice(&inner);
+        data
+    }
+
+    #[test]
+    fn decodes_out_of_line_values() {
+        let dword64 = 0x1122_3344_5566_7788_u64.to_le_bytes();
+        assert_eq!(
+            decode(6, 0, &dword64).expect("dword64"),
+            Value::DWord64(0x1122_3344_5566_7788)
+        );
+
+        let int64 = (-9_000_000_000_i64).to_le_bytes();
+        assert_eq!(
+            decode(7, 0, &int64).expect("int64"),
+            Value::Int64(-9_000_000_000)
+        );
+
+        let double = 2.5_f64.to_le_bytes();
+        assert_eq!(decode(9, 0, &double).expect("double"), Value::Double(2.5));
+
+        let mut string = 3_u32.to_le_bytes().to_vec();
+        string.extend_from_slice(b"abc");
+        assert_eq!(
+            decode(10, 0, &string).expect("string"),
+            Value::String("abc".to_owned())
+        );
+
+        let mut resref = vec![3];
+        resref.extend_from_slice(b"abc");
+        assert_eq!(
+            decode(11, 0, &resref).expect("resref"),
+            Value::ResRef("abc".to_owned())
+        );
+
+        assert_eq!(
+            decode(18, 0, &locstring(7, Some("hi"))).expect("locstring"),
+            Value::LocString(LocString {
+                strref: Some(7),
+                text: Some("hi".to_owned()),
+            })
+        );
+        assert_eq!(
+            decode(12, 0, &locstring(u32::MAX, None)).expect("legacy locstring"),
+            Value::LocString(LocString {
+                strref: None,
+                text: None,
+            })
+        );
+
+        let mut blob = 3_u32.to_le_bytes().to_vec();
+        blob.extend_from_slice(&[1, 2, 3]);
+        assert_eq!(
+            decode(13, 0, &blob).expect("blob"),
+            Value::Void(vec![1, 2, 3])
+        );
+
+        let quaternion = [1.0_f32, 2.0, 3.0, 4.0]
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            decode(16, 0, &quaternion).expect("quaternion"),
+            Value::Quaternion([1.0, 2.0, 3.0, 4.0])
+        );
+
+        let vector = [1.0_f32, 2.0, 3.0]
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            decode(17, 0, &vector).expect("vector"),
+            Value::Vector3([1.0, 2.0, 3.0])
+        );
+
+        // A later offset must be honoured as well.
+        let mut padded = vec![0_u8; 16];
+        padded.extend_from_slice(&dword64);
+        assert_eq!(
+            decode(6, 16, &padded).expect("offset"),
+            Value::DWord64(0x1122_3344_5566_7788)
+        );
+    }
+
+    #[test]
+    fn rejects_truncated_out_of_line_values() {
+        let cases = [
+            (6, vec![0; 4]),
+            (7, vec![0; 4]),
+            (9, vec![0; 4]),
+            (11, vec![3]),
+            (13, vec![5, 0, 0, 0]),
+            (16, vec![0; 4]),
+            (16, vec![0; 8]),
+            (16, vec![0; 12]),
+            (17, vec![0; 4]),
+            (17, vec![0; 8]),
+            (18, 10_u32.to_le_bytes().to_vec()),
+        ];
+        for (type_id, data) in cases {
+            assert!(
+                matches!(decode(type_id, 0, &data), Err(Error::Malformed { .. })),
+                "type {type_id} accepted {data:?}"
+            );
+        }
+
+        let mut string = 100_u32.to_le_bytes().to_vec();
+        string.extend_from_slice(b"x");
+        assert!(matches!(
+            decode(10, 0, &string),
+            Err(Error::Malformed { .. })
+        ));
+        let mut invalid = 2_u32.to_le_bytes().to_vec();
+        invalid.extend_from_slice(&[0xff, 0xfe]);
+        assert!(matches!(
+            decode(10, 0, &invalid),
+            Err(Error::Malformed { .. })
+        ));
+        assert!(matches!(
+            decode(11, 0, &[3, 0xff, 0xfe, 0xfd]),
+            Err(Error::Malformed { .. })
+        ));
+        assert!(matches!(decode(13, 99, &[]), Err(Error::Malformed { .. })));
+        assert!(matches!(decode(99, 0, &[]), Err(Error::Malformed { .. })));
+    }
+
+    #[test]
+    fn rejects_malformed_locstrings() {
+        let mut short = 3_u32.to_le_bytes().to_vec();
+        short.extend_from_slice(&[1, 2, 3]);
+        assert!(matches!(
+            decode(18, 0, &short),
+            Err(Error::Malformed { .. })
+        ));
+
+        // Five bytes are enough for the reference but not for the text length.
+        let mut odd = 5_u32.to_le_bytes().to_vec();
+        odd.extend_from_slice(&[1, 0, 0, 0, 0]);
+        assert!(matches!(decode(18, 0, &odd), Err(Error::Malformed { .. })));
+
+        // The text length points beyond the localized string.
+        let mut overflow = 9_u32.to_le_bytes().to_vec();
+        overflow.extend_from_slice(&1_u32.to_le_bytes());
+        overflow.extend_from_slice(&10_u32.to_le_bytes());
+        overflow.push(b'x');
+        assert!(matches!(
+            decode(18, 0, &overflow),
+            Err(Error::Malformed { .. })
+        ));
+
+        // Invalid UTF-8 in the inline text.
+        let mut invalid = 6_u32.to_le_bytes().to_vec();
+        invalid.extend_from_slice(&1_u32.to_le_bytes());
+        invalid.extend_from_slice(&2_u32.to_le_bytes());
+        invalid.extend_from_slice(&[0xff, 0xfe]);
+        assert!(matches!(
+            decode(18, 0, &invalid),
+            Err(Error::Malformed { .. })
+        ));
+
+        // The reference is read from the start, so a truncated text length word
+        // is the failure, not a missing reference.
+        let mut huge = 4_u32.to_le_bytes().to_vec();
+        huge.extend_from_slice(&u32::MAX.to_le_bytes());
+        assert_eq!(
+            decode(18, 0, &huge).expect("reference only"),
+            Value::LocString(LocString {
+                strref: None,
+                text: None,
+            })
+        );
+    }
 }

@@ -65,15 +65,11 @@ pub enum Error {
     #[error("savegame verification failed: {0}")]
     Verification(String),
 
-    /// A requested list element does not exist.
-    #[error("list {path:?} has no element at index {index} (length {len})")]
-    IndexOutOfBounds {
-        /// Path of the list.
-        path: String,
-        /// Requested index.
-        index: usize,
-        /// Current length.
-        len: usize,
+    /// The file changed on disk after it was opened.
+    #[error("savegame {path} changed on disk since it was opened; reload before saving")]
+    Conflict {
+        /// Path that changed.
+        path: PathBuf,
     },
 }
 
