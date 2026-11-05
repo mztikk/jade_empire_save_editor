@@ -286,10 +286,11 @@ result and writes it back.
 
 ```sh
 cargo install cargo-nextest --locked   # once; the test runner
-cargo nextest run --workspace          # unit, synthetic, real savegame and UI tests
+cargo nextest run --workspace          # unit, synthetic, real savegame and headless UI tests
 cargo test --workspace --doc           # doctests, which nextest does not run
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
+just live                              # windowed UI tests; ask first (rule 13)
 ```
 
 To install only the GUI binary into `~/.cargo/bin` (which must be on `PATH`),
@@ -326,8 +327,19 @@ JADEFORGE_SAVE_DIR="/path/to/Jade Empire/Save" cargo nextest run --workspace
 
 The headless UI tests render the real component tree with `freya-testing` and
 build a synthetic savegame plus installation when no game data is present, so
-they work on CI machines without a display or the retail game. The active
-workflow is [`.github/workflows/ci.yml`](.github/workflows/ci.yml); see
+they work on CI machines without a display or the retail game.
+
+The windowed suite is the second feedback loop: it launches the real application
+through `freya-winit`, opens a real Wayland window and drives it with real
+compositor input on KDE (or with events through the windowed plugin handle on
+other compositors). It is opt-in with `just live`, so normal test runs never open
+windows. Run it from a real Wayland desktop session, or from a VM with a real
+desktop; it is not part of CI. **Never run it without explicit permission**
+([AGENTS.md](AGENTS.md) rule 13), and only when a headless test cannot cover the
+case or the bug is in the real window. See
+[docs/LIVE-UI.md](docs/LIVE-UI.md) for the backends, the process model and how to
+add a scenario. The active workflow is
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml); see
 [ci/README.md](ci/README.md) for its jobs and the release signing checklist.
 
 See [AGENTS.md](AGENTS.md) for the development guidelines,

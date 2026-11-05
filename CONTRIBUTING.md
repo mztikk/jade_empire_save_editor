@@ -25,6 +25,12 @@ it must run rather than skip. New format knowledge belongs in
 [docs/FORMAT.md](docs/FORMAT.md); user-visible changes belong in `README.md` and
 `CHANGELOG.md`.
 
+`just live` is not part of this workflow: it opens real windows and needs a real
+Wayland desktop. **Never run it without explicit permission** from the machine's
+user, and only when the headless UI suite cannot cover the change or the bug is
+in the real window. See [AGENTS.md](AGENTS.md) rule 13 and
+[docs/LIVE-UI.md](docs/LIVE-UI.md).
+
 ## Pull requests
 
 - One logical change per pull request; keep the diff reviewable.

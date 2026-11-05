@@ -198,6 +198,19 @@ the suite runs in CI without the retail game. `cargo run -p jadeforge-gui --exam
 [TAB|all] [--height N] [--query TEXT]` produces the screenshots used in the
 documentation.
 
+A second, opt-in suite (`crates/jadeforge-gui/tests/live.rs`) covers the window
+path: it launches the real application through `freya-winit`, opens a real
+Wayland window with the production `app::window_config`, drives it with KWin's
+fake-input protocol on KDE (or with windowed plugin events on other
+compositors), and captures the presented window with Spectacle. A `Probe` plugin
+publishes the live label/paragraph tree so assertions use text and layout
+rectangles instead of image diffs. The suite is gated by `JADEFORGE_LIVE=1` and
+runs one scenario per child process because winit requires one event loop on the
+main thread. It opens real windows, so it is **never run without explicit
+permission** and only when the headless suite cannot cover the case
+([AGENTS.md](AGENTS.md) rule 13). See [LIVE-UI.md](LIVE-UI.md) for the process
+model, backends and the desktop/VM requirements.
+
 ## Startup path
 
 Opening the window must not wait for the savegame corpus. The sequence is:
@@ -240,6 +253,7 @@ background scan, so the messages cannot diverge.
 | fuzz targets | `fuzz/` (`cargo-fuzz`, not a workspace member) | no |
 | benchmark | `crates/jadeforge-core/benches/save_corpus.rs` | optional corpus |
 | UI | `crates/jadeforge-gui/tests/ui.rs` | synthetic by default, real corpus when set |
+| windowed UI | `crates/jadeforge-gui/tests/live.rs` | synthetic, opt-in, Wayland only |
 
 Tests that need the game look for `JADEFORGE_SAVE_DIR` and skip with a note when
 it is not set, so CI stays green on machines without Jade Empire.
@@ -255,5 +269,9 @@ Deliberately small:
 * `serde` and `toml` for the settings file,
 * `freya` for the GUI,
 * `freya-testing` (dev only) for headless UI tests,
+* `freya-winit`, `wayland-client` and `wayland-protocols-plasma` (dev only,
+  Linux) for the windowed UI suite and its KWin fake-input driver; `image` and
+  `serde_json` are dev-only companions for compositor screenshots and KWin's
+  JSON D-Bus replies,
 * `futures-channel` for the one-shot hand-off from the scan worker to the GUI
   future.

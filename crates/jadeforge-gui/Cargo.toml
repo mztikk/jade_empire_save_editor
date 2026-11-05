@@ -14,6 +14,15 @@ readme.workspace = true
 name = "jadeforge"
 path = "src/main.rs"
 
+[[test]]
+# Windowed (not `freya-testing`) UI tests. They run the real Freya window and
+# renderer against a live Wayland compositor, so they have their own scenario
+# runner instead of the libtest harness. `JADEFORGE_LIVE=1` opts in; see
+# `tests/live.rs`.
+name = "live"
+path = "tests/live.rs"
+harness = false
+
 [dependencies]
 futures-channel = "0.3"
 jadeforge-core.workspace = true
@@ -32,3 +41,18 @@ workspace = true
 [dev-dependencies]
 freya-testing = "0.4.3"
 jadeforge-gamedata.workspace = true
+
+# The windowed suite drives the real Freya window through winit's plugin API
+# and, on KDE Plasma, through KWin's fake-input Wayland protocol. Everything
+# below is Linux-only so the crate still builds on Windows and macOS.
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# Keep these caret ranges in step with `freya`: the probe passes freya-core
+# event types to freya-winit's plugin handle, so both must resolve to the exact
+# versions freya links. Exact pins here would allow a second copy after a freya
+# patch update and turn that into a type error.
+freya-core = "0.4.3"
+freya-winit = "0.4.3"
+image = { version = "0.25", default-features = false, features = ["png"] }
+serde_json.workspace = true
+wayland-client = "0.31"
+wayland-protocols-plasma = { version = "0.3", features = ["client"] }

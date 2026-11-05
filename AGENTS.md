@@ -38,9 +38,11 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 ```
 
 The same commands are available through `just` (see the `justfile`): `just
-check` runs formatting, clippy and the tests, `just snapshot …` renders the UI,
-and `just publish` builds the fat-LTO distribution binaries, stages checksums and
-third-party notices, and `just checksums` regenerates `dist/SHA256SUMS`.
+check` runs formatting, clippy and the tests, `just live` runs the opt-in
+windowed UI suite against the real Wayland desktop (only with explicit
+permission; see rule 13), `just snapshot …` renders the UI, and `just publish`
+builds the fat-LTO distribution binaries, stages checksums and third-party
+notices, and `just checksums` regenerates `dist/SHA256SUMS`.
 `just publish-linux` builds the SteamOS-compatible Linux binaries (glibc 2.35) in
 a rootless Podman container. Linux/Windows x86-64 releases ship both the
 `x86-64-v3` binaries (`jadeforge`, `jadeforge-cli`) and baseline fallbacks
@@ -112,6 +114,17 @@ cargo commands above remain canonical.
     is absent or a command fails because of the environment, stop and ask the
     user to install or provide it. Normal Cargo dependency resolution into the
     host's cache is fine; bootstrapping a tool that should already exist is not.
+13. **Never run the windowed UI suite without explicit permission.**
+    `just live`, `cargo test -p jadeforge-gui --test live` and anything with
+    `JADEFORGE_LIVE=1` open real windows, take focus, move the real pointer and
+    type on the user's desktop. Ask the user first, explain why the headless
+    suite cannot cover the case, and wait for their answer; a general request to
+    run the tests is not permission. Only run it when a headless GUI test
+    genuinely cannot reproduce or verify the behaviour (window creation,
+    compositor input, focus, presentation, HiDPI or window-manager interaction),
+    or when the bug is in the actual windowed GUI or a mismatch between the
+    headless and real window. Otherwise use the headless suite and snapshots.
+    The same rule applies to scripts and CI: the suite is not a CI target.
 
 ## Code style
 
@@ -249,6 +262,12 @@ documentation, not ground truth — verify against the game files where possible
   test (`assert_compact_action_rows`): the controls must stay inside the card
   and the row pitch must stay compact. Every tab must render at both narrow and
   wide widths.
+- Changes to window creation, input handling, focus or presentation may need
+  `just live`, the windowed suite, but **never run it without explicit
+  permission** (rule 13). It opens real windows and takes focus; only use it
+  when the headless runner cannot cover the case or the bug is in the real
+  window. Keep its scenarios small and window-level, because exhaustive layout
+  coverage belongs in the headless suite. See `docs/LIVE-UI.md`.
 - Every dynamic UI list item and every conditional tab root must have a stable
   key. Freya 0.4 can panic inside its diff when unkeyed/root-changing elements
   are replaced; keys are a crash guard, not optional. Use the existing
@@ -293,9 +312,10 @@ documentation, not ground truth — verify against the game files where possible
 | `crates/jadeforge-gui` | Freya application: `app/` (shell, sidebar, navigation), `views` (tabs), `theme`, `widgets` |
 | `docs/FORMAT.md` | savegame format reference |
 | `docs/ARCHITECTURE.md` | crate layout, data flow, safety model |
+| `docs/LIVE-UI.md` | windowed UI suite: backends, process model, desktop/VM requirements and how to add scenarios |
 | `.dsh/skills` | task-specific skills for working on this repository |
 | `.github/workflows/ci.yml` | GitHub Actions workflow (see `ci/README.md`) |
-| `justfile` | `just` shortcuts for the commands above (`just check`, `just coverage`, `just publish`) |
+| `justfile` | `just` shortcuts for the commands above (`just check`, `just live`, `just coverage`, `just publish`) |
 | `docs/COVERAGE.md` | current coverage, the gaps and the plan to close them |
 | `SaveEditorDoc.md` | the original project brief |
 
@@ -305,7 +325,8 @@ The repository ships skills that encode repeatable workflows:
 
 - `savegame-format` – inspecting and validating format changes against real
   savegames,
-- `freya-ui` – building, theming and headlessly testing Freya screens,
+- `freya-ui` – building, theming, headlessly testing and driving the real
+  windowed Freya screens,
 - `jade-empire-wiki` – reading the community wiki through the Fandom API when the
   normal URLs are blocked,
 - `release-check` – the checklist before a release or a push.

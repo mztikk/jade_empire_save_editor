@@ -1971,12 +1971,18 @@ name = "jadeforge-gui"
 version = "0.1.0"
 dependencies = [
  "freya",
+ "freya-core",
  "freya-testing",
+ "freya-winit",
  "futures-channel",
+ "image",
  "jadeforge-core",
  "jadeforge-gamedata",
  "jadeforge-session",
  "rfd",
+ "serde_json",
+ "wayland-client",
+ "wayland-protocols-plasma",
  "winresource",
 ]
 
