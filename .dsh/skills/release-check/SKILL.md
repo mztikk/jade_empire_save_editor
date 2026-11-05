@@ -5,6 +5,10 @@ description: Use before committing, pushing, tagging or releasing JadeForge; run
 
 # Before a commit, push or release
 
+Run this on the task branch that holds the change, never on `main`. The
+worktree must be clean and `just finish` must pass before a branch is pushed or
+tagged; see the `git-workflow` skill for the branch lifecycle.
+
 ## Quality gate
 
 Run all three, in this order, from the repository root. They must be free of
@@ -53,6 +57,8 @@ the variables did not reach the tests).
 
 4. `git status` shows no `target/`, `scratch/`, savegames or
    stray screenshots. `docs/screenshot.png` may be committed when it changed.
+   `just finish` must report a clean task branch with commits ahead of
+   `origin/main`.
 
 ## Review the diff
 
@@ -65,10 +71,14 @@ the variables did not reach the tests).
 
 ## Release
 
+- Do the release work on a `release/vX.Y.Z` branch, not on `main`.
 - Bump `version` in the workspace `Cargo.toml` only; the crates inherit it.
 - Update the changelog section in the release notes (or `CHANGELOG.md` when one
   exists).
-- Tag with `vMAJOR.MINOR.PATCH` and push tags: `git push origin main --tags`.
+- Merge the release branch through a pull request, then tag the merge commit on
+  `origin/main` without checking it out:
+  `git fetch origin && git tag -a vX.Y.Z origin/main -m "JadeForge vX.Y.Z" &&
+  git push origin vX.Y.Z`. Tags do not require a checkout of `main`.
 - `.github/workflows/ci.yml` produces the binaries, `SHA256SUMS`,
   `THIRD_PARTY_NOTICES.txt`, the dependency inventory, `sbom.cdx.json` and
   the Skia licence;
