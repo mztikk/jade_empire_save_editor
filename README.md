@@ -292,8 +292,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
-To install the GUI into `~/.cargo/bin` (which must be on `PATH`), tuned for the
-current machine's CPU:
+To install only the GUI binary into `~/.cargo/bin` (which must be on `PATH`),
+tuned for the current machine's CPU:
 
 ```sh
 just install
@@ -304,17 +304,18 @@ feature the build host has; it is not portable to other machines. Use
 `just publish` / `just publish-linux` for distribution binaries. Skia is still
 the prebuilt library, so only the Rust code gets native code generation.
 
-On Linux, install the desktop entry and hicolor icons once so the launcher and
-Wayland compositors can resolve the icon by app id:
+On Linux, `just install-desktop` installs everything in one step: the GUI
+binary, the desktop entry and the hicolor icons. The launcher and Wayland
+compositors can then resolve the icon by app id:
 
 ```sh
 just install-desktop
 ```
 
-This expects `jadeforge` on `PATH` (the location `just install` uses). The icon
-master lives in `crates/jadeforge-gui/assets/icon.svg`; `just icons` regenerates
-the PNG, ICO and ICNS files from it (needs `rsvg-convert`, ImageMagick and
-Python 3).
+The launcher entry expects `jadeforge` on `PATH` (the location `just install`
+uses). The icon master lives in `crates/jadeforge-gui/assets/icon.svg`;
+`just icons` regenerates the PNG, ICO and ICNS files from it (needs
+`rsvg-convert`, ImageMagick and Python 3).
 
 Tests that need real savegames or the game data are skipped unless the files are
 available:

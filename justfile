@@ -83,10 +83,11 @@ install:
 icons:
     python3 ci/icons.py
 
-# Install the Linux launcher entry and hicolor icons for the current user, so
-# Wayland compositors can find the icon by app id. Expects `jadeforge` on PATH.
+# Install the GUI, the Linux launcher entry and hicolor icons for the current
+# user, so Wayland compositors can find the icon by app id. The launcher entry
+# expects `jadeforge` on PATH (the location `just install` uses).
 [linux]
-install-desktop:
+install-desktop: install
     install -Dm644 crates/jadeforge-gui/assets/linux/jadeforge.desktop "$HOME/.local/share/applications/jadeforge.desktop"
     for size in 16 24 32 48 64 128 256 512; do \
         install -Dm644 "crates/jadeforge-gui/assets/icon-$size.png" \

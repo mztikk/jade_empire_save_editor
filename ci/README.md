@@ -40,7 +40,7 @@ just publish        # fat-LTO binaries, macOS .app/Linux share, notices under di
 just checksums      # dist/SHA256SUMS
 just sbom           # dist/sbom.cdx.json
 just icons          # regenerate the icon PNG/ICO/ICNS assets from icon.svg
-just install-desktop # Linux launcher entry + hicolor icons (current user)
+just install-desktop # Linux GUI + launcher entry + hicolor icons
 ci/test-icon-staging.sh # smoke-test the macOS bundle and Linux share staging
 cargo bench -p jadeforge-core --bench save_corpus
 cargo +nightly fuzz run gff   # long local run; see fuzz/README.md
