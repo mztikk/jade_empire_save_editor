@@ -14,7 +14,8 @@ pushes to `main`, pull requests, tags and manual dispatches.
   `jadeforge-core`, `jadeforge-session`, `jadeforge-gamedata` and
   `jadeforge-cli` on Linux, Windows and macOS. This includes the game-data
   tests that the previous workflow missed. On Windows it also checks the GUI so
-  the `winresource` build script really embeds the `.exe` icon.
+  the `winresource` build script really embeds the `.exe` icon, and on macOS it
+  checks that the GUI still compiles even though macOS is not released yet.
 - `msrv`: `cargo check` with the declared MSRV (currently 1.88) on Linux.
 - `gui`: installs the X11/Wayland/EGL development packages, runs the headless
   `freya-testing` UI suite, clippy and the release icon staging smoke test. The
@@ -24,13 +25,14 @@ pushes to `main`, pull requests, tags and manual dispatches.
   real Wayland desktop, so it is only run locally or in a desktop VM with
   explicit permission (see [docs/LIVE-UI.md](../docs/LIVE-UI.md)).
 - `audit`: `cargo audit` against the lockfile.
-- `publish` (non-PR only): builds the fat-LTO binaries with `just publish`,
-  stages the Windows icon, the macOS `JadeForge.app` bundles and the Linux
-  `share/` tree, checks the glibc baseline on Linux, writes
-  `THIRD_PARTY_NOTICES.txt`, the dependency inventory, a CycloneDX
-  `sbom.cdx.json`, `SHA256SUMS` and a GitHub build-provenance attestation, and
-  attaches the files to a release when the ref is a tag. Windows and macOS also
-  run the headless UI tests.
+- `publish` (non-PR only): builds the fat-LTO binaries with `just publish` on
+  Linux and Windows, stages the Windows icon and the Linux `share/` tree,
+  checks the glibc baseline on Linux, writes `THIRD_PARTY_NOTICES.txt`, the
+  dependency inventory, a CycloneDX `sbom.cdx.json`, `SHA256SUMS` and a GitHub
+  build-provenance attestation, and attaches the files to a release when the
+  ref is a tag. macOS is not in the release matrix yet and the published
+  binaries are unsigned; see [Release signing](#release-signing). Windows also
+  runs the headless UI tests.
 
 All actions are pinned to commit SHAs. The workflow has a read-only default
 token; only the publish job may write release contents.
@@ -62,27 +64,30 @@ merge.
 
 ## Release signing
 
-Signing is wired into the publish job and runs only when the platform
-credentials are configured; unsigned builds are still produced and marked as
-unsigned in the release checklist.
+The publish job does not sign or notarise anything yet: releases are unsigned
+and must say so in their notes. Windows shows an "unknown publisher" SmartScreen
+warning until the binaries are signed and their reputation builds up.
 
-- macOS (secrets `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PASSWORD`,
-  `MACOS_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`):
-  [ci/sign-macos.sh](sign-macos.sh) imports the Developer ID certificate,
-  signs every Mach-O binary with the hardened runtime and timestamp, signs the
-  `JadeForge.app` bundle after its nested binary, and submits a notarisation
-  archive with `xcrun notarytool`. The archives are attached to the release.
-  `spctl --assess` on the `.app` is the final manual check.
-- Windows (secrets `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD`):
-  [ci/sign-windows.ps1](sign-windows.ps1) finds `signtool.exe` in the Windows
-  SDK and signs every `.exe` with SHA-256 and a timestamp; `just publish`
-  embeds `assets/jadeforge.ico` before signing.
+The current scripts are kept for a later cloud-signing integration but are not
+called by the workflow:
+
+- Windows: [ci/sign-windows.ps1](sign-windows.ps1) assumes a base64 PKCS#12
+  certificate and `signtool /f`, which only works with a private CA or a
+  grandfathered certificate. Public CAs have required hardware or cloud-HSM key
+  storage since 1 June 2023 (CA/Browser Forum), so enabling signing again means
+  swapping the `.pfx` secret for a cloud signing service (for example Azure
+  Artifact Signing, SignPath or a CA cloud HSM) and verifying the result with
+  `signtool verify /pa /v`.
+- macOS: [ci/sign-macos.sh](sign-macos.sh) imports a Developer ID certificate,
+  signs the Mach-O binaries and the `JadeForge.app` bundle and notarises the
+  archive with `xcrun notarytool`. It runs again once macOS returns to the
+  release matrix; notarisation needs an Apple Developer Program membership.
 - Linux: the glibc check covers the runtime baseline; an optional AppImage or
   package signature is outside this repository.
 
 The workflow also creates a GitHub build-provenance attestation for the staged
-files. Keep the manual checklist below until the signed path has been exercised
-on a real release.
+files. Keep the manual checklist below until a signed release has been
+exercised against the real credentials.
 
 ## Release checklist
 
@@ -96,13 +101,11 @@ on a real release.
 4. Verify the four Linux binaries with `ci/check-glibc.sh` against 2.35.
 5. Verify the release includes `SHA256SUMS`, `THIRD_PARTY_NOTICES.txt`,
    `cargo-metadata.json`, `sbom.cdx.json`, the provenance attestation, the
-   Skia licence, the macOS `JadeForge.app` bundles and the Linux `share/` tree.
-6. Verify the icons on the real artifacts: the Windows `.exe` in Explorer, the
-   macOS `JadeForge.app` in Finder/Dock, and the Linux hicolor files resolving
-   `Icon=jadeforge`.
-7. Verify the macOS/Windows signing steps ran (the conditional steps are skipped
-   when the secrets are absent); otherwise mark the release unsigned in the
-   notes and run the manual signing commands above on a controlled host.
+   Skia licence and the Linux `share/` tree.
+6. Verify the icons on the real artifacts: the Windows `.exe` in Explorer and
+   the Linux hicolor files resolving `Icon=jadeforge`.
+7. This release is unsigned: state that in the notes. Signing is a follow-up
+   (see [Release signing](#release-signing)).
 8. Never ship a build whose real-savegame tests were skipped.
 
 ## Strict clippy report
