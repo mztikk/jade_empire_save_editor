@@ -881,6 +881,12 @@ fn every_saved_style_mask_fits_its_slot_table() {
         eprintln!("skipping: no savegames found");
         return;
     };
+    if !fixture.game_data {
+        // Style slot tables live in the game data; without it every style is
+        // legitimately unresolvable, so there is nothing to check.
+        eprintln!("skipping: no game data to resolve the style slot tables");
+        return;
+    }
     // With a real corpus, walk all of it; the copied fixture contains only the
     // smallest savegame, which may have no upgrades.
     let dir = save_dir_from_env().unwrap_or_else(|| fixture.save_dir.clone());

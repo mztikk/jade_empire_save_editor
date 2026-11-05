@@ -87,6 +87,7 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/ui.png all
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/inv.png Inventory --height 1900 --query "Drachen"
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/small.png Overview --width 900 --height 600
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/wide.png all --width 1600 --height 900
+just live                              # ask first; see the Windowed tests rule
 ```
 
 Check narrow windows too: rows with `spacing` overflow silently at 900 px unless
@@ -94,6 +95,25 @@ their container wraps (`Content::wrap_spacing`).
 
 Look at the PNG. Squeezed inputs, clipped rows and off-screen buttons are
 invisible to the compiler.
+
+## Windowed tests
+
+**Never run `just live` without asking the user for explicit permission first.**
+It opens real windows, takes focus, moves the pointer and types on their
+desktop. A general request to run the tests is not permission. Only run it when
+a headless GUI test genuinely cannot reproduce or verify the problem (window
+creation, compositor input, focus, presentation, HiDPI or window-manager
+interaction), or when the bug is in the actual windowed GUI or a mismatch
+between the headless and real window. Otherwise use the headless suite and
+snapshots.
+
+Once permission is given: `just live` launches the real application through
+`freya-winit` and drives a real Wayland window. On KDE it injects pointer and
+key events through KWin's fake-input protocol and captures the window with
+Spectacle; elsewhere it posts the same events through the windowed plugin
+handle. It is deliberately small; use it for window creation, input, focus and
+presentation changes, not for layout assertions. See `docs/LIVE-UI.md` and
+`AGENTS.md` rule 13.
 
 ## Headless tests
 

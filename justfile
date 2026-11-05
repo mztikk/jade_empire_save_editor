@@ -28,6 +28,13 @@ test:
     cargo nextest run --workspace
     cargo test --workspace --doc
 
+# NEVER run without explicit permission (AGENTS.md rule 13).
+# Windowed UI tests on the real Wayland desktop; only when a headless UI test
+# cannot cover the issue or the bug is in the real window. Opens real windows
+# and takes focus. See docs/LIVE-UI.md.
+live:
+    JADEFORGE_LIVE=1 cargo test -p jadeforge-gui --test live -- --nocapture
+
 # Lint the whole workspace and deny warnings.
 clippy:
     cargo clippy --workspace --all-targets -- -D warnings

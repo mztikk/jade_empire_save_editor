@@ -71,7 +71,7 @@ pub(super) fn header(
                 .content(Content::Flex)
                 .child(
                     label()
-                        .text("JadeForge")
+                        .text(super::WINDOW_TITLE)
                         .font_size(22.)
                         .font_weight(FontWeight::BOLD)
                         .color(theme::ACCENT),

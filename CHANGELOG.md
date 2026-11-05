@@ -13,6 +13,12 @@ All notable changes are documented here. The format follows
   Windows executables embed the ICO, macOS releases stage a `JadeForge.app`
   bundle with the ICNS, and Linux releases include the desktop entry and
   hicolor icons for Wayland launchers.
+- Automated windowed UI tests (`just live`) that launch the real Freya window
+  through `freya-winit`, drive it with KWin's Wayland fake-input protocol and
+  capture the presented window. Other compositors use windowed plugin events.
+  The suite is opt-in, runs in a real Wayland desktop session (or a desktop VM)
+  and is not part of CI; the existing `freya-testing` suite stays the fast,
+  exhaustive feedback loop. See [docs/LIVE-UI.md](docs/LIVE-UI.md).
 
 ### Fixed
 

@@ -17,7 +17,9 @@ pushes to `main`, pull requests, tags and manual dispatches.
   `freya-testing` UI suite, clippy and the release icon staging smoke test. The
   UI suite builds a synthetic savegame and game installation when
   `JADEFORGE_SAVE_DIR`/`JADEFORGE_GAME_DIR` are not set, so it is not a no-op on
-  CI.
+  CI. The windowed UI suite is not part of CI: it opens real windows and needs a
+  real Wayland desktop, so it is only run locally or in a desktop VM with
+  explicit permission (see [docs/LIVE-UI.md](../docs/LIVE-UI.md)).
 - `audit`: `cargo audit` against the lockfile.
 - `publish` (non-PR only): builds the fat-LTO binaries with `just publish`,
   stages the Windows icon, the macOS `JadeForge.app` bundles and the Linux

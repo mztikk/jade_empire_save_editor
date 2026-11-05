@@ -16,6 +16,7 @@ use crate::form::Form;
 use crate::session::{CharacterForm, GameStatus, Preview, Session, default_save_dir};
 use crate::theme;
 use crate::views;
+use crate::{APP_ID, ICON_PNG};
 
 mod navigation;
 mod shell;
@@ -67,6 +68,12 @@ pub enum HoverKey {
 
 /// Entries a searchable picker renders per page (items, styles, gems).
 pub const PAGE_SIZE: usize = 30;
+
+/// Title of the main window.
+///
+/// The windowed UI suite finds the application through this title, so keep the
+/// binary, the window configuration and the tests in sync.
+pub const WINDOW_TITLE: &str = "JadeForge";
 
 /// Whether the running window currently has unsaved changes.
 static UI_DIRTY: AtomicBool = AtomicBool::new(false);
@@ -158,6 +165,43 @@ impl Tab {
 /// Root component of the application.
 pub fn app() -> impl IntoElement {
     app_with_directory(default_save_dir())
+}
+
+/// Builds the main application window.
+///
+/// The binary and the automated windowed tests both use this, so the tests
+/// exercise the real title, icon, size, application id and unsaved-changes
+/// close guard instead of a test-only window. The hook returns
+/// [`CloseDecision::KeepOpen`] when the user declines to discard edits.
+#[must_use]
+pub fn window_config<E>(app: impl Fn() -> E + 'static) -> WindowConfig
+where
+    E: IntoElement + 'static,
+{
+    WindowConfig::new(app)
+        .with_title(WINDOW_TITLE)
+        .with_icon(LaunchConfig::window_icon(ICON_PNG))
+        .with_app_id(APP_ID)
+        .with_size(1180.0, 760.0)
+        .with_min_size(900.0, 600.0)
+        .with_on_close(|_, _| {
+            if !ui_is_dirty() {
+                return CloseDecision::Close;
+            }
+            let answer = rfd::MessageDialog::new()
+                .set_title("Unsaved changes")
+                .set_description(
+                    "This savegame has changes that are only in memory. Close JadeForge and discard them?",
+                )
+                .set_buttons(rfd::MessageButtons::YesNo)
+                .set_level(rfd::MessageLevel::Warning)
+                .show();
+            if matches!(answer, rfd::MessageDialogResult::Yes) {
+                CloseDecision::Close
+            } else {
+                CloseDecision::KeepOpen
+            }
+        })
 }
 
 /// Root component that starts with a specific save folder.
