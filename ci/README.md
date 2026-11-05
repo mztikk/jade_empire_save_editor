@@ -6,7 +6,8 @@ pushes to `main`, pull requests, tags and manual dispatches.
 
 ## Jobs
 
-- `formatting`: `cargo fmt --all --check`.
+- `formatting`: `cargo fmt --all --check` and `ci/test-git-hooks.sh`, which
+  proves the tracked pre-commit hook refuses a direct commit on `main`.
 - `test`: tests, doctests, clippy and rustdoc for `jadeforge-gff`,
   `jadeforge-core`, `jadeforge-session`, `jadeforge-gamedata` and
   `jadeforge-cli` on Linux, Windows and macOS. This includes the game-data
@@ -35,7 +36,10 @@ token; only the publish job may write release contents.
 ## Local reproduction
 
 ```sh
-just check          # fmt, clippy, nextest, doctests
+just setup           # enable the tracked git hooks (once per clone)
+just start fix/x     # create a task branch from origin/main
+just finish          # fail unless the branch is clean and ahead of origin/main
+just check           # fmt, clippy, nextest, doctests
 just strict         # non-gating audit of the strict lints
 just coverage       # cargo llvm-cov summary, lcov and html
 just publish        # fat-LTO binaries, macOS .app/Linux share, notices under dist/
@@ -50,7 +54,9 @@ cargo +nightly fuzz run gff   # long local run; see fuzz/README.md
 
 `just check` is the canonical gate. With a real installation, add
 `JADEFORGE_SAVE_DIR`/`JADEFORGE_GAME_DIR` to run the corpus tests; without them
-the UI tests use the synthetic fixture.
+the UI tests use the synthetic fixture. Work happens on task branches; a branch
+is ready for review when `just finish` passes, and pull requests run CI before a
+merge.
 
 ## Release signing
 
@@ -78,9 +84,13 @@ on a real release.
 
 ## Release checklist
 
-1. `just check` and, with game data, `cargo nextest run --workspace`.
-2. Bump the workspace version in `Cargo.toml`.
-3. Tag `vMAJOR.MINOR.PATCH` and push the tag.
+1. `just check`, `just finish` and, with game data, `cargo nextest run
+   --workspace`.
+2. Bump the workspace version in `Cargo.toml` on the release branch.
+3. Merge the release branch through a pull request, then tag the merge commit on
+   `origin/main` without checking it out:
+   `git fetch origin && git tag -a vMAJOR.MINOR.PATCH origin/main -m "..." &&
+   git push origin vMAJOR.MINOR.PATCH`.
 4. Verify the four Linux binaries with `ci/check-glibc.sh` against 2.35.
 5. Verify the release includes `SHA256SUMS`, `THIRD_PARTY_NOTICES.txt`,
    `cargo-metadata.json`, `sbom.cdx.json`, the provenance attestation, the

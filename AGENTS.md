@@ -23,6 +23,11 @@ cargo test --workspace --doc                  # doctests
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 
+# Task branches: install the hooks once, then start every task on a branch
+just setup
+just start fix/<slug>
+just finish                                   # clean tree + commits ahead of main
+
 # Install the GUI locally, tuned for this machine's CPU (not portable)
 just install
 
@@ -38,11 +43,13 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 ```
 
 The same commands are available through `just` (see the `justfile`): `just
-check` runs formatting, clippy and the tests, `just live` runs the opt-in
-windowed UI suite against the real Wayland desktop (only with explicit
-permission; see rule 13), `just snapshot …` renders the UI, and `just publish`
-builds the fat-LTO distribution binaries, stages checksums and third-party
-notices, and `just checksums` regenerates `dist/SHA256SUMS`.
+check` runs formatting, clippy and the tests, `just setup` installs the tracked
+git hooks once per clone, `just start <type>/<slug>` creates a task branch from
+the latest `origin/main`, `just finish` is the clean-hand-over guard, `just live`
+runs the opt-in windowed UI suite against the real Wayland desktop (only with
+explicit permission; see rule 13), `just snapshot …` renders the UI, and `just
+publish` builds the fat-LTO distribution binaries, stages checksums and
+third-party notices, and `just checksums` regenerates `dist/SHA256SUMS`.
 `just publish-linux` builds the SteamOS-compatible Linux binaries (glibc 2.35) in
 a rootless Podman container. Linux/Windows x86-64 releases ship both the
 `x86-64-v3` binaries (`jadeforge`, `jadeforge-cli`) and baseline fallbacks
@@ -50,6 +57,32 @@ a rootless Podman container. Linux/Windows x86-64 releases ship both the
 `cargo llvm-cov nextest` and writes `coverage/lcov.info` and `coverage/html` (see
 [docs/COVERAGE.md](docs/COVERAGE.md) for the current numbers and the plan). The
 cargo commands above remain canonical.
+
+## Branch workflow
+
+`main` is integration only: never edit files or make ordinary commits on it.
+Every task, including a one-line fix or a documentation change, runs on its own
+branch cut from the latest `origin/main`:
+
+```sh
+just setup                  # once per clone: enable the tracked .githooks
+just start fix/save-load    # fetch origin/main, create and switch the branch
+# ... work and commit logical steps with imperative messages ...
+just check                  # the quality gate (fmt, clippy, nextest, doctests)
+just finish                 # fails on main, a dirty tree or no commits ahead
+```
+
+Branch names are `<type>/<slug>` in lower-case kebab-case. `type` is one of
+`feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore` or
+`release`; `slug` describes the change (`fix/zero-length-locstrings`).
+
+`just finish` is the hand-over condition: it passes only when the branch is not
+`main`, `git status --porcelain` is empty and the branch has commits that
+`origin/main` does not. The branch is left checked out for review; agents must
+not push it or open a pull request unless the user asks. `main` only ever
+advances by merging task branches (a pull request is preferred). When a branch
+is merged, delete it. The `git-workflow` skill carries the step-by-step
+procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
 
 ## Editing files
 
@@ -125,6 +158,14 @@ cargo commands above remain canonical.
     or when the bug is in the actual windowed GUI or a mismatch between the
     headless and real window. Otherwise use the headless suite and snapshots.
     The same rule applies to scripts and CI: the suite is not a CI target.
+14. **Never work on `main`.** Every task, including a one-line fix or a
+    documentation change, starts on its own branch from `origin/main` with
+    `just start <type>/<slug>`; `main` only receives merged task branches. The
+    tracked `pre-commit` hook refuses direct commits on `main`.
+15. **Finish with a clean worktree.** A task is not finished until its work is
+    committed to the task branch, the quality gate passes and `just finish`
+    succeeds. Never leave uncommitted or untracked files behind after a task,
+    and never discard someone else's changes to get clean.
 
 ## Code style
 
@@ -290,10 +331,12 @@ documentation, not ground truth — verify against the game files where possible
   text to them.
 - A change is not done until `cargo nextest run --workspace` (+ `cargo test
   --workspace --doc`), `cargo clippy
-  --workspace --all-targets -- -D warnings` and `cargo fmt --all --check` pass.
+  --workspace --all-targets -- -D warnings` and `cargo fmt --all --check` pass,
+  and `just finish` reports a clean task branch.
 
 ## Commits
 
+- Commit on the task branch, never on `main`; the tracked hook refuses it.
 - Imperative, lower-case subject lines, one logical change per commit
   (`add focus editing`, `fix zero-length locstring parsing`).
 - The body explains *why* when the change is not obvious.
@@ -314,8 +357,9 @@ documentation, not ground truth — verify against the game files where possible
 | `docs/ARCHITECTURE.md` | crate layout, data flow, safety model |
 | `docs/LIVE-UI.md` | windowed UI suite: backends, process model, desktop/VM requirements and how to add scenarios |
 | `.dsh/skills` | task-specific skills for working on this repository |
+| `.githooks` | tracked git hooks; `just setup` enables them (`pre-commit` refuses direct commits on `main`) |
 | `.github/workflows/ci.yml` | GitHub Actions workflow (see `ci/README.md`) |
-| `justfile` | `just` shortcuts for the commands above (`just check`, `just live`, `just coverage`, `just publish`) |
+| `justfile` | `just` shortcuts for the commands above (`just setup`, `just start`, `just check`, `just finish`, `just live`, `just coverage`, `just publish`) |
 | `docs/COVERAGE.md` | current coverage, the gaps and the plan to close them |
 | `SaveEditorDoc.md` | the original project brief |
 
@@ -329,4 +373,6 @@ The repository ships skills that encode repeatable workflows:
   windowed Freya screens,
 - `jade-empire-wiki` – reading the community wiki through the Fandom API when the
   normal URLs are blocked,
+- `git-workflow` – starting, committing and finishing a task branch with a clean
+  worktree,
 - `release-check` – the checklist before a release or a push.
