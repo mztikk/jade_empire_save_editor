@@ -11,7 +11,7 @@ members = [
 exclude = ["fuzz"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Nils Feierabend <mztikk@outlook.de>"]
@@ -21,10 +21,10 @@ homepage = "https://github.com/mztikk/jade_empire_save_editor"
 readme = "README.md"
 
 [workspace.dependencies]
-jadeforge-core = { path = "crates/jadeforge-core", version = "0.1.0" }
-jadeforge-gff = { path = "crates/jadeforge-gff", version = "0.1.0" }
-jadeforge-session = { path = "crates/jadeforge-session", version = "0.1.0" }
-jadeforge-gamedata = { path = "crates/jadeforge-gamedata", version = "0.1.0" }
+jadeforge-core = { path = "crates/jadeforge-core", version = "0.2.0" }
+jadeforge-gff = { path = "crates/jadeforge-gff", version = "0.2.0" }
+jadeforge-session = { path = "crates/jadeforge-session", version = "0.2.0" }
+jadeforge-gamedata = { path = "crates/jadeforge-gamedata", version = "0.2.0" }
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
