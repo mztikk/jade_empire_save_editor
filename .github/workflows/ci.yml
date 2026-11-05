@@ -55,6 +55,9 @@ jobs:
       - name: Windows icon resource
         if: runner.os == 'Windows'
         run: cargo check --locked -p jadeforge-gui
+      - name: macOS GUI check
+        if: runner.os == 'macOS'
+        run: cargo check --locked -p jadeforge-gui
       - name: Doctests
         run: >-
           cargo test --locked --doc
@@ -174,8 +177,10 @@ jobs:
       fail-fast: false
       matrix:
         # Build on 22.04 (glibc 2.35) so the binaries also start on SteamOS /
-        # Steam Deck and older LTS distributions.
-        os: [ubuntu-22.04, windows-latest, macos-latest]
+        # Steam Deck and older LTS distributions. macOS stays out of the
+        # release matrix until the bundle can be signed and notarised; the
+        # published binaries are unsigned for now (see ci/README.md).
+        os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
       # Skia statically links ICU, while accesskit_windows imports the system
@@ -222,23 +227,8 @@ jobs:
             dist/jadeforge-*/jadeforge-generic-cpu dist/jadeforge-*/jadeforge-cli-generic-cpu; do
             ci/check-glibc.sh "$binary" 2.35
           done
-      - name: Sign macOS binaries
-        if: runner.os == 'macOS' && env.MACOS_CERTIFICATE != ''
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          MACOS_IDENTITY: ${{ secrets.MACOS_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-        run: ci/sign-macos.sh dist
-      - name: Sign Windows binaries
-        if: runner.os == 'Windows' && env.WINDOWS_CERTIFICATE != ''
-        shell: pwsh
-        env:
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: ./ci/sign-windows.ps1 -Dist dist
+      # No signing step on purpose: releases are unsigned until a cloud signing
+      # service replaces the retired PFX path (see ci/README.md).
       - name: Third-party notices, dependency inventory and SBOM
         if: runner.os == 'Linux'
         run: |

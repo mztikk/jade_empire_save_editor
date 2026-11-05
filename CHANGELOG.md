@@ -10,7 +10,7 @@ All notable changes are documented here. The format follows
 
 - Application icon: a steel hammer striking a jade gem on the dark tile. The
   icon is embedded as the window icon and committed as SVG/PNG/ICO/ICNS assets.
-  Windows executables embed the ICO, macOS releases stage a `JadeForge.app`
+  Windows executables embed the ICO, macOS builds stage a `JadeForge.app`
   bundle with the ICNS, and Linux releases include the desktop entry and
   hicolor icons for Wayland launchers.
 - Automated windowed UI tests (`just live`) that launch the real Freya window
@@ -81,7 +81,10 @@ All notable changes are documented here. The format follows
 - CI is active for pushes, pull requests and tags, with gamedata tests, clippy,
   docs, audit, an MSRV job and a synthetic headless UI suite.
 - Release artifacts include checksums, third-party notices, a CycloneDX SBOM,
-  build provenance, conditional macOS/Windows signing and the Skia licence.
+  build provenance and the Skia licence.
+- Release CI builds Linux and Windows only: macOS is out of the publish matrix
+  until its bundle can be signed and notarised, and the published binaries are
+  unsigned for now.
 - Split the GUI shell into `app/mod.rs`, `app/shell.rs`, `app/sidebar.rs` and
   `app/navigation.rs`; split the session row model and character form into
   `session/model.rs` and `session/form.rs`. Session state is private behind
