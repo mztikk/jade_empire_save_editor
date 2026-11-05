@@ -57,7 +57,7 @@ strict:
 # Needs cargo-llvm-cov and llvm-tools-preview (or LLVM_COV/LLVM_PROFDATA).
 coverage *args:
     mkdir -p coverage
-    cargo llvm-cov --workspace --all-targets --summary-only \
+    cargo llvm-cov nextest --workspace --summary-only \
         --lcov --output-path coverage/lcov.info {{ args }}
     cargo llvm-cov report --html --output-dir coverage
 

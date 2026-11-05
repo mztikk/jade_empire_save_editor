@@ -1,6 +1,6 @@
 # Code coverage
 
-Line and function coverage measured with `cargo llvm-cov` over the whole
+Line and function coverage measured with `cargo llvm-cov nextest` over the whole
 workspace, including the tests that need real savegames and game data.
 
 ```sh
@@ -22,14 +22,14 @@ just coverage
 
 | metric | covered |
 | --- | --- |
-| lines | **6 707 / 8 076 = 83.0 %** |
-| functions | **655 / 926 = 70.7 %** |
+| lines | **6 709 / 8 100 = 82.8 %** |
+| functions | **656 / 939 = 69.9 %** |
 
 | crate | lines | functions |
 | --- | --- | --- |
-| `jadeforge-gamedata` | 93.9 % | 91.2 % |
-| `jadeforge-gui` | 88.0 % | 66.1 % |
-| `jadeforge-core` | 78.7 % | 65.5 % |
+| `jadeforge-gamedata` | 93.6 % | 90.1 % |
+| `jadeforge-gui` | 87.8 % | 65.5 % |
+| `jadeforge-core` | 78.2 % | 63.2 % |
 | `jadeforge-session` | 77.2 % | 78.1 % |
 | `jadeforge-gff` | 80.2 % | 58.6 % |
 | `jadeforge-cli` | 68.3 % | 55.3 % |
@@ -60,7 +60,7 @@ Notes:
 
 | milestone | overall lines | core | session | gff | cli | gui | gamedata |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| now | 83.0 % | 78.7 % | 77.2 % | 80.2 % | 68.3 % | 88.0 % | 93.9 % |
+| now | 82.8 % | 78.2 % | 77.2 % | 80.2 % | 68.3 % | 87.8 % | 93.6 % |
 | phase 1 | **85 %** | 82 % | 82 % | 82 % | 78 % | 89 % | 92 % |
 | phase 2 | **88 %** | 86 % | 86 % | 86 % | 84 % | 90 % | 94 % |
 
