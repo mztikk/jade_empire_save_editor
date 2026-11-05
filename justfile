@@ -73,6 +73,11 @@ run:
 cli *args:
     cargo run -q -p jadeforge-cli -- {{ args }}
 
+# Install the GUI into ~/.cargo/bin, tuned for this machine's CPU. Not portable:
+# use `just publish` for binaries meant for other machines.
+install:
+    RUSTFLAGS="-C target-cpu=native" cargo install --path crates/jadeforge-gui --locked --profile dist --force
+
 # Build and stage the fat-LTO binaries for one target triple.
 #
 # x86-64 Linux and Windows build twice, into the same folder: `jadeforge` and

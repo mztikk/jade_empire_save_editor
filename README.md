@@ -274,6 +274,18 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
+To install the GUI into `~/.cargo/bin` (which must be on `PATH`), tuned for the
+current machine's CPU:
+
+```sh
+just install
+```
+
+This uses `-C target-cpu=native`, so the resulting binary can use every CPU
+feature the build host has; it is not portable to other machines. Use
+`just publish` / `just publish-linux` for distribution binaries. Skia is still
+the prebuilt library, so only the Rust code gets native code generation.
+
 Tests that need real savegames or the game data are skipped unless the files are
 available:
 

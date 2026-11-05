@@ -23,6 +23,9 @@ cargo test --workspace --doc                  # doctests
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 
+# Install the GUI locally, tuned for this machine's CPU (not portable)
+just install
+
 # Tests against real savegames (skipped when the variable is not set)
 JADEFORGE_SAVE_DIR="$HOME/games/Jade Empire/Save" \
 JADEFORGE_GAME_DIR="$HOME/games/Jade Empire" \
