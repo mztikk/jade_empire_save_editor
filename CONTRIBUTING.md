@@ -5,6 +5,21 @@ and the code style for this repository.
 
 ## Workflow
 
+Work happens on task branches, never on `main`. Install the tracked hooks once
+per clone and start every task from the latest `origin/main`:
+
+```sh
+just setup                  # once per clone; enables .githooks/pre-commit
+just start fix/save-load    # <type>/<slug>; fetches origin/main
+```
+
+Branch names are `<type>/<slug>` in lower-case kebab-case, where `type` is
+`feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore` or
+`release`. `just start` refuses a dirty worktree and the `pre-commit` hook
+refuses direct commits on `main`.
+
+Before handing a branch over, run the quality gate:
+
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
@@ -20,10 +35,19 @@ JADEFORGE_GAME_DIR="$HOME/games/Jade Empire" \
 JADEFORGE_CONFIG_DIR="$(mktemp -d)" cargo nextest run --workspace
 ```
 
-The UI suite builds a synthetic fixture when no installation is configured, so
-it must run rather than skip. New format knowledge belongs in
-[docs/FORMAT.md](docs/FORMAT.md); user-visible changes belong in `README.md` and
-`CHANGELOG.md`.
+Commit the work to the task branch and finish with a clean worktree:
+
+```sh
+git status --short          # must print nothing
+just finish                 # fails on main, a dirty worktree or no commits
+```
+
+`just finish` must report that the branch is clean and ahead of `main`. Push
+the branch and open a pull request when the change is ready; do not commit the
+merge on `main` yourself. The UI suite builds a synthetic fixture when no
+installation is configured, so it must run rather than skip. New format
+knowledge belongs in [docs/FORMAT.md](docs/FORMAT.md); user-visible changes
+belong in `README.md` and `CHANGELOG.md`.
 
 `just live` is not part of this workflow: it opens real windows and needs a real
 Wayland desktop. **Never run it without explicit permission** from the machine's
@@ -33,7 +57,9 @@ in the real window. See [AGENTS.md](AGENTS.md) rule 13 and
 
 ## Pull requests
 
-- One logical change per pull request; keep the diff reviewable.
+- Open the pull request from the task branch; `main` receives only merges.
+- One logical change per branch and pull request; keep the diff reviewable and
+  leave the worktree clean (`just finish`).
 - Add a regression test for every bug fix and a synthetic test for every new
   parser or editing path.
 - Do not commit savegames, game data, `target/`, `scratch/`, or generated

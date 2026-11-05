@@ -159,8 +159,9 @@ provenance (and signs/notarises when the platform secrets are configured), and
 uploads the staged folders as per-OS artifacts; pull requests skip that job.
 
 The `just` shortcuts are optional; the cargo commands above remain the
-canonical ones. `just check` runs the formatting, clippy and test gate and
-`just coverage` writes a line/function summary plus HTML and lcov reports to
+canonical ones. `just check` runs the formatting, clippy and test gate,
+`just setup`/`just start`/`just finish` manage task branches, and `just
+coverage` writes a line/function summary plus HTML and lcov reports to
 `coverage/`.
 
 ## Using the desktop application
@@ -284,6 +285,16 @@ result and writes it back.
 
 ## Development
 
+Work happens on task branches; `main` only receives merged branches. Install the
+tracked hooks once per clone and start every task from the latest `origin/main`:
+
+```sh
+just setup
+just start fix/save-load    # <type>/<slug>
+# ... work ...
+just finish                 # fails on main, a dirty tree or no commits
+```
+
 ```sh
 cargo install cargo-nextest --locked   # once; the test runner
 cargo nextest run --workspace          # unit, synthetic, real savegame and headless UI tests
@@ -292,6 +303,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 just live                              # windowed UI tests; ask first (rule 13)
 ```
+
+A branch is ready for review only when the worktree is clean and `just finish`
+passes; see [CONTRIBUTING.md](CONTRIBUTING.md) for the full checklist.
 
 To install only the GUI binary into `~/.cargo/bin` (which must be on `PATH`),
 tuned for the current machine's CPU:
