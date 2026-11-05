@@ -118,7 +118,9 @@ publish-linux:
     podman build -t jadeforge-build:22.04 -f ci/Containerfile .
     podman run --rm -v "$PWD":/src -w /src \
         -e CARGO_TARGET_DIR=/src/target/podman \
-        jadeforge-build:22.04 cargo build --locked --profile dist -p jadeforge -p jadeforge-cli
+        -v jadeforge-cargo-registry:/root/.cargo/registry \
+        jadeforge-build:22.04 cargo build --locked --profile dist \
+        -p jadeforge-gui -p jadeforge-cli
     version=$(awk -F'"' '/^version = / { print $2; exit }' Cargo.toml)
     host=$(rustc -vV | sed -n 's/^host: //p')
     out="dist/jadeforge-$version-$host"
