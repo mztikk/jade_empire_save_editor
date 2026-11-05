@@ -100,6 +100,7 @@ publish-target target:
     mkdir -p "$out"; \
     rm -f "$out/jadeforge{{ exe }}" "$out/jadeforge-generic-cpu{{ exe }}" \
         "$out/jadeforge-cli{{ exe }}" "$out/jadeforge-cli-generic-cpu{{ exe }}" \
+        "$out/jadeforge-baseline{{ exe }}" "$out/jadeforge-cli-baseline{{ exe }}" \
         "$out/jadeforge-gui{{ exe }}"; \
     cp "target/{{ target }}/dist/jadeforge{{ exe }}" "$out/"; \
     cp "target/{{ target }}/dist/jadeforge-cli{{ exe }}" "$out/"; \
@@ -152,6 +153,7 @@ publish-linux:
     mkdir -p "$out"; \
     rm -f "$out/jadeforge" "$out/jadeforge-generic-cpu" \
         "$out/jadeforge-cli" "$out/jadeforge-cli-generic-cpu" \
+        "$out/jadeforge-baseline" "$out/jadeforge-cli-baseline" \
         "$out/jadeforge-gui"; \
     cp "target/podman/dist/jadeforge" "$out/"; \
     cp "target/podman/dist/jadeforge-cli" "$out/"; \
