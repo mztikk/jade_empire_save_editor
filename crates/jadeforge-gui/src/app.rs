@@ -141,8 +141,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 });
                 if let Ok(entries) = rx.await {
                     session.borrow_mut().apply_entries(entries);
-                    *revision.write() += 1;
+                } else {
+                    session.borrow_mut().report_scan_failure();
                 }
+                *revision.write() += 1;
             }
         }
     });

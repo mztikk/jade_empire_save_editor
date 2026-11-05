@@ -22,16 +22,16 @@ just coverage
 
 | metric | covered |
 | --- | --- |
-| lines | **6 709 / 8 100 = 82.8 %** |
-| functions | **656 / 939 = 69.9 %** |
+| lines | **6 977 / 8 433 = 82.7 %** |
+| functions | **689 / 987 = 69.8 %** |
 
 | crate | lines | functions |
 | --- | --- | --- |
 | `jadeforge-gamedata` | 93.6 % | 90.1 % |
-| `jadeforge-gui` | 87.8 % | 65.5 % |
-| `jadeforge-core` | 78.2 % | 63.2 % |
-| `jadeforge-session` | 77.2 % | 78.1 % |
-| `jadeforge-gff` | 80.2 % | 58.6 % |
+| `jadeforge-gui` | 87.8 % | 66.1 % |
+| `jadeforge-core` | 77.6 % | 62.5 % |
+| `jadeforge-session` | 78.3 % | 78.8 % |
+| `jadeforge-gff` | 80.0 % | 59.2 % |
 | `jadeforge-cli` | 68.3 % | 55.3 % |
 
 Notes:
@@ -51,16 +51,28 @@ Notes:
 | `gamedata/src/rim.rs` | 95.0 % | done |
 | `cli/src/main.rs` | 68.3 % | `add_item`, `verify` failure and argument errors |
 | `core/src/henchmen.rs` | 69.7 % | list/field error paths |
-| `core/src/save.rs` | 70.7 % | verification and write-failure paths |
+| `core/src/save.rs` | 69.8 % | metadata, verification and write-failure paths |
 | `gff/src/value.rs` | 72.8 % | uncommon decode branches |
 | `gamedata/src/talktable.rs` | 92.1 % | done |
-| `session/src/session.rs` | 75.3 % | failure paths (config, form, save/revert) |
+| `session/src/session.rs` | 76.7 % | failure paths (config, form, save/revert) |
+
+## Recently completed
+
+- **Startup scan is asynchronous.** `Session::empty` renders the shell without
+  parsing savegames; `use_future` runs `Session::scan_entries` on a worker and
+  applies the result. A failed scan is reported instead of hanging on
+  "Scanning for savegames…".
+- **Metadata fast path.** `SaveGame::metadata` walks the container and
+  `Gff::selected_fields` decodes only `PlayerCreature.FirstName`,
+  `PlayerCreature.Level` and `Campaign.TimePlayed`. On the 89-savegame corpus
+  this is 140 ms instead of 1.87 s for the full character parse, and
+  `metadata_matches_the_full_character_parse` checks every save.
 
 ## Target
 
 | milestone | overall lines | core | session | gff | cli | gui | gamedata |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| now | 82.8 % | 78.2 % | 77.2 % | 80.2 % | 68.3 % | 87.8 % | 93.6 % |
+| now | 82.7 % | 77.6 % | 78.3 % | 80.0 % | 68.3 % | 87.8 % | 93.6 % |
 | phase 1 | **85 %** | 82 % | 82 % | 82 % | 78 % | 89 % | 92 % |
 | phase 2 | **88 %** | 86 % | 86 % | 86 % | 84 % | 90 % | 94 % |
 

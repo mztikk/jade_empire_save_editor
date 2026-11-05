@@ -35,6 +35,28 @@ fn put_u32(bytes: &mut [u8], offset: usize, value: u32) {
 }
 
 #[test]
+fn selected_fields_decode_only_the_requested_paths() {
+    let mut gff = empty_block();
+    let child = gff.push_struct(0);
+    gff.add_field(child, "Number", Value::DWord(7))
+        .expect("child field");
+    gff.add_field(0, "Child", Value::Struct(child))
+        .expect("struct field");
+    gff.add_field(0, "Other", Value::Byte(1))
+        .expect("other field");
+    let bytes = gff.to_bytes().expect("serialize");
+    let selected = Gff::selected_fields(
+        "selected",
+        &bytes,
+        &["Child.Number", "Child.Missing", "Other"],
+    )
+    .expect("selected fields");
+    assert_eq!(selected[0], Some(Value::DWord(7)));
+    assert_eq!(selected[1], None);
+    assert_eq!(selected[2], Some(Value::Byte(1)));
+}
+
+#[test]
 fn every_field_type_round_trips() {
     let mut gff = empty_block();
     let child = gff.push_struct(0);
