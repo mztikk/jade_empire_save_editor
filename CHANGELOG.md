@@ -49,6 +49,8 @@ All notable changes are documented here. The format follows
 
 ### Changed
 
+- `just install-desktop` now depends on `just install`, so a Linux install is
+  one command for the binary, launcher entry and hicolor icons.
 - Workspace MSRV is 1.88; the dependency graph was updated to remove the
   vulnerable `quick-xml` 0.38 path.
 - CI is active for pushes, pull requests and tags, with gamedata tests, clippy,

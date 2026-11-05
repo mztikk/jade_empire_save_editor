@@ -37,8 +37,9 @@ tools.
 - **Wayland:** the compositor ignores client window icons. It matches the
   window's app id (`jadeforge`) against `jadeforge.desktop` and loads the icon
   from the hicolor theme, which is why the desktop entry and the size-named PNGs
-  live here. `just install-desktop` installs both for a source install; release
-  folders carry the same files under `share/`.
+  live here. `just install-desktop` installs the GUI binary, the entry and the
+  icons for a source install; release folders carry the same files under
+  `share/`.
 - **macOS:** the window icon API is unsupported on macOS. `ci/macos-bundle.sh`
   wraps the staged binary in `JadeForge.app` and puts `jadeforge.icns` in
   `Contents/Resources`; the Dock and Finder read it from the bundle. The bare
