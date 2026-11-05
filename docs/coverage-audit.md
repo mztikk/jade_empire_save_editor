@@ -1,8 +1,8 @@
 # Coverage audit — post-P1
 
 > **Historical.** The P0/P1/P2 review remediation superseded these numbers.
-> [docs/COVERAGE.md](COVERAGE.md) records the current baseline (285 tests,
-> 89.1 % lines with the full corpus and 89.2 % without game data).
+> [docs/COVERAGE.md](COVERAGE.md) records the current baseline (286 tests,
+> 89.1 % lines with the full corpus and 89.3 % without game data).
 
 Measured on 2026-11-05 on the working tree (`c121cb8` plus the uncommitted GUI
 changes), Rust 1.99.1, `cargo-llvm-cov 0.9.1`, `cargo-nextest 0.9.151`.

@@ -35,6 +35,9 @@ All notable changes are documented here. The format follows
   aspect-preserving save preview, correct singular/plural count labels, and
   headless geometry tests for row pitch, control bounds, preview size and every
   tab at 900/1600 px.
+- Stability: stable keys on dynamic rows, tab content and preview subtrees, plus
+  a repeated tab-switch regression test, to avoid the Freya 0.4 diff panic seen
+  when switching Gems -> Inventory on a large save.
 
 ### Changed
 

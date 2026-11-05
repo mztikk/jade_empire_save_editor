@@ -116,6 +116,7 @@ pub(super) fn sidebar(
                     .into_element(),
             )
             .fill_width()
+            .key(index)
             .into_element(),
         );
     }
@@ -271,6 +272,7 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                             .height(Size::px(12.)),
                     ),
             )
+            .key(key.label())
             .into_element(),
         );
     }

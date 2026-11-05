@@ -380,6 +380,12 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         (_, None) => shell::empty_state(entries.len()),
     };
 
+    let content = rect()
+        .width(Size::fill())
+        .key(active_tab.index())
+        .child(content)
+        .into_element();
+
     let header = shell::header(
         &ctx,
         directory_state,

@@ -63,6 +63,7 @@ fn henchman_row(ctx: &Ctx, henchman: &HenchRow) -> Element {
     rect()
         .horizontal()
         .width(Size::fill())
+        .key(index)
         .spacing(10.)
         .content(Content::Flex)
         .padding(Gaps::new_symmetric(6., 10.))
