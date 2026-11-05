@@ -120,10 +120,10 @@ Linux and Windows x86-64 releases contain two GUI binaries and two CLI binaries:
 | binary | ISA | CPUs |
 | --- | --- | --- |
 | `jadeforge`, `jadeforge-cli` | **x86-64-v3** (AVX2, FMA, BMI2) | Haswell (2013+), Steam Deck Zen 2 |
-| `jadeforge-baseline`, `jadeforge-cli-baseline` | baseline | every x86-64 CPU |
+| `jadeforge-generic-cpu`, `jadeforge-cli-generic-cpu` | baseline | every x86-64 CPU |
 
 The fallback is built and staged automatically, so users on pre-2013 CPUs run
-the `-baseline` binary and everyone else gets the faster default. macOS builds
+the `jadeforge-generic-cpu` binary and everyone else gets the faster default. macOS builds
 once in baseline mode for both architectures: the Intel binary must also run
 under Rosetta, which has no AVX2. Run it on
 each platform you want to ship:
