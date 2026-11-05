@@ -315,6 +315,214 @@ impl Gff {
         })
     }
 
+    /// Decodes only the fields named by `paths`, without materialising the
+    /// rest of the tree.
+    ///
+    /// This is used for the savegame list, which needs a handful of values from
+    /// a block that may contain tens of thousands of fields. The header and
+    /// tables are validated exactly like [`Gff::parse`], but values for fields
+    /// that are not requested are never decoded. A missing path yields `None`;
+    /// malformed offsets or a bad target type still produce an error.
+    #[allow(clippy::too_many_lines)] // the parser mirrors the on-disk layout
+    pub fn selected_fields(
+        block: &str,
+        bytes: &[u8],
+        paths: &[&str],
+    ) -> Result<Vec<Option<Value>>> {
+        let err = |message: String| Error::Malformed {
+            block: block.to_owned(),
+            message,
+        };
+        if bytes.len() < HEADER_SIZE {
+            return Err(err(format!(
+                "block is {} bytes, smaller than the {HEADER_SIZE} byte header",
+                bytes.len()
+            )));
+        }
+        if bytes[..4] != MAGIC {
+            return Err(err(format!("bad magic {:?}", &bytes[..4])));
+        }
+        let mut version = [0_u8; 4];
+        version.copy_from_slice(&bytes[4..8]);
+        if &version[..2] != b"V3" {
+            return Err(err(format!(
+                "unsupported version {:?}",
+                String::from_utf8_lossy(&version)
+            )));
+        }
+        let word = |index: usize| -> Result<u32> {
+            let offset = 8 + index * 4;
+            bytes
+                .get(offset..offset + 4)
+                .and_then(|slice| slice.try_into().ok())
+                .map(u32::from_le_bytes)
+                .ok_or_else(|| err(format!("header word {index} is truncated")))
+        };
+        let struct_offset = word(0)? as usize;
+        let struct_count = word(1)? as usize;
+        let field_offset = word(2)? as usize;
+        let field_count = word(3)? as usize;
+        let label_offset = word(4)? as usize;
+        let label_count = word(5)? as usize;
+        let field_data_offset = word(6)? as usize;
+        let field_data_size = word(7)? as usize;
+        let field_indices_offset = word(8)? as usize;
+        let field_indices_size = word(9)? as usize;
+        let list_indices_offset = word(10)? as usize;
+        let list_indices_size = word(11)? as usize;
+        let end = |offset: usize, size: usize, what: &str| -> Result<()> {
+            let end = offset
+                .checked_add(size)
+                .ok_or_else(|| err(format!("{what} overflows the address space")))?;
+            if end > bytes.len() {
+                return Err(err(format!("{what} ends at {end}, beyond the block")));
+            }
+            Ok(())
+        };
+        end(
+            struct_offset,
+            struct_count * STRUCT_ENTRY_SIZE,
+            "struct table",
+        )?;
+        end(field_offset, field_count * FIELD_ENTRY_SIZE, "field table")?;
+        end(label_offset, label_count * LABEL_SIZE, "label table")?;
+        end(field_data_offset, field_data_size, "field data")?;
+        end(field_indices_offset, field_indices_size, "field indices")?;
+        end(list_indices_offset, list_indices_size, "list indices")?;
+        if list_indices_offset + list_indices_size != bytes.len() {
+            return Err(err(format!(
+                "block size is {} but the sections end at {}",
+                bytes.len(),
+                list_indices_offset + list_indices_size
+            )));
+        }
+        let mut labels = Vec::with_capacity(label_count);
+        for index in 0..label_count {
+            let start = label_offset + index * LABEL_SIZE;
+            let slot = &bytes[start..start + LABEL_SIZE];
+            let length = slot
+                .iter()
+                .position(|byte| *byte == 0)
+                .unwrap_or(LABEL_SIZE);
+            labels.push(
+                std::str::from_utf8(&slot[..length])
+                    .map_err(|_| err(format!("label {index} is not valid UTF-8")))?
+                    .to_owned(),
+            );
+        }
+        let field_data = &bytes[field_data_offset..field_data_offset + field_data_size];
+        let field_indices = &bytes[field_indices_offset..field_indices_offset + field_indices_size];
+        let list_indices = &bytes[list_indices_offset..list_indices_offset + list_indices_size];
+        let read_u32 = |buffer: &[u8], offset: usize, what: &str| -> Result<u32> {
+            buffer
+                .get(offset..offset + 4)
+                .and_then(|slice| slice.try_into().ok())
+                .map(u32::from_le_bytes)
+                .ok_or_else(|| err(format!("{what} at offset {offset} is out of bounds")))
+        };
+        let fields: Vec<(u32, u32, u32)> = (0..field_count)
+            .map(|index| {
+                let start = field_offset + index * FIELD_ENTRY_SIZE;
+                let type_id = read_u32(bytes, start, "field type")?;
+                let label = read_u32(bytes, start + 4, "field label")?;
+                if label as usize >= label_count {
+                    return Err(err(format!("field {index} references label {label}")));
+                }
+                Ok((type_id, label, read_u32(bytes, start + 8, "field data")?))
+            })
+            .collect::<Result<_>>()?;
+        let mut structures = Vec::with_capacity(struct_count);
+        for index in 0..struct_count {
+            let start = struct_offset + index * STRUCT_ENTRY_SIZE;
+            let type_id = read_u32(bytes, start, "struct type")?;
+            let data = read_u32(bytes, start + 4, "struct field reference")?;
+            let count = read_u32(bytes, start + 8, "struct field count")?;
+            structures.push((type_id, data, count));
+        }
+        let mut field_lists: Vec<Vec<usize>> = Vec::with_capacity(struct_count);
+        for (index, (_, data, count)) in structures.iter().enumerate() {
+            let mut indices = Vec::new();
+            match count {
+                0 => {}
+                1 => indices.push(*data as usize),
+                _ => {
+                    let offset = *data as usize;
+                    if offset % 4 != 0 {
+                        return Err(err(format!("struct {index} has an unaligned field offset")));
+                    }
+                    for element in 0..*count as usize {
+                        indices.push(read_u32(
+                            field_indices,
+                            offset + element * 4,
+                            "struct field index",
+                        )? as usize);
+                    }
+                }
+            }
+            for field in &indices {
+                if *field >= fields.len() {
+                    return Err(err(format!(
+                        "struct {index} references field {field}, but only {} fields exist",
+                        fields.len()
+                    )));
+                }
+            }
+            field_lists.push(indices);
+        }
+        let root = structures
+            .iter()
+            .position(|(type_id, _, _)| *type_id == u32::MAX)
+            .unwrap_or(0);
+        let mut selected = Vec::with_capacity(paths.len());
+        for path in paths {
+            let mut current = root;
+            let mut value = None;
+            let segments: Vec<&str> = path.split('.').filter(|part| !part.is_empty()).collect();
+            if segments.is_empty() {
+                selected.push(None);
+                continue;
+            }
+            for (position, segment) in segments.iter().enumerate() {
+                let Some(field_index) = field_lists.get(current).and_then(|list| {
+                    list.iter()
+                        .copied()
+                        .find(|index| labels[fields[*index].1 as usize] == *segment)
+                }) else {
+                    break;
+                };
+                let (type_id, _, data) = fields[field_index];
+                if position + 1 == segments.len() {
+                    let decoded = if type_id == TYPE_LIST {
+                        let count = read_u32(list_indices, data as usize, "list count")? as usize;
+                        let mut elements = Vec::with_capacity(count.min(1 << 16));
+                        for element in 0..count {
+                            elements.push(read_u32(
+                                list_indices,
+                                data as usize + 4 + element * 4,
+                                "list element",
+                            )? as usize);
+                        }
+                        Value::List(elements)
+                    } else if matches!(type_id, 6 | 7 | 9 | 10 | 11 | 12 | 13 | 16 | 17 | 18) {
+                        Value::decode_field_data(type_id, data, field_data, block)
+                            .map_err(|_| err(format!("field {path} is malformed")))?
+                    } else {
+                        Value::decode_inline(type_id, data)
+                            .map_err(|_| err(format!("field {path} has unknown type {type_id}")))?
+                    };
+                    value = Some(decoded);
+                } else {
+                    if type_id != TYPE_STRUCT || data as usize >= field_lists.len() {
+                        break;
+                    }
+                    current = data as usize;
+                }
+            }
+            selected.push(value);
+        }
+        Ok(selected)
+    }
+
     /// Returns the name of a label, or `None` when the index is out of range.
     #[must_use]
     pub fn label_name(&self, index: u32) -> Option<&str> {

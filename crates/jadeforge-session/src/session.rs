@@ -741,44 +741,18 @@ impl Session {
 
     /// Scans the directory for savegames and loads the game data.
     pub fn scan(&mut self) {
-        self.entries.clear();
-        let directory = self.directory.clone();
-        if directory.join("save.sac").is_file() {
-            self.entries.push(describe(&directory));
-        } else if let Ok(read) = std::fs::read_dir(&directory) {
-            let mut candidates: Vec<PathBuf> = read
-                .flatten()
-                .map(|entry| entry.path())
-                .filter(|path| path.join("save.sac").is_file())
-                .collect();
-            candidates.sort();
-            self.entries = candidates.iter().map(|path| describe(path)).collect();
-        }
-
         self.load_game_data();
+        let entries = Self::scan_entries(&self.directory);
+        self.apply_entries(entries);
+    }
 
-        let total = self.entries.len();
-        let broken = self
-            .entries
-            .iter()
-            .filter(|entry| entry.error.is_some())
-            .count();
-        let plural = if total == 1 { "" } else { "s" };
-        let directory = self.directory.display();
-        if total == 0 {
-            self.message = Message::info(format!("No savegames found in {directory}."));
-        } else if broken == 0 {
-            self.message =
-                Message::success(format!("Found {total} savegame{plural} in {directory}."));
-        } else if broken == total {
-            self.message = Message::error(format!(
-                "Found {total} savegame{plural} in {directory}, but none of them can be read."
-            ));
-        } else {
-            self.message = Message::error(format!(
-                "Found {total} savegame{plural} in {directory}, {broken} of them cannot be read."
-            ));
-        }
+    /// Reports that the background scan could not be completed.
+    pub fn report_scan_failure(&mut self) {
+        self.entries.clear();
+        self.message = Message::error(format!(
+            "Could not scan {}: the savegame reader stopped unexpectedly.",
+            self.directory.display()
+        ));
     }
 
     /// Remembers the folder for the next start (best effort).
@@ -1600,24 +1574,14 @@ fn describe(folder: &Path) -> SaveEntry {
         |name| name.to_string_lossy().into(),
     );
     let path = folder.join("save.sac");
-    match SaveGame::open(&path) {
-        Ok(save) => match save.character() {
-            Ok(character) => SaveEntry {
-                path: folder.to_path_buf(),
-                label,
-                character: Some(character.name),
-                level: Some(character.level),
-                time_played: character.time_played,
-                error: None,
-            },
-            Err(error) => SaveEntry {
-                path: folder.to_path_buf(),
-                label,
-                character: None,
-                level: None,
-                time_played: 0,
-                error: Some(error.to_string()),
-            },
+    match SaveGame::metadata(&path) {
+        Ok(metadata) => SaveEntry {
+            path: folder.to_path_buf(),
+            label,
+            character: Some(metadata.name),
+            level: Some(metadata.level),
+            time_played: metadata.time_played,
+            error: None,
         },
         Err(error) => SaveEntry {
             path: folder.to_path_buf(),
@@ -1823,5 +1787,20 @@ mod tests {
         assert_eq!(format::duration(90_000_000), "1m");
         assert_eq!(format::duration(3_600_000_000), "1h 00m");
         assert_eq!(format::duration(58_920_000_000), "16h 22m");
+    }
+    #[test]
+    fn background_scan_results_can_be_applied() {
+        let directory =
+            std::env::temp_dir().join(format!("jadeforge-empty-session-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).expect("temp dir");
+        let mut session = Session::empty(&directory);
+        assert_eq!(session.entries.len(), 0);
+        let entries = Session::scan_entries(&directory);
+        assert_eq!(entries.len(), 0);
+        session.apply_entries(entries);
+        assert!(session.message.text.contains("No savegames found"));
+        session.report_scan_failure();
+        assert!(session.message.text.contains("Could not scan"));
+        let _ = std::fs::remove_dir_all(directory);
     }
 }

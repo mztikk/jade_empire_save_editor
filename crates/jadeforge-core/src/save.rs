@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::{Error, Result};
-use crate::gff::Gff;
+use crate::gff::{Gff, Value};
 
 /// Name of the block that stores the global game state and the player creature.
 pub const GLOBAL_BLOCK: &str = "save.sav";
@@ -24,6 +24,17 @@ pub const GLOBAL_BLOCK: &str = "save.sav";
 pub const POLYPLAYER_BLOCK: &str = "polyplayer.sav";
 /// Largest accepted block name, including the trailing NUL.
 const MAX_NAME_LEN: usize = 260;
+
+/// Values needed to describe a savegame in a list, without building the tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SaveMetadata {
+    /// Character name shown in the list.
+    pub name: String,
+    /// Character level (defaults to 1 like [`crate::Character::level`]).
+    pub level: u8,
+    /// Play time in seconds.
+    pub time_played: u64,
+}
 
 /// A single block of a savegame.
 #[derive(Debug, Clone)]
@@ -153,6 +164,103 @@ impl SaveGame {
             path,
             bytes,
             blocks,
+        })
+    }
+
+    /// Reads only the values needed for the savegame list.
+    ///
+    /// Unlike [`SaveGame::open`] this never parses the full GFF trees: it walks
+    /// the container headers and asks the GFF reader for three selected fields.
+    pub fn metadata(path: impl AsRef<Path>) -> Result<SaveMetadata> {
+        let path = path.as_ref();
+        let bytes = fs::read(path).map_err(|error| Error::io(path, error))?;
+        let mut reader = Reader {
+            bytes: &bytes,
+            position: 0,
+        };
+        let count = reader.u32("block count")? as usize;
+        if count == 0 {
+            return Err(Error::NotASavegame(
+                "the container does not contain any block".to_owned(),
+            ));
+        }
+        if count > 4096 {
+            return Err(Error::Corrupt(format!(
+                "implausible block count {count}; this is probably not a Jade Empire savegame"
+            )));
+        }
+        let mut global: Option<&[u8]> = None;
+        let mut polyplayer: Option<&[u8]> = None;
+        for index in 0..count {
+            let name_length = reader.u32("block name length")? as usize;
+            if name_length == 0 || name_length > MAX_NAME_LEN {
+                return Err(Error::Corrupt(format!(
+                    "block {index} has an invalid name length of {name_length}"
+                )));
+            }
+            let raw_name = reader.bytes(name_length, "block name")?;
+            let name = std::str::from_utf8(&raw_name[..raw_name.len().saturating_sub(1)])
+                .map_err(|_| Error::Corrupt(format!("block {index} has a non UTF-8 name")))?;
+            let size = reader.u32("block size")? as usize;
+            let payload = reader.bytes(size, "block payload")?;
+            if name == GLOBAL_BLOCK {
+                global = Some(payload);
+            } else if name == POLYPLAYER_BLOCK {
+                polyplayer = Some(payload);
+            }
+        }
+        if reader.position != bytes.len() {
+            return Err(Error::Corrupt(format!(
+                "{} trailing bytes after the last block",
+                bytes.len() - reader.position
+            )));
+        }
+        let mut name = None;
+        let mut level = 1_u8;
+        let mut time_played = 0_u64;
+        if let Some(block) = global {
+            let selected = Gff::selected_fields(
+                GLOBAL_BLOCK,
+                block,
+                &[
+                    "PlayerCreature.FirstName",
+                    "PlayerCreature.Level",
+                    "Campaign.TimePlayed",
+                ],
+            )?;
+            name = selected[0]
+                .as_ref()
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            level = selected[1]
+                .as_ref()
+                .and_then(Value::as_u64)
+                .and_then(|value| u8::try_from(value).ok())
+                .unwrap_or(1);
+            time_played = selected[2].as_ref().and_then(Value::as_u64).unwrap_or(0);
+        }
+        if name.is_none() {
+            if let Some(block) = polyplayer {
+                let selected =
+                    Gff::selected_fields(POLYPLAYER_BLOCK, block, &["FirstName", "Level"])?;
+                name = selected[0]
+                    .as_ref()
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+                level = selected[1]
+                    .as_ref()
+                    .and_then(Value::as_u64)
+                    .and_then(|value| u8::try_from(value).ok())
+                    .unwrap_or(1);
+            }
+        }
+        let name = name.ok_or_else(|| {
+            Error::Corrupt("the savegame does not contain a player character".to_owned())
+        })?;
+        Ok(SaveMetadata {
+            name,
+            level,
+            time_played,
         })
     }
 
