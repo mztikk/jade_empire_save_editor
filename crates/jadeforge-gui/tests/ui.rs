@@ -118,6 +118,16 @@ fn click_node(test: &mut TestingRunner, node: &freya_testing::TestingNode) {
     test.sync_and_update();
 }
 
+fn wait_for_text(test: &mut TestingRunner, needle: &str) {
+    for _ in 0..500 {
+        if find_node_with_text(test, needle).is_some() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        test.sync_and_update();
+    }
+}
+
 fn click_text(test: &mut TestingRunner, needle: &str) -> bool {
     match find_node_with_text(test, needle) {
         Some(node) => {
@@ -139,6 +149,8 @@ fn launch_sized(save_dir: PathBuf, height: f64) -> TestingRunner {
         1.0,
     );
     test.sync_and_update();
+    // The scan runs after the first frame.
+    wait_for_text(&mut test, "Level ");
     // Open the single savegame of the fixture.
     click_text(&mut test, "Level ");
     test
@@ -841,6 +853,7 @@ fn broken_savegames_are_reported() {
         1.0,
     );
     test.sync_and_update();
+    wait_for_text(&mut test, "cannot be read");
 
     let scan = find_label_text(&test, "cannot be read").expect("scan warning");
     assert!(scan.contains("1 of them"), "{scan}");
@@ -866,6 +879,7 @@ fn empty_folder_shows_a_hint() {
         1.0,
     );
     test.sync_and_update();
+    wait_for_text(&mut test, "No savegames found");
     let message = find_label_text(&test, "No savegames found").expect("hint");
     assert!(message.contains("No savegames found"));
     let _ = std::fs::remove_dir_all(root);

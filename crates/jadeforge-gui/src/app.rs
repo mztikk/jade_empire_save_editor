@@ -124,8 +124,22 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     use_init_theme(theme::theme);
 
     let session: Rc<RefCell<Session>> =
-        use_hook(move || Rc::new(RefCell::new(Session::with_directory(directory))));
+        use_hook(move || Rc::new(RefCell::new(Session::empty(directory))));
     let revision = use_state(|| 0_u32);
+    // The directory listing loads after the first frame; scanning 89 savegames
+    // synchronously here used to delay startup by ~340 ms.
+    let scanned = use_hook(|| Rc::new(std::cell::Cell::new(false)));
+    {
+        let session = session.clone();
+        use_side_effect(move || {
+            let mut revision = revision;
+            if scanned.replace(true) {
+                return;
+            }
+            session.borrow_mut().scan();
+            *revision.write() += 1;
+        });
+    }
     let form = Form::new();
     let directory_state = use_state(|| session.borrow().directory.display().to_string());
     let tab = use_state(|| Tab::Overview);
