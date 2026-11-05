@@ -154,8 +154,9 @@ the CPU-appropriate binary as `jadeforge` in a directory on `PATH`, then copy
 `share/` into `~/.local/share` so Wayland launchers resolve the icon.
 
 The [CI workflow](.github/workflows/ci.yml) runs `just publish` on Linux and
-Windows, stages third-party notices, an SBOM and build provenance, and uploads
-the staged folders as per-OS artifacts; pull requests skip that job. On a `v*`
+Windows, stages third-party notices, an SBOM and (for public repositories)
+build provenance, and uploads the staged folders as per-OS artifacts; pull
+requests skip that job. On a `v*`
 tag the `release` job zips each platform folder, writes one `SHA256SUMS`, and
 creates the GitHub release from the matching changelog section. macOS is not in
 the release matrix yet, because the bundle has to be signed and notarised

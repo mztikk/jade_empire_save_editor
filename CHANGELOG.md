@@ -83,7 +83,7 @@ All notable changes are documented here. The format follows
 - CI is active for pushes, pull requests and tags, with gamedata tests, clippy,
   docs, audit, an MSRV job and a synthetic headless UI suite.
 - Release artifacts include checksums, third-party notices, a CycloneDX SBOM,
-  build provenance and the Skia licence.
+  build provenance on public repositories and the Skia licence.
 - Release CI builds Linux and Windows only: macOS is out of the publish matrix
   until its bundle can be signed and notarised, and the published binaries are
   unsigned for now.
