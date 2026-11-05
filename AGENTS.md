@@ -36,7 +36,9 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 
 The same commands are available through `just` (see the `justfile`): `just
 check` runs formatting, clippy and the tests, `just snapshot …` renders the UI,
-and `just publish` builds the fat-LTO distribution binaries. `just coverage` runs
+and `just publish` builds the fat-LTO distribution binaries.
+`just publish-linux` builds the SteamOS-compatible Linux binaries (glibc 2.35) in
+a rootless Podman container. `just coverage` runs
 `cargo llvm-cov nextest` and writes `coverage/lcov.info` and `coverage/html` (see
 [docs/COVERAGE.md](docs/COVERAGE.md) for the current numbers and the plan). The
 cargo commands above remain canonical.

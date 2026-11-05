@@ -110,6 +110,26 @@ publish: (publish-target "aarch64-apple-darwin") (publish-target "x86_64-apple-d
 publish: (publish-target host)
     @echo "publish: skipped macOS: it needs the Apple SDK on a macOS host"
 
+# Build SteamOS/Steam Deck-compatible Linux binaries with rootless podman.
+publish-linux:
+    @command -v podman >/dev/null 2>&1 || { \
+        echo "publish-linux needs rootless podman (https://podman.io)"; exit 1; \
+    }
+    podman build -t jadeforge-build:22.04 -f ci/Containerfile .
+    podman run --rm -v "$PWD":/src -w /src \
+        -e CARGO_TARGET_DIR=/src/target/podman \
+        jadeforge-build:22.04 cargo build --locked --profile dist -p jadeforge -p jadeforge-cli
+    version=$(awk -F'"' '/^version = / { print $2; exit }' Cargo.toml)
+    host=$(rustc -vV | sed -n 's/^host: //p')
+    out="dist/jadeforge-$version-$host"
+    mkdir -p "$out"
+    rm -f "$out/jadeforge" "$out/jadeforge-gui" "$out/jadeforge-cli"
+    cp "target/podman/$host/dist/jadeforge" "$out/"
+    cp "target/podman/$host/dist/jadeforge-cli" "$out/"
+    cp LICENSE README.md "$out/"
+    ci/check-glibc.sh "$out/jadeforge" 2.35
+    @echo "publish-linux: staged $out/"
+
 # Remove all build artifacts: the cargo target directory and the staged
 # distribution binaries in dist/.
 clean:

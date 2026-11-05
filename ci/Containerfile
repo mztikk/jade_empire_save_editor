@@ -1,0 +1,36 @@
+# Ubuntu 22.04 (glibc 2.35) builder for the Linux release binaries.
+#
+# The GUI must be linked against an older glibc than the one shipped by current
+# CI/dev hosts, otherwise it refuses to start on SteamOS/Steam Deck.
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    CARGO_TERM_COLOR=always
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        cmake \
+        curl \
+        git \
+        ninja-build \
+        pkg-config \
+        python3 \
+        libdbus-1-dev \
+        libegl1-mesa-dev \
+        libfontconfig1-dev \
+        libgl1-mesa-dev \
+        libx11-dev \
+        libxcursor-dev \
+        libxi-dev \
+        libxkbcommon-dev \
+        libxrandr-dev \
+        libwayland-dev \
+        wayland-protocols \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --profile minimal
+ENV PATH=/root/.cargo/bin:$PATH
+
+WORKDIR /src
