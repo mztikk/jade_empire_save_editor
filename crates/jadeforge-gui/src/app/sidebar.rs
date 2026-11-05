@@ -219,12 +219,7 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
     for key in [SaveSort::Name, SaveSort::Level, SaveSort::Played] {
         let (current, descending) = active;
         let is_active = key == current;
-        let arrow = if descending { " ↓" } else { " ↑" };
-        let text = if is_active {
-            format!("{}{arrow}", key.label())
-        } else {
-            key.label().to_owned()
-        };
+        let arrow = if descending { "↓" } else { "↑" };
         let action = Action::new({
             let ctx = ctx.clone();
             move || {
@@ -258,18 +253,26 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                 action,
                 rect()
                     .horizontal()
-                    .child(label().text(text).font_size(10.).color(if is_active {
-                        theme::ACCENT
-                    } else {
-                        theme::DIM
-                    }))
-                    // Reserve the arrow column on inactive buttons;
-                    // otherwise the buttons after the active one jump when
-                    // the sort key changes.
+                    .child(
+                        label()
+                            .text(key.label())
+                            .font_size(10.)
+                            .color(if is_active { theme::ACCENT } else { theme::DIM }),
+                    )
+                    // The arrow lives in a fixed slot on every button. Its
+                    // glyph width differs between platform fonts, so sizing
+                    // the slot from the active label moved the following
+                    // buttons.
                     .child(
                         rect()
-                            .width(Size::px(if is_active { 0. } else { SORT_ARROW_WIDTH }))
-                            .height(Size::px(12.)),
+                            .width(Size::px(SORT_ARROW_WIDTH))
+                            .height(Size::px(12.))
+                            .center()
+                            .child(if is_active {
+                                label().text(arrow).font_size(10.).color(theme::ACCENT)
+                            } else {
+                                label().text("").font_size(10.)
+                            }),
                     ),
             )
             .key(key.label())

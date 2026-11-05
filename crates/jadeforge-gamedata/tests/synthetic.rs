@@ -537,7 +537,13 @@ fn non_utf8_override_names_are_skipped() {
     write_tlk(&dir.join("dialog.tlk"), &["Name"]);
     std::fs::create_dir_all(dir.join("override")).expect("create override");
     let name = OsString::from_vec(vec![0xff, b'.', b'2', b'd', b'a']);
-    write(&dir.join("override").join(name), b"junk");
+    let path = dir.join("override").join(name);
+    if let Err(error) = std::fs::write(&path, b"junk") {
+        // APFS rejects non-UTF-8 filenames. The loader behaviour under test is
+        // only meaningful where the filesystem can represent such a name.
+        eprintln!("skipping: the filesystem rejected a non-UTF-8 name: {error}");
+        return;
+    }
     let game = GameData::open(dir.path()).expect("load installation");
     assert_eq!(game.item_count(), 0);
 }
