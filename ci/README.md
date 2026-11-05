@@ -6,8 +6,10 @@ pushes to `main`, pull requests, tags and manual dispatches.
 
 ## Jobs
 
-- `formatting`: `cargo fmt --all --check` and `ci/test-git-hooks.sh`, which
-  proves the tracked pre-commit hook refuses a direct commit on `main`.
+- `formatting`: `cargo fmt --all --check` and `ci/test-git-workflow.sh`, which
+  proves the task-branch guards in throwaway repositories: the pre-commit hook
+  refuses a direct commit on `main`, and `start`/`finish` reject a dirty or empty
+  branch.
 - `test`: tests, doctests, clippy and rustdoc for `jadeforge-gff`,
   `jadeforge-core`, `jadeforge-session`, `jadeforge-gamedata` and
   `jadeforge-cli` on Linux, Windows and macOS. This includes the game-data
