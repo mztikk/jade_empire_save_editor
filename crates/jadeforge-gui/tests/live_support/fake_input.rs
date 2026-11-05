@@ -131,6 +131,13 @@ impl FakeInput {
         Ok(())
     }
 
+    /// Presses and releases one Linux keycode.
+    pub fn tap_keycode(&self, code: u32) -> Result<(), String> {
+        self.key(code, true)?;
+        self.key(code, false)?;
+        Ok(())
+    }
+
     fn key(&self, code: u32, pressed: bool) -> Result<(), String> {
         self.device.keyboard_key(code, u32::from(pressed));
         self.flush()?;
