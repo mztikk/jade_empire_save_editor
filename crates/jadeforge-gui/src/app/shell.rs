@@ -168,21 +168,24 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
     let frame = rect()
         .width(Size::fill())
         .height(Size::px(PREVIEW_HEIGHT))
-        .center()
-        .background(theme::SURFACE)
-        .corner_radius(10.);
+        .center();
     match preview {
-        Some(handle) => frame.child(
-            image(handle)
-                .width(Size::fill())
-                .height(Size::px(PREVIEW_HEIGHT))
-                .corner_radius(10.)
-                .sampling_mode(SamplingMode::Bilinear)
-                .aspect_ratio(AspectRatio::Max),
-        ),
-        None => frame.child(label().text(message).font_size(10.).color(theme::DIM)),
+        Some(handle) => frame
+            .child(
+                image(handle)
+                    .width(Size::px(PREVIEW_HEIGHT))
+                    .height(Size::px(PREVIEW_HEIGHT))
+                    .corner_radius(10.)
+                    .sampling_mode(SamplingMode::Bilinear)
+                    .aspect_ratio(AspectRatio::Min),
+            )
+            .into_element(),
+        None => frame
+            .background(theme::SURFACE)
+            .corner_radius(10.)
+            .child(label().text(message).font_size(10.).color(theme::DIM))
+            .into_element(),
     }
-    .into_element()
 }
 
 #[allow(clippy::large_types_passed_by_value, clippy::needless_pass_by_value)] // `Form` is a bundle of cheap `Copy` handles

@@ -308,10 +308,12 @@ fn opening_a_save_does_not_move_the_sidebar() {
         "the savegame row text moved by {} px when it was selected",
         row_after - row_before
     );
+    let image_area = image.layout().area;
     assert!(
-        image.layout().area.size.height <= 160.5,
-        "the screenshot is {} px tall and outgrew its slot",
-        image.layout().area.size.height
+        image_area.size.height <= 160.5 && (image_area.size.width - 160.0).abs() < 0.5,
+        "the screenshot is {}x{} px; it must stay a fixed 160x160 square",
+        image_area.size.width,
+        image_area.size.height
     );
 }
 
@@ -597,6 +599,49 @@ fn every_list_is_browsable_and_labelled_the_same_way() {
         find_label_text(&test, " · #").is_some(),
         "items do not show the category and id subtitle"
     );
+}
+
+fn exact_label_nodes(test: &TestingRunner, wanted: &str) -> Vec<freya_testing::TestingNode> {
+    test.find_many(|node, element| {
+        let label = Label::try_downcast(element)?;
+        (label.text.as_ref() == wanted).then_some(node)
+    })
+}
+
+#[test]
+fn style_rows_stay_compact_and_inside_the_card() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_text(&mut test, "Styles"));
+
+    let removes = exact_label_nodes(&test, "Remove");
+    if removes.len() < 2 {
+        eprintln!("skipping: fewer than two learned styles");
+        return;
+    }
+    let mut ys: Vec<f32> = removes
+        .iter()
+        .map(|node| node.layout().area.origin.y)
+        .collect();
+    ys.sort_by(f32::total_cmp);
+    for pair in ys.windows(2) {
+        assert!(
+            pair[1] - pair[0] < 80.0,
+            "style rows are {} px apart; the name block consumed the row",
+            pair[1] - pair[0]
+        );
+    }
+    for node in &removes {
+        let area = node.layout().area;
+        assert!(
+            area.origin.x + area.size.width < 1270.0,
+            "the row controls run off the card at x={}",
+            area.origin.x
+        );
+    }
 }
 
 fn count_labels(test: &TestingRunner) -> usize {
