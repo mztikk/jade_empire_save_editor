@@ -98,7 +98,22 @@ or start the CLI against a save folder:
 
 `just publish` builds both binaries with the `dist` profile — release
 optimisation with fat LTO — and stages them in
-`dist/jadeforge-<version>-<target>/` with the licence and README. Run it on
+`dist/jadeforge-<version>-<target>/` with the licence and README.
+
+The Linux binaries inside that folder have to be built against an older glibc
+than current distributions ship, otherwise they refuse to start on SteamOS /
+Steam Deck (`GLIBC_2.44 not found`). `just publish-linux` does that in a rootless
+Podman container based on Ubuntu 22.04 (glibc 2.35), stages
+`jadeforge` + `jadeforge-cli` into `dist/` and verifies the result with
+`ci/check-glibc.sh`:
+
+```sh
+just publish-linux
+```
+
+It needs `podman` (`sudo apt install podman`) and the first run builds the image
+in `ci/Containerfile`; later runs reuse the cached layers and the
+`target/podman` build cache. Run it on
 each platform you want to ship:
 
 | host | targets |
