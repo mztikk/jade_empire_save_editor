@@ -255,10 +255,6 @@ application-wide facts shared by every window.
 
 Other a11y builders: `.a11y_role(...)`, `.a11y_alt("description")`, `.a11y_auto_focus(true)`, `.a11y_member_of(other_id)`, `.a11y_builder(|node| { /* raw accesskit::Node */ })`.
 
-Read the focused id of the current window via
-`PlatformWindow::get().focused_accessibility_id`; `Platform::get()` is the
-application-wide handle for multi-window facts.
-
 ## Hooks
 
 Hooks are prefixed with `use_` (e.g. `use_state`, `use_animation`). Follow these rules:

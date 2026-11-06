@@ -30,9 +30,11 @@ All notable changes are documented here. The format follows
   `auto_hide_scrollbars(false)`.
 - Adopted per-element cursor styling (`.cursor(CursorIcon::Pointer)`) instead of
   the removed global `Cursor::set` calls, with a headless regression test.
-- Ported the other 0.5 breaking changes: `KeyExt::key_mut`, `Platform` versus
-  `PlatformWindow`, the scroll controller callback form, and the windowed
-  probe's `NativePlatformErasedEventAction` close event.
+- Ported the 0.5 breaking changes the GUI used: `KeyExt::key_mut` and the
+  windowed probe's `NativePlatformErasedEventAction` close event. Audited
+  `Platform`/`PlatformWindow`, the scroll controller callback form,
+  `CornerRadius`/`Alignment`, the children API and the Card/Tooltip/Input
+  themes; none needed a change.
 - GUI font sizes, spacing, padding, corner radii, stroke widths and fixed
   component dimensions now use shared named tokens in `theme.rs` instead of
   literal values in the views.
