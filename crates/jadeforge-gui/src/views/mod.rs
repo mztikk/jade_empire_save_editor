@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use freya::prelude::*;
 
 use crate::app::Ctx;
+use crate::i18n::{fill, t};
 use crate::theme;
 use crate::widgets::{self, AccessibleButton, Action};
 
@@ -28,10 +29,17 @@ pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: &'stati
         let ctx = ctx.clone();
         let path = path.to_owned();
         Action::new(move || {
+            let what = t(what);
             let message = if crate::clipboard::copy(path.clone()) {
-                format!("Copied the {what} path to the clipboard.")
+                fill(
+                    "Copied the {what} path to the clipboard.",
+                    &[("what", what)],
+                )
             } else {
-                format!("Could not copy the {what} path: the system clipboard is not available.")
+                fill(
+                    "Could not copy the {what} path: the system clipboard is not available.",
+                    &[("what", what)],
+                )
             };
             ctx.run(|session| session.notify(&message));
         })
@@ -40,12 +48,19 @@ pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: &'stati
         let ctx = ctx.clone();
         Action::new(move || match crate::paths::open_folder(&folder) {
             Ok(()) => ctx.run(|session| {
-                session.notify(&format!("Opened the {what} folder in the file manager."));
+                session.notify(&fill(
+                    "Opened the {what} folder in the file manager.",
+                    &[("what", t(what))],
+                ));
             }),
             Err(error) => ctx.run(|session| {
-                session.set_error(&format!(
-                    "Could not open the {what} folder {}: {error}",
-                    folder.display()
+                session.set_error(&fill(
+                    "Could not open the {what} folder {folder}: {error}",
+                    &[
+                        ("what", t(what)),
+                        ("folder", &folder.display().to_string()),
+                        ("error", &error.to_string()),
+                    ],
                 ));
             }),
         })
@@ -55,13 +70,13 @@ pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: &'stati
         .spacing(theme::space::md())
         .content(Content::wrap_spacing(theme::space::md()))
         .child(path_button(
-            format!("Copy the {what} path"),
-            "Copy path",
+            fill("Copy the {what} path", &[("what", t(what))]),
+            t("Copy path"),
             copy,
         ))
         .child(path_button(
-            format!("Open the {what} folder"),
-            "Open folder",
+            fill("Open the {what} folder", &[("what", t(what))]),
+            t("Open folder"),
             open,
         ))
         .into_element()

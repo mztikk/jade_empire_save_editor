@@ -4,7 +4,7 @@ use freya::prelude::*;
 
 use crate::app::Ctx;
 use crate::form::Form;
-use crate::i18n::t;
+use crate::i18n::{fill, t};
 use crate::session::{CharacterField, FieldError, format};
 use crate::theme;
 use crate::widgets;
@@ -22,12 +22,14 @@ fn alignment_hint_height() -> f32 {
 #[must_use]
 pub fn alignment_hint(value: &str) -> String {
     match value.trim().parse::<i32>() {
-        Ok(value) => format!(
-            "{} (the game starts at {}, below is Closed Fist, above is Open Palm).",
-            format::alignment(value),
-            jadeforge_core::DEFAULT_ALIGNMENT
+        Ok(value) => fill(
+            "{alignment} (the game starts at {default}, below is Closed Fist, above is Open Palm).",
+            &[
+                ("alignment", format::alignment(value)),
+                ("default", &jadeforge_core::DEFAULT_ALIGNMENT.to_string()),
+            ],
         ),
-        Err(_) => "Alignment is a number; below 128 is the Closed Fist, above is the Open Palm."
+        Err(_) => t("Alignment is a number; below 128 is the Closed Fist, above is the Open Palm.")
             .to_owned(),
     }
 }
@@ -38,7 +40,7 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
     let form = ctx.form;
 
     let identity = widgets::card(t("Identity"),
-        Some("Every valid change is applied in memory immediately".to_owned()),
+        Some(t("Every valid change is applied in memory immediately").to_owned()),
         vec![
             // Three fields per row at every supported width: six narrow fields
             // of fixed width used to overflow the card and leave KILLS alone on
@@ -71,8 +73,8 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
             rect()
                 .horizontal()
                 .spacing(theme::space::md())
-                .child(quick_add(ctx, "+1 point", 1))
-                .child(quick_add(ctx, "+5 points", 5))
+                .child(quick_add(ctx, t("+1 point"), 1))
+                .child(quick_add(ctx, t("+5 points"), 5))
                 .child(widgets::hint(t("Attribute points you can still spend; the field is created when the savegame does not have it."),
                 ))
                 .into_element(),

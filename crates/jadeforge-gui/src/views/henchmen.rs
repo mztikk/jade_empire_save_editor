@@ -3,7 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::i18n::t;
+use crate::i18n::{fill, t};
 use crate::session::{HenchRow, Section};
 use crate::theme;
 use crate::widgets::{self, Action};
@@ -20,9 +20,9 @@ pub fn view(
     }
     if rows.is_empty() {
         rows.push(match ctx.session.borrow().section_error(Section::Companions) {
-            Some(error) => widgets::hint(format!(
-                "The companions section could not be read: {}",
-                error.message
+            Some(error) => widgets::hint(fill(
+                "The companions section could not be read: {error}",
+                &[("error", &error.message)],
             )),
             None => widgets::hint(t("This savegame has no companions yet. They appear here once the story introduces them."),
             ),
@@ -95,7 +95,10 @@ fn henchman_row(
         move |text: String| {
             let Ok(value) = text.trim().parse::<u8>() else {
                 ctx.run(|session| {
-                    session.set_error(&format!("{name}: enter a level from 1 to 60."));
+                    session.set_error(&fill(
+                        "{name}: enter a level from 1 to 60.",
+                        &[("name", &name)],
+                    ));
                 });
                 return;
             };
@@ -108,7 +111,7 @@ fn henchman_row(
         .width(Size::fill())
         .key(index)
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(format!("{} companion", henchman.name))
+        .a11y_alt(fill("{name} companion", &[("name", &henchman.name)]))
         .spacing(theme::space::lg())
         .content(Content::Flex)
         .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::lg()))
@@ -151,7 +154,7 @@ fn henchman_row(
             widgets::badge(t("hidden"), theme::surface(), theme::muted())
         })
         .child(widgets::row_action(
-            format!("Decrease {name} level"),
+            fill("Decrease {name} level", &[("name", &name)]),
             "−",
             lower,
         ))
@@ -164,17 +167,21 @@ fn henchman_row(
                 .on_submit(set_level),
         )
         .child(widgets::row_action(
-            format!("Increase {name} level"),
+            fill("Increase {name} level", &[("name", &name)]),
             "+",
             raise,
         ))
         .child(widgets::row_action(
             if available {
-                format!("Hide {name}")
+                fill("Hide {name}", &[("name", &name)])
             } else {
-                format!("Make {name} available")
+                fill("Make {name} available", &[("name", &name)])
             },
-            if available { "Hide" } else { "Make available" },
+            if available {
+                t("Hide")
+            } else {
+                t("Make available")
+            },
             toggle,
         ))
         .into_element()

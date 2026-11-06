@@ -3,7 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::i18n::t;
+use crate::i18n::{fill, t};
 use crate::session::{GameStatus, format};
 use crate::theme;
 use crate::views::path_actions;
@@ -18,7 +18,7 @@ pub fn view(
     style_count: usize,
 ) -> Element {
     let path = ctx.session.borrow().current_path().map_or_else(
-        || "No savegame".to_owned(),
+        || t("No savegame selected").to_owned(),
         |path| path.display().to_string(),
     );
     let block_count = ctx.session.borrow().block_count();
@@ -37,7 +37,7 @@ pub fn view(
         let session = ctx.session.borrow();
         match session.game_status() {
             GameStatus::Loading => (
-                "Reading the game installation and its tables…".to_owned(),
+                t("Reading the game installation and its tables…").to_owned(),
                 false,
             ),
             GameStatus::Loaded {
@@ -45,37 +45,46 @@ pub fn view(
                 styles,
                 root,
             } => (
-                format!(
-                    "{} and {} resolved from {}",
-                    crate::i18n::plural(*items, "item", "items"),
-                    crate::i18n::plural(*styles, "style", "styles"),
-                    root.display()
+                fill(
+                    "{items} and {styles} resolved from {root}",
+                    &[
+                        ("items", &crate::i18n::plural(*items, "item", "items")),
+                        ("styles", &crate::i18n::plural(*styles, "style", "styles")),
+                        ("root", &root.display().to_string()),
+                    ],
                 ),
                 true,
             ),
             GameStatus::NamesOnly { items, styles } => (
-                format!(
-                    "No game installation found: using bundled English names for {} and {}. \
+                fill(
+                    "No game installation found: using bundled English names for {items} and {styles}. \
                      Descriptions and upgrades still need the game data.",
-                    crate::i18n::plural(*items, "item", "items"),
-                    crate::i18n::plural(*styles, "style", "styles")
+                    &[
+                        ("items", &crate::i18n::plural(*items, "item", "items")),
+                        ("styles", &crate::i18n::plural(*styles, "style", "styles")),
+                    ],
                 ),
                 false,
             ),
             GameStatus::Missing => (
-                "No game installation found next to the savegames: names fall back to ids, \
-                 while categories, levels and timings still come from the savegame."
-                    .to_owned(),
+                t(
+                    "No game installation found next to the savegames: names fall back to ids, \
+                 while categories, levels and timings still come from the savegame.",
+                )
+                .to_owned(),
                 false,
             ),
             GameStatus::Error(error) => {
                 let bundled = if session.has_bundled_names() {
-                    ". Bundled English names are still available."
+                    t(". Bundled English names are still available.")
                 } else {
                     "."
                 };
                 (
-                    format!("Cannot read the game data: {error}{bundled}"),
+                    fill(
+                        "Cannot read the game data: {error}{bundled}",
+                        &[("error", error.as_str()), ("bundled", bundled)],
+                    ),
                     false,
                 )
             }
@@ -105,12 +114,15 @@ pub fn view(
                 .spacing(theme::space::md())
                 .content(Content::wrap_spacing(theme::space::md()))
                 .child(widgets::badge(
-                    format!("Level {}", character.level),
+                    fill("Level {level}", &[("level", &character.level.to_string())]),
                     theme::accent(),
                     theme::on_accent(),
                 ))
                 .child(widgets::badge(
-                    format!("Chapter {}", character.chapter),
+                    fill(
+                        "Chapter {chapter}",
+                        &[("chapter", &character.chapter.to_string())],
+                    ),
                     theme::surface_active(),
                     theme::text(),
                 ))
@@ -118,19 +130,27 @@ pub fn view(
                 .into_element(),
         )
         .child(
-            widgets::a11y_text(format!(
-                "Time played {} · {} · {}",
-                format::duration(character.time_played),
-                crate::i18n::plural(
-                    usize::try_from(character.kills).unwrap_or(usize::MAX),
-                    "kill",
-                    "kills"
-                ),
-                crate::i18n::plural(
-                    usize::try_from(character.experience).unwrap_or(usize::MAX),
-                    "experience point",
-                    "experience points"
-                )
+            widgets::a11y_text(fill(
+                "Time played {time} · {kills} · {experience}",
+                &[
+                    ("time", &format::duration(character.time_played)),
+                    (
+                        "kills",
+                        &crate::i18n::plural(
+                            usize::try_from(character.kills).unwrap_or(usize::MAX),
+                            "kill",
+                            "kills",
+                        ),
+                    ),
+                    (
+                        "experience",
+                        &crate::i18n::plural(
+                            usize::try_from(character.experience).unwrap_or(usize::MAX),
+                            "experience point",
+                            "experience points",
+                        ),
+                    ),
+                ],
             ))
             .font_size(theme::font::label())
             .color(theme::muted()),
@@ -140,7 +160,7 @@ pub fn view(
                 t("GOLD"),
                 character
                     .gold
-                    .map_or_else(|| "Not set".to_owned(), format::amount),
+                    .map_or_else(|| t("not set").to_owned(), format::amount),
             ),
             widgets::stat(
                 t("HEALTH"),
@@ -170,14 +190,14 @@ pub fn view(
         None,
         vec![widgets::definition_list(vec![
             (
-                "Inventory".to_owned(),
+                t("Inventory").to_owned(),
                 widgets::a11y_text(widgets::plural(item_count, "stack", "stacks"))
                     .font_size(theme::font::body())
                     .color(theme::text())
                     .into_element(),
             ),
             (
-                "Styles".to_owned(),
+                t("Styles").to_owned(),
                 widgets::a11y_text(widgets::plural(
                     style_count,
                     "style learned",
@@ -188,7 +208,7 @@ pub fn view(
                 .into_element(),
             ),
             (
-                "Unspent attribute points".to_owned(),
+                t("Unspent attribute points").to_owned(),
                 widgets::a11y_text(character.attribute_points.to_string())
                     .font_size(theme::font::body())
                     .color(if character.attribute_points > 0 {
@@ -199,7 +219,7 @@ pub fn view(
                     .into_element(),
             ),
             (
-                "Body / Mind / Spirit".to_owned(),
+                t("Body / Mind / Spirit").to_owned(),
                 widgets::a11y_text(format!(
                     "{} / {} / {}",
                     character.body, character.mind, character.spirit
@@ -209,7 +229,7 @@ pub fn view(
                 .into_element(),
             ),
             (
-                "Charm / Intuition / Intimidate".to_owned(),
+                t("Charm / Intuition / Intimidate").to_owned(),
                 widgets::a11y_text(format!(
                     "{} / {} / {}",
                     character.charm, character.intuition, character.intimidate
@@ -292,7 +312,7 @@ pub fn view(
                 widgets::a11y_text(format!(
                     "{} · {}",
                     crate::i18n::plural(block_count, "block", "blocks"),
-                    file_size.map_or_else(|| "unknown size".to_owned(), format::bytes)
+                    file_size.map_or_else(|| t("unknown size").to_owned(), format::bytes)
                 ))
                 .font_size(theme::font::label())
                 .color(theme::muted()),
@@ -302,17 +322,17 @@ pub fn view(
                 .horizontal()
                 .spacing(theme::space::md())
                 .child(
-                    widgets::a11y_text(if game_ok { "Game data" } else { "Notice" })
+                    widgets::a11y_text(if game_ok { t("Game data") } else { t("Notice") })
                         .font_size(theme::font::label())
                         .color(theme::muted()),
                 )
                 .child(widgets::badge(
                     if game_ok {
-                        "linked"
+                        t("linked")
                     } else if game_loading {
-                        "loading"
+                        t("loading")
                     } else {
-                        "not found"
+                        t("not found")
                     },
                     if game_ok {
                         theme::surface()

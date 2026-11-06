@@ -9,6 +9,7 @@
 
 pub mod config;
 pub mod locale;
+pub mod message;
 pub mod preferences;
 pub mod session;
 

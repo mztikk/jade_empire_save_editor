@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use jadeforge_core::GemLocation;
 
+use crate::message;
 use crate::session::format;
 
 /// One entry of the savegame list.
@@ -35,14 +36,17 @@ impl SaveEntry {
     #[must_use]
     pub fn summary(&self) -> String {
         if self.error.is_some() {
-            return "Cannot be read".to_owned();
+            return message::tr("Cannot be read").to_owned();
         }
         let level = self
             .level
             .map_or_else(|| "?".to_owned(), |level| level.to_string());
-        let mut parts = vec![format!(
-            "Level {level} · Time played {}",
-            format::duration(self.time_played)
+        let mut parts = vec![message::fill(
+            "Level {level} · Time played {time}",
+            &[
+                ("level", &level),
+                ("time", &format::duration(self.time_played)),
+            ],
         )];
         if let Some(character) = self.character.as_deref().filter(|name| !name.is_empty()) {
             parts.push(character.to_owned());
@@ -125,12 +129,12 @@ impl Section {
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
-            Self::Character => "Character",
-            Self::Items => "Inventory",
-            Self::Styles => "Styles",
-            Self::Companions => "Companions",
-            Self::Gems => "Gems",
-            Self::Amulet => "Amulet",
+            Self::Character => message::tr("Character"),
+            Self::Items => message::tr("Inventory"),
+            Self::Styles => message::tr("Styles"),
+            Self::Companions => message::tr("Companions"),
+            Self::Gems => message::tr("Gems"),
+            Self::Amulet => message::tr("Amulet"),
         }
     }
 }

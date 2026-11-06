@@ -10,7 +10,7 @@ use freya::prelude::*;
 
 use crate::Locale;
 use crate::app::Ctx;
-use crate::i18n::t;
+use crate::i18n::{fill, t};
 use crate::preferences::{TEXT_SCALES, ThemeChoice};
 use crate::session::{GameStatus, SaveSort};
 use crate::theme;
@@ -34,11 +34,11 @@ pub fn view(
     let (sort, descending) = *sort.read();
     let save_folder = ctx.session.borrow().directory().to_path_buf();
     let game_text = match ctx.session.borrow().game_status() {
-        GameStatus::Loading => "Reading the game installation…".to_owned(),
+        GameStatus::Loading => t("Reading the game installation…").to_owned(),
         GameStatus::Loaded { root, .. } => root.display().to_string(),
-        GameStatus::NamesOnly { .. } => "Bundled English names (no installation)".to_owned(),
-        GameStatus::Missing => "No installation configured".to_owned(),
-        GameStatus::Error(error) => format!("Unreadable: {error}"),
+        GameStatus::NamesOnly { .. } => t("Bundled English names (no installation)").to_owned(),
+        GameStatus::Missing => t("No installation configured").to_owned(),
+        GameStatus::Error(error) => fill("Unreadable: {error}", &[("error", error.as_str())]),
     };
     let backup = ctx
         .session
@@ -90,7 +90,10 @@ pub fn view(
         let selected = selected_scale == percent;
         scale_chips.push(appearance_chip(
             format!("{percent} %"),
-            format!("Use {percent} percent text size"),
+            fill(
+                "Use {percent} percent text size",
+                &[("percent", &percent.to_string())],
+            ),
             selected,
             Action::new(move || {
                 text_scale.set(percent);
@@ -115,7 +118,10 @@ pub fn view(
         let selected = selected_locale == candidate;
         locale_chips.push(appearance_chip(
             candidate.label(),
-            format!("Use {} for the interface", candidate.label()),
+            fill(
+                "Use {language} for the interface",
+                &[("language", candidate.label())],
+            ),
             selected,
             Action::new(move || {
                 locale.set(candidate);
@@ -169,52 +175,57 @@ pub fn view(
     }
 
     let mut diagnostics: Vec<(String, String)> = vec![
-        ("Version".to_owned(), crate::APP_VERSION.to_owned()),
+        (t("Version").to_owned(), crate::APP_VERSION.to_owned()),
         (
-            "Open savegame".to_owned(),
+            t("Open savegame").to_owned(),
             ctx.session
                 .borrow()
                 .current_path()
-                .map_or_else(|| "none".to_owned(), |path| path.display().to_string()),
+                .map_or_else(|| t("none").to_owned(), |path| path.display().to_string()),
         ),
         (
-            "Blocks".to_owned(),
+            t("Blocks").to_owned(),
             ctx.session.borrow().block_count().to_string(),
         ),
         (
-            "File size".to_owned(),
+            t("File size").to_owned(),
             ctx.session
                 .borrow()
                 .file_size()
-                .map_or_else(|| "not read".to_owned(), crate::session::format::bytes),
+                .map_or_else(|| t("not read").to_owned(), crate::session::format::bytes),
         ),
         (
-            "Theme".to_owned(),
-            format!(
-                "{} at {} %",
-                theme::current().palette.kind.key(),
-                (theme::current().text_scale * 100.0).round()
+            t("Theme").to_owned(),
+            fill(
+                "{theme} at {scale} %",
+                &[
+                    ("theme", theme::current().palette.kind.key()),
+                    (
+                        "scale",
+                        &(theme::current().text_scale * 100.0).round().to_string(),
+                    ),
+                ],
             ),
         ),
         (
-            "Language".to_owned(),
+            t("Language").to_owned(),
             crate::i18n::current().label().to_owned(),
         ),
         (
-            "Renderer override".to_owned(),
-            std::env::var("JADEFORGE_RENDERER").unwrap_or_else(|_| "auto".to_owned()),
+            t("Renderer override").to_owned(),
+            std::env::var("JADEFORGE_RENDERER").unwrap_or_else(|_| t("auto").to_owned()),
         ),
         (
-            "Remember window".to_owned(),
+            t("Remember window").to_owned(),
             if *remember_window.read() {
-                "yes".to_owned()
+                t("yes").to_owned()
             } else {
-                "no".to_owned()
+                t("no").to_owned()
             },
         ),
     ];
     diagnostics.push((
-        "Backup folder".to_owned(),
+        t("Backup folder").to_owned(),
         backup
             .as_ref()
             .and_then(|backup| backup.parent())
@@ -233,27 +244,54 @@ pub fn view(
         ));
     }
     let diagnostics_text = {
-        let mut text = String::from("JadeForge diagnostics\n");
-        let _ = writeln!(text, "Version: {}", crate::APP_VERSION);
-        let _ = writeln!(text, "Save folder: {}", save_folder.display());
-        if let Some(path) = ctx.session.borrow().current_path() {
-            let _ = writeln!(text, "Savegame: {}", path.display());
-        }
+        let mut text = format!("{}\n", t("JadeForge diagnostics"));
         let _ = writeln!(
             text,
-            "Config: {}",
-            config_path.as_ref().map_or_else(
-                || "unavailable".to_owned(),
-                |path| path.display().to_string()
+            "{}",
+            fill("Version: {version}", &[("version", crate::APP_VERSION)],)
+        );
+        let _ = writeln!(
+            text,
+            "{}",
+            fill(
+                "Save folder: {path}",
+                &[("path", &save_folder.display().to_string())],
+            )
+        );
+        if let Some(path) = ctx.session.borrow().current_path() {
+            let _ = writeln!(
+                text,
+                "{}",
+                fill("Savegame: {path}", &[("path", &path.display().to_string())]),
+            );
+        }
+        let config = config_path.as_ref().map_or_else(
+            || t("unavailable").to_owned(),
+            |path| path.display().to_string(),
+        );
+        let _ = writeln!(text, "{}", fill("Config: {path}", &[("path", &config)]));
+        let _ = writeln!(
+            text,
+            "{}",
+            fill(
+                "Theme: {theme} at {scale} %",
+                &[
+                    ("theme", theme::current().palette.kind.key()),
+                    (
+                        "scale",
+                        &(theme::current().text_scale * 100.0).round().to_string(),
+                    ),
+                ],
             )
         );
         let _ = writeln!(
             text,
-            "Theme: {} at {} %",
-            theme::current().palette.kind.key(),
-            (theme::current().text_scale * 100.0).round()
+            "{}",
+            fill(
+                "Language: {language}",
+                &[("language", crate::i18n::current().label())],
+            )
         );
-        let _ = writeln!(text, "Language: {}", crate::i18n::current().label());
         text
     };
     let copy_diagnostics = {
@@ -262,9 +300,9 @@ pub fn view(
             let copied = crate::clipboard::copy(diagnostics_text.clone());
             ctx.run(|session| {
                 session.notify(if copied {
-                    "Copied the diagnostics to the clipboard."
+                    t("Copied the diagnostics to the clipboard.")
                 } else {
-                    "Could not copy the diagnostics: the system clipboard is not available."
+                    t("Could not copy the diagnostics: the system clipboard is not available.")
                 });
             });
         })
@@ -278,7 +316,7 @@ pub fn view(
     } else {
         settings.push(path_section(
             ctx,
-            "Save folder",
+            t("Save folder"),
             &save_folder.display().to_string(),
             save_folder.clone(),
             "savegame",
@@ -287,14 +325,19 @@ pub fn view(
     settings.extend([
         widgets::label_row(
             t("Sort order"),
-            widgets::a11y_text(format!(
-                "{}, {}",
-                sort.label(),
-                if descending {
-                    "descending"
-                } else {
-                    "ascending"
-                }
+            widgets::a11y_text(fill(
+                "{name}, {direction}",
+                &[
+                    ("name", sort.label()),
+                    (
+                        "direction",
+                        if descending {
+                            t("descending")
+                        } else {
+                            t("ascending")
+                        },
+                    ),
+                ],
             ))
             .font_size(theme::font::label())
             .color(theme::text()),
@@ -313,7 +356,7 @@ pub fn view(
                 .map_or_else(|| save_folder.clone(), std::path::Path::to_path_buf);
             settings.push(path_section(
                 ctx,
-                "Settings file",
+                t("Settings file"),
                 &path.display().to_string(),
                 folder,
                 "settings",
@@ -337,7 +380,7 @@ pub fn view(
                 .map_or_else(|| save_folder.clone(), std::path::Path::to_path_buf);
             backups.push(path_section(
                 ctx,
-                "Latest backup",
+                t("Latest backup"),
                 &backup.display().to_string(),
                 folder,
                 "backup",
@@ -402,14 +445,14 @@ pub fn view(
     children.push(widgets::divider());
     children.push(widgets::section_label(t("KEYBOARD SHORTCUTS")));
     for (action, keys) in [
-        ("Save (opens the review)", "Ctrl+S"),
-        ("Choose save folder", "Ctrl+O"),
-        ("Focus the active filter", "Ctrl+F"),
-        ("Undo the last edit", "Ctrl+Z"),
-        ("Redo an undone edit", "Ctrl+Y or Ctrl+Shift+Z"),
-        ("Scan the save folder", "F5"),
-        ("Open this help page", "Ctrl+/"),
-        ("Clear the active filter or close this page", "Escape"),
+        (t("Save (opens the review)"), "Ctrl+S"),
+        (t("Choose save folder"), "Ctrl+O"),
+        (t("Focus the active filter"), "Ctrl+F"),
+        (t("Undo the last edit"), "Ctrl+Z"),
+        (t("Redo an undone edit"), "Ctrl+Y or Ctrl+Shift+Z"),
+        (t("Scan the save folder"), "F5"),
+        (t("Open this help page"), "Ctrl+/"),
+        (t("Clear the active filter or close this page"), "Escape"),
     ] {
         children.push(widgets::label_row(
             action,
@@ -419,7 +462,10 @@ pub fn view(
 
     widgets::card(
         t("About JadeForge"),
-        Some(format!("Version {}", crate::APP_VERSION)),
+        Some(fill(
+            "Version {version}",
+            &[("version", crate::APP_VERSION)],
+        )),
         children,
     )
 }

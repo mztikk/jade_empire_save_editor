@@ -33,7 +33,12 @@ All notable changes are documented here. The format follows
   (`crates/jadeforge-gui/locales/de.toml`) with one key per source string.
   Empty German values fall back to English while the translation is filled in;
   the catalog is coverage tested, and a `de` locale with `de-DE` tag detection
-  is selectable from About.
+  is selectable from About. Every remaining GUI string (status line, About
+  diagnostics and report, dialogs, empty states, row subtitles, tooltips,
+  accessible names, field captions and range hints) is catalogued, and a
+  `jadeforge_session::message` hook localizes session status templates,
+  pending-change labels and session-owned row labels. The new keys are
+  awaiting translation.
 - About/help now shows version, savegame block count and size, theme, scale,
   language, renderer override and backup folder, with a Copy diagnostics
   action and a complete keyboard shortcut sheet (Ctrl+/ opens it). Window size

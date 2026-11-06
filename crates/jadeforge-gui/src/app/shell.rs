@@ -7,7 +7,7 @@ use freya::elements::image::ImageHandle;
 use freya::prelude::*;
 
 use crate::form::Form;
-use crate::i18n::t;
+use crate::i18n::{fill, t};
 use crate::session::{FieldError, GameStatus, MessageKind, Session};
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
@@ -27,9 +27,9 @@ pub(super) fn choose_folder(
 ) -> bool {
     if ctx.session.borrow().is_dirty() {
         ctx.run(|session| {
-            session.set_error(
+            session.set_error(t(
                 "This savegame has unsaved changes: save them or press Revert before choosing another folder.",
-            );
+            ));
         });
         return false;
     }
@@ -38,7 +38,9 @@ pub(super) fn choose_folder(
         crate::dialog::PickOutcome::Picked(folder) => folder,
         crate::dialog::PickOutcome::Cancelled => {
             ctx.run(|session| {
-                session.inform("No folder was chosen; the save folder on screen is unchanged.");
+                session.inform(t(
+                    "No folder was chosen; the save folder on screen is unchanged.",
+                ));
             });
             return false;
         }
@@ -57,9 +59,9 @@ pub(super) fn choose_folder(
 /// Copies a status message to the system clipboard.
 pub(super) fn copy_status(ctx: &Ctx, text: String) {
     let message = if crate::clipboard::copy(text) {
-        "Copied the status message to the clipboard.".to_owned()
+        t("Copied the status message to the clipboard.").to_owned()
     } else {
-        "Could not copy the status message: the system clipboard is not available.".to_owned()
+        t("Could not copy the status message: the system clipboard is not available.").to_owned()
     };
     ctx.run(|session| session.notify(&message));
 }
@@ -95,13 +97,14 @@ pub(super) fn header(
         MessageKind::Info | MessageKind::Success => accesskit::Live::Polite,
     };
     let game_text = match game_status {
-        GameStatus::Loading => "loading game data…".to_owned(),
-        GameStatus::Loaded { items, .. } => {
-            crate::widgets::plural(*items, "item", "items") + " loaded"
-        }
-        GameStatus::NamesOnly { .. } => "English names loaded".to_owned(),
-        GameStatus::Missing => "game data not found".to_owned(),
-        GameStatus::Error(_) => "game data unreadable".to_owned(),
+        GameStatus::Loading => t("loading game data…").to_owned(),
+        GameStatus::Loaded { items, .. } => fill(
+            "{items} loaded",
+            &[("items", &crate::widgets::plural(*items, "item", "items"))],
+        ),
+        GameStatus::NamesOnly { .. } => t("English names loaded").to_owned(),
+        GameStatus::Missing => t("game data not found").to_owned(),
+        GameStatus::Error(_) => t("game data unreadable").to_owned(),
     };
     let game_color = match game_status {
         GameStatus::Loaded { .. } | GameStatus::NamesOnly { .. } => theme::jade(),
@@ -154,7 +157,9 @@ pub(super) fn header(
                 crate::dialog::PickOutcome::Picked(folder) => folder,
                 crate::dialog::PickOutcome::Cancelled => {
                     ctx.run(|session| {
-                        session.inform("No folder was chosen; the game data folder is unchanged.");
+                        session.inform(t(
+                            "No folder was chosen; the game data folder is unchanged.",
+                        ));
                     });
                     return;
                 }
@@ -260,7 +265,11 @@ pub(super) fn header(
                 Button::new()
                     .outline()
                     .enabled(!scanning)
-                    .child(if scanning { "Scanning…" } else { "Scan" })
+                    .child(if scanning {
+                        t("Scanning…")
+                    } else {
+                        t("Scan")
+                    })
                     .on_press({
                         let scan = scan.clone();
                         move |_| scan()
@@ -407,9 +416,9 @@ fn backups_button(
 /// save list below it.
 pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Element {
     let message = if selected {
-        "no screenshot"
+        t("no screenshot")
     } else {
-        "select a save"
+        t("select a save")
     };
     // Keep the root and its content box stable while the preview loads. Freya's
     // diff can panic if an element changes its root type in place, especially
@@ -513,8 +522,10 @@ pub(super) fn footer(
         move |_| {
             if dirty
                 && !crate::dialog::confirm(
-                    "Discard changes?",
-                    "Reload the savegame from disk and discard every change that is only in memory?",
+                    t("Discard changes?"),
+                    t(
+                        "Reload the savegame from disk and discard every change that is only in memory?",
+                    ),
                 )
             {
                 return;
@@ -529,25 +540,29 @@ pub(super) fn footer(
     let can_save = has_save && dirty;
     let can_revert = has_save && dirty;
     let (hint_text, hint_color) = if !has_save {
-        ("Open a savegame to edit it.", theme::dim())
+        (t("Open a savegame to edit it."), theme::dim())
     } else if !form_errors.is_empty() && dirty {
         (
-            "Some character fields are invalid and were not applied; your other edits can still be saved.",
+            t(
+                "Some character fields are invalid and were not applied; your other edits can still be saved.",
+            ),
             theme::warning(),
         )
     } else if !form_errors.is_empty() {
         (
-            "Some character fields are invalid and were not applied; fix the highlighted fields to apply them.",
+            t(
+                "Some character fields are invalid and were not applied; fix the highlighted fields to apply them.",
+            ),
             theme::warning(),
         )
     } else if dirty {
         (
-            "Changes are only in memory until you save.",
+            t("Changes are only in memory until you save."),
             theme::warning(),
         )
     } else {
         (
-            "All changes are saved. There is nothing to write.",
+            t("All changes are saved. There is nothing to write."),
             theme::dim(),
         )
     };
@@ -658,9 +673,9 @@ pub(super) fn empty_state(
     start_scan: Rc<dyn Fn(PathBuf) -> bool>,
 ) -> Element {
     let text = if savegames == 0 {
-        "Point JadeForge at the folder that contains your Jade Empire savegames and press Scan."
+        t("Point JadeForge at the folder that contains your Jade Empire savegames and press Scan.")
     } else {
-        "Pick a savegame on the left to start editing."
+        t("Pick a savegame on the left to start editing.")
     };
     let choose = {
         let ctx = ctx.clone();
@@ -709,10 +724,12 @@ pub(super) fn empty_state(
 pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element {
     let dirty = ctx.session.borrow().is_dirty();
     let text = if dirty {
-        "This savegame changed on disk since it was opened. Saving will be refused; reloading \
-         discards the unsaved edits on screen and shows the file that is on disk."
+        t(
+            "This savegame changed on disk since it was opened. Saving will be refused; reloading \
+         discards the unsaved edits on screen and shows the file that is on disk.",
+        )
     } else {
-        "This savegame changed on disk since it was opened. Reload it to edit the current file."
+        t("This savegame changed on disk since it was opened. Reload it to edit the current file.")
     };
     let reload = {
         let ctx = ctx.clone();
@@ -720,9 +737,11 @@ pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element 
         move |_| {
             if dirty
                 && !crate::dialog::confirm(
-                    "Reload from disk?",
-                    "The savegame changed on disk outside JadeForge. Reloading discards every \
+                    t("Reload from disk?"),
+                    t(
+                        "The savegame changed on disk outside JadeForge. Reloading discards every \
                      unsaved edit on screen.",
+                    ),
                 )
             {
                 return;

@@ -12,7 +12,7 @@ use std::rc::Rc;
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::i18n::t;
+use crate::i18n::{fill, t};
 use crate::theme;
 use crate::widgets::{self, AccessibleButton, Action};
 
@@ -22,13 +22,14 @@ pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> Element {
     let backups = ctx.session.borrow().backups();
     let dirty = ctx.session.borrow().is_dirty();
     let open = ctx.session.borrow().current_path().map_or_else(
-        || "no savegame".to_owned(),
+        || t("no savegame open").to_owned(),
         |path| path.display().to_string(),
     );
 
-    let mut children: Vec<Element> = vec![widgets::hint(format!(
+    let mut children: Vec<Element> = vec![widgets::hint(fill(
         "Backups of the open savegame, newest first. A restore verifies the chosen file, keeps a \
-         new backup of the file it replaces, and writes atomically. Open savegame: {open}"
+         new backup of the file it replaces, and writes atomically. Open savegame: {open}",
+        &[("open", &open)],
     ))];
     if dirty {
         children.push(widgets::hint(t(
@@ -60,7 +61,7 @@ pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> Element {
 
     widgets::card(
         t("Backups"),
-        Some("timestamps are UTC".to_owned()),
+        Some(t("timestamps are UTC").to_owned()),
         children,
     )
 }
@@ -79,9 +80,11 @@ fn backup_row(
         let sync = sync.clone();
         Action::new(move || {
             if !crate::dialog::confirm(
-                "Restore this backup?",
-                "The current savegame is replaced by the chosen backup. JadeForge first writes a \
+                t("Restore this backup?"),
+                t(
+                    "The current savegame is replaced by the chosen backup. JadeForge first writes a \
                  new backup of the current file, so the restore can be undone.",
+                ),
             ) {
                 return;
             }
@@ -92,7 +95,10 @@ fn backup_row(
         })
     };
     let restore = AccessibleButton::new(
-        format!("Restore the backup from {}", backup.timestamp()),
+        fill(
+            "Restore the backup from {timestamp}",
+            &[("timestamp", &backup.timestamp())],
+        ),
         restore,
         rect()
             .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
@@ -141,10 +147,13 @@ fn backup_row(
                 .into_element(),
         )
         .child(
-            widgets::a11y_text(format!("Original: {}", backup.original.display()))
-                .font_size(theme::font::micro())
-                .color(theme::muted())
-                .max_lines(2),
+            widgets::a11y_text(fill(
+                "Original: {path}",
+                &[("path", &backup.original.display().to_string())],
+            ))
+            .font_size(theme::font::micro())
+            .color(theme::muted())
+            .max_lines(2),
         )
         .into_element()
 }

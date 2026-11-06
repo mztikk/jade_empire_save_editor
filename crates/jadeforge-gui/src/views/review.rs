@@ -15,7 +15,7 @@ use crate::theme;
 use crate::widgets;
 
 use crate::app::Ctx;
-use crate::i18n::t;
+use crate::i18n::{fill, t};
 
 /// Renders the review page.
 #[must_use]
@@ -32,18 +32,18 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> 
          character fields are not applied; the other edits are.",
     )));
     if !invalid.is_empty() {
-        children.push(widgets::hint(format!(
-            "{} character field(s) are still invalid and will not be written. Go back to fix them \
-             if you need those values.",
-            invalid.len()
+        children.push(widgets::hint(fill(
+            "{count} character field(s) are still invalid and will not be written. Go back to fix \
+             them if you need those values.",
+            &[("count", &invalid.len().to_string())],
         )));
     }
     children.push(widgets::divider());
     if groups.is_empty() {
         children.push(widgets::hint(if dirty {
-            "There are unsaved changes, but no described field changed."
+            t("There are unsaved changes, but no described field changed.")
         } else {
-            "There is nothing to write."
+            t("There is nothing to write.")
         }));
     } else {
         for (index, group) in groups.iter().enumerate() {
@@ -96,10 +96,12 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> 
 
     widgets::card(
         t("Review changes"),
-        Some(format!(
-            "{} in {}",
-            widgets::plural(total, "change", "changes"),
-            widgets::plural(groups.len(), "group", "groups")
+        Some(fill(
+            "{changes} in {groups}",
+            &[
+                ("changes", &widgets::plural(total, "change", "changes")),
+                ("groups", &widgets::plural(groups.len(), "group", "groups")),
+            ],
         )),
         children,
     )
@@ -123,9 +125,12 @@ fn group_block(index: usize, group: &PendingChangeGroup) -> Element {
                         .max_lines(2),
                 )
                 .child(
-                    widgets::a11y_text(format!("was {}, now {}", change.before, change.after))
-                        .font_size(theme::font::micro())
-                        .color(theme::muted()),
+                    widgets::a11y_text(fill(
+                        "was {before}, now {after}",
+                        &[("before", &change.before), ("after", &change.after)],
+                    ))
+                    .font_size(theme::font::micro())
+                    .color(theme::muted()),
                 )
                 .into_element(),
         );

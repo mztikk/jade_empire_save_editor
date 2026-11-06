@@ -293,6 +293,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     // winit reports nothing, so the binary's startup detection and the portal
     // watcher installed here provide the System choice.
     let saved_config = use_hook(crate::config::Config::load);
+    // The session builds its status messages without depending on the GUI. The
+    // desktop entry point installs the catalog lookup once; every later message
+    // follows the thread-local locale because the actions run on this thread.
+    use_hook(|| crate::message::install_translator(crate::i18n::t));
     let theme_choice = use_state(|| saved_config.theme);
     let text_scale = use_state(|| saved_config.normalized_text_scale());
     let locale = use_state(|| saved_config.locale);

@@ -14,6 +14,8 @@ use jadeforge_core::{
 };
 use jadeforge_gamedata::{BundledItem, GameData, NameIndex};
 
+use crate::message;
+
 mod error;
 mod form;
 mod model;
@@ -94,9 +96,9 @@ pub mod format {
     pub fn alignment(value: i32) -> &'static str {
         let reference = jadeforge_core::DEFAULT_ALIGNMENT as i32;
         match value.cmp(&reference) {
-            std::cmp::Ordering::Greater => "Way of the Open Palm",
-            std::cmp::Ordering::Less => "Way of the Closed Fist",
-            std::cmp::Ordering::Equal => "Balanced",
+            std::cmp::Ordering::Greater => crate::message::tr("Way of the Open Palm"),
+            std::cmp::Ordering::Less => crate::message::tr("Way of the Closed Fist"),
+            std::cmp::Ordering::Equal => crate::message::tr("Balanced"),
         }
     }
 
@@ -120,7 +122,7 @@ pub mod format {
     #[must_use]
     pub fn timestamp(time: std::time::SystemTime) -> String {
         let Ok(duration) = time.duration_since(std::time::UNIX_EPOCH) else {
-            return "unknown".to_owned();
+            return crate::message::tr("unknown").to_owned();
         };
         let seconds = duration.as_secs();
         let days = (seconds / 86_400) as i64;
@@ -176,9 +178,9 @@ impl SaveSort {
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
-            Self::Name => "Name",
-            Self::Level => "Level",
-            Self::Played => "Time played",
+            Self::Name => message::tr("Name"),
+            Self::Level => message::tr("Level"),
+            Self::Played => message::tr("Time played"),
         }
     }
 
@@ -212,12 +214,12 @@ impl SaveSort {
 #[must_use]
 pub fn item_category_label(category: &str) -> String {
     match category.to_lowercase().as_str() {
-        "gems" => "Gems".to_owned(),
-        "powerups" => "Power-ups".to_owned(),
-        "weapons" => "Weapons".to_owned(),
-        "plot_items" => "Plot items".to_owned(),
-        "mgweapons" => "Magic weapons".to_owned(),
-        "improve" => "Improvements".to_owned(),
+        "gems" => message::tr("Gems").to_owned(),
+        "powerups" => message::tr("Power-ups").to_owned(),
+        "weapons" => message::tr("Weapons").to_owned(),
+        "plot_items" => message::tr("Plot items").to_owned(),
+        "mgweapons" => message::tr("Magic weapons").to_owned(),
+        "improve" => message::tr("Improvements").to_owned(),
         _ => title_case(category),
     }
 }
@@ -229,13 +231,13 @@ pub fn item_category_label(category: &str) -> String {
 #[must_use]
 pub fn style_kind_label(kind: &str) -> String {
     match kind.to_lowercase().as_str() {
-        "martial" => "Martial".to_owned(),
-        "weapon" => "Weapon".to_owned(),
-        "magic" => "Magic".to_owned(),
-        "support" => "Support".to_owned(),
-        "transformation" => "Transformation".to_owned(),
-        "improvised" => "Improvised".to_owned(),
-        "unique" => "Unique".to_owned(),
+        "martial" => message::tr("Martial").to_owned(),
+        "weapon" => message::tr("Weapon").to_owned(),
+        "magic" => message::tr("Magic").to_owned(),
+        "support" => message::tr("Support").to_owned(),
+        "transformation" => message::tr("Transformation").to_owned(),
+        "improvised" => message::tr("Improvised").to_owned(),
+        "unique" => message::tr("Unique").to_owned(),
         _ => title_case(kind),
     }
 }
@@ -722,13 +724,15 @@ impl Session {
         let mut session = Self::unloaded(directory);
         if session.directory.as_os_str().is_empty() {
             session.game_status = GameStatus::Missing;
-            session.message =
-                Message::info("Choose the folder that contains your Jade Empire savegames.");
+            session.message = Message::info(message::tr(
+                "Choose the folder that contains your Jade Empire savegames.",
+            ));
         } else {
             session.game_status = GameStatus::Loading;
-            session.message = Message::info(format!(
-                "Scanning {} for savegames…",
-                session.directory.display()
+            let directory = session.directory.display().to_string();
+            session.message = Message::info(message::fill(
+                "Scanning {directory} for savegames…",
+                &[("directory", &directory)],
             ));
         }
         session
@@ -753,7 +757,7 @@ impl Session {
             section_errors: Vec::new(),
             character_error: None,
             preview: None,
-            message: Message::info("Scanning for savegames…"),
+            message: Message::info(message::tr("Scanning for savegames…")),
             last_backup: None,
             baseline: None,
             dirty: false,
@@ -826,19 +830,32 @@ impl Session {
                 self.clear_open_save();
             }
         }
-        let directory = self.directory.display();
-        let savegames = format::plural(total, "savegame", "savegames");
+        let directory = self.directory.display().to_string();
+        let savegames = format::plural(total, message::tr("savegame"), message::tr("savegames"));
         self.message = if total == 0 {
-            Message::info(format!("No savegames found in {directory}."))
+            Message::info(message::fill(
+                "No savegames found in {directory}.",
+                &[("directory", &directory)],
+            ))
         } else if broken == 0 {
-            Message::success(format!("Found {savegames} in {directory}."))
+            Message::success(message::fill(
+                "Found {savegames} in {directory}.",
+                &[("savegames", &savegames), ("directory", &directory)],
+            ))
         } else if broken == total {
-            Message::error(format!(
-                "Found {savegames} in {directory}, but none of them can be read."
+            Message::error(message::fill(
+                "Found {savegames} in {directory}, but none of them can be read.",
+                &[("savegames", &savegames), ("directory", &directory)],
             ))
         } else {
-            Message::error(format!(
-                "Found {savegames} in {directory}; {broken} of them cannot be read."
+            let broken = broken.to_string();
+            Message::error(message::fill(
+                "Found {savegames} in {directory}; {broken} of them cannot be read.",
+                &[
+                    ("savegames", &savegames),
+                    ("directory", &directory),
+                    ("broken", &broken),
+                ],
             ))
         };
     }
@@ -901,15 +918,16 @@ impl Session {
     pub fn begin_scan(&mut self, directory: impl Into<PathBuf>) -> Option<ScanRequest> {
         let directory = directory.into();
         if self.is_dirty() {
-            self.message = Message::info(
+            self.message = Message::info(message::tr(
                 "This savegame has unsaved changes: save them or press Revert before scanning.",
-            );
+            ));
             self.settle_loading_game_data();
             return None;
         }
         if directory.as_os_str().is_empty() {
-            self.message =
-                Message::info("Choose the folder that contains your Jade Empire savegames.");
+            self.message = Message::info(message::tr(
+                "Choose the folder that contains your Jade Empire savegames.",
+            ));
             self.settle_loading_game_data();
             return None;
         }
@@ -921,7 +939,11 @@ impl Session {
         self.scan_token = self.scan_token.wrapping_add(1);
         let token = self.scan_token;
         self.scanning = Some((directory.clone(), token));
-        self.message = Message::info(format!("Scanning {} for savegames…", directory.display()));
+        let directory_label = directory.display().to_string();
+        self.message = Message::info(message::fill(
+            "Scanning {directory} for savegames…",
+            &[("directory", &directory_label)],
+        ));
         Some(ScanRequest {
             directory,
             token,
@@ -969,9 +991,10 @@ impl Session {
         if !self.is_current_scan(request) {
             return false;
         }
-        self.message = Message::error(format!(
-            "Could not scan {}: the savegame reader stopped unexpectedly.",
-            request.directory.display()
+        let directory = request.directory.display().to_string();
+        self.message = Message::error(message::fill(
+            "Could not scan {directory}: the savegame reader stopped unexpectedly.",
+            &[("directory", &directory)],
         ));
         self.settle_loading_game_data();
         self.finish_scan();
@@ -988,7 +1011,9 @@ impl Session {
         }
         self.scan_token = self.scan_token.wrapping_add(1);
         self.settle_loading_game_data();
-        self.message = Message::info("Scan cancelled; the savegames on screen are unchanged.");
+        self.message = Message::info(message::tr(
+            "Scan cancelled; the savegames on screen are unchanged.",
+        ));
         true
     }
 
@@ -1050,10 +1075,13 @@ impl Session {
                 self.game_status = bundled_game_status(self.name_index);
                 Vec::new()
             }
-            Err(message) => {
+            Err(reason) => {
                 self.game = None;
-                self.game_status = GameStatus::Error(message.clone());
-                vec![format!("game data: {message}")]
+                self.game_status = GameStatus::Error(reason.clone());
+                vec![message::fill(
+                    "game data: {message}",
+                    &[("message", &reason)],
+                )]
             }
         }
     }
@@ -1089,14 +1117,18 @@ impl Session {
                 // Names, descriptions and upgrade tables all become resolvable
                 // now, so every derived row has to be rebuilt.
                 self.rebuild_rows();
-                self.message =
-                    Message::success(format!("Using the game data in {}.", root.display()));
+                let root = root.display().to_string();
+                self.message = Message::success(message::fill(
+                    "Using the game data in {root}.",
+                    &[("root", &root)],
+                ));
                 true
             }
             Err(error) => {
-                self.message = Message::error(format!(
-                    "{} is not a readable Jade Empire installation: {error}",
-                    root.display()
+                let root = root.display().to_string();
+                self.message = Message::error(message::fill(
+                    "{root} is not a readable Jade Empire installation: {error}",
+                    &[("root", &root), ("error", &error.to_string())],
                 ));
                 false
             }
@@ -1121,19 +1153,21 @@ impl Session {
             return true;
         }
         if self.is_dirty() {
-            self.message = Message::info(
+            self.message = Message::info(message::tr(
                 "This savegame has unsaved changes: save them or press Revert first.",
-            );
+            ));
             return false;
         }
         let Some(entry) = self.entries.get(index) else {
-            self.message = Message::error("That savegame no longer exists; scan the folder again.");
+            self.message = Message::error(message::tr(
+                "That savegame no longer exists; scan the folder again.",
+            ));
             return false;
         };
         if let Some(error) = &entry.error {
-            self.message = Message::error(format!(
+            self.message = Message::error(message::fill(
                 "Cannot open {label}: the scan found it unreadable ({error}).",
-                label = entry.label
+                &[("label", &entry.label), ("error", error)],
             ));
             return false;
         }
@@ -1178,7 +1212,7 @@ impl Session {
                     warnings.extend(self.load_game_data());
                 }
                 self.message = if warnings.is_empty() && self.section_errors.is_empty() {
-                    Message::success(format!("Opened {label}."))
+                    Message::success(message::fill("Opened {label}.", &[("label", &label)]))
                 } else {
                     let mut problems: Vec<String> = self
                         .section_errors
@@ -1186,15 +1220,20 @@ impl Session {
                         .map(|error| format!("{}: {}", error.section.label(), error.message))
                         .collect();
                     problems.extend(warnings);
-                    Message::error(format!(
-                        "Opened {label}, but some sections could not be read: {}",
-                        problems.join("; ")
+                    let problems = problems.join("; ");
+                    Message::error(message::fill(
+                        "Opened {label}, but some sections could not be read: {problems}",
+                        &[("label", &label), ("problems", &problems)],
                     ))
                 };
                 true
             }
             Err(error) => {
-                self.message = Message::error(format!("Cannot open {}: {error}", path.display()));
+                let path = path.display().to_string();
+                self.message = Message::error(message::fill(
+                    "Cannot open {path}: {error}",
+                    &[("path", &path), ("error", &error.to_string())],
+                ));
                 false
             }
         }
@@ -1283,7 +1322,7 @@ impl Session {
     fn describe_item(&self, item: &Item) -> ItemRow {
         let info = self.game.as_ref().and_then(|game| game.item(item.item_id));
         let bundled = self.bundled_item(item.item_id);
-        let fallback = format!("Item {}", item.item_id);
+        let fallback = message::fill("Item {item_id}", &[("item_id", &item.item_id.to_string())]);
         let name = info
             .map(|info| info.name.clone())
             .or_else(|| bundled.map(|item| item.name.clone()))
@@ -1308,7 +1347,10 @@ impl Session {
             .game
             .as_ref()
             .and_then(|game| game.style(style.style_id));
-        let fallback = format!("Style {}", style.style_id);
+        let fallback = message::fill(
+            "Style {style_id}",
+            &[("style_id", &style.style_id.to_string())],
+        );
         let name = info
             .map(|info| info.name.clone())
             .or_else(|| self.bundled_style(style.style_id).map(ToOwned::to_owned))
@@ -1547,7 +1589,10 @@ impl Session {
             }
         }
         if let Some(error) = failure {
-            self.message = Message::error(format!("Cannot undo that step: {error}"));
+            self.message = Message::error(message::fill(
+                "Cannot undo that step: {error}",
+                &[("error", &error.to_string())],
+            ));
             return false;
         }
         true
@@ -1565,7 +1610,7 @@ impl Session {
     /// Undoes the last applied action and restores the typed views.
     pub fn undo(&mut self) -> bool {
         if self.history_cursor == 0 {
-            self.message = Message::info("There is nothing to undo.");
+            self.message = Message::info(message::tr("There is nothing to undo."));
             return false;
         }
         let entry = self.history[self.history_cursor - 1].clone();
@@ -1574,14 +1619,14 @@ impl Session {
         }
         self.history_cursor -= 1;
         self.refresh_after_history_restore();
-        self.message = Message::info(format!("Undid {}.", entry.label));
+        self.message = Message::info(message::fill("Undid {label}.", &[("label", &entry.label)]));
         true
     }
 
     /// Reapplies the most recently undone action.
     pub fn redo(&mut self) -> bool {
         if self.history_cursor >= self.history.len() {
-            self.message = Message::info("There is nothing to redo.");
+            self.message = Message::info(message::tr("There is nothing to redo."));
             return false;
         }
         let entry = self.history[self.history_cursor].clone();
@@ -1590,7 +1635,7 @@ impl Session {
         }
         self.history_cursor += 1;
         self.refresh_after_history_restore();
-        self.message = Message::info(format!("Redid {}.", entry.label));
+        self.message = Message::info(message::fill("Redid {label}.", &[("label", &entry.label)]));
         true
     }
 
@@ -1618,11 +1663,11 @@ impl Session {
         }
         if groups.is_empty() && self.dirty {
             groups.push(PendingChangeGroup {
-                label: "Savegame structure".to_owned(),
+                label: message::tr("Savegame structure").to_owned(),
                 changes: vec![PendingChange::new(
-                    "Block layout",
-                    "as opened",
-                    "structs were added or orphaned",
+                    message::tr("Block layout"),
+                    message::tr("as opened"),
+                    message::tr("structs were added or orphaned"),
                 )],
             });
         }
@@ -1665,19 +1710,19 @@ impl Session {
     /// and the external-change banner do.
     pub fn reload_from_disk(&mut self) -> Result<(), SessionError> {
         let Some(index) = self.selected else {
-            self.message = Message::error("No savegame is open.");
+            self.message = Message::error(message::tr("No savegame is open."));
             return Err(SessionError::NoSavegame);
         };
         if self.dirty {
-            self.message = Message::error(
+            self.message = Message::error(message::tr(
                 "Reloading from disk would discard the unsaved changes. Save or revert them first.",
-            );
+            ));
             return Err(SessionError::CannotReload);
         }
         if !self.load(index) {
             return Err(SessionError::CannotReload);
         }
-        self.message = Message::info("Reloaded the savegame from disk.");
+        self.message = Message::info(message::tr("Reloaded the savegame from disk."));
         Ok(())
     }
 
@@ -1706,12 +1751,13 @@ impl Session {
     /// backup of the current file first; the returned path is that safety copy.
     pub fn restore_backup(&mut self, backup: &Path) -> Result<PathBuf, SessionError> {
         let Some(path) = self.current_path() else {
-            self.message = Message::error("No savegame is open.");
+            self.message = Message::error(message::tr("No savegame is open."));
             return Err(SessionError::NoSavegame);
         };
         if self.dirty {
-            self.message =
-                Message::error("Save or revert the current edits before restoring a backup.");
+            self.message = Message::error(message::tr(
+                "Save or revert the current edits before restoring a backup.",
+            ));
             return Err(SessionError::CannotReload);
         }
         let known = self
@@ -1719,7 +1765,9 @@ impl Session {
             .into_iter()
             .any(|candidate| candidate.path == backup);
         if !known {
-            self.message = Message::error("That file is not a backup of the open savegame.");
+            self.message = Message::error(message::tr(
+                "That file is not a backup of the open savegame.",
+            ));
             return Err(SessionError::CannotReload);
         }
         match restore_backup(backup, &path) {
@@ -1729,15 +1777,19 @@ impl Session {
                     let _ = self.load(index);
                 }
                 self.last_backup = Some(safety.clone());
-                self.message = Message::success(format!(
-                    "Restored {}. The file it replaced is kept as {}.",
-                    backup.display(),
-                    safety.display()
+                let backup_path = backup.display().to_string();
+                let safety_path = safety.display().to_string();
+                self.message = Message::success(message::fill(
+                    "Restored {backup}. The file it replaced is kept as {safety}.",
+                    &[("backup", &backup_path), ("safety", &safety_path)],
                 ));
                 Ok(safety)
             }
             Err(error) => {
-                self.message = Message::error(format!("Cannot restore the backup: {error}"));
+                self.message = Message::error(message::fill(
+                    "Cannot restore the backup: {error}",
+                    &[("error", &error.to_string())],
+                ));
                 Err(SessionError::CannotReload)
             }
         }
@@ -1906,7 +1958,7 @@ impl Session {
             }
         };
         let Some(save) = self.save.as_mut() else {
-            self.message = Message::error("No savegame is open.");
+            self.message = Message::error(message::tr("No savegame is open."));
             return Err(SessionError::NoSavegame);
         };
         match save.apply_character(&character) {
@@ -1916,12 +1968,19 @@ impl Session {
                 self.refresh_entry();
                 self.refresh_dirty();
                 if changes.is_empty() {
-                    self.message = Message::info("Nothing changed, so there was nothing to apply.");
+                    self.message = Message::info(message::tr(
+                        "Nothing changed, so there was nothing to apply.",
+                    ));
                 } else {
-                    self.remember_edit("Character", pending_from_core(&changes), None);
-                    self.message = Message::success(format!(
-                        "Applied {} in memory.",
-                        format::plural(changes.len(), "change", "changes")
+                    self.remember_edit(message::tr("Character"), pending_from_core(&changes), None);
+                    let changes_label = format::plural(
+                        changes.len(),
+                        message::tr("change"),
+                        message::tr("changes"),
+                    );
+                    self.message = Message::success(message::fill(
+                        "Applied {changes} in memory.",
+                        &[("changes", &changes_label)],
                     ));
                 }
                 Ok(changes.len())
@@ -1961,7 +2020,11 @@ impl Session {
                     .map(|change| change.field.as_str())
                     .collect::<Vec<_>>()
                     .join("|");
-                self.remember_edit("Character", pending, (!key.is_empty()).then_some(key));
+                self.remember_edit(
+                    message::tr("Character"),
+                    pending,
+                    (!key.is_empty()).then_some(key),
+                );
                 true
             }
             _ => false,
@@ -1978,7 +2041,9 @@ impl Session {
             return Err(SessionError::NoSavegame);
         };
         if !self.dirty {
-            self.message = Message::info("Nothing changed, so there is nothing to write.");
+            self.message = Message::info(message::tr(
+                "Nothing changed, so there is nothing to write.",
+            ));
             return Err(SessionError::NothingToSave);
         }
         match save.save(SaveOptions { backup: true }) {
@@ -1988,13 +2053,18 @@ impl Session {
                 self.disk_stamp = DiskStamp::of(&path);
                 self.disk_changed = false;
                 self.last_backup = backup;
+                let path_label = path.display().to_string();
                 self.message = match &self.last_backup {
-                    Some(backup) => Message::success(format!(
-                        "Saved {}. The previous file is kept as {}.",
-                        path.display(),
-                        backup.display()
-                    )),
-                    None => Message::success(format!("Saved {}.", path.display())),
+                    Some(backup) => {
+                        let backup = backup.display().to_string();
+                        Message::success(message::fill(
+                            "Saved {path}. The previous file is kept as {backup}.",
+                            &[("path", &path_label), ("backup", &backup)],
+                        ))
+                    }
+                    None => {
+                        Message::success(message::fill("Saved {path}.", &[("path", &path_label)]))
+                    }
                 };
                 self.refresh_entry();
                 self.accept_as_clean();
@@ -2003,12 +2073,16 @@ impl Session {
             Err(error) => {
                 if matches!(error, jadeforge_core::Error::Conflict { .. }) {
                     self.disk_changed = true;
-                    self.message = Message::error(format!(
+                    self.message = Message::error(message::fill(
                         "The savegame changed on disk since it was opened, so it was not overwritten. \
-                         Reload it to keep the file on disk, or restore a backup. ({error})"
+                         Reload it to keep the file on disk, or restore a backup. ({error})",
+                        &[("error", &error.to_string())],
                     ));
                 } else {
-                    self.message = Message::error(format!("Cannot save: {error}"));
+                    self.message = Message::error(message::fill(
+                        "Cannot save: {error}",
+                        &[("error", &error.to_string())],
+                    ));
                 }
                 Err(SessionError::Save(error.to_string()))
             }
@@ -2035,19 +2109,19 @@ impl Session {
         match self.save() {
             Ok(path) => {
                 if let Some(first) = invalid.first() {
-                    self.message = Message::info(format!(
-                        "Saved {}. The invalid character field was not applied: {}",
-                        path.display(),
-                        first.message
+                    let path = path.display().to_string();
+                    self.message = Message::info(message::fill(
+                        "Saved {path}. The invalid character field was not applied: {error}",
+                        &[("path", &path), ("error", &first.message)],
                     ));
                 }
                 Ok(path)
             }
             Err(error) => {
                 if let Some(first) = invalid.first() {
-                    self.message = Message::error(format!(
-                        "{} The character form also has an invalid field: {}",
-                        self.message.text, first.message
+                    self.message = Message::error(message::fill(
+                        "{message} The character form also has an invalid field: {error}",
+                        &[("message", &self.message.text), ("error", &first.message)],
                     ));
                 }
                 Err(error)
@@ -2061,7 +2135,7 @@ impl Session {
             return Err(SessionError::NoSavegame);
         };
         if self.load(index) {
-            self.message = Message::info("Reloaded the savegame from disk.");
+            self.message = Message::info(message::tr("Reloaded the savegame from disk."));
             Ok(())
         } else {
             Err(SessionError::CannotReload)
@@ -2080,11 +2154,16 @@ impl Session {
         };
         let new_count = i32::from(current) + delta;
         if new_count > 255 {
-            self.message = Message::info(format!("{name}: a stack cannot hold more than 255."));
+            self.message = Message::info(message::fill(
+                "{name}: a stack cannot hold more than 255.",
+                &[("name", &name)],
+            ));
             return;
         }
         if new_count < 1 {
-            self.message = Message::info("A stack needs at least one item; use Remove instead.");
+            self.message = Message::info(message::tr(
+                "A stack needs at least one item; use Remove instead.",
+            ));
             return;
         }
         let Some(save) = self.save.as_mut() else {
@@ -2099,7 +2178,7 @@ impl Session {
                     item.count = new_count as u8;
                 }
                 self.remember_edit(
-                    "Item stack",
+                    message::tr("Item stack"),
                     vec![PendingChange::new(
                         format!("ItemList[{struct_index}].Count ({name})"),
                         current.to_string(),
@@ -2107,16 +2186,22 @@ impl Session {
                     )],
                     None,
                 );
-                self.message = Message::success(format!(
-                    "{name}: {} in the stack.",
-                    format::plural(
-                        usize::try_from(new_count).unwrap_or(usize::MAX),
-                        "item",
-                        "items"
-                    )
+                let count = format::plural(
+                    usize::try_from(new_count).unwrap_or(usize::MAX),
+                    message::tr("item"),
+                    message::tr("items"),
+                );
+                self.message = Message::success(message::fill(
+                    "{name}: {count} in the stack.",
+                    &[("name", &name), ("count", &count)],
                 ));
             }
-            Err(error) => self.message = Message::error(format!("Cannot change item: {error}")),
+            Err(error) => {
+                self.message = Message::error(message::fill(
+                    "Cannot change item: {error}",
+                    &[("error", &error.to_string())],
+                ));
+            }
         }
         self.refresh_dirty();
     }
@@ -2133,7 +2218,9 @@ impl Session {
             return;
         };
         if count == 0 {
-            self.message = Message::info("A stack needs at least one item; use Remove instead.");
+            self.message = Message::info(message::tr(
+                "A stack needs at least one item; use Remove instead.",
+            ));
             return;
         }
         let Some(save) = self.save.as_mut() else {
@@ -2153,7 +2240,7 @@ impl Session {
                     item.count = count;
                 }
                 self.remember_edit(
-                    "Item stack",
+                    message::tr("Item stack"),
                     vec![PendingChange::new(
                         format!("ItemList[{struct_index}].Count ({name})"),
                         previous.to_string(),
@@ -2161,12 +2248,22 @@ impl Session {
                     )],
                     None,
                 );
-                self.message = Message::success(format!(
-                    "{name}: {} in the stack.",
-                    format::plural(usize::from(count), "item", "items")
+                let count_label = format::plural(
+                    usize::from(count),
+                    message::tr("item"),
+                    message::tr("items"),
+                );
+                self.message = Message::success(message::fill(
+                    "{name}: {count} in the stack.",
+                    &[("name", &name), ("count", &count_label)],
                 ));
             }
-            Err(error) => self.message = Message::error(format!("Cannot change item: {error}")),
+            Err(error) => {
+                self.message = Message::error(message::fill(
+                    "Cannot change item: {error}",
+                    &[("error", &error.to_string())],
+                ));
+            }
         }
         self.refresh_dirty();
     }
@@ -2177,7 +2274,10 @@ impl Session {
         let (name, save_type) =
             if let Some(info) = self.game.as_ref().and_then(|game| game.item(item_id)) {
                 let Some(save_type) = info.save_type else {
-                    let error = format!("item {item_id} has no savegame category type");
+                    let error = message::fill(
+                        "item {item_id} has no savegame category type",
+                        &[("item_id", &item_id.to_string())],
+                    );
                     self.message = Message::error(error.clone());
                     return Err(SessionError::Item(error));
                 };
@@ -2192,7 +2292,10 @@ impl Session {
             } else {
                 // The CLI and older fixtures can add an id that is not in the
                 // current item table; the legacy generic type keeps that working.
-                (format!("Item {item_id}"), 8)
+                (
+                    message::fill("Item {item_id}", &[("item_id", &item_id.to_string())]),
+                    8,
+                )
             };
         let Some(save) = self.save.as_mut() else {
             return Err(SessionError::NoSavegame);
@@ -2201,19 +2304,22 @@ impl Session {
             Ok(index) => {
                 self.rebuild_rows();
                 self.remember_edit(
-                    "Item added",
+                    message::tr("Item added"),
                     vec![PendingChange::new(
                         format!("ItemList[{index}] ({name})"),
-                        "not present",
+                        message::tr("not present"),
                         format!("#{item_id} x1"),
                     )],
                     None,
                 );
-                self.message = Message::success(format!("Added {name}."));
+                self.message = Message::success(message::fill("Added {name}.", &[("name", &name)]));
                 Ok(())
             }
             Err(error) => {
-                self.message = Message::error(format!("Cannot add item: {error}"));
+                self.message = Message::error(message::fill(
+                    "Cannot add item: {error}",
+                    &[("error", &error.to_string())],
+                ));
                 Err(SessionError::Item(error.to_string()))
             }
         }
@@ -2236,18 +2342,24 @@ impl Session {
             Ok(true) => {
                 Rc::make_mut(&mut self.items).retain(|item| item.struct_index != struct_index);
                 self.remember_edit(
-                    "Item removed",
+                    message::tr("Item removed"),
                     vec![PendingChange::new(
                         format!("ItemList[{struct_index}] ({name})"),
                         format!("#{item_id} x{count}"),
-                        "removed",
+                        message::tr("removed"),
                     )],
                     None,
                 );
-                self.message = Message::success(format!("Removed {name}."));
+                self.message =
+                    Message::success(message::fill("Removed {name}.", &[("name", &name)]));
             }
-            Ok(false) => self.message = Message::info("The item was already gone."),
-            Err(error) => self.message = Message::error(format!("Cannot remove item: {error}")),
+            Ok(false) => self.message = Message::info(message::tr("The item was already gone.")),
+            Err(error) => {
+                self.message = Message::error(message::fill(
+                    "Cannot remove item: {error}",
+                    &[("error", &error.to_string())],
+                ));
+            }
         }
         self.refresh_dirty();
     }
@@ -2385,7 +2497,12 @@ impl Session {
                     family: choice.family.clone(),
                     tier: choice.tier,
                     name: advance.map_or_else(
-                        || format!("Upgrade {}", choice.advance),
+                        || {
+                            message::fill(
+                                "Upgrade {advance}",
+                                &[("advance", &choice.advance.to_string())],
+                            )
+                        },
                         |advance| advance.name.clone(),
                     ),
                     effect: advance
@@ -2438,7 +2555,7 @@ impl Session {
                         .find(|row| row.struct_index == struct_index)
                         .map_or((before_mask, before_level), |row| (row.mask, row.level));
                     self.remember_edit(
-                        "Style upgrade",
+                        message::tr("Style upgrade"),
                         vec![
                             PendingChange::new(
                                 format!(
@@ -2458,24 +2575,35 @@ impl Session {
                     );
                 }
                 self.message = if changed == 0 {
-                    Message::info("That upgrade is already in the requested state.")
+                    Message::info(message::tr(
+                        "That upgrade is already in the requested state.",
+                    ))
                 } else {
                     let upgrades = format::plural(
                         usize::try_from(changed).unwrap_or(usize::MAX),
-                        "upgrade",
-                        "upgrades",
+                        message::tr("upgrade"),
+                        message::tr("upgrades"),
                     );
                     if taken {
-                        Message::success(format!("Bought {upgrades}."))
+                        Message::success(message::fill(
+                            "Bought {upgrades}.",
+                            &[("upgrades", &upgrades)],
+                        ))
                     } else {
-                        Message::success(format!("Removed {upgrades}."))
+                        Message::success(message::fill(
+                            "Removed {upgrades}.",
+                            &[("upgrades", &upgrades)],
+                        ))
                     }
                 };
                 changed > 0
             }
             Err(error) => {
                 self.rebuild_rows();
-                self.message = Message::error(format!("Cannot change the upgrade: {error}"));
+                self.message = Message::error(message::fill(
+                    "Cannot change the upgrade: {error}",
+                    &[("error", &error.to_string())],
+                ));
                 false
             }
         };
@@ -2532,17 +2660,19 @@ impl Session {
                     .iter()
                     .map(|effect| {
                         self.game.as_ref().map_or_else(
-                            || format!("{:+} effect {}", effect.value, effect.kind),
+                            || describe_unsaved_effect(effect),
                             |game| describe_effect(game, effect),
                         )
                     })
                     .collect();
                 let name = if empty {
-                    "Empty socket".to_owned()
+                    message::tr("Empty socket").to_owned()
                 } else {
                     info.map(|item| item.name.clone())
                         .or_else(|| bundled.map(|item| item.name.clone()))
-                        .unwrap_or_else(|| format!("Gem {}", gem.item_id))
+                        .unwrap_or_else(|| {
+                            message::fill("Gem {item_id}", &[("item_id", &gem.item_id.to_string())])
+                        })
                 };
                 GemRow {
                     struct_index: gem.struct_index,
@@ -2583,7 +2713,7 @@ impl Session {
             .and_then(|game| game.gem(item_id))
             .cloned()
         else {
-            self.message = Message::error("That gem is not in the game data.");
+            self.message = Message::error(message::tr("That gem is not in the game data."));
             return;
         };
         let Some(save) = self.save.as_mut() else {
@@ -2593,18 +2723,22 @@ impl Session {
             Ok(index) => {
                 self.gems = Rc::new(self.build_gem_rows().0);
                 self.remember_edit(
-                    "Gem added",
+                    message::tr("Gem added"),
                     vec![PendingChange::new(
                         format!("GemList[{index}] ({})", gem.name),
-                        "not present",
+                        message::tr("not present"),
                         format!("gem #{item_id}"),
                     )],
                     None,
                 );
-                self.message = Message::success(format!("Added {}.", gem.name));
+                self.message =
+                    Message::success(message::fill("Added {name}.", &[("name", &gem.name)]));
             }
             Err(error) => {
-                self.message = Message::error(format!("Cannot add the gem: {error}"));
+                self.message = Message::error(message::fill(
+                    "Cannot add the gem: {error}",
+                    &[("error", &error.to_string())],
+                ));
             }
         }
         self.refresh_dirty();
@@ -2624,16 +2758,16 @@ impl Session {
             Ok(location) => {
                 self.gems = Rc::new(self.build_gem_rows().0);
                 if let Some((name, from)) = before {
+                    let inventory = message::tr("inventory");
+                    let amulet = message::tr("amulet");
                     let (from, to) = match (from, location) {
-                        (GemLocation::Inventory, GemLocation::Amulet) => ("inventory", "amulet"),
-                        (GemLocation::Amulet, GemLocation::Inventory) => ("amulet", "inventory"),
-                        (GemLocation::Inventory, GemLocation::Inventory) => {
-                            ("inventory", "inventory")
-                        }
-                        (GemLocation::Amulet, GemLocation::Amulet) => ("amulet", "amulet"),
+                        (GemLocation::Inventory, GemLocation::Amulet) => (inventory, amulet),
+                        (GemLocation::Amulet, GemLocation::Inventory) => (amulet, inventory),
+                        (GemLocation::Inventory, GemLocation::Inventory) => (inventory, inventory),
+                        (GemLocation::Amulet, GemLocation::Amulet) => (amulet, amulet),
                     };
                     self.remember_edit(
-                        "Gem moved",
+                        message::tr("Gem moved"),
                         vec![PendingChange::new(
                             format!("GemList[{struct_index}] ({name})"),
                             from,
@@ -2642,13 +2776,16 @@ impl Session {
                         None,
                     );
                 }
-                self.message = Message::success(match location {
+                self.message = Message::success(message::tr(match location {
                     GemLocation::Amulet => "Gem socketed into the amulet.",
                     GemLocation::Inventory => "Gem moved to the inventory.",
-                });
+                }));
             }
             Err(error) => {
-                self.message = Message::error(format!("Cannot move the gem: {error}"));
+                self.message = Message::error(message::fill(
+                    "Cannot move the gem: {error}",
+                    &[("error", &error.to_string())],
+                ));
             }
         }
         self.refresh_dirty();
@@ -2669,19 +2806,22 @@ impl Session {
                 self.gems = Rc::new(self.build_gem_rows().0);
                 if let Some((name, location)) = before {
                     self.remember_edit(
-                        "Gem removed",
+                        message::tr("Gem removed"),
                         vec![PendingChange::new(
                             format!("GemList[{struct_index}] ({name})"),
                             format!("{location:?}"),
-                            "removed",
+                            message::tr("removed"),
                         )],
                         None,
                     );
                 }
-                self.message = Message::success("Gem removed.");
+                self.message = Message::success(message::tr("Gem removed."));
             }
             Err(error) => {
-                self.message = Message::error(format!("Cannot remove the gem: {error}"));
+                self.message = Message::error(message::fill(
+                    "Cannot remove the gem: {error}",
+                    &[("error", &error.to_string())],
+                ));
             }
         }
         self.refresh_dirty();
@@ -2732,12 +2872,13 @@ impl Session {
             .and_then(|game| game.style(style_id))
             .cloned()
         else {
-            self.message = Message::error("That style is not in the game data.");
+            self.message = Message::error(message::tr("That style is not in the game data."));
             return;
         };
         let Some(template) = self.styles.first().map(|style| style.struct_index) else {
-            self.message =
-                Message::error("Learn a style first so JadeForge can copy the field layout.");
+            self.message = Message::error(message::tr(
+                "Learn a style first so JadeForge can copy the field layout.",
+            ));
             return;
         };
         let identity = StyleIdentity {
@@ -2755,17 +2896,23 @@ impl Session {
             Ok(index) => {
                 self.rebuild_rows();
                 self.remember_edit(
-                    "Style added",
+                    message::tr("Style added"),
                     vec![PendingChange::new(
                         format!("StyleList[{index}] ({})", info.name),
-                        "not present",
+                        message::tr("not present"),
                         format!("style #{}", info.id),
                     )],
                     None,
                 );
-                self.message = Message::success(format!("Added {}.", info.name));
+                self.message =
+                    Message::success(message::fill("Added {name}.", &[("name", &info.name)]));
             }
-            Err(error) => self.message = Message::error(format!("Cannot add style: {error}")),
+            Err(error) => {
+                self.message = Message::error(message::fill(
+                    "Cannot add style: {error}",
+                    &[("error", &error.to_string())],
+                ));
+            }
         }
         self.refresh_dirty();
     }
@@ -2781,9 +2928,9 @@ impl Session {
             return;
         };
         if self.styles.len() <= 1 {
-            self.message = Message::error(
+            self.message = Message::error(message::tr(
                 "Keep at least one style: JadeForge needs an existing style as the layout template for learning one.",
-            );
+            ));
             return;
         }
         let Some(save) = self.save.as_mut() else {
@@ -2793,18 +2940,24 @@ impl Session {
             Ok(true) => {
                 Rc::make_mut(&mut self.styles).retain(|style| style.struct_index != struct_index);
                 self.remember_edit(
-                    "Style removed",
+                    message::tr("Style removed"),
                     vec![PendingChange::new(
                         format!("StyleList[{struct_index}] ({name})"),
                         format!("style #{style_id}"),
-                        "removed",
+                        message::tr("removed"),
                     )],
                     None,
                 );
-                self.message = Message::success(format!("Removed {name}."));
+                self.message =
+                    Message::success(message::fill("Removed {name}.", &[("name", &name)]));
             }
-            Ok(false) => self.message = Message::info("The style was already gone."),
-            Err(error) => self.message = Message::error(format!("Cannot remove style: {error}")),
+            Ok(false) => self.message = Message::info(message::tr("The style was already gone.")),
+            Err(error) => {
+                self.message = Message::error(message::fill(
+                    "Cannot remove style: {error}",
+                    &[("error", &error.to_string())],
+                ));
+            }
         }
         self.refresh_dirty();
     }
@@ -2812,7 +2965,7 @@ impl Session {
     /// Changes the level of a companion.
     pub fn set_henchman_level(&mut self, struct_index: usize, level: u8) {
         if !(1..=60).contains(&level) {
-            self.message = Message::info("Companion levels go from 1 to 60.");
+            self.message = Message::info(message::tr("Companion levels go from 1 to 60."));
             return;
         }
         let known = self
@@ -2833,7 +2986,7 @@ impl Session {
                 }
                 if let Some((name, previous)) = known {
                     self.remember_edit(
-                        "Companion level",
+                        message::tr("Companion level"),
                         vec![PendingChange::new(
                             format!("HenchmanList[{struct_index}].Level ({name})"),
                             previous.to_string(),
@@ -2842,10 +2995,16 @@ impl Session {
                         None,
                     );
                 }
-                self.message = Message::success(format!("Companion level set to {level}."));
+                self.message = Message::success(message::fill(
+                    "Companion level set to {level}.",
+                    &[("level", &level.to_string())],
+                ));
             }
             Err(error) => {
-                self.message = Message::error(format!("Cannot change companion: {error}"));
+                self.message = Message::error(message::fill(
+                    "Cannot change companion: {error}",
+                    &[("error", &error.to_string())],
+                ));
             }
         }
         self.refresh_dirty();
@@ -2873,12 +3032,12 @@ impl Session {
                     henchman.available = !available;
                 }
                 let state = if available {
-                    "unavailable"
+                    message::tr("unavailable")
                 } else {
-                    "available"
+                    message::tr("available")
                 };
                 self.remember_edit(
-                    "Companion availability",
+                    message::tr("Companion availability"),
                     vec![PendingChange::new(
                         format!("HenchmanList[{struct_index}].Available ({name})"),
                         (!available).to_string(),
@@ -2886,10 +3045,16 @@ impl Session {
                     )],
                     None,
                 );
-                self.message = Message::success(format!("{name} is now {state}."));
+                self.message = Message::success(message::fill(
+                    "{name} is now {state}.",
+                    &[("name", &name), ("state", state)],
+                ));
             }
             Err(error) => {
-                self.message = Message::error(format!("Cannot change companion: {error}"));
+                self.message = Message::error(message::fill(
+                    "Cannot change companion: {error}",
+                    &[("error", &error.to_string())],
+                ));
             }
         }
         self.refresh_dirty();
@@ -2948,9 +3113,10 @@ fn pending_from_core(changes: &[Change]) -> Vec<PendingChange> {
 
 /// Formats one predefined gem effect as `+2 Body` or `+1 Fire (5s)`.
 fn describe_gem_effect(game: &GameData, kind: u32, value: u32, duration: f32) -> String {
-    let name = game
-        .effect_name(kind)
-        .map_or_else(|| format!("Effect {kind}"), ToOwned::to_owned);
+    let name = game.effect_name(kind).map_or_else(
+        || message::fill("Effect {kind}", &[("kind", &kind.to_string())]),
+        ToOwned::to_owned,
+    );
     let signed = i64::from(value);
     if duration > 0.0 {
         format!("{signed:+} {name} ({duration:.0}s)")
@@ -2959,11 +3125,23 @@ fn describe_gem_effect(game: &GameData, kind: u32, value: u32, duration: f32) ->
     }
 }
 
+/// Formats an effect that only exists in the savegame, without game data names.
+fn describe_unsaved_effect(effect: &jadeforge_core::GemEffect) -> String {
+    let value = format!("{:+}", effect.value);
+    message::fill(
+        "{value} effect {kind}",
+        &[("value", &value), ("kind", &effect.kind.to_string())],
+    )
+}
+
 /// Formats one gem effect as `+2 Body` or `-1 Fire (-5s)`.
 fn describe_effect(game: &GameData, effect: &jadeforge_core::GemEffect) -> String {
     let name = game
         .effect_name(u32::try_from(effect.kind).unwrap_or(u32::MAX))
-        .map_or_else(|| format!("Effect {}", effect.kind), ToOwned::to_owned);
+        .map_or_else(
+            || message::fill("Effect {kind}", &[("kind", &effect.kind.to_string())]),
+            ToOwned::to_owned,
+        );
     if effect.duration > 0.0 {
         format!("{:+} {} ({:.0}s)", effect.value, name, effect.duration)
     } else {
@@ -2989,27 +3167,40 @@ fn bundled_game_status(name_index: Option<&'static NameIndex>) -> GameStatus {
 fn directory_problem(directory: &Path) -> Option<String> {
     match std::fs::metadata(directory) {
         Err(error) => Some(match error.kind() {
-            std::io::ErrorKind::NotFound => format!(
-                "The save folder {} does not exist. Check the path or use Browse.",
-                directory.display()
-            ),
-            std::io::ErrorKind::PermissionDenied => format!(
-                "The save folder {} cannot be read: permission denied.",
-                directory.display()
-            ),
-            _ => format!(
-                "The save folder {} cannot be read: {error}.",
-                directory.display()
-            ),
+            std::io::ErrorKind::NotFound => {
+                let directory = directory.display().to_string();
+                message::fill(
+                    "The save folder {directory} does not exist. Check the path or use Browse.",
+                    &[("directory", &directory)],
+                )
+            }
+            std::io::ErrorKind::PermissionDenied => {
+                let directory = directory.display().to_string();
+                message::fill(
+                    "The save folder {directory} cannot be read: permission denied.",
+                    &[("directory", &directory)],
+                )
+            }
+            _ => {
+                let directory = directory.display().to_string();
+                message::fill(
+                    "The save folder {directory} cannot be read: {error}.",
+                    &[("directory", &directory), ("error", &error.to_string())],
+                )
+            }
         }),
-        Ok(metadata) if !metadata.is_dir() => Some(format!(
-            "{} is a file, not a save folder.",
-            directory.display()
-        )),
+        Ok(metadata) if !metadata.is_dir() => {
+            let directory = directory.display().to_string();
+            Some(message::fill(
+                "{directory} is a file, not a save folder.",
+                &[("directory", &directory)],
+            ))
+        }
         Ok(_) => std::fs::read_dir(directory).err().map(|error| {
-            format!(
-                "The save folder {} cannot be listed: {error}.",
-                directory.display()
+            let directory = directory.display().to_string();
+            message::fill(
+                "The save folder {directory} cannot be listed: {error}.",
+                &[("directory", &directory), ("error", &error.to_string())],
             )
         }),
     }

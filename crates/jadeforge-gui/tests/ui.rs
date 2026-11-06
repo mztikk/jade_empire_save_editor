@@ -4440,6 +4440,31 @@ fn the_pseudolocale_marks_catalogued_ui_text() {
 }
 
 #[test]
+fn the_german_catalog_translations_render_in_the_shell() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let _ = jadeforge_gui::config::ensure_test_path();
+    let mut config = jadeforge_gui::config::Config::load();
+    config.locale = jadeforge_gui::Locale::German;
+    config.store().expect("store locale");
+    let test = launch_unopened_at(fixture.save_dir.clone(), 1280.0, 1400.0);
+    assert_eq!(
+        jadeforge_gui::i18n::current(),
+        jadeforge_gui::Locale::German
+    );
+    assert!(
+        find_label_text(&test, "Über JadeForge").is_some(),
+        "the translated About button is missing"
+    );
+    assert!(
+        find_label_text(&test, "Kein Spielstand ausgewählt").is_some(),
+        "the translated empty state is missing"
+    );
+}
+
+#[test]
 fn the_about_page_changes_the_language_and_persists_it() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");

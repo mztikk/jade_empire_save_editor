@@ -25,7 +25,7 @@ pub use jadeforge_session::{
     CharacterForm, GameStatus, Locale, Message, MessageKind, SaveEntry, Session, ThemeChoice,
     default_save_dir, normalize_text_scale,
 };
-pub use jadeforge_session::{config, preferences, session};
+pub use jadeforge_session::{config, message, preferences, session};
 
 /// The application id: the Wayland app id and the base name of the Linux
 /// desktop entry (`jadeforge.desktop`) and its hicolor icon.

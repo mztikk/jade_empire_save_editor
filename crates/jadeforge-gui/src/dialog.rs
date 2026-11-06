@@ -11,6 +11,8 @@
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
+use crate::i18n::t;
+
 /// What the test seam should answer instead of opening a dialog.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Answer {
@@ -77,7 +79,7 @@ pub fn pick_folder(start: Option<&Path>) -> PickOutcome {
             Answer::Picked(path) => PickOutcome::Picked(path),
         };
     }
-    let mut dialog = rfd::FileDialog::new().set_title("Choose the Jade Empire save folder");
+    let mut dialog = rfd::FileDialog::new().set_title(t("Choose the Jade Empire save folder"));
     if let Some(start) = start.filter(|path| path.is_dir()) {
         dialog = dialog.set_directory(start);
     }
@@ -137,14 +139,14 @@ pub fn ask_close_choice() -> CloseChoice {
         return choice;
     }
     let result = rfd::MessageDialog::new()
-        .set_title("Unsaved changes")
-        .set_description(
+        .set_title(t("Unsaved changes"))
+        .set_description(t(
             "This savegame has changes that are only in memory. Save them before closing, discard them, or cancel and keep editing.",
-        )
+        ))
         .set_buttons(rfd::MessageButtons::YesNoCancelCustom(
-            "Save".to_owned(),
-            "Discard".to_owned(),
-            "Cancel".to_owned(),
+            t("Save").to_owned(),
+            t("Discard").to_owned(),
+            t("Cancel").to_owned(),
         ))
         .set_level(rfd::MessageLevel::Warning)
         .show();
@@ -161,8 +163,8 @@ fn close_choice(result: &rfd::MessageDialogResult) -> CloseChoice {
     match result {
         rfd::MessageDialogResult::Yes => CloseChoice::Save,
         rfd::MessageDialogResult::No => CloseChoice::Discard,
-        rfd::MessageDialogResult::Custom(label) if label == "Save" => CloseChoice::Save,
-        rfd::MessageDialogResult::Custom(label) if label == "Discard" => CloseChoice::Discard,
+        rfd::MessageDialogResult::Custom(label) if label == t("Save") => CloseChoice::Save,
+        rfd::MessageDialogResult::Custom(label) if label == t("Discard") => CloseChoice::Discard,
         rfd::MessageDialogResult::Ok
         | rfd::MessageDialogResult::Cancel
         | rfd::MessageDialogResult::Custom(_) => CloseChoice::Cancel,

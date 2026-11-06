@@ -3,7 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::i18n::t;
+use crate::i18n::{fill, t};
 use crate::session::{ItemRow, ItemSuggestion, Section};
 use crate::theme;
 use crate::widgets::{self, AccessibleButton, Action};
@@ -35,9 +35,9 @@ pub fn view(
     }
     if rows.is_empty() {
         rows.push(match ctx.session.borrow().section_error(Section::Items) {
-            Some(error) => widgets::hint(format!(
-                "The inventory section could not be read: {}",
-                error.message
+            Some(error) => widgets::hint(fill(
+                "The inventory section could not be read: {error}",
+                &[("error", &error.message)],
             )),
             None => widgets::hint(t("The inventory is empty.")),
         });
@@ -68,12 +68,12 @@ pub fn view(
         if results.is_empty() {
             children.push(widgets::hint(if query.read().trim().is_empty() {
                 if active_category.is_some() {
-                    "No items in this category."
+                    t("No items in this category.")
                 } else {
-                    "The item database is empty."
+                    t("The item database is empty.")
                 }
             } else {
-                "No items match this search and category."
+                t("No items match this search and category.")
             }));
         } else {
             let browsing = query.read().trim().is_empty() && active_category.is_none();
@@ -81,9 +81,9 @@ pub fn view(
             let heading_text = active_category.as_deref().map_or_else(
                 || {
                     if browsing {
-                        "ALL ITEMS".to_owned()
+                        t("ALL ITEMS").to_owned()
                     } else {
-                        "SEARCH RESULTS".to_owned()
+                        t("SEARCH RESULTS").to_owned()
                     }
                 },
                 |category| crate::session::item_category_label(category).to_uppercase(),
@@ -123,9 +123,9 @@ pub fn view(
                         Some(suggestion.category.as_str()),
                         suggestion.save_type,
                     ),
-                    accessible: format!("{} item", suggestion.name),
-                    action_label: format!("Add {}", suggestion.name),
-                    action_text: "Add".to_owned(),
+                    accessible: fill("{name} item", &[("name", &suggestion.name)]),
+                    action_label: fill("Add {name}", &[("name", &suggestion.name)]),
+                    action_text: t("Add").to_owned(),
                     action: {
                         let ctx = ctx.clone();
                         let id = suggestion.item_id;
@@ -139,7 +139,7 @@ pub fn view(
                     selected: selected == Some(id),
                 });
             }
-            children.push(widgets::picker_list("Items you can add", picker_rows));
+            children.push(widgets::picker_list(t("Items you can add"), picker_rows));
             if let Some(selected) = selected
                 && let Some(suggestion) = results.iter().find(|row| row.item_id == selected)
             {
@@ -175,7 +175,7 @@ pub fn item_subtitle(item_id: u16, category: Option<&str>, kind: u8) -> String {
             "{} · #{item_id}",
             crate::session::item_category_label(category)
         ),
-        None => format!("type {kind}"),
+        None => fill("type {kind}", &[("kind", &kind.to_string())]),
     }
 }
 
@@ -190,8 +190,8 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
     let active = category.read().clone();
     let mut chips: Vec<Element> = Vec::new();
     chips.push(category_chip(
-        "All items".to_owned(),
-        "Show items from every category".to_owned(),
+        t("All items").to_owned(),
+        t("Show items from every category").to_owned(),
         active.is_none(),
         Action::new(move || category.set(None)),
     ));
@@ -202,7 +202,7 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
         let value = raw.clone();
         chips.push(category_chip(
             label.clone(),
-            format!("Show only {label}"),
+            fill("Show only {label}", &[("label", &label)]),
             selected,
             Action::new(move || category.set(Some(value.clone()))),
         ));
@@ -273,9 +273,10 @@ fn item_row(
         let name = item.name.clone();
         Action::new(move || {
             if !crate::dialog::confirm(
-                "Remove item?",
-                &format!(
-                    "Remove {name} from the inventory? You can still press Revert before saving."
+                t("Remove item?"),
+                &fill(
+                    "Remove {name} from the inventory? You can still press Revert before saving.",
+                    &[("name", &name)],
                 ),
             ) {
                 return;
@@ -293,7 +294,10 @@ fn item_row(
         move |text: String| {
             let Ok(count) = text.trim().parse::<u8>() else {
                 ctx.run(|session| {
-                    session.set_error(&format!("{name}: enter a stack size from 1 to 255."));
+                    session.set_error(&fill(
+                        "{name}: enter a stack size from 1 to 255.",
+                        &[("name", &name)],
+                    ));
                 });
                 return;
             };
@@ -307,7 +311,7 @@ fn item_row(
         .width(Size::fill())
         .key(item.struct_index)
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(format!("{} item", item.name))
+        .a11y_alt(fill("{name} item", &[("name", &item.name)]))
         .background(if is_hovered {
             theme::surface_hover()
         } else {
@@ -336,7 +340,7 @@ fn item_row(
                     theme::font::body(),
                 ))
                 .child(widgets::row_action(
-                    format!("Decrease {} stack", item.name),
+                    fill("Decrease {name} stack", &[("name", &item.name)]),
                     "−",
                     minus,
                 ))
@@ -350,13 +354,13 @@ fn item_row(
                         .on_submit(set_count),
                 )
                 .child(widgets::row_action(
-                    format!("Increase {} stack", item.name),
+                    fill("Increase {name} stack", &[("name", &item.name)]),
                     "+",
                     plus,
                 ))
                 .child(widgets::row_action(
-                    format!("Remove {}", item.name),
-                    "Remove",
+                    fill("Remove {name}", &[("name", &item.name)]),
+                    t("Remove"),
                     remove,
                 )),
         )

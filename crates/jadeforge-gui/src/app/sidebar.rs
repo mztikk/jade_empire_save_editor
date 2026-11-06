@@ -8,7 +8,7 @@ use freya::elements::image::ImageHandle;
 use freya::prelude::*;
 use jadeforge_core::Character;
 
-use crate::i18n::t;
+use crate::i18n::{fill, t};
 use crate::session::{SaveEntry, SaveSort};
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
@@ -67,14 +67,15 @@ pub(super) fn sidebar(
     let show_preview = theme::text_scale() <= 1.25;
     let preview_block = preview_slot(preview, selected.is_some());
     let heading = if entries.is_empty() && scanning {
-        "LOADING SAVEGAMES…".to_owned()
+        t("LOADING SAVEGAMES…").to_owned()
     } else if visible.len() == entries.len() {
         crate::widgets::plural(entries.len(), "SAVEGAME", "SAVEGAMES")
     } else {
-        format!(
-            "{} OF {}",
-            visible.len(),
-            crate::widgets::plural(entries.len(), "SAVEGAME", "SAVEGAMES")
+        let shown = visible.len().to_string();
+        let total = crate::widgets::plural(entries.len(), "SAVEGAME", "SAVEGAMES");
+        fill(
+            "{shown} OF {total}",
+            &[("shown", &shown), ("total", &total)],
         )
     };
     let list = if entries.is_empty() && scanning {
@@ -97,16 +98,21 @@ pub(super) fn sidebar(
     };
 
     let title = character.as_ref().map_or_else(
-        || "No savegame".to_owned(),
+        || t("No savegame selected").to_owned(),
         |character| character.name.clone(),
     );
     let subtitle = character.as_ref().map_or_else(
-        || "Select a savegame".to_owned(),
+        || t("Select a savegame").to_owned(),
         |character| {
-            format!(
-                "Level {} · Time played {}",
-                character.level,
-                crate::session::format::duration(character.time_played)
+            fill(
+                "Level {level} · Time played {time}",
+                &[
+                    ("level", &character.level.to_string()),
+                    (
+                        "time",
+                        &crate::session::format::duration(character.time_played),
+                    ),
+                ],
             )
         },
     );
@@ -306,9 +312,9 @@ impl Component for SaveList {
                 .padding(Gaps::new_all(theme::space::xl()))
                 .child(
                     crate::widgets::a11y_text(if self.data.entries.is_empty() {
-                        "No savegames in this folder."
+                        t("No savegames in this folder.")
                     } else {
-                        "No savegame matches this filter."
+                        t("No savegame matches this filter.")
                     })
                     .font_size(theme::font::caption())
                     .color(theme::dim()),
@@ -338,7 +344,7 @@ impl Component for SaveList {
             .a11y_id(a11y_id)
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::ListBox)
-            .a11y_alt("Savegames")
+            .a11y_alt(t("Savegames"))
             .border(
                 Border::new()
                     .fill(if is_focused {
@@ -556,17 +562,22 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
             }
         });
         let accessible = if is_active {
-            format!(
-                "Sort by {} ({})",
-                key.label(),
-                if descending {
-                    "descending"
-                } else {
-                    "ascending"
-                }
+            fill(
+                "Sort by {name} ({direction})",
+                &[
+                    ("name", t(key.label())),
+                    (
+                        "direction",
+                        if descending {
+                            t("descending")
+                        } else {
+                            t("ascending")
+                        },
+                    ),
+                ],
             )
         } else {
-            format!("Sort by {}", key.label())
+            fill("Sort by {name}", &[("name", t(key.label()))])
         };
         buttons.push(
             AccessibleButton::new(
@@ -577,7 +588,7 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                     .cross_align(Alignment::Center)
                     .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::xs()))
                     .child(
-                        crate::widgets::a11y_text(key.label())
+                        crate::widgets::a11y_text(t(key.label()))
                             .font_size(theme::font::micro())
                             .color(if is_active {
                                 theme::accent()
@@ -604,7 +615,7 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                     ),
             )
             .hover_background(theme::surface_hover())
-            .key(key.label())
+            .key(t(key.label()))
             .into_element(),
         );
     }

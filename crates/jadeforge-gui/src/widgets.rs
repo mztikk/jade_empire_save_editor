@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use freya::prelude::*;
 
-use crate::i18n::t;
+use crate::i18n::{fill, t};
 use crate::session::{CharacterField, FieldError};
 use crate::theme;
 
@@ -83,7 +83,10 @@ pub fn field_checked(
     input: impl IntoElement,
     error: Option<&FieldError>,
 ) -> Element {
-    let message = error.map_or_else(|| field.range().to_owned(), |error| error.message.clone());
+    let message = error.map_or_else(
+        || t(field.range()).to_owned(),
+        |error| error.message.clone(),
+    );
     let invalid = error.is_some();
     // Freya 0.5 still has no Input::label API. Naming the field group at
     // least gives a screen reader the caption before it reaches the input's
@@ -94,9 +97,9 @@ pub fn field_checked(
         .width(Size::flex(1.0))
         .min_width(Size::px(theme::layout::field_min_width()))
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(field.label())
+        .a11y_alt(t(field.label()))
         .child(
-            a11y_text(field.label())
+            a11y_text(t(field.label()))
                 .font_size(theme::font::micro())
                 .font_weight(FontWeight::BOLD)
                 .color(if invalid {
@@ -352,11 +355,20 @@ where
         let mut expanded = self.expanded;
         let id = self.id;
         let is_expanded = *expanded.read() == Some(id);
-        let accessible = format!(
-            "{}, {}, {}, Details",
-            self.name,
-            self.subtitle,
-            if is_expanded { "expanded" } else { "collapsed" }
+        let accessible = fill(
+            "{name}, {subtitle}, {state}, Details",
+            &[
+                ("name", &self.name),
+                ("subtitle", &self.subtitle),
+                (
+                    "state",
+                    if is_expanded {
+                        t("expanded")
+                    } else {
+                        t("collapsed")
+                    },
+                ),
+            ],
         );
         rect()
             .vertical()

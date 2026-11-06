@@ -176,7 +176,7 @@ fn busy_slot(scanning: bool) -> Element {
         .main_align(Alignment::Center)
         .cross_align(Alignment::End)
         .child(
-            crate::widgets::a11y_text(if scanning { "SCANNING…" } else { "" })
+            crate::widgets::a11y_text(if scanning { t("SCANNING…") } else { "" })
                 .a11y_builder(move |node| {
                     if scanning {
                         node.set_role(AccessibilityRole::Status);

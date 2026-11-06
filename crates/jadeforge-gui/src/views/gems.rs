@@ -6,7 +6,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::i18n::t;
+use crate::i18n::{fill, t};
 use crate::session::{GemRow, GemSuggestion, Section};
 use crate::theme;
 use crate::widgets::{self, Action};
@@ -42,15 +42,15 @@ pub fn view(
     let carried = inventory.iter().filter(|gem| !gem.empty).count();
     let can_socket = amulet.is_some_and(|amulet| socketed < usize::from(amulet.sockets));
     let amulet_title = amulet.map_or_else(
-        || "No amulet yet".to_owned(),
+        || t("No amulet yet").to_owned(),
         |amulet| amulet_summary(amulet, socketed),
     );
     let amulet_error = ctx.session.borrow().section_error(Section::Amulet).cloned();
     let gems_error = ctx.session.borrow().section_error(Section::Gems).cloned();
     let amulet_rows: Vec<Element> = if let Some(error) = &amulet_error {
-        vec![widgets::hint(format!(
-            "The amulet section could not be read: {}",
-            error.message
+        vec![widgets::hint(fill(
+            "The amulet section could not be read: {error}",
+            &[("error", &error.message)],
         ))]
     } else if amulet.is_none() {
         vec![widgets::hint(t(
@@ -65,9 +65,9 @@ pub fn view(
             .collect()
     };
     let inventory_rows: Vec<Element> = if let Some(error) = &gems_error {
-        vec![widgets::hint(format!(
-            "The gems section could not be read: {}",
-            error.message
+        vec![widgets::hint(fill(
+            "The gems section could not be read: {error}",
+            &[("error", &error.message)],
         ))]
     } else if inventory.is_empty() {
         vec![widgets::hint(t("No gems carried in the inventory."))]
@@ -98,17 +98,20 @@ pub fn view(
         let ctx = ctx.clone();
         let item_id = gem.item_id;
         let effects = if gem.effects.is_empty() {
-            "no effects".to_owned()
+            t("no effects").to_owned()
         } else {
             gem.effects.join(" · ")
         };
         picker_rows.push(widgets::PickerRow {
             key: item_id,
-            accessible: format!("{} gem, {effects}", gem.name),
+            accessible: fill(
+                "{name} gem, {effects}",
+                &[("name", &gem.name), ("effects", &effects)],
+            ),
             title: gem.name.clone(),
             subtitle: effects.clone(),
-            action_label: format!("Add {}", gem.name),
-            action_text: "Add".to_owned(),
+            action_label: fill("Add {name}", &[("name", &gem.name)]),
+            action_text: t("Add").to_owned(),
             action: Action::new(move || ctx.run(|session| session.add_gem(item_id))),
             select: None,
             selected: false,
@@ -135,16 +138,16 @@ pub fn view(
     );
     if picker_rows.is_empty() {
         add_children.push(widgets::hint(if available.is_empty() {
-            "The game data with the gem definitions was not found."
+            t("The game data with the gem definitions was not found.")
         } else {
-            "No gem matches this filter."
+            t("No gem matches this filter.")
         }));
     } else {
-        add_children.push(widgets::picker_list("Gems you can add", picker_rows));
+        add_children.push(widgets::picker_list(t("Gems you can add"), picker_rows));
     }
     let add_card = widgets::card(
         t("Add a gem"),
-        Some("From the game data".to_owned()),
+        Some(t("From the game data").to_owned()),
         add_children,
     );
 
@@ -163,9 +166,9 @@ pub fn view(
                     .into_element()];
                 if let Some(amulet) = amulet {
                     children.push(widgets::hint(if amulet.sockets >= 7 {
-                        "All seven sockets are unlocked."
+                        t("All seven sockets are unlocked.")
                     } else {
-                        "More sockets unlock as the story progresses."
+                        t("More sockets unlock as the story progresses.")
                     }));
                 }
                 children
@@ -198,10 +201,16 @@ pub fn view(
 /// names the tier so the hint cannot read like a bare count.
 #[must_use]
 pub fn amulet_summary(amulet: AmuletInfo, socketed: usize) -> String {
-    format!(
-        "{socketed} of {} filled · amulet tier {}",
-        widgets::plural(usize::from(amulet.sockets), "socket", "sockets"),
-        amulet.tier
+    fill(
+        "{socketed} of {sockets} filled · amulet tier {tier}",
+        &[
+            ("socketed", &socketed.to_string()),
+            (
+                "sockets",
+                &widgets::plural(usize::from(amulet.sockets), "socket", "sockets"),
+            ),
+            ("tier", &amulet.tier.to_string()),
+        ],
     )
 }
 
@@ -221,9 +230,9 @@ fn gem_row(
     let key = crate::app::HoverKey::Gem(index);
     let is_hovered = *hovered.read() == Some(key);
     let action = if socketed {
-        "Move to inventory"
+        t("Move to inventory")
     } else {
-        "Move to amulet"
+        t("Move to amulet")
     };
     let mut actions: Vec<Element> = Vec::new();
     if !gem.empty {
@@ -233,7 +242,10 @@ fn gem_row(
             let move_name = name.clone();
             actions.push(
                 widgets::row_action(
-                    format!("{action} ({move_name})"),
+                    fill(
+                        "{action} ({name})",
+                        &[("action", action), ("name", &move_name)],
+                    ),
                     action,
                     Action::new(move || move_ctx.run(|session| session.move_gem(index))),
                 )
@@ -242,9 +254,9 @@ fn gem_row(
         } else {
             actions.push(
                 widgets::a11y_text(if has_amulet {
-                    "Amulet full"
+                    t("Amulet full")
                 } else {
-                    "No amulet yet"
+                    t("No amulet yet")
                 })
                 .font_size(theme::font::micro())
                 .color(theme::dim())
@@ -254,12 +266,15 @@ fn gem_row(
         let remove_name = gem.name.clone();
         actions.push(
             widgets::row_action(
-                format!("Remove {remove_name}"),
-                "Remove",
+                fill("Remove {name}", &[("name", &remove_name)]),
+                t("Remove"),
                 Action::new(move || {
                     if !crate::dialog::confirm(
-                        "Remove gem?",
-                        &format!("Remove {remove_name}? You can still press Revert before saving."),
+                        t("Remove gem?"),
+                        &fill(
+                            "Remove {name}? You can still press Revert before saving.",
+                            &[("name", &remove_name)],
+                        ),
                     ) {
                         return;
                     }
@@ -275,7 +290,7 @@ fn gem_row(
         .width(Size::fill())
         .key(index)
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(format!("{} gem", gem.name))
+        .a11y_alt(fill("{name} gem", &[("name", &gem.name)]))
         .spacing(theme::space::lg())
         .content(Content::Flex)
         .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::lg()))
@@ -310,7 +325,7 @@ fn gem_row(
                 ))
                 .child(
                     widgets::a11y_text(if gem.effects.is_empty() {
-                        "no effects".to_owned()
+                        t("no effects").to_owned()
                     } else {
                         gem.effects.join(" · ")
                     })
