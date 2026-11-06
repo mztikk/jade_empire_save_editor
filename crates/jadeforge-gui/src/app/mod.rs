@@ -87,32 +87,6 @@ pub fn ui_is_dirty() -> bool {
     UI_DIRTY.load(Ordering::Relaxed)
 }
 
-/// Height of the savegame preview slot, in logical pixels.
-///
-/// The placeholder and the loaded screenshot share this square, so selecting a
-/// savegame never reflows the sidebar. Keep it small enough that the save list
-/// remains usable at the 900x700 minimum window size.
-pub(super) const PREVIEW_HEIGHT: f32 = 120.;
-
-/// Height of one line of the header status message.
-///
-/// The message is rendered at font size 11, whose line box is 13 logical
-/// pixels. Keep this in sync with that label; the UI test
-/// `long_status_messages_do_not_move_the_tab_bar` covers it.
-pub(super) const STATUS_LINE_HEIGHT: f32 = 13.;
-
-/// The status line always reserves two lines: scan errors and long paths would
-/// otherwise grow the header and push every tab down when they appear or pass.
-pub(super) const STATUS_HEIGHT: f32 = STATUS_LINE_HEIGHT * 2.;
-
-/// Width of the fixed sort-direction arrow slot, in logical pixels.
-///
-/// Every sort button reserves the slot, active or not, so changing the sort key
-/// or direction cannot move the neighbouring buttons. The glyph itself is
-/// platform-font dependent, which is why the slot is fixed rather than measured
-/// from the active label.
-pub(super) const SORT_ARROW_WIDTH: f32 = 16.;
-
 /// The tabs of the editor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
@@ -184,8 +158,14 @@ where
         .with_title(WINDOW_TITLE)
         .with_icon(LaunchConfig::window_icon(ICON_PNG))
         .with_app_id(APP_ID)
-        .with_size(1180.0, 760.0)
-        .with_min_size(900.0, 700.0)
+        .with_size(
+            theme::layout::WINDOW_WIDTH.into(),
+            theme::layout::WINDOW_HEIGHT.into(),
+        )
+        .with_min_size(
+            theme::layout::MIN_WINDOW_WIDTH.into(),
+            theme::layout::MIN_WINDOW_HEIGHT.into(),
+        )
         .with_on_close(|_, _| {
             if !ui_is_dirty() {
                 return CloseDecision::Close;
@@ -207,7 +187,7 @@ where
 }
 
 /// Root component that starts with a specific save folder.
-#[allow(clippy::too_many_lines, clippy::redundant_closure_for_method_calls)] // the shell wires all views in one place
+#[allow(clippy::too_many_lines, clippy::redundant_closure_for_method_calls)] // the root wires every view in dependency order
 pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     use_init_theme(theme::theme);
 
@@ -492,7 +472,12 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                                     rect()
                                         .vertical()
                                         .width(Size::fill())
-                                        .padding(Gaps::new(16., 18., 16., 18.))
+                                        .padding(Gaps::new(
+                                            theme::space::XXL,
+                                            theme::space::CARD,
+                                            theme::space::XXL,
+                                            theme::space::CARD,
+                                        ))
                                         .child(if has_save {
                                             content
                                         } else {

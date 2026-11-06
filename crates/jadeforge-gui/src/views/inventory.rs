@@ -8,7 +8,7 @@ use crate::theme;
 use crate::widgets;
 
 /// Renders the inventory tab.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)] // one argument per reactive tab input; grouping would only rename them
 pub fn view(
     ctx: &Ctx,
     items: &[ItemRow],
@@ -34,7 +34,7 @@ pub fn view(
         rect()
             .vertical()
             .width(Size::fill())
-            .spacing(4.)
+            .spacing(theme::space::XS)
             .children(rows)
             .into_element(),
         widgets::divider(),
@@ -58,10 +58,10 @@ pub fn view(
             let shown = results.len();
             let browsing = query.read().trim().is_empty();
             let total = if browsing { total_items } else { matching };
-            let mut heading = rect()
+            let heading = rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(10.)
+                .spacing(theme::space::LG)
                 .content(Content::Flex)
                 .child(widgets::section_label(if browsing {
                     "ALL ITEMS"
@@ -77,18 +77,18 @@ pub fn view(
                             format!("{shown} of {}", widgets::plural(total, "match", "matches"))
                         }
                     })
-                    .font_size(10.)
+                    .font_size(theme::font::MICRO)
                     .color(theme::DIM),
-                );
-            if shown < total {
-                heading = heading.child(
-                    Button::new()
-                        .compact()
-                        .outline()
-                        .child("Show more")
-                        .on_press(show_more),
-                );
-            }
+                )
+                .maybe(shown < total, |el| {
+                    el.child(
+                        Button::new()
+                            .compact()
+                            .outline()
+                            .child("Show more")
+                            .on_press(show_more),
+                    )
+                });
             children.push(heading.into_element());
             let mut result_rows: Vec<Element> = Vec::new();
             for suggestion in results {
@@ -103,7 +103,7 @@ pub fn view(
                 rect()
                     .vertical()
                     .width(Size::fill())
-                    .spacing(2.)
+                    .spacing(theme::space::XXS)
                     .children(result_rows)
                     .into_element(),
             );
@@ -180,7 +180,7 @@ fn item_row(
         } else {
             theme::SURFACE
         })
-        .corner_radius(8.)
+        .corner_radius(theme::radius::MEDIUM)
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -191,21 +191,21 @@ fn item_row(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(10.)
+                .spacing(theme::space::LG)
                 .content(Content::Flex)
-                .padding(Gaps::new_symmetric(4., 6.))
+                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::SM))
                 .child(widgets::expanding_name(
                     item.struct_index,
                     item.name.clone(),
                     item_subtitle(item.item_id, item.category.as_deref(), item.kind),
                     expanded,
-                    13.,
+                    theme::font::BODY,
                 ))
                 .child(Button::new().compact().flat().child("−").on_press(minus))
                 .child(
                     widgets::a11y_text(item.count.to_string())
-                        .font_size(13.)
-                        .width(Size::px(30.))
+                        .font_size(theme::font::BODY)
+                        .width(Size::px(theme::layout::ITEM_COUNT_WIDTH))
                         .text_align(TextAlign::Center),
                 )
                 .child(Button::new().compact().flat().child("+").on_press(plus))
@@ -254,7 +254,7 @@ fn suggestion_row(
         } else {
             theme::PANEL
         })
-        .corner_radius(6.)
+        .corner_radius(theme::radius::CONTROL)
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -265,9 +265,9 @@ fn suggestion_row(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(10.)
+                .spacing(theme::space::LG)
                 .content(Content::Flex)
-                .padding(Gaps::new_symmetric(3., 4.))
+                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::XS))
                 .child(widgets::expanding_name(
                     suggestion.item_id,
                     suggestion.name.clone(),
@@ -277,7 +277,7 @@ fn suggestion_row(
                         suggestion.save_type,
                     ),
                     expanded,
-                    12.,
+                    theme::font::LABEL,
                 ))
                 .child(Button::new().compact().outline().child("Add").on_press(add)),
         )

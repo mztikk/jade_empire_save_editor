@@ -12,7 +12,7 @@ use crate::widgets;
 use jadeforge_core::{AmuletInfo, GemLocation};
 
 /// Renders the gems tab.
-#[allow(clippy::too_many_lines)] // one declarative layout is easier to follow
+#[allow(clippy::too_many_lines)] // one declarative tree keeps the visual order auditable
 pub fn view(
     ctx: &Ctx,
     gems: &[GemRow],
@@ -83,19 +83,19 @@ pub fn view(
                 .key(item_id)
                 .a11y_role(AccessibilityRole::Group)
                 .a11y_alt(format!("{name} gem"))
-                .spacing(10.)
+                .spacing(theme::space::LG)
                 .content(Content::Flex)
-                .padding(Gaps::new_symmetric(4., 8.))
+                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::MD))
                 .child(
                     widgets::a11y_text(name.clone())
-                        .font_size(12.)
+                        .font_size(theme::font::LABEL)
                         .max_lines(1)
                         .color(theme::TEXT),
                 )
                 .child(rect().width(Size::flex(1.0)))
                 .child(
                     widgets::a11y_text(widgets::plural(*effects, "effect", "effects"))
-                        .font_size(10.)
+                        .font_size(theme::font::MICRO)
                         .color(theme::DIM),
                 )
                 .child(
@@ -127,14 +127,14 @@ pub fn view(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(8.)
+                .spacing(theme::space::MD)
                 .content(Content::Flex)
                 .child(
                     widgets::a11y_text(format!(
                         "{shown} of {}",
                         widgets::plural(matching.len(), "gem", "gems")
                     ))
-                    .font_size(10.)
+                    .font_size(theme::font::MICRO)
                     .color(theme::DIM),
                 )
                 .child(rect().width(Size::flex(1.0)))
@@ -152,7 +152,7 @@ pub fn view(
         rect()
             .vertical()
             .width(Size::fill())
-            .spacing(2.)
+            .spacing(theme::space::XXS)
             .children(add_rows)
             .into_element(),
     );
@@ -165,7 +165,7 @@ pub fn view(
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(16.)
+        .spacing(theme::space::XXL)
         .child(widgets::card(
             "Amulet",
             Some(amulet_title),
@@ -173,7 +173,7 @@ pub fn view(
                 let mut children = vec![rect()
                     .vertical()
                     .width(Size::fill())
-                    .spacing(4.)
+                    .spacing(theme::space::XS)
                     .children(amulet_rows)
                     .into_element()];
                 if let Some(amulet) = amulet {
@@ -194,7 +194,7 @@ pub fn view(
                 rect()
                     .vertical()
                     .width(Size::fill())
-                    .spacing(4.)
+                    .spacing(theme::space::XS)
                     .children(inventory_rows)
                     .into_element(),
                 widgets::hint(
@@ -213,63 +213,33 @@ fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool, can_move: bool, has_amulet: 
     } else {
         "Move to amulet"
     };
-    let mut row = rect()
-        .horizontal()
-        .width(Size::fill())
-        .key(index)
-        .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(format!("{} gem", gem.name))
-        .spacing(10.)
-        .content(Content::Flex)
-        .padding(Gaps::new_symmetric(6., 10.))
-        .background(theme::SURFACE)
-        .corner_radius(8.)
-        .child(
-            rect()
-                .vertical()
-                .spacing(1.)
-                .width(Size::flex(1.0))
-                .child(
-                    widgets::a11y_text(gem.name.clone())
-                        .font_size(13.)
-                        .max_lines(1)
-                        .color(if gem.empty { theme::DIM } else { theme::TEXT }),
-                )
-                .child(
-                    widgets::a11y_text(if gem.effects.is_empty() {
-                        "no effects".to_owned()
-                    } else {
-                        gem.effects.join(" · ")
-                    })
-                    .font_size(10.)
-                    .max_lines(2)
-                    .color(theme::DIM),
-                ),
-        );
+    let mut actions: Vec<Element> = Vec::new();
     if !gem.empty {
         let remove_ctx = ctx.clone();
         if can_move {
             let move_ctx = ctx.clone();
-            row = row.child(
+            actions.push(
                 Button::new()
                     .compact()
                     .flat()
                     .child(action)
-                    .on_press(move |_| move_ctx.run(|session| session.move_gem(index))),
+                    .on_press(move |_| move_ctx.run(|session| session.move_gem(index)))
+                    .into_element(),
             );
         } else {
-            row = row.child(
+            actions.push(
                 widgets::a11y_text(if has_amulet {
                     "Amulet full"
                 } else {
                     "No amulet yet"
                 })
-                .font_size(10.)
-                .color(theme::DIM),
+                .font_size(theme::font::MICRO)
+                .color(theme::DIM)
+                .into_element(),
             );
         }
         let remove_name = gem.name.clone();
-        row = row.child(
+        actions.push(
             Button::new()
                 .compact()
                 .flat()
@@ -282,8 +252,43 @@ fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool, can_move: bool, has_amulet: 
                         return;
                     }
                     remove_ctx.run(|session| session.remove_gem(index));
-                }),
+                })
+                .into_element(),
         );
     }
-    row.into_element()
+    rect()
+        .horizontal()
+        .width(Size::fill())
+        .key(index)
+        .a11y_role(AccessibilityRole::Group)
+        .a11y_alt(format!("{} gem", gem.name))
+        .spacing(theme::space::LG)
+        .content(Content::Flex)
+        .padding(Gaps::new_symmetric(theme::space::SM, theme::space::LG))
+        .background(theme::SURFACE)
+        .corner_radius(theme::radius::MEDIUM)
+        .child(
+            rect()
+                .vertical()
+                .spacing(theme::space::XXS)
+                .width(Size::flex(1.0))
+                .child(
+                    widgets::a11y_text(gem.name.clone())
+                        .font_size(theme::font::BODY)
+                        .max_lines(1)
+                        .color(if gem.empty { theme::DIM } else { theme::TEXT }),
+                )
+                .child(
+                    widgets::a11y_text(if gem.effects.is_empty() {
+                        "no effects".to_owned()
+                    } else {
+                        gem.effects.join(" · ")
+                    })
+                    .font_size(theme::font::MICRO)
+                    .max_lines(2)
+                    .color(theme::DIM),
+                ),
+        )
+        .children(actions)
+        .into_element()
 }
