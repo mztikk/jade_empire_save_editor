@@ -10,7 +10,8 @@ dist="$work/dist"
 linux="$dist/jadeforge-1.2.3-x86_64-unknown-linux-gnu"
 windows="$dist/jadeforge-1.2.3-x86_64-pc-windows-msvc"
 mkdir -p "$linux/share/applications" "$windows"
-printf 'linux binary\n' > "$linux/jadeforge"
+printf '\177ELFlinux binary\n' > "$linux/jadeforge"
+chmod 644 "$linux/jadeforge"
 printf 'windows binary\n' > "$windows/jadeforge.exe"
 printf 'desktop entry\n' > "$linux/share/applications/jadeforge.desktop"
 printf 'notices\n' > "$dist/THIRD_PARTY_NOTICES.txt"
@@ -49,8 +50,16 @@ import zipfile
 
 with zipfile.ZipFile(sys.argv[1]) as archive:
     names = archive.namelist()
+    binary = archive.getinfo("jadeforge-1.2.3-x86_64-unknown-linux-gnu/jadeforge")
+    desktop = archive.getinfo(
+        "jadeforge-1.2.3-x86_64-unknown-linux-gnu/share/applications/jadeforge.desktop"
+    )
 assert "jadeforge-1.2.3-x86_64-unknown-linux-gnu/jadeforge" in names, names
 assert any(name.endswith("share/applications/jadeforge.desktop") for name in names), names
+# Artifact downloads lose their modes; the ELF binary must be executable in
+# the archive while ordinary files stay non-executable.
+assert (binary.external_attr >> 16) & 0o111, oct(binary.external_attr >> 16)
+assert not (desktop.external_attr >> 16) & 0o111, oct(desktop.external_attr >> 16)
 PY
 
 ( cd "$dist" && sha256sum -c SHA256SUMS >/dev/null )
