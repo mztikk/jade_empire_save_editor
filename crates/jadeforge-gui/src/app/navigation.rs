@@ -16,9 +16,10 @@ pub(super) fn tab_bar(
     mut show_about: State<bool>,
 ) -> Element {
     let mut buttons: Vec<Element> = Vec::new();
+    let about_open = *show_about.read();
     for candidate in Tab::ALL {
         let mut tab = tab;
-        let is_active = candidate == active;
+        let is_active = candidate == active && !about_open;
         let action = Action::new(move || {
             *tab.write() = candidate;
             show_about.set(false);

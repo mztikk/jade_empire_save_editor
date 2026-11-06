@@ -63,6 +63,9 @@ All notable changes are documented here. The format follows
   save folder and sort order, backup rules and keyboard shortcuts; a category
   filter for the 291-row item picker; field ranges and units (plus the optional
   Gold field rule) in the character form.
+- The About entry point is an outlined toolbar button instead of plain text,
+  and opening About clears the tab selection so no editor tab appears active
+  while the page is shown.
 
 ### Changed
 

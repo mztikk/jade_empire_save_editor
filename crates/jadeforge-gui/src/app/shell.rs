@@ -219,6 +219,12 @@ pub(super) fn header(
             .child(rect().width(Size::flex(1.0)))
             .children(badges)
             .child(crate::widgets::badge(game_text, theme::SURFACE, game_color))
+            .child(
+                rect()
+                    .width(Size::px(theme::layout::DIVIDER))
+                    .height(Size::px(theme::font::LINE_HEIGHT))
+                    .background(theme::BORDER),
+            )
             .child(about_button(show_about))
             .into_element(),
         rect()
@@ -353,18 +359,11 @@ pub(super) fn header(
 
 /// Top-bar button that opens the About / help surface.
 fn about_button(mut show_about: State<bool>) -> Element {
-    AccessibleButton::new(
-        "About JadeForge, version and settings",
+    crate::widgets::outline_action(
+        "About JadeForge, version, settings and backups",
+        "About",
         Action::new(move || show_about.set(true)),
-        rect()
-            .padding(Gaps::new_symmetric(theme::space::XS, theme::space::MD))
-            .child(
-                crate::widgets::a11y_text("About")
-                    .font_size(theme::font::MICRO)
-                    .color(theme::MUTED),
-            ),
     )
-    .hover_background(theme::SURFACE_HOVER)
     .into_element()
 }
 

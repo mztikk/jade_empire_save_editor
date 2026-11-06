@@ -10,7 +10,7 @@ use crate::app::Ctx;
 use crate::session::{GameStatus, SaveSort};
 use crate::theme;
 use crate::views::path_actions;
-use crate::widgets::{self, AccessibleButton, Action};
+use crate::widgets::{self, Action};
 
 /// Renders the About / help surface.
 #[allow(clippy::too_many_lines)] // one declarative page keeps the help text together
@@ -32,18 +32,7 @@ pub fn view(ctx: &Ctx, sort: State<(SaveSort, bool)>, mut show_about: State<bool
     let config_path = crate::config::Config::path();
 
     let close = Action::new(move || show_about.set(false));
-    let close_button = AccessibleButton::new(
-        "Close the About page",
-        close,
-        rect()
-            .padding(Gaps::new_symmetric(theme::space::XS, theme::space::MD))
-            .child(
-                widgets::a11y_text("Close")
-                    .font_size(theme::font::MICRO)
-                    .color(theme::MUTED),
-            ),
-    )
-    .hover_background(theme::SURFACE_HOVER);
+    let close_button = widgets::outline_action("Close the About page", "Close", close);
 
     let mut settings = Vec::new();
     if save_folder.as_os_str().is_empty() {

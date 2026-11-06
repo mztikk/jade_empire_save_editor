@@ -1937,6 +1937,14 @@ fn a11y_selected(node: &freya_testing::TestingNode) -> bool {
     a11y_node(node).is_selected().unwrap_or(false)
 }
 
+fn selected_tab_labels(test: &TestingRunner) -> Vec<String> {
+    test.find_many(|node, _| (a11y_role(&node) == "Tab").then_some(node))
+        .iter()
+        .filter(|node| a11y_selected(node))
+        .filter_map(a11y_label)
+        .collect()
+}
+
 fn a11y_focusable(node: &freya_testing::TestingNode) -> bool {
     let element = node.element();
     element.accessibility().a11y_focusable.is_enabled()
@@ -2557,6 +2565,72 @@ fn the_about_page_shows_the_version_settings_and_backups() {
     assert!(
         find_label_text(&test, "No savegame selected").is_some(),
         "closing About did not return to the editor"
+    );
+}
+
+#[test]
+fn about_clears_the_selected_tab_and_returns_to_it() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1000.0);
+    assert!(click_label_exact(&mut test, "Character"));
+    assert!(find_label_text(&test, "Identity").is_some());
+    assert_eq!(
+        selected_tab_labels(&test),
+        vec!["Character".to_owned()],
+        "the Character tab is not selected before opening About"
+    );
+
+    let about = test
+        .find(|node, _| {
+            (a11y_label(&node).as_deref() == Some("About JadeForge, version, settings and backups"))
+                .then_some(node)
+        })
+        .expect("the About button is missing");
+    assert_eq!(
+        a11y_role(&about),
+        "Button",
+        "the About entry point is not exposed as a button"
+    );
+    assert!(
+        about.layout().area.size.height >= 27.5,
+        "the About button is only {} px tall",
+        about.layout().area.size.height
+    );
+    click_node(&mut test, &about);
+    settle(&mut test);
+
+    assert!(
+        find_label_text(&test, "About JadeForge").is_some(),
+        "the About page did not open"
+    );
+    assert!(
+        find_label_text(&test, "Identity").is_none(),
+        "the Character content is still shown behind About"
+    );
+    assert!(
+        selected_tab_labels(&test).is_empty(),
+        "a tab is still selected while About is shown"
+    );
+    assert_eq!(
+        test.find_many(|node, _| (a11y_role(&node) == "Tab").then_some(node))
+            .len(),
+        6,
+        "the tab bar disappeared while About was shown"
+    );
+
+    assert!(click_label_exact(&mut test, "Close"), "no Close button");
+    settle(&mut test);
+    assert!(
+        find_label_text(&test, "Identity").is_some(),
+        "closing About did not return to the Character tab"
+    );
+    assert_eq!(
+        selected_tab_labels(&test),
+        vec!["Character".to_owned()],
+        "the Character tab was not selected again after closing About"
     );
 }
 

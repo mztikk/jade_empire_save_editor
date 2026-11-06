@@ -678,6 +678,38 @@ pub fn row_action(
     .hover_background(theme::SURFACE_HOVER)
 }
 
+/// A compact outlined action for a toolbar or page header.
+///
+/// `AccessibleButton` has no visual chrome of its own, so a transparent action
+/// with only a hover state reads like plain text next to status badges. The
+/// border and control padding make the action recognizable as a button while
+/// the explicit accessible name stays on the button node.
+pub fn outline_action(
+    accessible: impl Into<String>,
+    text: impl Into<String>,
+    action: Action,
+) -> AccessibleButton {
+    AccessibleButton::new(
+        accessible,
+        action,
+        rect()
+            .padding(Gaps::new_symmetric(theme::space::MD, theme::space::XL))
+            .border(
+                Border::new()
+                    .fill(theme::CONTROL_BORDER)
+                    .width(theme::stroke::HAIRLINE),
+            )
+            .corner_radius(theme::radius::CONTROL)
+            .child(
+                a11y_text(text)
+                    .font_size(theme::font::CAPTION)
+                    .font_weight(FontWeight::BOLD)
+                    .color(theme::TEXT),
+            ),
+    )
+    .hover_background(theme::SURFACE_HOVER)
+}
+
 #[cfg(test)]
 mod tests {
     use super::plural;
