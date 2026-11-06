@@ -419,6 +419,79 @@ impl SaveGame {
         self.blocks.iter().any(Block::is_modified)
     }
 
+    /// Canonical payload of one block by index.
+    ///
+    /// The undo history captures the payload of the blocks an edit touched, so
+    /// it can restore them without keeping a second copy of the whole
+    /// savegame. The bytes are canonical, so restoring them and writing the
+    /// savegame produces a deterministic file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the index is out of range or the block cannot be
+    /// serialized.
+    pub fn block_canonical_payload(&self, index: usize) -> Result<Vec<u8>> {
+        self.blocks
+            .get(index)
+            .ok_or_else(|| Error::Corrupt(format!("block {index} does not exist")))?
+            .to_canonical_bytes()
+    }
+
+    /// Replaces a block with a canonical payload captured earlier.
+    ///
+    /// The payload must parse as the same block kind; the block is marked as
+    /// modified so the next save serializes it instead of copying the original
+    /// byte range. Used by the undo history.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an out-of-range index, an unparsable payload or a
+    /// payload whose block cannot be validated.
+    pub fn restore_block_payload(&mut self, index: usize, payload: &[u8]) -> Result<()> {
+        let block = self
+            .blocks
+            .get_mut(index)
+            .ok_or_else(|| Error::Corrupt(format!("block {index} does not exist")))?;
+        let gff = Gff::parse(&block.name, payload)?;
+        gff.validate(&block.name)?;
+        block.gff = gff;
+        block.modified = true;
+        Ok(())
+    }
+
+    /// Restores a block to the payload it had when the file was opened.
+    ///
+    /// The payload comes back out of the container bytes, so an undo of the
+    /// first edit restores the exact original block and marks it clean, which
+    /// lets the next save copy the original range through verbatim. The undo
+    /// history is discarded when a save replaces the file, so the stored source
+    /// bytes always describe the current on-disk baseline.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an out-of-range index or a corrupt stored block.
+    pub fn restore_block_from_source(&mut self, index: usize) -> Result<()> {
+        let block = self
+            .blocks
+            .get(index)
+            .ok_or_else(|| Error::Corrupt(format!("block {index} does not exist")))?;
+        let payload = self.bytes.get(block.span.clone()).ok_or_else(|| {
+            Error::Corrupt(format!(
+                "the stored byte range for block {:?} is invalid",
+                block.name
+            ))
+        })?;
+        let gff = Gff::parse(&block.name, payload)?;
+        gff.validate(&block.name)?;
+        let block = self
+            .blocks
+            .get_mut(index)
+            .ok_or_else(|| Error::Corrupt(format!("block {index} does not exist")))?;
+        block.gff = gff;
+        block.mark_clean();
+        Ok(())
+    }
+
     /// Canonical payloads of every block, in file order.
     ///
     /// Used to compare the in-memory savegame with a baseline by content: an
@@ -821,7 +894,7 @@ pub fn backup_path(target: &Path) -> PathBuf {
 }
 
 /// Creates a complete backup of `target` and returns its path.
-fn create_backup(target: &Path) -> Result<PathBuf> {
+pub(crate) fn create_backup(target: &Path) -> Result<PathBuf> {
     let metadata = fs::metadata(target).map_err(|error| Error::io(target, error))?;
     let (temporary, temporary_file) = create_temporary_named(target, "backup")?;
     let result = (|| -> Result<PathBuf> {
@@ -904,7 +977,7 @@ fn resolve_write_target(target: &Path) -> Result<PathBuf> {
 // Windows has no directory fsync; keeping the same Result signature lets the
 // save path call this unconditionally.
 #[cfg_attr(not(unix), allow(clippy::unnecessary_wraps))]
-fn sync_parent(path: &Path) -> Result<()> {
+pub(crate) fn sync_parent(path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         if let Some(parent) = path.parent() {

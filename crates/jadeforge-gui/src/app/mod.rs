@@ -329,6 +329,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let item_query = use_state(String::new);
     let item_category = use_state(|| None::<String>);
     let show_about = use_state(|| false);
+    let show_backups = use_state(|| false);
+    let show_review = use_state(|| false);
     let style_query = use_state(String::new);
     let item_limit = use_state(|| PAGE_SIZE);
     let style_limit = use_state(|| PAGE_SIZE);
@@ -456,6 +458,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 item_query,
                 item_category,
                 show_about,
+                show_backups,
+                show_review,
                 style_query,
                 gem_query,
                 item_limit,
@@ -473,6 +477,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     };
 
     // Snapshot everything the shell needs so the borrow stays short.
+    let disk_changed = session.borrow_mut().check_disk_state();
     let active_tab = *tab.read();
     let entries = session.borrow().entries();
     let selected = session.borrow().selected();
@@ -739,15 +744,42 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         (_, None) => shell::empty_state(&ctx, entries.len(), directory_state, start_scan.clone()),
     };
     let show_about_now = *show_about.read();
-    let content = if show_about_now {
+    let show_backups_now = *show_backups.read();
+    let show_review_now = *show_review.read();
+    let close_review: Rc<dyn Fn()> = {
+        let show_review = show_review;
+        Rc::new(move || {
+            let mut show_review = show_review;
+            show_review.set(false);
+        })
+    };
+    let close_backups: Rc<dyn Fn()> = {
+        let show_backups = show_backups;
+        Rc::new(move || {
+            let mut show_backups = show_backups;
+            show_backups.set(false);
+        })
+    };
+    let content = if show_review_now {
+        views::review::view(&ctx, form, close_review, sync.clone())
+    } else if show_backups_now {
+        views::backups::view(&ctx, close_backups, sync.clone())
+    } else if show_about_now {
         views::about::view(&ctx, save_sort, show_about, theme_choice, text_scale)
     } else {
         tab_content
     };
+    let page_index = if show_review_now {
+        2
+    } else if show_backups_now {
+        1
+    } else {
+        0
+    };
 
     let content = rect()
         .width(Size::fill())
-        .key(active_tab.index() * 2 + usize::from(show_about_now))
+        .key(active_tab.index() * 3 + page_index)
         .child(content)
         .into_element();
 
@@ -762,6 +794,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         &form_errors,
         scanning,
         show_about,
+        show_backups,
+        show_review,
         start_scan.clone(),
         cancel_scan.clone(),
     );
@@ -798,8 +832,26 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         reset.clone(),
         sync.clone(),
     );
-    let tabs = navigation::tab_bar(tab, active_tab, has_save, scanning, show_about);
-    let footer = shell::footer(&ctx, form, dirty, has_save, &form_errors, sync.clone());
+    let tabs = navigation::tab_bar(
+        tab,
+        active_tab,
+        has_save,
+        scanning,
+        show_about,
+        show_backups,
+        show_review,
+    );
+    let footer = shell::footer(
+        &ctx,
+        form,
+        dirty,
+        has_save,
+        &form_errors,
+        show_about,
+        show_backups,
+        show_review,
+        sync.clone(),
+    );
 
     // Desktop shortcuts. Save and Scan duplicate the footer/header actions so
     // they work no matter which control has focus.
@@ -820,22 +872,35 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         let mut style_query = style_query;
         let mut gem_query = gem_query;
         let mut show_about = show_about;
+        let mut show_backups = show_backups;
+        let mut show_review = show_review;
         move |event: Event<KeyboardEventData>| {
             let ctrl = event.modifiers.contains(Modifiers::CONTROL);
+            let ctrl_shift = event.modifiers.contains(Modifiers::SHIFT);
             match &event.key {
                 Key::Character(character) if ctrl => match character.to_lowercase().as_str() {
                     "s" => {
                         // Match the disabled footer action: a shortcut must not
-                        // report a save when there is no applied change.
+                        // open an empty review when there is no applied change.
                         if !ctx.session.borrow().is_dirty() {
                             return;
                         }
-                        let errors = ctx.run(|session| session.form_errors(&form.read()));
-                        if let Some(first) = errors.first() {
-                            form.focus(first.field);
+                        show_about.set(false);
+                        show_backups.set(false);
+                        show_review.set(true);
+                    }
+                    "z" => {
+                        let changed = if ctrl_shift {
+                            ctx.run(Session::redo)
+                        } else {
+                            ctx.run(Session::undo)
+                        };
+                        if changed {
+                            sync();
                         }
-                        let saved = ctx.run(|session| session.save_applied(&form.read()));
-                        if errors.is_empty() && saved.is_ok() {
+                    }
+                    "y" => {
+                        if ctx.run(Session::redo) {
                             sync();
                         }
                     }
@@ -863,7 +928,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                     }
                 }
                 Key::Named(NamedKey::Escape) => {
-                    if *show_about.read() {
+                    if *show_review.read() {
+                        show_review.set(false);
+                    } else if *show_backups.read() {
+                        show_backups.set(false);
+                    } else if *show_about.read() {
                         show_about.set(false);
                     } else {
                         match active {
@@ -902,6 +971,9 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         .height(Size::fill())
                         .content(Content::Flex)
                         .child(tabs)
+                        .maybe_child(
+                            disk_changed.then(|| shell::external_change_banner(&ctx, sync.clone())),
+                        )
                         .child(
                             rect()
                                 .a11y_id(editor_scroll_id)
@@ -988,6 +1060,8 @@ fn reset_pickers(
     item_query: State<String>,
     item_category: State<Option<String>>,
     show_about: State<bool>,
+    show_backups: State<bool>,
+    show_review: State<bool>,
     style_query: State<String>,
     gem_query: State<String>,
     item_limit: State<usize>,
@@ -1009,6 +1083,10 @@ fn reset_pickers(
     item_category.set(None);
     let mut show_about = show_about;
     show_about.set(false);
+    let mut show_backups = show_backups;
+    show_backups.set(false);
+    let mut show_review = show_review;
+    show_review.set(false);
     let mut style_query = style_query;
     style_query.set(String::new());
     let mut gem_query = gem_query;

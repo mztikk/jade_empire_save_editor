@@ -16,7 +16,7 @@ use freya_core::events::platform::{KeyboardEventName, PlatformEvent};
 use freya_testing::TestingRunner;
 use jadeforge_gui::ThemeChoice;
 use jadeforge_gui::app_with_directory;
-use jadeforge_gui::theme::{self, PaletteKind};
+use jadeforge_gui::theme;
 
 mod support;
 
@@ -3008,11 +3008,15 @@ fn save_focuses_the_first_invalid_field_and_still_saves() {
     );
 
     assert!(click_text(&mut test, "Save to disk"), "no save button");
-    let focused = test.sync_and_update().focus;
-    assert_eq!(
-        focused, level_id,
-        "Save did not focus the first invalid field"
+    assert!(
+        find_label_text(&test, "Review changes").is_some(),
+        "Save did not open the review page"
     );
+    assert!(
+        find_label_text(&test, "still invalid and will not be written").is_some(),
+        "the review does not explain that the invalid field is not applied"
+    );
+    assert!(click_text(&mut test, "Write savegame"));
     assert!(
         find_label_text(&test, "Saved").is_some(),
         "the valid item edit was not saved"
@@ -3053,6 +3057,11 @@ fn save_and_revert_only_act_when_there_are_changes() {
     as_many_updates(&mut test);
     assert!(find_label_text(&test, "unsaved changes").is_some());
     assert!(click_text(&mut test, "Save to disk"));
+    assert!(
+        find_label_text(&test, "Review changes").is_some(),
+        "Save did not open the review page"
+    );
+    assert!(click_text(&mut test, "Write savegame"));
     wait_for_text(&mut test, "Saved ");
     assert!(
         find_label_text(&test, "all changes saved").is_some(),
@@ -3085,6 +3094,7 @@ fn a_save_surfaces_the_backup_and_opens_the_save_folder() {
     assert!(click_text(&mut test, "+1 point"), "no quick-add button");
     as_many_updates(&mut test);
     assert!(click_text(&mut test, "Save to disk"));
+    assert!(click_text(&mut test, "Write savegame"));
     wait_for_text(&mut test, "Saved ");
     assert!(click_label_exact(&mut test, "Overview"));
 
@@ -3408,6 +3418,11 @@ fn desktop_shortcuts_drive_the_shell() {
     assert!(click_label_exact(&mut test, "+"), "no count stepper");
     as_many_updates(&mut test);
     click_ctrl(&mut test, Key::Character("s".to_owned()));
+    assert!(
+        find_label_text(&test, "Review changes").is_some(),
+        "Ctrl+S did not open the review page"
+    );
+    assert!(click_text(&mut test, "Write savegame"));
     assert!(
         find_label_text(&test, "Saved").is_some(),
         "Ctrl+S did not save"
@@ -4186,4 +4201,151 @@ fn every_tab_renders_at_200_percent_text_without_a_layout_panic() {
     // The status slot and the footer are still inside the window.
     let footer = find_label_exact(&test, "Save to disk").expect("the footer is missing");
     assert!(footer.layout().area.origin.y > 0.0);
+}
+
+#[test]
+fn undo_and_redo_work_from_the_footer_and_the_keyboard() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_text(&mut test, "Character"));
+    assert!(click_text(&mut test, "+1 point"), "no quick-add button");
+    as_many_updates(&mut test);
+    assert!(find_label_text(&test, "unsaved changes").is_some());
+
+    assert!(click_text(&mut test, "Undo"), "Undo is missing");
+    as_many_updates(&mut test);
+    assert!(
+        find_label_text(&test, "all changes saved").is_some(),
+        "Undo did not clear the unsaved state"
+    );
+
+    assert!(click_text(&mut test, "Redo"), "Redo is missing");
+    as_many_updates(&mut test);
+    assert!(
+        find_label_text(&test, "unsaved changes").is_some(),
+        "Redo did not restore the edit"
+    );
+
+    click_ctrl(&mut test, Key::Character("z".to_owned()));
+    as_many_updates(&mut test);
+    assert!(
+        find_label_text(&test, "all changes saved").is_some(),
+        "Ctrl+Z did not undo"
+    );
+    click_ctrl(&mut test, Key::Character("y".to_owned()));
+    as_many_updates(&mut test);
+    assert!(
+        find_label_text(&test, "unsaved changes").is_some(),
+        "Ctrl+Y did not redo"
+    );
+}
+
+#[test]
+fn the_review_page_lists_the_exact_field_before_and_after() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 2000.0);
+    assert!(click_text(&mut test, "Character"));
+    assert!(click_text(&mut test, "+1 point"), "no quick-add button");
+    as_many_updates(&mut test);
+    assert!(click_text(&mut test, "Save to disk"));
+    assert!(find_label_text(&test, "Review changes").is_some());
+    assert!(
+        find_label_text(&test, "PlayerCreature.Stats.UnassignedPts").is_some(),
+        "the review does not name the changed field"
+    );
+    assert!(
+        find_label_text(&test, "was ").is_some(),
+        "the review does not show the before/after values"
+    );
+
+    // Going back must not write anything.
+    assert!(click_text(&mut test, "Back to editing"));
+    assert!(find_label_text(&test, "Review changes").is_none());
+    assert!(find_label_text(&test, "unsaved changes").is_some());
+    assert!(
+        find_label_text(&test, "Saved ").is_none(),
+        "cancelling the review wrote the savegame"
+    );
+}
+
+#[test]
+fn the_backup_screen_lists_and_restores_a_backup() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 2000.0);
+    assert!(click_text(&mut test, "Character"));
+    assert!(click_text(&mut test, "+1 point"), "no quick-add button");
+    as_many_updates(&mut test);
+    assert!(click_text(&mut test, "Save to disk"));
+    assert!(click_text(&mut test, "Write savegame"));
+    wait_for_text(&mut test, "Saved ");
+
+    assert!(
+        click_text(&mut test, "Backups"),
+        "Backups button is missing"
+    );
+    assert!(
+        find_label_text(&test, "1 BACKUP").is_some(),
+        "the backup count is missing"
+    );
+    assert!(
+        find_label_text(&test, "Restore").is_some(),
+        "the backup screen has no restore action"
+    );
+    assert!(
+        find_text_node(&test, "Original: ").is_some(),
+        "the backup screen does not show the original path"
+    );
+    jadeforge_gui::dialog::set_next_confirm_for_tests(true);
+    assert!(click_text(&mut test, "Restore"));
+    wait_for_text(&mut test, "Restored ");
+    assert!(
+        find_label_text(&test, "Restored ").is_some(),
+        "the restore did not report success"
+    );
+}
+
+#[test]
+fn an_external_change_is_explained_and_can_be_reloaded() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 2000.0);
+    let path = fixture.save_dir.join("Test Save").join("save.sac");
+
+    // Rewrite the file behind the editor's back with a valid savegame whose
+    // level differs.
+    let mut save = jadeforge_core::SaveGame::open(&path).expect("open savegame");
+    let mut character = save.character().expect("character");
+    character.level = 42;
+    save.apply_character(&character).expect("apply level");
+    save.save(jadeforge_core::SaveOptions { backup: false })
+        .expect("external save");
+    // Any render re-checks the file stamp and shows the banner.
+    assert!(click_text(&mut test, "Overview"));
+    wait_for_text(&mut test, "changed on disk");
+    assert!(
+        find_label_text(&test, "changed on disk").is_some(),
+        "the external change was not explained"
+    );
+
+    assert!(click_text(&mut test, "Reload from disk"));
+    wait_for_text(&mut test, "Reloaded ");
+    assert!(
+        find_label_text(&test, "Reloaded ").is_some(),
+        "the external change was not reloaded"
+    );
+    assert!(
+        find_label_text(&test, "Level 42").is_some(),
+        "the reload did not show the file on disk"
+    );
 }

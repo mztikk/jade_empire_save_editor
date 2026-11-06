@@ -7,7 +7,7 @@ use freya::elements::image::ImageHandle;
 use freya::prelude::*;
 
 use crate::form::Form;
-use crate::session::{FieldError, GameStatus, MessageKind};
+use crate::session::{FieldError, GameStatus, MessageKind, Session};
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
 
@@ -79,6 +79,8 @@ pub(super) fn header(
     form_errors: &[FieldError],
     scanning: bool,
     show_about: State<bool>,
+    show_backups: State<bool>,
+    show_review: State<bool>,
     start_scan: Rc<dyn Fn(PathBuf) -> bool>,
     cancel_scan: Rc<dyn Fn()>,
 ) -> Element {
@@ -228,7 +230,8 @@ pub(super) fn header(
                     .height(Size::px(theme::font::line_height()))
                     .background(theme::border()),
             )
-            .child(about_button(show_about))
+            .child(backups_button(show_backups, show_about, show_review))
+            .child(about_button(show_about, show_backups, show_review))
             .into_element(),
         rect()
             .horizontal()
@@ -361,11 +364,37 @@ pub(super) fn header(
 }
 
 /// Top-bar button that opens the About / help surface.
-fn about_button(mut show_about: State<bool>) -> Element {
+fn about_button(
+    mut show_about: State<bool>,
+    mut show_backups: State<bool>,
+    mut show_review: State<bool>,
+) -> Element {
     crate::widgets::outline_action(
         "About JadeForge, version, settings and backups",
         "About",
-        Action::new(move || show_about.set(true)),
+        Action::new(move || {
+            show_about.set(true);
+            show_backups.set(false);
+            show_review.set(false);
+        }),
+    )
+    .into_element()
+}
+
+/// Top-bar button that opens the backup browser.
+fn backups_button(
+    mut show_backups: State<bool>,
+    mut show_about: State<bool>,
+    mut show_review: State<bool>,
+) -> Element {
+    crate::widgets::outline_action(
+        "Browse the backups of the open savegame",
+        "Backups",
+        Action::new(move || {
+            show_backups.set(true);
+            show_about.set(false);
+            show_review.set(false);
+        }),
     )
     .into_element()
 }
@@ -427,7 +456,8 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
 
 #[allow(
     clippy::large_types_passed_by_value, // `Form` is a bundle of cheap `Copy` handles
-    clippy::needless_pass_by_value // the closures own the sync handle
+    clippy::needless_pass_by_value, // the closures own the sync handle
+    clippy::too_many_arguments // one parameter per independent footer control
 )]
 pub(super) fn footer(
     ctx: &Ctx,
@@ -435,24 +465,47 @@ pub(super) fn footer(
     dirty: bool,
     has_save: bool,
     form_errors: &[FieldError],
+    mut show_about: State<bool>,
+    mut show_backups: State<bool>,
+    mut show_review: State<bool>,
     sync: Rc<dyn Fn()>,
 ) -> Element {
     let save = {
         let ctx = ctx.clone();
-        let sync = sync.clone();
+        let form = form;
         move |_| {
             let errors = ctx.run(|session| session.form_errors(&form.read()));
             if let Some(first) = errors.first() {
                 form.focus(first.field);
             }
-            let saved = ctx.run(|session| session.save_applied(&form.read()));
-            // An invalid form keeps its text so the user can fix it; a valid
-            // form is normalised to the values that were written.
-            if errors.is_empty() && saved.is_ok() {
+            if !ctx.session.borrow().is_dirty() {
+                return;
+            }
+            show_about.set(false);
+            show_backups.set(false);
+            show_review.set(true);
+        }
+    };
+    let undo = {
+        let ctx = ctx.clone();
+        let sync = sync.clone();
+        move |_| {
+            if ctx.run(Session::undo) {
                 sync();
             }
         }
     };
+    let redo = {
+        let ctx = ctx.clone();
+        let sync = sync.clone();
+        move |_| {
+            if ctx.run(Session::redo) {
+                sync();
+            }
+        }
+    };
+    let can_undo = ctx.session.borrow().can_undo();
+    let can_redo = ctx.session.borrow().can_redo();
     let revert = {
         let ctx = ctx.clone();
         let sync = sync.clone();
@@ -511,6 +564,20 @@ pub(super) fn footer(
             theme::space::card(),
         ))
         .background(theme::panel())
+        .child(
+            Button::new()
+                .flat()
+                .enabled(can_undo)
+                .child("Undo")
+                .on_press(undo),
+        )
+        .child(
+            Button::new()
+                .flat()
+                .enabled(can_redo)
+                .child("Redo")
+                .on_press(redo),
+        )
         .child(
             Button::new()
                 .filled()
@@ -629,6 +696,72 @@ pub(super) fn empty_state(
             )
             .font_size(theme::font::caption())
             .color(theme::dim()),
+        )
+        .into_element()
+}
+
+/// Banner shown when the open savegame changed on disk outside the editor.
+///
+/// A clean savegame reloads directly. A dirty one explains that reloading
+/// discards the unsaved edits, because the write path refuses to overwrite a
+/// file that changed underneath it.
+pub(super) fn external_change_banner(ctx: &Ctx, sync: Rc<dyn Fn()>) -> Element {
+    let dirty = ctx.session.borrow().is_dirty();
+    let text = if dirty {
+        "This savegame changed on disk since it was opened. Saving will be refused; reloading \
+         discards the unsaved edits on screen and shows the file that is on disk."
+    } else {
+        "This savegame changed on disk since it was opened. Reload it to edit the current file."
+    };
+    let reload = {
+        let ctx = ctx.clone();
+        let sync = sync.clone();
+        move |_| {
+            if dirty
+                && !crate::dialog::confirm(
+                    "Reload from disk?",
+                    "The savegame changed on disk outside JadeForge. Reloading discards every \
+                     unsaved edit on screen.",
+                )
+            {
+                return;
+            }
+            let result = if dirty {
+                ctx.run(|session| session.revert())
+            } else {
+                ctx.run(Session::reload_from_disk)
+            };
+            if result.is_ok() {
+                sync();
+            }
+        }
+    };
+    rect()
+        .horizontal()
+        .width(Size::fill())
+        .spacing(theme::space::md())
+        .content(Content::Flex)
+        .cross_align(Alignment::Center)
+        .padding(Gaps::new_symmetric(
+            theme::space::md(),
+            theme::space::card(),
+        ))
+        .background(theme::surface_active())
+        .child(
+            crate::widgets::a11y_text(text)
+                .a11y_builder(|node| {
+                    node.set_role(AccessibilityRole::Status);
+                    node.set_live(accesskit::Live::Assertive);
+                })
+                .font_size(theme::font::caption())
+                .color(theme::warning())
+                .width(Size::flex(1.0)),
+        )
+        .child(
+            Button::new()
+                .outline()
+                .child("Reload from disk")
+                .on_press(reload),
         )
         .into_element()
 }

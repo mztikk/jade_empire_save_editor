@@ -18,10 +18,10 @@ and 1600 px. The windowed suite is never run without explicit permission
 | 3 | text scaling to 200 % | [text-scaling.md](text-scaling.md) | implemented |
 | 4 | UI localization | [localization.md](localization.md) | pending |
 | 5 | virtualized browser and pickers | [virtual-lists.md](virtual-lists.md) | pending |
-| 6 | per-action undo/redo | [undo-redo.md](undo-redo.md) | pending |
-| 7 | pending-changes diff before save | [pending-diff.md](pending-diff.md) | pending |
-| 8 | backup browsing and restore screen | [backups.md](backups.md) | pending |
-| 9 | reload from disk after an external change | [reload-from-disk.md](reload-from-disk.md) | pending |
+| 6 | per-action undo/redo | [undo-redo.md](undo-redo.md) | implemented |
+| 7 | pending-changes diff before save | [pending-diff.md](pending-diff.md) | implemented |
+| 8 | backup browsing and restore screen | [backups.md](backups.md) | implemented |
+| 9 | reload from disk after an external change | [reload-from-disk.md](reload-from-disk.md) | implemented |
 | 10 | item and style icons | [icons.md](icons.md) | pending |
 | 11 | About/help with diagnostics | [about-diagnostics.md](about-diagnostics.md) | pending |
 | 12 | command palette or shortcut sheet | [command-palette.md](command-palette.md) | pending |

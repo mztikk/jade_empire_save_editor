@@ -686,6 +686,29 @@ pub fn row_action(
     .hover_background(theme::surface_hover())
 }
 
+/// A filled primary action for a page or dialog.
+pub fn filled_action(
+    accessible: impl Into<String>,
+    text: impl Into<String>,
+    action: Action,
+) -> AccessibleButton {
+    AccessibleButton::new(
+        accessible,
+        action,
+        rect()
+            .padding(Gaps::new_symmetric(theme::space::md(), theme::space::xl()))
+            .background(theme::accent())
+            .corner_radius(theme::radius::control())
+            .child(
+                a11y_text(text)
+                    .font_size(theme::font::caption())
+                    .font_weight(FontWeight::BOLD)
+                    .color(theme::on_accent()),
+            ),
+    )
+    .hover_background(theme::accent_hover())
+}
+
 /// A compact outlined action for a toolbar or page header.
 ///
 /// `AccessibleButton` has no visual chrome of its own, so a transparent action

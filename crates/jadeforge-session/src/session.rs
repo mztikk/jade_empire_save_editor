@@ -6,10 +6,11 @@
 
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::time::{Duration, Instant, SystemTime};
 
 use jadeforge_core::{
-    AmuletInfo, Character, GemLocation, Henchman, Item, SaveGame, SaveImage, SaveOptions, Style,
-    StyleIdentity,
+    AmuletInfo, Change, Character, GemLocation, Henchman, Item, SaveGame, SaveImage, SaveOptions,
+    Style, StyleIdentity, list_backups, restore_backup,
 };
 use jadeforge_gamedata::{BundledItem, GameData, NameIndex};
 
@@ -20,8 +21,9 @@ mod model;
 pub use error::SessionError;
 pub use form::{CharacterField, CharacterForm, FieldError, FormError};
 pub use model::{
-    GameStatus, GemRow, GemSuggestion, HenchRow, ItemRow, ItemSuggestion, Message, MessageKind,
-    Preview, SaveEntry, Section, SectionError, StyleRow, StyleSuggestion, StyleUpgrade,
+    BackupRow, GameStatus, GemRow, GemSuggestion, HenchRow, ItemRow, ItemSuggestion, Message,
+    MessageKind, PendingChange, PendingChangeGroup, Preview, SaveEntry, Section, SectionError,
+    StyleRow, StyleSuggestion, StyleUpgrade,
 };
 
 /// Folder to start with: the environment override, the last folder used, or
@@ -532,6 +534,74 @@ impl ContentFingerprint {
     }
 }
 
+/// Budget for the canonical block payloads kept by the undo history.
+///
+/// Only blocks an edit touched are captured, and a savegame's `save.sav` is a
+/// few hundred kilobytes, so this is many steps in practice. The cap keeps a
+/// long editing session from growing the editor's memory without bound; older
+/// entries are dropped first.
+const HISTORY_MAX_BYTES: usize = 32 * 1024 * 1024;
+/// Maximum number of undo steps kept, independent of the byte budget.
+const HISTORY_MAX_ENTRIES: usize = 100;
+/// Consecutive edits to the same character fields within this window become
+/// one undo step, so typing `123` is one undo instead of three.
+const HISTORY_COALESCE_WINDOW: Duration = Duration::from_millis(1500);
+
+/// Canonical payload of one block before or after an action.
+#[derive(Debug, Clone)]
+struct BlockState {
+    index: usize,
+    /// `None` means "the file as it was opened"; restoring it uses the
+    /// container's original bytes and marks the block clean again.
+    bytes: Option<Vec<u8>>,
+}
+
+impl BlockState {
+    fn cost(&self) -> usize {
+        self.bytes.as_ref().map_or(0, Vec::len)
+    }
+}
+
+/// One undoable user action.
+#[derive(Debug, Clone)]
+struct HistoryEntry {
+    /// Short action label shown by undo/redo and the diff screen.
+    label: String,
+    /// Field and row level before/after values for the diff screen.
+    changes: Vec<PendingChange>,
+    /// State of every block the action changed, before the action.
+    before: Vec<BlockState>,
+    /// State of every block the action changed, after the action.
+    after: Vec<BlockState>,
+    /// Same-key actions within the coalescing window merge into this entry.
+    coalesce: Option<String>,
+    recorded: Instant,
+}
+
+impl HistoryEntry {
+    fn cost(&self) -> usize {
+        self.before.iter().map(BlockState::cost).sum::<usize>()
+            + self.after.iter().map(BlockState::cost).sum::<usize>()
+    }
+}
+
+/// Identity of the savegame file on disk, for external-change detection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DiskStamp {
+    len: u64,
+    modified: Option<SystemTime>,
+}
+
+impl DiskStamp {
+    fn of(path: &Path) -> Option<Self> {
+        let metadata = std::fs::metadata(path).ok()?;
+        Some(Self {
+            len: metadata.len(),
+            modified: metadata.modified().ok(),
+        })
+    }
+}
+
 /// A loaded editing session.
 pub struct Session {
     /// Folder that is currently scanned.
@@ -585,6 +655,18 @@ pub struct Session {
     baseline: Option<Vec<ContentFingerprint>>,
     /// True when the in-memory savegame differs from the file on disk.
     dirty: bool,
+    /// Undo history, oldest first, with a cursor for undone entries.
+    history: Vec<HistoryEntry>,
+    /// Number of history entries that are currently applied.
+    history_cursor: usize,
+    /// Memory held by [`Session::history`].
+    history_bytes: usize,
+    /// Current canonical payload of every block that has edits.
+    history_current: Vec<Option<Vec<u8>>>,
+    /// Identity of the open savegame on disk when it was read.
+    disk_stamp: Option<DiskStamp>,
+    /// True when the open savegame changed on disk outside the editor.
+    disk_changed: bool,
     file_size: Option<u64>,
     preview_generation: u64,
     scan_token: u64,
@@ -675,6 +757,12 @@ impl Session {
             last_backup: None,
             baseline: None,
             dirty: false,
+            history: Vec::new(),
+            history_cursor: 0,
+            history_bytes: 0,
+            history_current: Vec::new(),
+            disk_stamp: None,
+            disk_changed: false,
             file_size: None,
             preview_generation: 0,
             scan_token: 0,
@@ -713,6 +801,9 @@ impl Session {
         self.last_backup = None;
         self.baseline = None;
         self.dirty = false;
+        self.clear_history();
+        self.disk_stamp = None;
+        self.disk_changed = false;
     }
 
     /// Replaces the entry list with the result of [`Session::scan_entries`].
@@ -1058,6 +1149,8 @@ impl Session {
         match SaveGame::open(&path) {
             Ok(save) => {
                 self.file_size = std::fs::metadata(&path).ok().map(|meta| meta.len());
+                self.disk_stamp = DiskStamp::of(&path);
+                self.disk_changed = false;
                 let label = entry.label.clone();
                 let mut warnings = Vec::new();
                 self.character_error = None;
@@ -1295,6 +1388,361 @@ impl Session {
                 .collect::<Option<Vec<_>>>()
         });
         self.dirty = false;
+        self.clear_history();
+    }
+
+    /// Canonical payload of every block after the current edit.
+    ///
+    /// `None` means the block is still the file as opened. Serialization only
+    /// runs for edited blocks, which is normally a single `save.sav`.
+    fn current_block_states(&self) -> Option<Vec<Option<Vec<u8>>>> {
+        let save = self.save.as_ref()?;
+        let mut states = Vec::with_capacity(save.blocks().len());
+        for (index, block) in save.blocks().iter().enumerate() {
+            if block.is_modified() {
+                states.push(Some(save.block_canonical_payload(index).ok()?));
+            } else {
+                states.push(None);
+            }
+        }
+        Some(states)
+    }
+
+    /// Records the block payloads and field detail of one applied action.
+    ///
+    /// A no-op (the block payloads did not change) records nothing. Consecutive
+    /// edits to the same character fields within
+    /// [`HISTORY_COALESCE_WINDOW`] merge into the previous entry, so typing a
+    /// number is one undo step. The history is bounded by
+    /// [`HISTORY_MAX_BYTES`] and [`HISTORY_MAX_ENTRIES`].
+    fn remember_edit(
+        &mut self,
+        label: &str,
+        changes: Vec<PendingChange>,
+        coalesce: Option<String>,
+    ) {
+        if changes.is_empty() {
+            return;
+        }
+        let Some(states) = self.current_block_states() else {
+            return;
+        };
+        let previous = std::mem::replace(&mut self.history_current, states.clone());
+        if previous == states {
+            return;
+        }
+        let mut before = Vec::new();
+        let mut after = Vec::new();
+        for (index, (old, new)) in previous.iter().zip(&states).enumerate() {
+            if old != new {
+                before.push(BlockState {
+                    index,
+                    bytes: old.clone(),
+                });
+                after.push(BlockState {
+                    index,
+                    bytes: new.clone(),
+                });
+            }
+        }
+        if before.is_empty() {
+            return;
+        }
+        let now = Instant::now();
+        let merge = coalesce.as_deref().is_some_and(|key| {
+            self.history_cursor == self.history.len()
+                && self.history.last().is_some_and(|last| {
+                    last.coalesce.as_deref() == Some(key)
+                        && now.duration_since(last.recorded) <= HISTORY_COALESCE_WINDOW
+                })
+        });
+        if merge {
+            if let Some(last) = self.history.last_mut() {
+                let old_cost = last.cost();
+                for state in before {
+                    if !last.before.iter().any(|known| known.index == state.index) {
+                        last.before.push(state);
+                    }
+                }
+                last.after = after;
+                for change in changes {
+                    if let Some(existing) = last
+                        .changes
+                        .iter_mut()
+                        .find(|existing| existing.field == change.field)
+                    {
+                        existing.after = change.after;
+                    } else {
+                        last.changes.push(change);
+                    }
+                }
+                last.recorded = now;
+                let new_cost = last.cost();
+                self.history_bytes = self.history_bytes.saturating_sub(old_cost) + new_cost;
+                return;
+            }
+        }
+        let entry = HistoryEntry {
+            label: label.to_owned(),
+            changes,
+            before,
+            after,
+            coalesce,
+            recorded: now,
+        };
+        self.history_bytes += entry.cost();
+        while self.history.len() > self.history_cursor {
+            if let Some(removed) = self.history.pop() {
+                self.history_bytes = self.history_bytes.saturating_sub(removed.cost());
+            }
+        }
+        self.history.push(entry);
+        self.history_cursor += 1;
+        while self.history.len() > HISTORY_MAX_ENTRIES || self.history_bytes > HISTORY_MAX_BYTES {
+            if self.history.is_empty() {
+                break;
+            }
+            let removed = self.history.remove(0);
+            self.history_bytes = self.history_bytes.saturating_sub(removed.cost());
+            self.history_cursor = self.history_cursor.saturating_sub(1);
+        }
+    }
+
+    /// Drops the undo history, for example after a save or a reload.
+    fn clear_history(&mut self) {
+        self.history.clear();
+        self.history_cursor = 0;
+        self.history_bytes = 0;
+        self.history_current = self
+            .save
+            .as_ref()
+            .map(|save| vec![None; save.blocks().len()])
+            .unwrap_or_default();
+    }
+
+    /// True when there is an applied action to undo.
+    #[must_use]
+    pub fn can_undo(&self) -> bool {
+        self.history_cursor > 0
+    }
+
+    /// True when an undone action can be reapplied.
+    #[must_use]
+    pub fn can_redo(&self) -> bool {
+        self.history_cursor < self.history.len()
+    }
+
+    /// Restores the block payloads of `states`.
+    fn restore_states(&mut self, states: &[BlockState]) -> bool {
+        let Some(save) = self.save.as_mut() else {
+            return false;
+        };
+        let mut failure = None;
+        for state in states {
+            let result = match &state.bytes {
+                Some(bytes) => save.restore_block_payload(state.index, bytes),
+                None => save.restore_block_from_source(state.index),
+            };
+            if let Err(error) = result {
+                failure = Some(error);
+                break;
+            }
+        }
+        if let Some(error) = failure {
+            self.message = Message::error(format!("Cannot undo that step: {error}"));
+            return false;
+        }
+        true
+    }
+
+    /// Re-reads the typed views after undo/redo replaced block payloads.
+    fn refresh_after_history_restore(&mut self) {
+        self.character = self.save.as_ref().and_then(|save| save.character().ok());
+        self.rebuild_rows();
+        self.refresh_entry();
+        self.refresh_dirty();
+        self.history_current = self.current_block_states().unwrap_or_default();
+    }
+
+    /// Undoes the last applied action and restores the typed views.
+    pub fn undo(&mut self) -> bool {
+        if self.history_cursor == 0 {
+            self.message = Message::info("There is nothing to undo.");
+            return false;
+        }
+        let entry = self.history[self.history_cursor - 1].clone();
+        if !self.restore_states(&entry.before) {
+            return false;
+        }
+        self.history_cursor -= 1;
+        self.refresh_after_history_restore();
+        self.message = Message::info(format!("Undid {}.", entry.label));
+        true
+    }
+
+    /// Reapplies the most recently undone action.
+    pub fn redo(&mut self) -> bool {
+        if self.history_cursor >= self.history.len() {
+            self.message = Message::info("There is nothing to redo.");
+            return false;
+        }
+        let entry = self.history[self.history_cursor].clone();
+        if !self.restore_states(&entry.after) {
+            return false;
+        }
+        self.history_cursor += 1;
+        self.refresh_after_history_restore();
+        self.message = Message::info(format!("Redid {}.", entry.label));
+        true
+    }
+
+    /// Pending changes since the last save, grouped by action.
+    ///
+    /// This is what the review screen shows before a write. A structural edit
+    /// that leaves an orphan struct can keep the savegame dirty after every
+    /// described change has been undone; the screen then shows a generic
+    /// structural note instead of pretending there is nothing to write.
+    #[must_use]
+    pub fn pending_changes(&self) -> Vec<PendingChangeGroup> {
+        let applied = &self.history[..self.history_cursor.min(self.history.len())];
+        let mut groups: Vec<PendingChangeGroup> = Vec::new();
+        for entry in applied {
+            if let Some(last) = groups.last_mut()
+                && last.label == entry.label
+            {
+                last.changes.extend(entry.changes.iter().cloned());
+            } else {
+                groups.push(PendingChangeGroup {
+                    label: entry.label.clone(),
+                    changes: entry.changes.clone(),
+                });
+            }
+        }
+        if groups.is_empty() && self.dirty {
+            groups.push(PendingChangeGroup {
+                label: "Savegame structure".to_owned(),
+                changes: vec![PendingChange::new(
+                    "Block layout",
+                    "as opened",
+                    "structs were added or orphaned",
+                )],
+            });
+        }
+        groups
+    }
+
+    /// Checks whether the open savegame changed on disk.
+    ///
+    /// The check compares size and modification time, the same identity the
+    /// core uses before a save. It is cheap enough to run once per render, and
+    /// `save` performs the authoritative check before writing. A file replaced
+    /// with identical size and timestamp is not detected until the save
+    /// conflict check; that caveat is documented in the design note.
+    pub fn check_disk_state(&mut self) -> bool {
+        let Some(path) = self.current_path() else {
+            self.disk_changed = false;
+            self.disk_stamp = None;
+            return false;
+        };
+        let stamp = DiskStamp::of(&path);
+        if self.disk_stamp.is_none() {
+            self.disk_stamp = stamp;
+            self.disk_changed = false;
+            return false;
+        }
+        self.disk_changed = stamp != self.disk_stamp;
+        self.disk_changed
+    }
+
+    /// True when the last [`Session::check_disk_state`] found an external edit.
+    #[must_use]
+    pub fn disk_changed(&self) -> bool {
+        self.disk_changed
+    }
+
+    /// Re-reads the open savegame from disk.
+    ///
+    /// Refuses while the in-memory savegame has unsaved changes: the caller
+    /// must offer an explicit discard first, which is what the review screen
+    /// and the external-change banner do.
+    pub fn reload_from_disk(&mut self) -> Result<(), SessionError> {
+        let Some(index) = self.selected else {
+            self.message = Message::error("No savegame is open.");
+            return Err(SessionError::NoSavegame);
+        };
+        if self.dirty {
+            self.message = Message::error(
+                "Reloading from disk would discard the unsaved changes. Save or revert them first.",
+            );
+            return Err(SessionError::CannotReload);
+        }
+        if !self.load(index) {
+            return Err(SessionError::CannotReload);
+        }
+        self.message = Message::info("Reloaded the savegame from disk.");
+        Ok(())
+    }
+
+    /// Backups of the open savegame, newest first.
+    #[must_use]
+    pub fn backups(&self) -> Vec<BackupRow> {
+        let Some(path) = self.current_path() else {
+            return Vec::new();
+        };
+        list_backups(&path)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|backup| BackupRow {
+                path: backup.path,
+                original: backup.original,
+                created: backup.created,
+                size: backup.size,
+            })
+            .collect()
+    }
+
+    /// Restores one of the open savegame's backups.
+    ///
+    /// Refuses when the current savegame has unsaved changes or when `backup`
+    /// does not belong to it. The core verifies both files and writes a new
+    /// backup of the current file first; the returned path is that safety copy.
+    pub fn restore_backup(&mut self, backup: &Path) -> Result<PathBuf, SessionError> {
+        let Some(path) = self.current_path() else {
+            self.message = Message::error("No savegame is open.");
+            return Err(SessionError::NoSavegame);
+        };
+        if self.dirty {
+            self.message =
+                Message::error("Save or revert the current edits before restoring a backup.");
+            return Err(SessionError::CannotReload);
+        }
+        let known = self
+            .backups()
+            .into_iter()
+            .any(|candidate| candidate.path == backup);
+        if !known {
+            self.message = Message::error("That file is not a backup of the open savegame.");
+            return Err(SessionError::CannotReload);
+        }
+        match restore_backup(backup, &path) {
+            Ok(safety) => {
+                let index = self.selected;
+                if let Some(index) = index {
+                    let _ = self.load(index);
+                }
+                self.last_backup = Some(safety.clone());
+                self.message = Message::success(format!(
+                    "Restored {}. The file it replaced is kept as {}.",
+                    backup.display(),
+                    safety.display()
+                ));
+                Ok(safety)
+            }
+            Err(error) => {
+                self.message = Message::error(format!("Cannot restore the backup: {error}"));
+                Err(SessionError::CannotReload)
+            }
+        }
     }
 
     /// Every field of `form` that cannot be applied, in field order.
@@ -1472,6 +1920,7 @@ impl Session {
                 if changes.is_empty() {
                     self.message = Message::info("Nothing changed, so there was nothing to apply.");
                 } else {
+                    self.remember_edit("Character", pending_from_core(&changes), None);
                     self.message = Message::success(format!(
                         "Applied {} in memory.",
                         format::plural(changes.len(), "change", "changes")
@@ -1508,6 +1957,13 @@ impl Session {
                 self.character = Some(character);
                 self.refresh_entry();
                 self.refresh_dirty();
+                let pending = pending_from_core(&changes);
+                let key = pending
+                    .iter()
+                    .map(|change| change.field.as_str())
+                    .collect::<Vec<_>>()
+                    .join("|");
+                self.remember_edit("Character", pending, (!key.is_empty()).then_some(key));
                 true
             }
             _ => false,
@@ -1531,6 +1987,8 @@ impl Session {
             Ok(path) => {
                 let backup = save.last_backup().map(Path::to_path_buf);
                 self.file_size = std::fs::metadata(&path).ok().map(|meta| meta.len());
+                self.disk_stamp = DiskStamp::of(&path);
+                self.disk_changed = false;
                 self.last_backup = backup;
                 self.message = match &self.last_backup {
                     Some(backup) => Message::success(format!(
@@ -1545,7 +2003,15 @@ impl Session {
                 Ok(path)
             }
             Err(error) => {
-                self.message = Message::error(format!("Cannot save: {error}"));
+                if matches!(error, jadeforge_core::Error::Conflict { .. }) {
+                    self.disk_changed = true;
+                    self.message = Message::error(format!(
+                        "The savegame changed on disk since it was opened, so it was not overwritten. \
+                         Reload it to keep the file on disk, or restore a backup. ({error})"
+                    ));
+                } else {
+                    self.message = Message::error(format!("Cannot save: {error}"));
+                }
                 Err(SessionError::Save(error.to_string()))
             }
         }
@@ -1634,6 +2100,15 @@ impl Session {
                 {
                     item.count = new_count as u8;
                 }
+                self.remember_edit(
+                    "Item stack",
+                    vec![PendingChange::new(
+                        format!("ItemList[{struct_index}].Count ({name})"),
+                        current.to_string(),
+                        new_count.to_string(),
+                    )],
+                    None,
+                );
                 self.message = Message::success(format!(
                     "{name}: {} in the stack.",
                     format::plural(
@@ -1666,6 +2141,12 @@ impl Session {
         let Some(save) = self.save.as_mut() else {
             return;
         };
+        let previous = self
+            .items
+            .iter()
+            .find(|item| item.struct_index == struct_index)
+            .map(|item| item.count)
+            .unwrap_or(count);
         match save.set_item_count(struct_index, count) {
             Ok(()) => {
                 if let Some(item) = Rc::make_mut(&mut self.items)
@@ -1674,6 +2155,15 @@ impl Session {
                 {
                     item.count = count;
                 }
+                self.remember_edit(
+                    "Item stack",
+                    vec![PendingChange::new(
+                        format!("ItemList[{struct_index}].Count ({name})"),
+                        previous.to_string(),
+                        count.to_string(),
+                    )],
+                    None,
+                );
                 self.message = Message::success(format!(
                     "{name}: {} in the stack.",
                     format::plural(usize::from(count), "item", "items")
@@ -1711,8 +2201,17 @@ impl Session {
             return Err(SessionError::NoSavegame);
         };
         match save.add_item(item_id, save_type, 1) {
-            Ok(_) => {
+            Ok(index) => {
                 self.rebuild_rows();
+                self.remember_edit(
+                    "Item added",
+                    vec![PendingChange::new(
+                        format!("ItemList[{index}] ({name})"),
+                        "not present",
+                        format!("#{item_id} x1"),
+                    )],
+                    None,
+                );
                 self.message = Message::success(format!("Added {name}."));
                 Ok(())
             }
@@ -1725,11 +2224,11 @@ impl Session {
 
     /// Removes an item stack.
     pub fn remove_item(&mut self, struct_index: usize) {
-        let Some(name) = self
+        let Some((name, item_id, count)) = self
             .items
             .iter()
             .find(|item| item.struct_index == struct_index)
-            .map(|item| item.name.clone())
+            .map(|item| (item.name.clone(), item.item_id, item.count))
         else {
             return;
         };
@@ -1739,6 +2238,15 @@ impl Session {
         match save.remove_item(struct_index) {
             Ok(true) => {
                 Rc::make_mut(&mut self.items).retain(|item| item.struct_index != struct_index);
+                self.remember_edit(
+                    "Item removed",
+                    vec![PendingChange::new(
+                        format!("ItemList[{struct_index}] ({name})"),
+                        format!("#{item_id} x{count}"),
+                        "removed",
+                    )],
+                    None,
+                );
                 self.message = Message::success(format!("Removed {name}."));
             }
             Ok(false) => self.message = Message::info("The item was already gone."),
@@ -1911,6 +2419,8 @@ impl Session {
         let Some(clicked) = style.upgrades.iter().find(|upgrade| upgrade.slot == slot) else {
             return false;
         };
+        let before_mask = style.mask;
+        let before_level = style.level;
         let taken = !clicked.taken;
         let family_slots: Vec<u16> = style
             .upgrades
@@ -1924,6 +2434,33 @@ impl Session {
         let changed = match save.set_style_family_slot(struct_index, &family_slots, slot) {
             Ok(changed) => {
                 self.rebuild_rows();
+                if changed > 0 {
+                    let after = self
+                        .styles
+                        .iter()
+                        .find(|row| row.struct_index == struct_index)
+                        .map(|row| (row.mask, row.level))
+                        .unwrap_or((before_mask, before_level));
+                    self.remember_edit(
+                        "Style upgrade",
+                        vec![
+                            PendingChange::new(
+                                format!(
+                                    "StyleList[{struct_index}].StyleLevelInfo ({})",
+                                    style.name
+                                ),
+                                format!("0x{:016X}", before_mask),
+                                format!("0x{:016X}", after.0),
+                            ),
+                            PendingChange::new(
+                                format!("StyleList[{struct_index}].StyleLevel ({})", style.name),
+                                before_level.to_string(),
+                                after.1.to_string(),
+                            ),
+                        ],
+                        None,
+                    );
+                }
                 self.message = if changed == 0 {
                     Message::info("That upgrade is already in the requested state.")
                 } else {
@@ -2057,8 +2594,17 @@ impl Session {
             return;
         };
         match save.add_gem(item_id, &gem.effects, gem.duration) {
-            Ok(_) => {
+            Ok(index) => {
                 self.gems = Rc::new(self.build_gem_rows().0);
+                self.remember_edit(
+                    "Gem added",
+                    vec![PendingChange::new(
+                        format!("GemList[{index}] ({})", gem.name),
+                        "not present",
+                        format!("gem #{item_id}"),
+                    )],
+                    None,
+                );
                 self.message = Message::success(format!("Added {}.", gem.name));
             }
             Err(error) => {
@@ -2070,12 +2616,36 @@ impl Session {
 
     /// Moves a gem between the amulet and the inventory.
     pub fn move_gem(&mut self, struct_index: usize) {
+        let before = self
+            .gems
+            .iter()
+            .find(|gem| gem.struct_index == struct_index)
+            .map(|gem| (gem.name.clone(), gem.location));
         let Some(save) = self.save.as_mut() else {
             return;
         };
         match save.move_gem(struct_index) {
             Ok(location) => {
                 self.gems = Rc::new(self.build_gem_rows().0);
+                if let Some((name, from)) = before {
+                    let (from, to) = match (from, location) {
+                        (GemLocation::Inventory, GemLocation::Amulet) => ("inventory", "amulet"),
+                        (GemLocation::Amulet, GemLocation::Inventory) => ("amulet", "inventory"),
+                        (GemLocation::Inventory, GemLocation::Inventory) => {
+                            ("inventory", "inventory")
+                        }
+                        (GemLocation::Amulet, GemLocation::Amulet) => ("amulet", "amulet"),
+                    };
+                    self.remember_edit(
+                        "Gem moved",
+                        vec![PendingChange::new(
+                            format!("GemList[{struct_index}] ({name})"),
+                            from,
+                            to,
+                        )],
+                        None,
+                    );
+                }
                 self.message = Message::success(match location {
                     GemLocation::Amulet => "Gem socketed into the amulet.",
                     GemLocation::Inventory => "Gem moved to the inventory.",
@@ -2090,12 +2660,28 @@ impl Session {
 
     /// Removes a gem from the inventory or the amulet.
     pub fn remove_gem(&mut self, struct_index: usize) {
+        let before = self
+            .gems
+            .iter()
+            .find(|gem| gem.struct_index == struct_index)
+            .map(|gem| (gem.name.clone(), gem.location));
         let Some(save) = self.save.as_mut() else {
             return;
         };
         match save.remove_gem(struct_index) {
             Ok(()) => {
                 self.gems = Rc::new(self.build_gem_rows().0);
+                if let Some((name, location)) = before {
+                    self.remember_edit(
+                        "Gem removed",
+                        vec![PendingChange::new(
+                            format!("GemList[{struct_index}] ({name})"),
+                            format!("{location:?}"),
+                            "removed",
+                        )],
+                        None,
+                    );
+                }
                 self.message = Message::success("Gem removed.");
             }
             Err(error) => {
@@ -2170,8 +2756,17 @@ impl Session {
             return;
         };
         match save.add_style(template, &identity) {
-            Ok(_) => {
+            Ok(index) => {
                 self.rebuild_rows();
+                self.remember_edit(
+                    "Style added",
+                    vec![PendingChange::new(
+                        format!("StyleList[{index}] ({})", info.name),
+                        "not present",
+                        format!("style #{}", info.id),
+                    )],
+                    None,
+                );
                 self.message = Message::success(format!("Added {}.", info.name));
             }
             Err(error) => self.message = Message::error(format!("Cannot add style: {error}")),
@@ -2181,11 +2776,11 @@ impl Session {
 
     /// Removes a style from the player.
     pub fn remove_style(&mut self, struct_index: usize) {
-        let Some(name) = self
+        let Some((name, style_id)) = self
             .styles
             .iter()
             .find(|style| style.struct_index == struct_index)
-            .map(|style| style.name.clone())
+            .map(|style| (style.name.clone(), style.style_id))
         else {
             return;
         };
@@ -2201,6 +2796,15 @@ impl Session {
         match save.remove_style(struct_index) {
             Ok(true) => {
                 Rc::make_mut(&mut self.styles).retain(|style| style.struct_index != struct_index);
+                self.remember_edit(
+                    "Style removed",
+                    vec![PendingChange::new(
+                        format!("StyleList[{struct_index}] ({name})"),
+                        format!("style #{style_id}"),
+                        "removed",
+                    )],
+                    None,
+                );
                 self.message = Message::success(format!("Removed {name}."));
             }
             Ok(false) => self.message = Message::info("The style was already gone."),
@@ -2215,6 +2819,11 @@ impl Session {
             self.message = Message::info("Companion levels go from 1 to 60.");
             return;
         }
+        let known = self
+            .henchmen
+            .iter()
+            .find(|henchman| henchman.struct_index == struct_index)
+            .map(|henchman| (henchman.name.clone(), henchman.level));
         let Some(save) = self.save.as_mut() else {
             return;
         };
@@ -2225,6 +2834,17 @@ impl Session {
                     .find(|henchman| henchman.struct_index == struct_index)
                 {
                     henchman.level = level;
+                }
+                if let Some((name, previous)) = known {
+                    self.remember_edit(
+                        "Companion level",
+                        vec![PendingChange::new(
+                            format!("HenchmanList[{struct_index}].Level ({name})"),
+                            previous.to_string(),
+                            level.to_string(),
+                        )],
+                        None,
+                    );
                 }
                 self.message = Message::success(format!("Companion level set to {level}."));
             }
@@ -2261,6 +2881,15 @@ impl Session {
                 } else {
                     "available"
                 };
+                self.remember_edit(
+                    "Companion availability",
+                    vec![PendingChange::new(
+                        format!("HenchmanList[{struct_index}].Available ({name})"),
+                        (!available).to_string(),
+                        available.to_string(),
+                    )],
+                    None,
+                );
                 self.message = Message::success(format!("{name} is now {state}."));
             }
             Err(error) => {
@@ -2305,6 +2934,20 @@ impl Session {
             entry.time_played = character.time_played;
         }
     }
+}
+
+/// Converts core field changes into the review screen's rows.
+fn pending_from_core(changes: &[Change]) -> Vec<PendingChange> {
+    changes
+        .iter()
+        .map(|change| {
+            PendingChange::new(
+                change.field.clone(),
+                change.before.clone(),
+                change.after.clone(),
+            )
+        })
+        .collect()
 }
 
 /// Formats one predefined gem effect as `+2 Body` or `+1 Fire (5s)`.
@@ -3957,6 +4600,157 @@ mod tests {
             session.complete_scan(&request, ScanOutcome::run(&request)),
             ScanApply::Stale
         );
+    }
+
+    #[test]
+    fn undo_and_redo_restore_character_fields_and_the_dirty_state() {
+        let (_directory, mut session) = fixture();
+        let mut form = form_for(&session);
+        form.level = "9".to_owned();
+        let mut character = form
+            .to_character(session.character.as_ref().expect("character"))
+            .expect("character");
+        assert!(session.apply(&form).is_ok());
+        assert_eq!(session.character.as_ref().expect("character").level, 9);
+        assert!(session.is_dirty());
+        assert!(session.can_undo());
+
+        character.level = 10;
+        form.level = "10".to_owned();
+        assert!(session.apply(&form).is_ok());
+        assert_eq!(session.character.as_ref().expect("character").level, 10);
+
+        assert!(session.undo());
+        assert_eq!(session.character.as_ref().expect("character").level, 9);
+        assert!(session.undo());
+        assert_eq!(session.character.as_ref().expect("character").level, 7);
+        assert!(
+            !session.is_dirty(),
+            "undoing every edit must clear the dirty state"
+        );
+        assert!(!session.can_undo());
+
+        assert!(session.redo());
+        assert_eq!(session.character.as_ref().expect("character").level, 9);
+        assert!(session.redo());
+        assert_eq!(session.character.as_ref().expect("character").level, 10);
+        assert!(session.is_dirty());
+    }
+
+    #[test]
+    fn consecutive_character_typing_is_one_undo_step() {
+        let (_directory, mut session) = fixture();
+        let mut form = form_for(&session);
+        form.level = "8".to_owned();
+        assert!(session.apply_form_silently(&form));
+        form.level = "80".to_owned();
+        assert!(session.apply_form_silently(&form));
+        assert_eq!(session.character.as_ref().expect("character").level, 80);
+        assert!(session.undo());
+        assert_eq!(
+            session.character.as_ref().expect("character").level,
+            7,
+            "typing two digits must coalesce into one undo step"
+        );
+    }
+
+    #[test]
+    fn pending_changes_list_the_fields_and_clear_after_save() {
+        let (_directory, mut session) = fixture();
+        let mut form = form_for(&session);
+        form.level = "9".to_owned();
+        assert!(session.apply(&form).is_ok());
+        let groups = session.pending_changes();
+        assert_eq!(groups.len(), 1);
+        assert!(
+            groups[0]
+                .changes
+                .iter()
+                .any(|change| change.field.contains("Level")
+                    && change.before == "7"
+                    && change.after == "9"),
+            "the diff does not describe the level edit: {groups:?}"
+        );
+        session.save().expect("save");
+        assert!(session.pending_changes().is_empty());
+        assert!(!session.can_undo());
+    }
+
+    #[test]
+    fn undoing_an_item_stack_change_restores_the_count() {
+        let (_directory, mut session) = fixture();
+        let index = session.items[0].struct_index;
+        session.adjust_item_count(index, 2);
+        assert_eq!(session.items[0].count, 7);
+        assert!(session.undo());
+        assert_eq!(session.items[0].count, 5);
+        assert!(!session.is_dirty());
+    }
+
+    #[test]
+    fn an_external_change_is_detected_and_a_dirty_reload_is_refused() {
+        let (directory, mut session) = fixture();
+        assert!(!session.check_disk_state());
+        let path = directory.path().join("save.sac");
+        let mut gff = fixture_gff();
+        gff.get_mut("PlayerCreature.Level").expect("level").value = Value::Byte(42);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        fs::write(&path, container(&gff)).expect("write external change");
+        assert!(session.check_disk_state(), "the external change was missed");
+        assert!(session.disk_changed());
+
+        let mut form = form_for(&session);
+        form.level = "9".to_owned();
+        assert!(session.apply(&form).is_ok());
+        assert!(session.reload_from_disk().is_err());
+        assert!(
+            session.message.text.contains("unsaved changes"),
+            "the refusal does not explain itself: {}",
+            session.message.text
+        );
+
+        assert!(session.undo());
+        assert!(session.reload_from_disk().is_ok());
+        assert_eq!(session.character.as_ref().expect("character").level, 42);
+        assert!(!session.disk_changed());
+    }
+
+    #[test]
+    fn a_backup_can_be_listed_and_restored() {
+        let (_directory, mut session) = fixture();
+        let mut form = form_for(&session);
+        form.level = "9".to_owned();
+        assert!(session.apply(&form).is_ok());
+        let saved = session.save().expect("save");
+        let backups = session.backups();
+        assert_eq!(backups.len(), 1, "the save did not create a backup");
+        assert_eq!(backups[0].original, saved);
+
+        assert!(session.restore_backup(&backups[0].path).is_ok());
+        assert_eq!(
+            session.character.as_ref().expect("character").level,
+            7,
+            "restoring the backup did not restore the pre-save file"
+        );
+        assert!(
+            session.last_backup().is_some(),
+            "the safety copy is missing"
+        );
+        assert_eq!(session.backups().len(), 2);
+    }
+
+    #[test]
+    fn restoring_a_backup_with_unsaved_changes_is_refused() {
+        let (_directory, mut session) = fixture();
+        let mut form = form_for(&session);
+        form.level = "9".to_owned();
+        assert!(session.apply(&form).is_ok());
+        session.save().expect("save");
+        let backup = session.backups().remove(0).path;
+        form.level = "11".to_owned();
+        assert!(session.apply(&form).is_ok());
+        assert!(session.restore_backup(&backup).is_err());
+        assert_eq!(session.character.as_ref().expect("character").level, 11);
     }
 
     #[test]

@@ -9,11 +9,13 @@ use crate::theme;
 use crate::widgets::{self, AccessibleButton, Action};
 
 pub mod about;
+pub mod backups;
 pub mod character;
 pub mod gems;
 pub mod henchmen;
 pub mod inventory;
 pub mod overview;
+pub mod review;
 pub mod styles;
 
 /// Copy and open actions for a path shown in a card.

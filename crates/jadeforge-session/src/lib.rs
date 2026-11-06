@@ -15,6 +15,6 @@ pub use preferences::{
     MAX_TEXT_SCALE, MIN_TEXT_SCALE, TEXT_SCALES, ThemeChoice, normalize_text_scale,
 };
 pub use session::{
-    CharacterForm, GameStatus, Message, MessageKind, SaveEntry, Session, SessionError,
-    default_save_dir,
+    BackupRow, CharacterForm, GameStatus, Message, MessageKind, PendingChange, PendingChangeGroup,
+    SaveEntry, Session, SessionError, default_save_dir,
 };

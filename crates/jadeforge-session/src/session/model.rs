@@ -331,3 +331,63 @@ pub struct Preview {
     /// Bumped every time a new preview is loaded.
     pub generation: u64,
 }
+
+/// One field or row that an applied edit changed.
+///
+/// The pending-changes screen groups these by action so the user can see the
+/// exact fields and rows a save will write, not just "unsaved changes".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingChange {
+    /// Dotted field path or row description.
+    pub field: String,
+    /// Value before the edit.
+    pub before: String,
+    /// Value after the edit.
+    pub after: String,
+}
+
+impl PendingChange {
+    /// Builds a change row.
+    #[must_use]
+    pub fn new(
+        field: impl Into<String>,
+        before: impl Into<String>,
+        after: impl Into<String>,
+    ) -> Self {
+        Self {
+            field: field.into(),
+            before: before.into(),
+            after: after.into(),
+        }
+    }
+}
+
+/// All pending changes made by one user action.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingChangeGroup {
+    /// Short action label such as `Inventory` or `Upgrade`.
+    pub label: String,
+    /// Fields and rows the action changed.
+    pub changes: Vec<PendingChange>,
+}
+
+/// One backup listed by the backup screen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackupRow {
+    /// Path of the backup file.
+    pub path: PathBuf,
+    /// The savegame the backup belongs to.
+    pub original: PathBuf,
+    /// Creation instant parsed from the backup name.
+    pub created: std::time::SystemTime,
+    /// Size in bytes.
+    pub size: u64,
+}
+
+impl BackupRow {
+    /// UTC timestamp shown in the backup list.
+    #[must_use]
+    pub fn timestamp(&self) -> String {
+        format::timestamp(self.created)
+    }
+}

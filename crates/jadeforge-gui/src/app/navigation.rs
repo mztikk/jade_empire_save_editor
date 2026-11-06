@@ -14,15 +14,19 @@ pub(super) fn tab_bar(
     enabled: bool,
     scanning: bool,
     mut show_about: State<bool>,
+    mut show_backups: State<bool>,
+    mut show_review: State<bool>,
 ) -> Element {
     let mut buttons: Vec<Element> = Vec::new();
-    let about_open = *show_about.read();
+    let page_open = *show_about.read() || *show_backups.read() || *show_review.read();
     for candidate in Tab::ALL {
         let mut tab = tab;
-        let is_active = candidate == active && !about_open;
+        let is_active = candidate == active && !page_open;
         let action = Action::new(move || {
             *tab.write() = candidate;
             show_about.set(false);
+            show_backups.set(false);
+            show_review.set(false);
         });
         let content = rect()
             .vertical()
@@ -80,6 +84,8 @@ pub(super) fn tab_bar(
                     .on_key({
                         let mut tab = tab;
                         let mut show_about = show_about;
+                        let mut show_backups = show_backups;
+                        let mut show_review = show_review;
                         move |event: Event<KeyboardEventData>| {
                             let target = match event.key {
                                 Key::Named(NamedKey::ArrowLeft) => {
@@ -97,6 +103,8 @@ pub(super) fn tab_bar(
                             {
                                 *tab.write() = *next;
                                 show_about.set(false);
+                                show_backups.set(false);
+                                show_review.set(false);
                                 event.stop_propagation();
                             }
                         }
