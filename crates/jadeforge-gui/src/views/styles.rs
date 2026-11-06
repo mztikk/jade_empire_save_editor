@@ -159,7 +159,7 @@ fn style_row(
     filter_id: AccessibilityId,
 ) -> Element {
     let key = crate::app::HoverKey::Style(style.struct_index);
-    let is_hovered = *hovered.read() == Some(key);
+    let is_hovered = (*hovered.read()).is_some_and(|key| key.is_style_row(style.struct_index));
     let index = style.struct_index;
     let level = style.level;
     let remove = {
@@ -328,7 +328,7 @@ fn upgrade_row(family: &str, chips: Vec<Element>) -> Element {
         .horizontal()
         .width(Size::fill())
         .key(family.to_owned())
-        .spacing(theme::space::SM)
+        .spacing(theme::space::NONE)
         .content(Content::Flex)
         .child(
             widgets::a11y_text(family_title(family))
@@ -410,11 +410,10 @@ impl Component for UpgradeOrb {
         let slot = self.upgrade.slot;
         rect()
             .center()
-            .width(Size::px(theme::layout::ORB))
-            .height(Size::px(theme::layout::ORB))
-            .corner_radius(theme::radius::PILL)
-            .background(background)
-            .border(Border::new().fill(border).width(border_width))
+            // The hit target reaches halfway into the gap to each neighbour
+            // (the row itself has no spacing), so sweeping from one orb to the
+            // next never lands on the row background in between.
+            .padding(Gaps::new_symmetric(theme::space::NONE, theme::space::XS))
             .a11y_id(a11y_id)
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::Button)
@@ -440,6 +439,15 @@ impl Component for UpgradeOrb {
                 session.0.borrow_mut().change_upgrade(struct_index, slot);
                 *revision.write() += 1;
             })
+            .child(
+                rect()
+                    .center()
+                    .width(Size::px(theme::layout::ORB))
+                    .height(Size::px(theme::layout::ORB))
+                    .corner_radius(theme::radius::PILL)
+                    .background(background)
+                    .border(Border::new().fill(border).width(border_width)),
+            )
             .into_element()
     }
 }
@@ -631,7 +639,7 @@ fn learn_row(
     expanded: State<Option<u16>>,
     mut hovered: State<Option<crate::app::HoverKey>>,
 ) -> Element {
-    let key = crate::app::HoverKey::Orb(suggestion.style_id.into(), 0);
+    let key = crate::app::HoverKey::StyleSuggestion(suggestion.style_id);
     let is_hovered = *hovered.read() == Some(key);
     let learn = {
         let ctx = ctx.clone();
