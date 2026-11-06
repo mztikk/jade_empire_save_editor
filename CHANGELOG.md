@@ -8,6 +8,36 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Responsive editor composition: the six identity fields are a fluid 3+3
+  grid at the default 1180x760 window and at the 900 minimum, the overview
+  glance cells reflow from one column to 2+2+1 and the hero stats stay a 2x2
+  block, the editor column stops at 1100 px on wide windows, descriptions
+  expand in full, and clipped save, item and companion names get an ellipsis
+  plus a tooltip. The overview save path wraps and can be copied.
+- DPI-aware window geometry: the default size is clamped to the monitor, the
+  minimum follows a short screen, and the size and position are remembered
+  between runs (Wayland reports no position, so the stored one is kept).
+- Per-field character validation: every field shows its allowed range, an
+  invalid input is marked and reported, valid fields of an otherwise invalid
+  form are applied, and Save focuses the first invalid field while still
+  writing every applied item, style or gem edit.
+- Unsaved state is a content comparison, so an edit that is undone clears the
+  dirty flag again; Scan keeps the open savegame when the folder did not
+  change; a missing, unreadable, empty and file path are reported separately;
+  only a successful scan replaces the remembered folder.
+- The missing game installation can be chosen from the header, is remembered
+  in the settings file, and the discovered root is shown; sections that could
+  not be read are no longer rendered as empty lists.
+- Discoverability and editing: disclosure chevrons and Details affordances on
+  expandable rows, upgrade-orb effect/cost/owned details, a read-only notice
+  for styles without a slot table, gem effect lines in the picker, contextual
+  accessible names for row actions, direct numeric stack and companion-level
+  editing, desktop shortcuts (Ctrl+S/O/F, F5, Enter, Escape, tab arrows) and
+  the character name and modification time in save rows.
+- Accessibility and diagnostics: 28 px targets, 11 px micro and 14 px body
+  type, 3:1 control borders, a non-colour active-tab underline, an explicit
+  success glyph, focus restoration after removing a row, a focusable keyboard
+  scroll view, frame-time instrumentation and an 89-save render test.
 - A generated English name index for items and styles, plus item categories,
   used when no game installation is available. It keeps downloaded and console
   saves readable on machines without the game and enables the item picker;
