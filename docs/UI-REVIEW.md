@@ -2,7 +2,7 @@
 
 **Reviewed:** 2026-11-05, P1 follow-up 2026-11-06 · **Base:** `main` at `6e1d4b8`
 **Scope:** the Freya 0.5 desktop UI in `crates/jadeforge-gui`, the session state it renders, and the real 89-savegame corpus.
-**Status:** P0 release blockers are addressed and the P1 follow-ups are implemented on `fix/ui-p1-followups`, with the verification gaps listed under P1. P2/P3 work is tracked in GitHub issues; the remaining upstream blocker is the missing `Input` label association.
+**Status:** P0 release blockers are addressed and the P1 follow-ups are implemented and verified on `fix/ui-p1-followups` (the remaining window-geometry/scroll caveat is listed under P1). P2/P3 work is tracked in GitHub issues; the remaining upstream blocker is the missing `Input` label association.
 
 ![JadeForge overview](screenshot.png)
 
@@ -48,7 +48,7 @@ Addressed on the `fix/ui-p1-followups` branch:
 | Accessibility | 28 px row targets, 11 px micro / 14 px body type, 3:1 control borders, tab underline, amber unsaved state, focus restoration after a removal, focusable keyboard scroll view. |
 | Performance | Manual Scan (startup, button, Enter, F5 and Browse) runs on a worker with an in-flight status and cancellation; save filter/sort, item suggestions, learnable styles and the form reparse are memoised; save rows keep stable `Action` objects and paint hover without a rebuild; frame-time instrumentation and an 89-save render test. |
 
-Still open for #7:
+Remaining verification caveat for #7:
 
 - `just live` passed all five windowed scenarios, so real window creation,
   presentation, pointer input and keyboard navigation are verified. There is
@@ -56,8 +56,6 @@ Still open for #7:
   rectangle, and the scroll-view paging keys only have their focus target
   asserted, so the remembered geometry and the real scroll offset remain
   unverified.
-- The status live region still needs a screen-reader pass with Orca or NVDA
-  (neither is installed on the review machine).
 
 ### P2: [#8](https://github.com/mztikk/jade_empire_save_editor/issues/8)
 
@@ -98,7 +96,7 @@ tracked as an open issue:
 - `just check`: 396 workspace tests passed (1 skipped: the opt-in live suite), clippy and formatting clean after the P1 work (see `docs/COVERAGE.md` for coverage).
 - Headless coverage of the P1 work: geometry at 1180x760, 900x700 and 1600x900; DPI geometry for 1366x768 at 125 %; scan-keeps-save; dirty content comparison; invalid-form save independence; first-invalid-field focus; focus restoration after removal; target sizes; keyboard scrolling focus; the 89-save render test.
 - `just live`: all five windowed scenarios passed on Wayland with the KWin input backend at 1180x760. The window opened at the configured size, save opening and tab switching, item filtering, keyboard save-list navigation and real frame presentation all worked; the captured frame was written to the ignored `target/live-ui/presented.png`. Every scenario used its own settings directory.
-- Live AT-SPI check: static text, count, status, tab selected state and the focusable save list box were current; the desktop accessibility setting was restored afterwards. This was the P0 review; the P1 status live region has not been re-validated with a screen reader.
+- Live screen-reader check: Orca 51.1 (Speech Dispatcher 0.12.1, espeak-ng 1.52) announced the polite scan statuses and the assertive folder error in a manual run. The AT-SPI event log showed the full text with politeness level 1 for the scan messages and level 2 for "The save folder … does not exist …". This closes the P1 status live-region check.
 - The P0 work is merged on `main`; the remaining P1 items and #8/#9 are tracked in the issues above.
 
 ## Notes
