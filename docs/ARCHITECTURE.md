@@ -151,7 +151,7 @@ paths unchanged.
 
 ## `jadeforge-gui`
 
-Freya 0.4 application with a small, explicit structure:
+Freya 0.5 application with a small, explicit structure:
 
 | module | responsibility |
 | --- | --- |
@@ -192,11 +192,13 @@ The GUI is tested headlessly through `freya-testing`: the real component tree is
 rendered off-screen, a savegame is opened by clicking it, tabs are switched, a
 style level is raised, an item is searched and added, the pagination of the item
 database is exercised, a broken savegame is reported and the rendered frames are
-checked. The fixture uses `JADEFORGE_SAVE_DIR` when it is set and otherwise
-builds a complete synthetic savegame and installation in a temporary folder, so
-the suite runs in CI without the retail game. `cargo run -p jadeforge-gui --example snapshot -- <dir> <png>
-[TAB|all] [--height N] [--query TEXT]` produces the screenshots used in the
-documentation.
+checked. Accessibility assertions read the effective AccessKit nodes (including
+the values Freya 0.5 fills while building the tree) and activate a tab through a
+synthetic AccessKit `Click` action. The fixture uses `JADEFORGE_SAVE_DIR` when it
+is set and otherwise builds a complete synthetic savegame and installation in a
+temporary folder, so the suite runs in CI without the retail game.
+`cargo run -p jadeforge-gui --example snapshot -- <dir> <png> [TAB|all]
+[--height N] [--query TEXT]` produces the screenshots used in the documentation.
 
 A second, opt-in suite (`crates/jadeforge-gui/tests/live.rs`) covers the window
 path: it launches the real application through `freya-winit`, opens a real
@@ -220,7 +222,10 @@ Opening the window must not wait for the savegame corpus. The sequence is:
 2. The first frame renders with the "Scanning for savegames…" message.
 3. `app_with_directory` starts a `use_future` task. It spawns a worker thread
    running `Session::scan_entries` and awaits the result through a futures
-   channel, so the Freya executor is never blocked by file I/O.
+   channel, so the Freya executor is never blocked by file I/O. Freya 0.5's
+   `use_future` is reactive, but this callback reads no state before its async
+   block, so it starts once and cannot restart itself through the revision it
+   bumps when the scan lands.
 4. The future calls `Session::apply_entries_for` with the directory and scan
    token it started from. Stale results for a folder the user has already left
    are discarded, then the revision is bumped and the list appears.
@@ -268,6 +273,8 @@ Deliberately small:
 * `thiserror` for errors,
 * `serde` and `toml` for the settings file,
 * `freya` for the GUI,
+* `accesskit` for the roles, states, actions and live regions the views set
+  directly; it must stay on the same 0.25 release line as Freya,
 * `freya-testing` (dev only) for headless UI tests,
 * `freya-winit`, `wayland-client` and `wayland-protocols-plasma` (dev only,
   Linux) for the windowed UI suite and its KWin fake-input driver; `image` and

@@ -17,7 +17,7 @@ truth and must be updated whenever the understanding of the format changes.
 ## Commands
 
 ```sh
-cargo build --workspace                       # build everything (MSRV 1.88)
+cargo build --workspace                       # build everything (MSRV 1.99)
 cargo nextest run --workspace                 # all tests (cargo-nextest)
 cargo test --workspace --doc                  # doctests
 cargo clippy --workspace --all-targets -- -D warnings
@@ -331,9 +331,11 @@ documentation, not ground truth: verify against the game files where possible).
   window. Keep its scenarios small and window-level, because exhaustive layout
   coverage belongs in the headless suite. See `docs/LIVE-UI.md`.
 - Every dynamic UI list item and every conditional tab root must have a stable
-  key. Freya 0.4 can panic inside its diff when unkeyed/root-changing elements
-  are replaced; keys are a crash guard, not optional. Use the existing
-  `KeyExt` implementations and call `.key(...)` at list sites.
+  key. Freya 0.5 fixed several diff panics, including the unkeyed replacement
+  crash that 0.4 hit, but keyed identity is still what reconciles reordered rows
+  without duplicating or dropping element state. Keys are a correctness and
+  crash guard, not optional. Use the existing `KeyExt` implementations and call
+  `.key(...)` at list sites.
 - UI tests isolate the settings file through a thread-local override
   (`jadeforge_session::config::ensure_test_path`), so a developer's remembered
   sort order or save folder can never influence them. Keep it that way; do not

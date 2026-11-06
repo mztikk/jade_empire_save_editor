@@ -11,16 +11,40 @@ All notable changes are documented here. The format follows
 - Repository rules for secrets, unnecessary comments, lint suppressions, the
   named GUI design tokens, and the no-em-dash convention.
 - The upstream Freya framework skill at `.dsh/skills/freya/SKILL.md`, adapted
-  for the pinned Freya 0.4.3 and linked from `AGENTS.md`.
+  for the pinned Freya 0.5.0 and linked from `AGENTS.md`.
+- Screen-reader activation: Freya 0.5 dispatches AccessKit `Click` actions to
+  `on_press` handlers, and a headless test activates a tab through
+  `TestingRunner::send_accessibility_action`.
 
 ### Changed
 
+- Upgraded the desktop UI from Freya 0.4.3 to Freya 0.5.0, including the
+  `freya-testing` headless runner and the Linux-only `freya-core` /
+  `freya-winit` windowed-test pins. The direct `accesskit` dependency now
+  follows Freya's 0.25 line.
+- Adopted the 0.5 accessibility work: labels and paragraphs fill their AccessKit
+  value while the tree is built and accessibility nodes refresh from their diff,
+  so `widgets::a11y_text` no longer builds value/label nodes or keys by content.
+- Adopted the 0.5 scrollbar theme: the two scroll views keep the 9 px,
+  always-visible bar with the new `thumb_cross_size`, opacity and gap fields and
+  `auto_hide_scrollbars(false)`.
+- Adopted per-element cursor styling (`.cursor(CursorIcon::Pointer)`) instead of
+  the removed global `Cursor::set` calls, with a headless regression test.
+- Ported the other 0.5 breaking changes: `KeyExt::key_mut`, `Platform` versus
+  `PlatformWindow`, the scroll controller callback form, and the windowed
+  probe's `NativePlatformErasedEventAction` close event.
 - GUI font sizes, spacing, padding, corner radii, stroke widths and fixed
   component dimensions now use shared named tokens in `theme.rs` instead of
   literal values in the views.
 - The savegame and overview placeholders use readable text instead of an em
   dash, and interactive controls use `on_press` so keyboard activation stays
   available.
+
+### Breaking
+
+- Workspace MSRV is 1.99 (was 1.88), matching Freya 0.5.0's pinned toolchain.
+  Updated `Cargo.toml`, `README.md`, `AGENTS.md`, `ci/README.md` and the CI MSRV
+  job together.
 
 ## [0.2.0] - 2026-11-05
 
