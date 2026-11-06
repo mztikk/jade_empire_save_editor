@@ -31,36 +31,38 @@ pub fn a11y_text(content: impl Into<String>) -> Label {
 
 /// A card with a title, an optional hint and a vertical body.
 pub fn card(title: &'static str, hint: Option<String>, children: Vec<Element>) -> Element {
-    let mut body = rect()
+    rect()
         .vertical()
         .width(Size::fill())
-        .spacing(16.)
-        .padding(Gaps::new_all(18.))
+        .spacing(theme::space::XXL)
+        .padding(Gaps::new_all(theme::space::CARD))
         .background(theme::PANEL)
-        .corner_radius(14.)
+        .corner_radius(theme::radius::PANEL)
         .child(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(10.)
+                .spacing(theme::space::LG)
                 .content(Content::Flex)
                 .child(
                     a11y_text(title)
                         .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-                        .font_size(15.)
+                        .font_size(theme::font::CARD_TITLE)
                         .font_weight(FontWeight::BOLD)
                         .color(theme::TEXT),
                 )
                 .child(rect().width(Size::flex(1.0)))
                 .child(hint.map_or_else(
-                    || a11y_text("").font_size(11.),
-                    |hint| a11y_text(hint).font_size(11.).color(theme::DIM),
+                    || a11y_text("").font_size(theme::font::CAPTION),
+                    |hint| {
+                        a11y_text(hint)
+                            .font_size(theme::font::CAPTION)
+                            .color(theme::DIM)
+                    },
                 )),
-        );
-    for child in children {
-        body = body.child(child);
-    }
-    body.into_element()
+        )
+        .children(children)
+        .into_element()
 }
 
 /// A row of form fields that wraps on narrow windows.
@@ -68,8 +70,8 @@ pub fn field_grid(children: Vec<Element>) -> Element {
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(14.)
-        .content(Content::wrap_spacing(14.0))
+        .spacing(theme::space::FIELD)
+        .content(Content::wrap_spacing(theme::space::FIELD))
         .children(children)
         .into_element()
 }
@@ -78,7 +80,7 @@ pub fn field_grid(children: Vec<Element>) -> Element {
 pub fn field(label_text: &'static str, input: impl IntoElement, width: f32) -> Element {
     rect()
         .vertical()
-        .spacing(6.)
+        .spacing(theme::space::SM)
         .width(Size::px(width))
         // Freya 0.4 has no Input::label API yet. Naming the field group at
         // least gives a screen reader the caption before it reaches the input's
@@ -87,7 +89,7 @@ pub fn field(label_text: &'static str, input: impl IntoElement, width: f32) -> E
         .a11y_alt(label_text)
         .child(
             a11y_text(label_text)
-                .font_size(10.)
+                .font_size(theme::font::MICRO)
                 .font_weight(FontWeight::BOLD)
                 .color(theme::DIM),
         )
@@ -99,12 +101,16 @@ pub fn field(label_text: &'static str, input: impl IntoElement, width: f32) -> E
 pub fn stat(label_text: &'static str, value: String) -> Element {
     rect()
         .vertical()
-        .spacing(2.)
-        .width(Size::px(120.))
-        .child(a11y_text(label_text).font_size(10.).color(theme::DIM))
+        .spacing(theme::space::XXS)
+        .width(Size::px(theme::layout::STAT_WIDTH))
+        .child(
+            a11y_text(label_text)
+                .font_size(theme::font::MICRO)
+                .color(theme::DIM),
+        )
         .child(
             a11y_text(value)
-                .font_size(18.)
+                .font_size(theme::font::SUBHEADING)
                 .font_weight(FontWeight::BOLD)
                 .color(theme::TEXT),
         )
@@ -114,10 +120,14 @@ pub fn stat(label_text: &'static str, value: String) -> Element {
 /// A coloured pill, used for categories and states.
 pub fn badge(text: impl Into<String>, fill: Color, text_color: Color) -> Element {
     rect()
-        .padding(Gaps::new_symmetric(2., 8.))
+        .padding(Gaps::new_symmetric(theme::space::XXS, theme::space::MD))
         .background(fill)
-        .corner_radius(99.)
-        .child(a11y_text(text.into()).font_size(10.).color(text_color))
+        .corner_radius(theme::radius::PILL)
+        .child(
+            a11y_text(text.into())
+                .font_size(theme::font::MICRO)
+                .color(text_color),
+        )
         .into_element()
 }
 
@@ -125,7 +135,7 @@ pub fn badge(text: impl Into<String>, fill: Color, text_color: Color) -> Element
 pub fn divider() -> Element {
     rect()
         .width(Size::fill())
-        .height(Size::px(1.))
+        .height(Size::px(theme::layout::DIVIDER))
         .background(theme::BORDER)
         .into_element()
 }
@@ -133,7 +143,7 @@ pub fn divider() -> Element {
 /// Small muted explanatory text.
 pub fn hint(text: impl Into<String>) -> Element {
     a11y_text(text.into())
-        .font_size(11.)
+        .font_size(theme::font::CAPTION)
         .color(theme::DIM)
         .into_element()
 }
@@ -142,7 +152,7 @@ pub fn hint(text: impl Into<String>) -> Element {
 pub fn section_label(text: &'static str) -> Element {
     a11y_text(text)
         .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-        .font_size(10.)
+        .font_size(theme::font::MICRO)
         .font_weight(FontWeight::BOLD)
         .color(theme::DIM)
         .into_element()
@@ -153,11 +163,11 @@ pub fn label_row(label_text: impl Into<String>, trailing: impl IntoElement) -> E
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(10.)
+        .spacing(theme::space::LG)
         .content(Content::Flex)
         .child(
             a11y_text(label_text.into())
-                .font_size(12.)
+                .font_size(theme::font::LABEL)
                 .color(theme::MUTED),
         )
         .child(rect().width(Size::flex(1.0)))
@@ -174,12 +184,17 @@ pub fn details(description: Option<&str>) -> Option<Element> {
             let value = text.to_owned();
             rect()
                 .width(Size::fill())
-                .padding(Gaps::new(2., 10., 6., 10.))
+                .padding(Gaps::new(
+                    theme::space::XXS,
+                    theme::space::LG,
+                    theme::space::SM,
+                    theme::space::LG,
+                ))
                 .child(
                     paragraph()
                         .width(Size::fill())
                         .max_lines(5)
-                        .font_size(11.)
+                        .font_size(theme::font::CAPTION)
                         .color(theme::MUTED)
                         .a11y_builder(move |node| node.set_value(value))
                         .span(text.to_owned()),
@@ -255,14 +270,18 @@ where
         );
         rect()
             .vertical()
-            .spacing(1.)
+            .spacing(theme::space::XXS)
             .width(Size::flex(1.0))
-            .padding(Gaps::new_symmetric(6., 6.))
-            .corner_radius(4.)
+            .padding(Gaps::new_symmetric(theme::space::SM, theme::space::SM))
+            .corner_radius(theme::radius::SMALL)
             .border(if focused {
-                Border::new().fill(theme::ACCENT).width(1.5)
+                Border::new()
+                    .fill(theme::ACCENT)
+                    .width(theme::stroke::FOCUS)
             } else {
-                Border::new().fill(Color::TRANSPARENT).width(1.5)
+                Border::new()
+                    .fill(Color::TRANSPARENT)
+                    .width(theme::stroke::FOCUS)
             })
             .a11y_id(a11y_id)
             .a11y_focusable(true)
@@ -271,7 +290,7 @@ where
             .a11y_builder(move |node| node.set_expanded(is_expanded))
             .on_pointer_enter(|_| Cursor::set(CursorIcon::Pointer))
             .on_pointer_leave(|_| Cursor::set(CursorIcon::default()))
-            .on_all_press(move |_| {
+            .on_press(move |_| {
                 a11y_id.request_focus();
                 let current = *expanded.read();
                 *expanded.write() = if current == Some(id) { None } else { Some(id) };
@@ -284,7 +303,7 @@ where
             )
             .child(
                 a11y_text(self.subtitle.clone())
-                    .font_size(10.)
+                    .font_size(theme::font::MICRO)
                     .color(theme::DIM),
             )
     }
@@ -298,11 +317,15 @@ pub fn label_grid(rows: Vec<(String, Element)>) -> Element {
         .map(|(name, value)| {
             rect()
                 .horizontal()
-                .width(Size::px(340.))
-                .spacing(12.)
+                .width(Size::px(theme::layout::LABEL_GRID_WIDTH))
+                .spacing(theme::space::XL)
                 .content(Content::Flex)
-                .padding(Gaps::new_symmetric(8., 0.))
-                .child(a11y_text(name).font_size(12.).color(theme::MUTED))
+                .padding(Gaps::new_symmetric(theme::space::MD, theme::space::NONE))
+                .child(
+                    a11y_text(name)
+                        .font_size(theme::font::LABEL)
+                        .color(theme::MUTED),
+                )
                 .child(rect().width(Size::flex(1.0)))
                 .child(value)
                 .into_element()
@@ -311,8 +334,8 @@ pub fn label_grid(rows: Vec<(String, Element)>) -> Element {
     rect()
         .horizontal()
         .width(Size::fill())
-        .content(Content::wrap_spacing(16.))
-        .spacing(16.)
+        .content(Content::wrap_spacing(theme::space::XXL))
+        .spacing(theme::space::XXL)
         .children(cells)
         .into_element()
 }
@@ -418,13 +441,13 @@ impl Component for AccessibleButton {
         let focused = focus() == Focus::Keyboard;
         let action = self.action.clone();
         let selected = self.selected;
-        let mut button = rect()
+        let button = rect()
             .a11y_id(a11y_id)
             .a11y_focusable(self.focusable)
             .a11y_role(self.role)
             .a11y_alt(self.label.clone())
             .a11y_builder(move |node| node.set_selected(selected))
-            .on_all_press(move |_| {
+            .on_press(move |_| {
                 a11y_id.request_focus();
                 action.call();
             })
@@ -439,12 +462,10 @@ impl Component for AccessibleButton {
                     } else {
                         Color::TRANSPARENT
                     })
-                    .width(1.5),
+                    .width(theme::stroke::FOCUS),
             )
-            .child(self.content.clone());
-        if self.fill_width {
-            button = button.width(Size::fill());
-        }
+            .child(self.content.clone())
+            .maybe(self.fill_width, |el| el.width(Size::fill()));
         button.into_element()
     }
 }

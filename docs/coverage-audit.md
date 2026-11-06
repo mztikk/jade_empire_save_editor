@@ -1,4 +1,4 @@
-# Coverage audit — post-P1
+# Coverage audit: post-P1
 
 > **Historical.** The P0/P1/P2 review remediation superseded these numbers.
 > [docs/COVERAGE.md](COVERAGE.md) records the current baseline (286 tests,
@@ -16,8 +16,8 @@ the new baseline and what is left.
 | --- | --- | --- |
 | full corpus (real savegames + game data, 89 saves) | **8 435 / 9 062 = 93.1 %** | 824 / 1 008 = 81.7 % |
 | no game data (`env -u JADEFORGE_SAVE_DIR -u JADEFORGE_GAME_DIR -u JADEFORGE_CONFIG_DIR`) | **6 774 / 9 062 = 74.8 %** | 696 / 1 008 = 69.0 % |
-| non-test source lines | 7 036 / 7 488 = 94.0 % | — |
-| non-test source lines, no data | 5 431 / 7 488 = 72.5 % | — |
+| non-test source lines | 7 036 / 7 488 = 94.0 % | n/a |
+| non-test source lines, no data | 5 431 / 7 488 = 72.5 % | n/a |
 
 Non-test source excludes every `#[cfg(test)]` module, including the inline
 session, GFF and 2DA unit tests added during this work.
@@ -42,25 +42,25 @@ lcov export now contains per-line `DA:` records.
 
 ### Core
 
-- `core/tests/character.rs` — every range-check error, float/name validation,
+- `core/tests/character.rs`: every range-check error, float/name validation,
   type-preserving writes for `Word`/`Short`/`Int`/`DWord64`/`Int64`, wrong
   field types, missing optional fields, `polyplayer.sav` + campaign merging and
   the unchanged-edit `mark_clean` path. `character.rs`: 90.8 % full corpus /
   89.1 % without data. The typed-write test exposed an `Int64` gap:
   `Value::as_u64` previously returned `None`, so `CurrentXP` stored as `Int64`
   read back as 0; that is fixed and covered by the codec test.
-- `core/tests/container.rs` — block helpers, metadata fast path, polyplayer
+- `core/tests/container.rs`: block helpers, metadata fast path, polyplayer
   defaults and wrong-type fallback, container parse/metadata errors, backup
   naming. `save.rs`: 92.0 % in both runs.
-- `core/tests/inventory.rs` — missing/malformed lists, dangling structs,
+- `core/tests/inventory.rs`: missing/malformed lists, dangling structs,
   defaults, `Byte`/`Word` count handling, missing/non-numeric `Count`,
   failure-not-dirtying and the public `read_items`. `inventory.rs`: 97.3 %.
-- `core/tests/gems_synthetic.rs` — amulet presence/tier clamp, both gem lists,
+- `core/tests/gems_synthetic.rs`: amulet presence/tier clamp, both gem lists,
   malformed lists, nested/missing `Gem`, effect parsing, adding, moving both
   directions and removing socketed/inventory gems. `gems.rs`: 95.2 %.
-- `core/tests/styles_synthetic.rs` — list errors, level-from-mask, missing
+- `core/tests/styles_synthetic.rs`: list errors, level-from-mask, missing
   fields, bit preservation, slot overflow, add/remove. `styles.rs`: 91.5 %.
-- `core/tests/henchmen_synthetic.rs` — list errors, defaults, level clamping,
+- `core/tests/henchmen_synthetic.rs`: list errors, defaults, level clamping,
   type preservation, availability and combat mode. `henchmen.rs`: 87.0 %.
 
 ### Session

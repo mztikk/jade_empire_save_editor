@@ -34,12 +34,12 @@ curl -s 'https://jadeempire-modding.fandom.com/api.php?action=query&prop=revisio
 ```
 
 Extract with `jq` (the paths below assume `formatversion=2`, which is why every
-URL above passes it — without it the shapes change and these paths break):
+URL above passes it: without it the shapes change and these paths break):
 
 | query | path to the text |
 | --- | --- |
 | `prop=wikitext` | `.parse.wikitext` |
-| `prop=text` | `.parse.text` — the HTML **string itself**, not `.parse.text["*"]` |
+| `prop=text` | `.parse.text`: the HTML **string itself**, not `.parse.text["*"]` |
 | `prop=revisions` | `.query.pages[0].revisions[0].slots.main.content` |
 
 ```sh
@@ -69,16 +69,16 @@ Useful categories: `Category:2da`, `Category:Styles`, `Category:Effects`,
 ## Reading the answer
 
 The API answers **HTTP 200 for almost everything, including its own errors**.
-Never judge the result from the status code — read the body.
+Never judge the result from the status code: read the body.
 
 | what you see | what it means |
 | --- | --- |
-| HTTP 403, `Just a moment...` | the reader URL hit the bot challenge — switch to `api.php`, do not retry the same URL |
-| HTTP 200, `{"error":{"code":"missingtitle"}}` | the page really does not exist — search for the right title |
-| HTTP 200, `{"error":{"code":"badvalue", ...}}` | a parameter is misspelt or invalid (`action`, `prop`, `list`, …) — fix the URL |
-| HTTP 200, `{"warnings": ...}` and no `parse.wikitext` | an unknown `prop` was *ignored*, so the result is silently incomplete — read the warning |
+| HTTP 403, `Just a moment...` | the reader URL hit the bot challenge: switch to `api.php`, do not retry the same URL |
+| HTTP 200, `{"error":{"code":"missingtitle"}}` | the page really does not exist: search for the right title |
+| HTTP 200, `{"error":{"code":"badvalue", ...}}` | a parameter is misspelt or invalid (`action`, `prop`, `list`, …): fix the URL |
+| HTTP 200, `{"warnings": ...}` and no `parse.wikitext` | an unknown `prop` was *ignored*, so the result is silently incomplete: read the warning |
 | HTTP 200 with `parse.wikitext` | success |
-| HTTP 404 | the URL is not the API at all — a typo in the host or path, not a missing page |
+| HTTP 404 | the URL is not the API at all: a typo in the host or path, not a missing page |
 
 Percent-encode the query: spaces become `_` or `%20`, `&` becomes `%26`. Titles
 that contain a dot (`Styleadvance.2da`, `Items.2da`) need no escaping.
@@ -123,7 +123,7 @@ the base values; this table holds **deltas added to them**.
   multiplier, 87 permanently adds resistances (parameter is a `Resistances.2da`
   row). Several other `STYLE_` effects are listed but unreliable.
 - `NameOverride`/`DescOverride` would override a style's name in a way the
-  current template-prefix `StyleKind` logic does not model — keep that in mind
+  current template-prefix `StyleKind` logic does not model: keep that in mind
   when naming styles.
 
 Do not paste long wiki passages into the repository: Fandom text is CC-BY-SA

@@ -2,14 +2,14 @@
 //!
 //! The suite is split into:
 //!
-//! * [`probe`] — a Freya plugin that publishes the live window's text and facts
+//! * [`probe`]: a Freya plugin that publishes the live window's text and facts
 //!   to the test thread and exposes the event-loop handle for input and close.
-//! * [`kwin`] — window lookup, activation, geometry and screenshots through
+//! * [`kwin`]: window lookup, activation, geometry and screenshots through
 //!   KWin's D-Bus interface (KDE Plasma only).
-//! * [`fake_input`] — real pointer/keyboard events through KWin's Wayland
+//! * [`fake_input`]: real pointer/keyboard events through KWin's Wayland
 //!   fake-input protocol (KDE Plasma only).
-//! * [`driver`] — the backend-independent click/type/wait API used by tests.
-//! * [`scenarios`] — the scenarios themselves.
+//! * [`driver`]: the backend-independent click/type/wait API used by tests.
+//! * [`scenarios`]: the scenarios themselves.
 
 pub mod driver;
 pub mod fake_input;

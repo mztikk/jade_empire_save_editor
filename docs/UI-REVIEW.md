@@ -1,4 +1,4 @@
-# Desktop UI review — status and remaining work
+# Desktop UI review: status and remaining work
 
 **Reviewed:** 2026-11-05 · **Base:** `main` at `9151c2a`
 **Scope:** the Freya 0.4 desktop UI in `crates/jadeforge-gui`, the session state it renders, and the real 89-savegame corpus.
@@ -12,7 +12,7 @@ The review read the GUI, session and theme code, ran the headless UI suite and r
 
 The strongest parts of the current UI are the coherent jade-on-charcoal palette, the save-safety pipeline (verification, atomic write, backups and close guard), the fixed preview square, and the layout-shift/geometry tests. The main remaining work is responsive composition, state handling around save/folder changes, discoverability of expansion/upgrades, and accessibility outside the app's control.
 
-## P0 — addressed
+## P0: addressed
 
 | Item | Result |
 | --- | --- |
@@ -30,7 +30,7 @@ App-side accessibility is in place, but **full screen-reader operation is still 
 
 The GitHub issues are the source of truth for checklists. This section is a short map.
 
-### P1 — [#7](https://github.com/mztikk/jade_empire_save_editor/issues/7)
+### P1: [#7](https://github.com/mztikk/jade_empire_save_editor/issues/7)
 
 High-value follow-ups:
 
@@ -42,7 +42,7 @@ High-value follow-ups:
 - **Accessibility polish:** targets below 24×24 (sort 38×12, ± 23×25), 10–11 px secondary type, low non-text contrast for inputs/scrollbars, colour-only active tab, green overload for unsaved/success, missing hover states.
 - **Performance:** manual Scan blocks the UI thread; per-frame derived lists and all-row hover rebuilds; no instrumentation or 89-save render test.
 
-### P2 — [#8](https://github.com/mztikk/jade_empire_save_editor/issues/8)
+### P2: [#8](https://github.com/mztikk/jade_empire_save_editor/issues/8)
 
 Polish after P1:
 
@@ -52,7 +52,7 @@ Polish after P1:
 - Guidance/settings: About/version/help, config location, field ranges/units, item category filtering, save-filter placeholder.
 - Tooling/docs: snapshot `--query` targets the first filter (the save filter) instead of the active tab’s filter; document evidence/screenshot maintenance.
 
-### P3 — [#9](https://github.com/mztikk/jade_empire_save_editor/issues/9)
+### P3: [#9](https://github.com/mztikk/jade_empire_save_editor/issues/9)
 
 Strategic work:
 

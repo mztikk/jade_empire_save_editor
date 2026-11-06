@@ -12,7 +12,7 @@ use crate::theme;
 use crate::widgets;
 
 /// Renders the styles tab.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)] // one argument per reactive tab input; grouping would only rename them
 pub fn view(
     ctx: &Ctx,
     styles: &[StyleRow],
@@ -39,7 +39,7 @@ pub fn view(
         rect()
             .vertical()
             .width(Size::fill())
-            .spacing(4.)
+            .spacing(theme::space::XS)
             .children(rows)
             .into_element(),
         widgets::divider(),
@@ -66,10 +66,10 @@ pub fn view(
         } else {
             let browsing = query.read().trim().is_empty();
             let shown = matches.len();
-            let mut heading = rect()
+            let heading = rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(10.)
+                .spacing(theme::space::LG)
                 .content(Content::Flex)
                 .child(widgets::section_label(if browsing {
                     "ALL STYLES"
@@ -86,18 +86,18 @@ pub fn view(
                             crate::widgets::plural(matching, "match", "matches")
                         ),
                     })
-                    .font_size(10.)
+                    .font_size(theme::font::MICRO)
                     .color(theme::DIM),
-                );
-            if shown < matching {
-                heading = heading.child(
-                    Button::new()
-                        .compact()
-                        .outline()
-                        .child("Show more")
-                        .on_press(show_more),
-                );
-            }
+                )
+                .maybe(shown < matching, |el| {
+                    el.child(
+                        Button::new()
+                            .compact()
+                            .outline()
+                            .child("Show more")
+                            .on_press(show_more),
+                    )
+                });
             children.push(heading.into_element());
             let mut result_rows: Vec<Element> = Vec::new();
             for suggestion in matches {
@@ -107,7 +107,7 @@ pub fn view(
                 rect()
                     .vertical()
                     .width(Size::fill())
-                    .spacing(2.)
+                    .spacing(theme::space::XXS)
                     .children(result_rows)
                     .into_element(),
             );
@@ -169,7 +169,7 @@ fn style_row(
         } else {
             theme::SURFACE
         })
-        .corner_radius(8.)
+        .corner_radius(theme::radius::MEDIUM)
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -180,15 +180,15 @@ fn style_row(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(10.)
+                .spacing(theme::space::LG)
                 .content(Content::Flex)
-                .padding(Gaps::new_symmetric(4., 6.))
+                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::SM))
                 .child(widgets::expanding_name(
                     style.style_id,
                     style.name.clone(),
                     subtitle,
                     expanded,
-                    13.,
+                    theme::font::BODY,
                 ))
                 .child(widgets::badge(
                     style.kind,
@@ -197,8 +197,8 @@ fn style_row(
                 ))
                 .child(
                     widgets::a11y_text(format!("Lv {level}"))
-                        .font_size(12.)
-                        .width(Size::px(46.))
+                        .font_size(theme::font::LABEL)
+                        .width(Size::px(theme::layout::STEPPER_WIDTH))
                         .text_align(TextAlign::Center)
                         .color(theme::ACCENT),
                 )
@@ -237,8 +237,13 @@ fn upgrade_panel(
         return rect()
             .vertical()
             .width(Size::fill())
-            .spacing(4.)
-            .padding(Gaps::new(0., 10., 6., 10.))
+            .spacing(theme::space::XS)
+            .padding(Gaps::new(
+                theme::space::NONE,
+                theme::space::LG,
+                theme::space::SM,
+                theme::space::LG,
+            ))
             .children(rows)
             .into_element();
     }
@@ -273,8 +278,13 @@ fn upgrade_panel(
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(6.)
-        .padding(Gaps::new(0., 10., 8., 10.))
+        .spacing(theme::space::SM)
+        .padding(Gaps::new(
+            theme::space::NONE,
+            theme::space::LG,
+            theme::space::MD,
+            theme::space::LG,
+        ))
         .children(rows)
         .into_element()
 }
@@ -285,12 +295,12 @@ fn upgrade_row(family: &str, chips: Vec<Element>) -> Element {
         .horizontal()
         .width(Size::fill())
         .key(family.to_owned())
-        .spacing(6.)
+        .spacing(theme::space::SM)
         .content(Content::Flex)
         .child(
             widgets::a11y_text(family_title(family))
-                .font_size(11.)
-                .width(Size::px(120.))
+                .font_size(theme::font::CAPTION)
+                .width(Size::px(theme::layout::UPGRADE_LABEL_WIDTH))
                 .color(theme::MUTED),
         )
         .children(chips)
@@ -355,7 +365,11 @@ impl Component for UpgradeOrb {
         } else {
             theme::ORB
         };
-        let border_width = if focused { 2.0 } else { 1.5 };
+        let border_width = if focused {
+            theme::stroke::EMPHASIS
+        } else {
+            theme::stroke::FOCUS
+        };
         let mut hovered = self.hovered;
         let session = self.session.clone();
         let mut revision = self.revision;
@@ -363,9 +377,9 @@ impl Component for UpgradeOrb {
         let slot = self.upgrade.slot;
         rect()
             .center()
-            .width(Size::px(26.))
-            .height(Size::px(26.))
-            .corner_radius(13.)
+            .width(Size::px(theme::layout::ORB))
+            .height(Size::px(theme::layout::ORB))
+            .corner_radius(theme::radius::PILL)
             .background(background)
             .border(Border::new().fill(border).width(border_width))
             .a11y_id(a11y_id)
@@ -395,7 +409,7 @@ impl Component for UpgradeOrb {
                     *hovered.write() = None;
                 }
             })
-            .on_all_press(move |_| {
+            .on_press(move |_| {
                 a11y_id.request_focus();
                 session.0.borrow_mut().change_upgrade(struct_index, slot);
                 *revision.write() += 1;
@@ -481,7 +495,7 @@ fn learn_row(
         } else {
             theme::PANEL
         })
-        .corner_radius(6.)
+        .corner_radius(theme::radius::CONTROL)
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -492,15 +506,15 @@ fn learn_row(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(10.)
+                .spacing(theme::space::LG)
                 .content(Content::Flex)
-                .padding(Gaps::new_symmetric(3., 4.))
+                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::XS))
                 .child(widgets::expanding_name(
                     suggestion.style_id,
                     suggestion.name.clone(),
                     subtitle,
                     expanded,
-                    12.,
+                    theme::font::LABEL,
                 ))
                 .child(widgets::badge(
                     suggestion.kind,
