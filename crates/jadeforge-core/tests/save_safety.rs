@@ -41,10 +41,22 @@ fn two_saves_in_the_same_second_keep_two_backups() {
     let original = fs::read(&path).expect("read original");
 
     save_with_level(&path, 8);
-    save_with_level(&path, 9);
+    let mut second = SaveGame::open(&path).expect("reopen");
+    let mut character = second.character().expect("character");
+    character.level = 9;
+    second.apply_character(&character).expect("apply");
+    second.save(SaveOptions { backup: true }).expect("save");
+    let reported = second
+        .last_backup()
+        .expect("a save with backup must report the backup path");
+    assert!(reported.exists(), "the reported backup does not exist");
 
     let found = backups(temp.path());
     assert_eq!(found.len(), 2, "each save must keep its own backup");
+    assert!(
+        found.contains(&reported.to_path_buf()),
+        "the reported backup is not one of the backups in the folder"
+    );
     let contents: Vec<Vec<u8>> = found
         .iter()
         .map(|backup| fs::read(backup).expect("read backup"))
@@ -145,6 +157,10 @@ fn a_save_without_backup_writes_no_backup_file() {
     character.level = 8;
     save.apply_character(&character).expect("apply");
     save.save(SaveOptions { backup: false }).expect("save");
+    assert!(
+        save.last_backup().is_none(),
+        "a save without backups must not report one"
+    );
     assert_eq!(backups(temp.path()).len(), 0);
 }
 
