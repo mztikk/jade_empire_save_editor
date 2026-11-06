@@ -82,7 +82,7 @@ pub fn field(label_text: &'static str, input: impl IntoElement, width: f32) -> E
         .vertical()
         .spacing(theme::space::SM)
         .width(Size::px(width))
-        // Freya 0.4 has no Input::label API yet. Naming the field group at
+        // Freya 0.5 still has no Input::label API. Naming the field group at
         // least gives a screen reader the caption before it reaches the input's
         // own value; the true label association is an upstream follow-up.
         .a11y_role(AccessibilityRole::Group)
@@ -246,7 +246,7 @@ impl<T> KeyExt for ExpandingName<T>
 where
     T: Copy + Hash + PartialEq + 'static,
 {
-    fn write_key(&mut self) -> &mut DiffKey {
+    fn key_mut(&mut self) -> &mut DiffKey {
         &mut self.key
     }
 }
@@ -288,8 +288,7 @@ where
             .a11y_role(AccessibilityRole::Button)
             .a11y_alt(accessible)
             .a11y_builder(move |node| node.set_expanded(is_expanded))
-            .on_pointer_enter(|_| Cursor::set(CursorIcon::Pointer))
-            .on_pointer_leave(|_| Cursor::set(CursorIcon::default()))
+            .cursor(CursorIcon::Pointer)
             .on_press(move |_| {
                 a11y_id.request_focus();
                 let current = *expanded.read();
@@ -429,7 +428,7 @@ impl AccessibleButton {
 }
 
 impl KeyExt for AccessibleButton {
-    fn write_key(&mut self) -> &mut DiffKey {
+    fn key_mut(&mut self) -> &mut DiffKey {
         &mut self.key
     }
 }
@@ -447,12 +446,11 @@ impl Component for AccessibleButton {
             .a11y_role(self.role)
             .a11y_alt(self.label.clone())
             .a11y_builder(move |node| node.set_selected(selected))
+            .cursor(CursorIcon::Pointer)
             .on_press(move |_| {
                 a11y_id.request_focus();
                 action.call();
             })
-            .on_pointer_enter(|_| Cursor::set(CursorIcon::Pointer))
-            .on_pointer_leave(|_| Cursor::set(CursorIcon::default()))
             // Reserve the focus ring even when unfocused, so tabbing through
             // the shell never shifts tabs, sort controls or savegame rows.
             .border(

@@ -18,10 +18,11 @@ use freya::winit;
 use freya::winit::raw_window_handle::{HasDisplayHandle, RawDisplayHandle};
 use freya_core::events::platform::PlatformEvent;
 use freya_core::tree::Tree;
-use freya_core::user_event::SingleThreadErasedEvent;
+use freya_core::user_event::{GlobalUserEvent, SingleThreadErasedEvent};
 use freya_winit::plugins::{FreyaPlugin, PluginEvent, PluginHandle};
 use freya_winit::renderer::{
-    NativeEvent, NativeWindowErasedEventAction, NativeWindowEvent, NativeWindowEventAction,
+    NativeEvent, NativeGenericEvent, NativePlatformErasedEventAction, NativeWindowEvent,
+    NativeWindowEventAction,
 };
 
 /// The kind of text element a snapshot came from.
@@ -172,13 +173,11 @@ impl Probe {
             let (Some(handle), Some(window_id)) = (shared.handle.as_ref(), shared.window_id) else {
                 return;
             };
-            let action = NativeWindowErasedEventAction::CloseWindow(window_id);
-            handle.send_event_loop_event(NativeEvent::Window(NativeWindowEvent {
-                window_id,
-                action: NativeWindowEventAction::User(UserEvent::Erased(SingleThreadErasedEvent(
-                    Box::new(action),
+            handle.send_event_loop_event(NativeEvent::Generic(NativeGenericEvent::User(
+                GlobalUserEvent::Erased(SingleThreadErasedEvent(Box::new(
+                    NativePlatformErasedEventAction::CloseWindow(window_id),
                 ))),
-            }));
+            )));
         });
     }
 

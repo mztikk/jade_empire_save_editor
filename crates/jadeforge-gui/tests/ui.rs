@@ -601,6 +601,32 @@ fn tabs_switch_the_content() {
 }
 
 #[test]
+fn buttons_use_the_pointer_cursor() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1000.0);
+    let tab = test
+        .find(|node, _| {
+            (a11y_role(&node) == "Tab" && a11y_label(&node).as_deref() == Some("Character"))
+                .then_some(node)
+        })
+        .expect("Character tab");
+    let area = tab.layout().area;
+    test.move_cursor(CursorPoint::new(
+        f64::from(area.origin.x) + f64::from(area.size.width) / 2.0,
+        f64::from(area.origin.y) + f64::from(area.size.height) / 2.0,
+    ));
+    test.sync_and_update();
+    assert_eq!(
+        test.cursor_icon(),
+        CursorIcon::Pointer,
+        "the tab does not show a pointer cursor"
+    );
+}
+
+#[test]
 fn items_can_be_searched_and_added() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
@@ -1191,9 +1217,14 @@ fn form_edits_apply_in_memory_without_a_message() {
 }
 
 fn scroll_offset(test: &TestingRunner) -> f32 {
+    // Freya 0.5 renders the scrollbar in an overlaid strip and moves its thumb
+    // with `offset_y` even when the content is at the top, so the thumb reports
+    // a small inset offset that is not a content translation. Content offsets
+    // are much larger than the 20 px strip; ignore the strip's own movement.
+    const SCROLLBAR_STRIP: f32 = 20.0;
     test.find_many(|node, _| {
         let value = node.layout().offset_y.get();
-        (value.abs() > 0.5).then_some(value.abs())
+        (value.abs() > SCROLLBAR_STRIP).then_some(value.abs())
     })
     .into_iter()
     .fold(0.0_f32, f32::max)
