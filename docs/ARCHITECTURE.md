@@ -155,6 +155,13 @@ toolkit, so its tests run on every platform without the GUI system libraries.
 `jadeforge-gui` re-exports the modules, which keeps the views' `crate::session`
 paths unchanged.
 
+`is_dirty` is a content comparison: an edit that is undone clears the flag. The
+load-time baseline stores a 128 bit fingerprint (two independently salted 64 bit
+hashes) of each block's canonical bytes instead of the canonical bytes
+themselves. A savegame is a few megabytes, so the copy was a noticeable part of
+the editor's idle memory; 16 bytes per block answer the same equality question.
+The fingerprints are process-local and never written anywhere.
+
 ## `jadeforge-gui`
 
 Freya 0.5 application with a small, explicit structure:
@@ -164,6 +171,7 @@ Freya 0.5 application with a small, explicit structure:
 | `app/` | root component (`mod.rs`), header/preview/footer (`shell.rs`), save list and sort controls (`sidebar.rs`), tab bar (`navigation.rs`) |
 | `dialog` | the native folder dialog (`rfd`) with a test seam for the headless suite |
 | `theme` | palette, Freya component theme, named type/spacing/radius/stroke scales and fixed layout tokens |
+| `renderer` | `JADEFORGE_RENDERER` parsing and the Skia GPU resource cache limit |
 | `app::HoverKey` | one shared hover state for save, item, style rows and upgrade orbs |
 | `widgets` | cards, fields, badges, dividers |
 | `views` | one module per tab (overview, character, styles, inventory, companions); item and style rows expand to show the game's description |
@@ -184,6 +192,18 @@ same mark in Windows executables through `winresource`, and
 `ci/macos-bundle.sh` wraps the macOS binary in `JadeForge.app` so the Dock can
 show the ICNS. `assets/README.md` documents the generated files and
 `just icons`.
+
+`renderer` owns the two memory knobs that are not view code. The default stays
+Freya's automatic GPU choice; `JADEFORGE_RENDERER` can force `software` (Skia on
+the CPU through `softbuffer`), `opengl` or `vulkan`, which is how a machine
+where the graphics driver is too expensive trades GPU acceleration for roughly
+half the resident memory. Every window also gets a 32 MiB Skia GPU resource cache
+limit instead of Skia's 256 MiB default ([Freya's cache option](https://github.com/marc2332/freya/issues/1207)):
+the editor's largest texture is one 512 px screenshot, and an uncapped cache
+keeps GPU resources around after resizes. The savegame sidebar is a
+`VirtualScrollView`, so only the rows inside it are built; each row carries two
+tooltips and two text paragraphs, and building all of them for a few hundred
+saves dominated the idle footprint.
 
 There are no hardcoded installation paths anywhere. The folder comes from
 `JADEFORGE_SAVE_DIR`, the settings file or the native folder dialog, in that order.
