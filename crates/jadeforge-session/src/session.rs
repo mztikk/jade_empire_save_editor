@@ -1525,6 +1525,14 @@ impl Session {
         self.message = Message::error(text);
     }
 
+    /// Reports a successful action the session did not perform itself.
+    ///
+    /// The GUI uses it for things like copying the save path, so the feedback
+    /// lands in the same persistent status area as every other action.
+    pub fn notify(&mut self, text: &str) {
+        self.message = Message::success(text.to_owned());
+    }
+
     /// Refreshes the summary of the selected entry after an edit.
     fn refresh_entry(&mut self) {
         let Some(index) = self.selected else {

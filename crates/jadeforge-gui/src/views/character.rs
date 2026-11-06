@@ -36,40 +36,40 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
         "Identity",
         Some("Every valid change is applied in memory immediately".to_owned()),
         vec![
+            // Three fields per row at every supported width: six narrow fields
+            // of fixed width used to overflow the card and leave KILLS alone on
+            // a second row.
             widgets::field_grid(vec![
-                widgets::field("NAME", Input::new(form.name).width(Size::fill()), theme::layout::FIELD_WIDE),
-                widgets::field("LEVEL", Input::new(form.level).width(Size::fill()), theme::layout::FIELD_NARROW),
+                widgets::field("NAME", Input::new(form.name).width(Size::fill())),
+                widgets::field("LEVEL", Input::new(form.level).width(Size::fill())),
                 widgets::field(
                     "EXPERIENCE",
                     Input::new(form.experience).width(Size::fill()),
-                    theme::layout::FIELD_MEDIUM,
                 ),
+            ]),
+            widgets::field_grid(vec![
                 widgets::field(
                     "GOLD",
                     Input::new(form.gold)
                         .placeholder("not set")
                         .width(Size::fill()),
-                    theme::layout::FIELD_MEDIUM,
                 ),
-                widgets::field("CHAPTER", Input::new(form.chapter).width(Size::fill()), theme::layout::FIELD_NARROW),
-                widgets::field("KILLS", Input::new(form.kills).width(Size::fill()), theme::layout::FIELD_NARROW),
+                widgets::field("CHAPTER", Input::new(form.chapter).width(Size::fill())),
+                widgets::field("KILLS", Input::new(form.kills).width(Size::fill())),
             ]),
             widgets::divider(),
             widgets::field_grid(vec![
                 widgets::field(
                     "ALIGNMENT",
                     Input::new(form.alignment).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
                 ),
                 widgets::field(
                     "APPEARANCE",
                     Input::new(form.appearance).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
                 ),
                 widgets::field(
                     "UNSPENT ATTRIBUTE POINTS",
                     Input::new(form.attribute_points).width(Size::fill()),
-                    theme::layout::FIELD_MEDIUM,
                 ),
             ]),
             alignment_note(alignment_hint(&form.alignment.read())),
@@ -90,39 +90,18 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
         None,
         vec![
             widgets::field_grid(vec![
-                widgets::field(
-                    "HEALTH",
-                    Input::new(form.health).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
+                widgets::field("HEALTH", Input::new(form.health).width(Size::fill())),
                 widgets::field(
                     "HEALTH MAX",
                     Input::new(form.health_max).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
                 ),
-                widgets::field(
-                    "CHI",
-                    Input::new(form.chi).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "CHI MAX",
-                    Input::new(form.chi_max).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
+                widgets::field("CHI", Input::new(form.chi).width(Size::fill())),
+                widgets::field("CHI MAX", Input::new(form.chi_max).width(Size::fill())),
             ]),
             widgets::divider(),
             widgets::field_grid(vec![
-                widgets::field(
-                    "FOCUS",
-                    Input::new(form.focus).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "FOCUS MAX",
-                    Input::new(form.focus_max).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
+                widgets::field("FOCUS", Input::new(form.focus).width(Size::fill())),
+                widgets::field("FOCUS MAX", Input::new(form.focus_max).width(Size::fill())),
             ]),
             widgets::hint(
                 "Current values may stay below the maximum; the game fills them on rest.",
@@ -135,38 +114,17 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
         None,
         vec![
             widgets::field_grid(vec![
-                widgets::field(
-                    "BODY",
-                    Input::new(form.body).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "MIND",
-                    Input::new(form.mind).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "SPIRIT",
-                    Input::new(form.spirit).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
+                widgets::field("BODY", Input::new(form.body).width(Size::fill())),
+                widgets::field("MIND", Input::new(form.mind).width(Size::fill())),
+                widgets::field("SPIRIT", Input::new(form.spirit).width(Size::fill())),
             ]),
             widgets::divider(),
             widgets::field_grid(vec![
-                widgets::field(
-                    "CHARM",
-                    Input::new(form.charm).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "INTUITION",
-                    Input::new(form.intuition).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
+                widgets::field("CHARM", Input::new(form.charm).width(Size::fill())),
+                widgets::field("INTUITION", Input::new(form.intuition).width(Size::fill())),
                 widgets::field(
                     "INTIMIDATE",
                     Input::new(form.intimidate).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
                 ),
             ]),
         ],

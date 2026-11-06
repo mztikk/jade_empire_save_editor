@@ -76,12 +76,14 @@ fn henchman_row(ctx: &Ctx, henchman: &HenchRow) -> Element {
                 .vertical()
                 .spacing(theme::space::XXS)
                 .width(Size::flex(1.0))
-                .child(
+                .child(widgets::with_tooltip(
+                    henchman.name.clone(),
                     widgets::a11y_text(henchman.name.clone())
                         .font_size(theme::font::BODY)
                         .max_lines(1)
+                        .text_overflow(TextOverflow::Ellipsis)
                         .color(theme::TEXT),
-                )
+                ))
                 .child(
                     widgets::a11y_text(henchman.resref.clone())
                         .font_size(theme::font::MICRO)

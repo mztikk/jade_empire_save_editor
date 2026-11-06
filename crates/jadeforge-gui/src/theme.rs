@@ -170,6 +170,29 @@ pub mod layout {
     pub const FIELD_MEDIUM: f32 = 150.0;
     /// Wide form field.
     pub const FIELD_WIDE: f32 = 220.0;
+    /// Smallest width of a fluid form field.
+    ///
+    /// Fields fill their row and wrap once this width no longer fits, so the
+    /// identity grid reflows from three columns to two instead of leaving one
+    /// field alone on its own row.
+    pub const FIELD_MIN_WIDTH: f32 = 132.0;
+    /// Width of an overview label cell as a percentage of its row.
+    ///
+    /// Just under half, so two cells and their spacing share a row on the
+    /// default window while the supported minimum shows one per row.
+    pub const LABEL_CELL_PERCENT: f32 = 48.0;
+    /// Smallest width of an overview label cell.
+    pub const LABEL_CELL_MIN_WIDTH: f32 = 300.0;
+    /// Smallest width of a fluid overview statistic.
+    pub const STAT_MIN_WIDTH: f32 = 110.0;
+    /// Largest width of the editor column.
+    ///
+    /// Cards stop growing on very wide windows, which keeps the reading column
+    /// together instead of spreading a paragraph across the whole screen.
+    pub const EDITOR_MAX_WIDTH: f32 = 1100.0;
+    /// Largest width of a run of body text, about 75 characters at
+    /// [`font::BODY`].
+    pub const TEXT_MEASURE: f32 = 720.0;
     /// Width of the fixed sort-direction arrow slot.
     ///
     /// Every sort button reserves it, active or not, so changing the sort key

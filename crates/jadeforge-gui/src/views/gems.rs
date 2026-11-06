@@ -86,12 +86,14 @@ pub fn view(
                 .spacing(theme::space::LG)
                 .content(Content::Flex)
                 .padding(Gaps::new_symmetric(theme::space::XS, theme::space::MD))
-                .child(
+                .child(widgets::with_tooltip(
+                    name.clone(),
                     widgets::a11y_text(name.clone())
                         .font_size(theme::font::LABEL)
                         .max_lines(1)
+                        .text_overflow(TextOverflow::Ellipsis)
                         .color(theme::TEXT),
-                )
+                ))
                 .child(rect().width(Size::flex(1.0)))
                 .child(
                     widgets::a11y_text(widgets::plural(*effects, "effect", "effects"))
@@ -272,12 +274,14 @@ fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool, can_move: bool, has_amulet: 
                 .vertical()
                 .spacing(theme::space::XXS)
                 .width(Size::flex(1.0))
-                .child(
+                .child(widgets::with_tooltip(
+                    gem.name.clone(),
                     widgets::a11y_text(gem.name.clone())
                         .font_size(theme::font::BODY)
                         .max_lines(1)
+                        .text_overflow(TextOverflow::Ellipsis)
                         .color(if gem.empty { theme::DIM } else { theme::TEXT }),
-                )
+                ))
                 .child(
                     widgets::a11y_text(if gem.effects.is_empty() {
                         "no effects".to_owned()

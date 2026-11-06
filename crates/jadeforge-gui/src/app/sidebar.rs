@@ -119,12 +119,14 @@ pub(super) fn sidebar(
                             .width(Size::flex(1.0))
                             .spacing(theme::space::XXS)
                             .padding(Gaps::new_symmetric(theme::space::MD, theme::space::LG))
-                            .child(
+                            .child(crate::widgets::with_tooltip(
+                                format!("{title}, {summary}"),
                                 crate::widgets::a11y_text(title)
                                     .font_size(theme::font::LABEL)
                                     .max_lines(1)
+                                    .text_overflow(TextOverflow::Ellipsis)
                                     .color(if broken { theme::DANGER } else { theme::TEXT }),
-                            )
+                            ))
                             .child(
                                 crate::widgets::a11y_text(summary)
                                     .font_size(theme::font::MICRO)
@@ -195,14 +197,16 @@ pub(super) fn sidebar(
             rect()
                 .vertical()
                 .spacing(theme::space::XXS)
-                .child(
+                .child(crate::widgets::with_tooltip(
+                    title.clone(),
                     crate::widgets::a11y_text(title)
                         .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
                         .font_size(theme::font::CARD_TITLE)
                         .font_weight(FontWeight::BOLD)
                         .max_lines(1)
+                        .text_overflow(TextOverflow::Ellipsis)
                         .color(theme::TEXT),
-                )
+                ))
                 .child(
                     crate::widgets::a11y_text(subtitle)
                         .font_size(theme::font::MICRO)

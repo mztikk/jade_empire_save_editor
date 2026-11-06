@@ -473,17 +473,29 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                                     rect()
                                         .vertical()
                                         .width(Size::fill())
+                                        .cross_align(Alignment::Center)
                                         .padding(Gaps::new(
                                             theme::space::XXL,
                                             theme::space::CARD,
                                             theme::space::XXL,
                                             theme::space::CARD,
                                         ))
-                                        .child(if has_save {
-                                            content
-                                        } else {
-                                            shell::empty_state(entries.len())
-                                        }),
+                                        // Wide windows stop stretching the
+                                        // cards: past this width a paragraph
+                                        // becomes a 150-character line.
+                                        .child(
+                                            rect()
+                                                .vertical()
+                                                .width(Size::fill())
+                                                .max_width(Size::px(
+                                                    theme::layout::EDITOR_MAX_WIDTH,
+                                                ))
+                                                .child(if has_save {
+                                                    content
+                                                } else {
+                                                    shell::empty_state(entries.len())
+                                                }),
+                                        ),
                                 ),
                         ),
                 ),

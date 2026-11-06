@@ -52,23 +52,31 @@ pub fn card(title: &'static str, hint: Option<String>, children: Vec<Element>) -
         .into_element()
 }
 
-/// A row of form fields that wraps on narrow windows.
+/// One row of form fields that share the width evenly.
+///
+/// Fields grow to fill the row and never shrink below
+/// [`theme::layout::FIELD_MIN_WIDTH`]. Callers group the fields they want on a
+/// row, so a wide window shows a deliberate 3+3 identity grid instead of
+/// whichever fields happen to fit; a row that no longer fits keeps its fields
+/// inside the horizontal scroll area rather than moving one field to its own
+/// row.
 pub fn field_grid(children: Vec<Element>) -> Element {
     rect()
         .horizontal()
         .width(Size::fill())
         .spacing(theme::space::FIELD)
-        .content(Content::wrap_spacing(theme::space::FIELD))
+        .content(Content::Flex)
         .children(children)
         .into_element()
 }
 
-/// A labelled input.
-pub fn field(label_text: &'static str, input: impl IntoElement, width: f32) -> Element {
+/// A labelled input that shares its row with the other fields.
+pub fn field(label_text: &'static str, input: impl IntoElement) -> Element {
     rect()
         .vertical()
         .spacing(theme::space::SM)
-        .width(Size::px(width))
+        .width(Size::flex(1.0))
+        .min_width(Size::px(theme::layout::FIELD_MIN_WIDTH))
         // Freya 0.5 still has no Input::label API. Naming the field group at
         // least gives a screen reader the caption before it reaches the input's
         // own value; the true label association is an upstream follow-up.
@@ -89,7 +97,8 @@ pub fn stat(label_text: &'static str, value: String) -> Element {
     rect()
         .vertical()
         .spacing(theme::space::XXS)
-        .width(Size::px(theme::layout::STAT_WIDTH))
+        .width(Size::flex(1.0))
+        .min_width(Size::px(theme::layout::STAT_MIN_WIDTH))
         .child(
             a11y_text(label_text)
                 .font_size(theme::font::MICRO)
@@ -101,6 +110,31 @@ pub fn stat(label_text: &'static str, value: String) -> Element {
                 .font_weight(FontWeight::BOLD)
                 .color(theme::TEXT),
         )
+        .into_element()
+}
+
+/// A deliberately two-column statistic grid.
+///
+/// The four hero values stay a 2x2 block at every supported width instead of
+/// wrapping 3+1, which used to leave the last value alone under a wide row.
+pub fn stat_grid(children: Vec<Element>) -> Element {
+    let rows: Vec<Element> = children
+        .chunks(2)
+        .map(|pair| {
+            rect()
+                .horizontal()
+                .width(Size::fill())
+                .spacing(theme::space::GRID)
+                .content(Content::Flex)
+                .children(pair.iter().cloned())
+                .into_element()
+        })
+        .collect();
+    rect()
+        .vertical()
+        .width(Size::fill())
+        .spacing(theme::space::MD)
+        .children(rows)
         .into_element()
 }
 
@@ -163,6 +197,10 @@ pub fn label_row(label_text: impl Into<String>, trailing: impl IntoElement) -> E
 }
 
 /// Details area shown under a row when it is expanded.
+///
+/// The description is shown in full: an expanded row is the user asking for
+/// the text, so it must not stop mid-sentence at five lines. The paragraph is
+/// capped at a readable measure on very wide windows.
 pub fn details(description: Option<&str>) -> Option<Element> {
     description
         .map(str::trim)
@@ -180,7 +218,7 @@ pub fn details(description: Option<&str>) -> Option<Element> {
                 .child(
                     paragraph()
                         .width(Size::fill())
-                        .max_lines(5)
+                        .max_width(Size::px(theme::layout::TEXT_MEASURE))
                         .font_size(theme::font::CAPTION)
                         .color(theme::MUTED)
                         .a11y_builder(move |node| node.set_value(value))
@@ -188,6 +226,13 @@ pub fn details(description: Option<&str>) -> Option<Element> {
                 )
                 .into_element()
         })
+}
+
+/// Wraps a name in a tooltip so a clipped label can still be read in full.
+pub fn with_tooltip(text: String, content: impl IntoElement) -> Element {
+    TooltipContainer::new(Tooltip::new_text(text))
+        .child(content)
+        .into_element()
 }
 
 /// Formats a count with the correct singular or plural noun.
@@ -281,12 +326,13 @@ where
                 let current = *expanded.read();
                 *expanded.write() = if current == Some(id) { None } else { Some(id) };
             })
-            .child(
+            .child(with_tooltip(self.name.clone(), {
                 a11y_text(self.name.clone())
                     .font_size(self.font_size)
                     .max_lines(1)
-                    .color(theme::TEXT),
-            )
+                    .text_overflow(TextOverflow::Ellipsis)
+                    .color(theme::TEXT)
+            }))
             .child(
                 a11y_text(self.subtitle.clone())
                     .font_size(theme::font::MICRO)
@@ -296,6 +342,11 @@ where
 }
 
 /// Two-column key/value grid that collapses to one column in narrow windows.
+///
+/// Cells take just under half a row, so two share it once the window is wide
+/// enough and a single cell keeps the rest of the row empty at the supported
+/// minimum width. This is a deliberate reflow rather than five fixed 340 px
+/// cells that leave a gap on every window.
 #[must_use]
 pub fn label_grid(rows: Vec<(String, Element)>) -> Element {
     let cells: Vec<Element> = rows
@@ -303,7 +354,8 @@ pub fn label_grid(rows: Vec<(String, Element)>) -> Element {
         .map(|(name, value)| {
             rect()
                 .horizontal()
-                .width(Size::px(theme::layout::LABEL_GRID_WIDTH))
+                .width(Size::percent(theme::layout::LABEL_CELL_PERCENT))
+                .min_width(Size::px(theme::layout::LABEL_CELL_MIN_WIDTH))
                 .spacing(theme::space::XL)
                 .content(Content::Flex)
                 .padding(Gaps::new_symmetric(theme::space::MD, theme::space::NONE))

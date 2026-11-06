@@ -1786,3 +1786,182 @@ fn a_save_without_gold_opens_without_an_invalid_form() {
         "the absent gold field should show its placeholder"
     );
 }
+
+/// Layout area of an exact label, which is the visible anchor of its field.
+fn label_area(test: &TestingRunner, text: &str) -> freya::prelude::Area {
+    find_label_exact(test, text)
+        .unwrap_or_else(|| panic!("missing label {text:?}"))
+        .layout()
+        .area
+}
+
+fn assert_same_row(test: &TestingRunner, left: &str, right: &str) {
+    let left = label_area(test, left);
+    let right = label_area(test, right);
+    assert!(
+        (left.origin.y - right.origin.y).abs() < 0.5,
+        "{left:?} and {right:?} are not on the same row ({} vs {})",
+        left.origin.y,
+        right.origin.y
+    );
+}
+
+fn assert_different_rows(test: &TestingRunner, left: &str, right: &str) {
+    let left = label_area(test, left);
+    let right = label_area(test, right);
+    assert!(
+        (left.origin.y - right.origin.y).abs() > 10.0,
+        "{left:?} and {right:?} wrapped onto the same row unexpectedly"
+    );
+}
+
+#[test]
+fn identity_fields_use_three_columns_at_the_default_and_minimum_size() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    for (width, height) in [(1180.0_f32, 760.0_f32), (900.0, 700.0)] {
+        let mut test = launch_unopened_at(
+            fixture.save_dir.clone(),
+            f64::from(width),
+            f64::from(height),
+        );
+        assert!(click_text(&mut test, "Level "), "the savegame did not open");
+        assert!(
+            click_label_exact(&mut test, "Character"),
+            "the Character tab is missing"
+        );
+
+        // The six identity fields are two deliberate rows of three.
+        assert_same_row(&test, "NAME", "LEVEL");
+        assert_same_row(&test, "LEVEL", "EXPERIENCE");
+        assert_same_row(&test, "GOLD", "CHAPTER");
+        assert_same_row(&test, "CHAPTER", "KILLS");
+        assert_different_rows(&test, "NAME", "GOLD");
+        // The regression: KILLS used to sit alone on a third row.
+        assert_different_rows(&test, "EXPERIENCE", "GOLD");
+
+        for field in ["NAME", "EXPERIENCE", "KILLS"] {
+            let area = label_area(&test, field);
+            assert!(
+                area.origin.x + area.size.width <= width,
+                "{field} runs off the {width}px window"
+            );
+        }
+    }
+}
+
+#[test]
+fn overview_grids_reflow_at_900_and_1280() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+
+    let mut narrow = launch_unopened_at(fixture.save_dir.clone(), 900.0, 900.0);
+    assert!(
+        click_text(&mut narrow, "Level "),
+        "the savegame did not open"
+    );
+    // One column at the supported minimum: every glance cell starts a row.
+    assert_different_rows(&narrow, "Unspent attribute points", "Body / Mind / Spirit");
+    assert_different_rows(
+        &narrow,
+        "Body / Mind / Spirit",
+        "Charm / Intuition / Intimidate",
+    );
+    // The four hero stats are a 2x2 grid instead of wrapping 3+1.
+    assert_same_row(&narrow, "GOLD", "HEALTH");
+    assert_same_row(&narrow, "CHI", "FOCUS");
+    assert_different_rows(&narrow, "GOLD", "CHI");
+
+    let mut wide = launch_unopened_at(fixture.save_dir.clone(), 1280.0, 900.0);
+    assert!(click_text(&mut wide, "Level "), "the savegame did not open");
+    // Two columns: 2+2+1.
+    assert_same_row(&wide, "Unspent attribute points", "Body / Mind / Spirit");
+    assert_different_rows(
+        &wide,
+        "Charm / Intuition / Intimidate",
+        "Body / Mind / Spirit",
+    );
+    assert_same_row(&wide, "GOLD", "HEALTH");
+    assert_different_rows(&wide, "GOLD", "CHI");
+}
+
+#[test]
+fn the_editor_column_stops_growing_on_wide_windows() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    // "Unspent attribute points" is the first cell of the second glance row, so
+    // its x is the left edge of the editor column.
+    let mut wide = launch_unopened_at(fixture.save_dir.clone(), 1600.0, 900.0);
+    assert!(click_text(&mut wide, "Level "), "the savegame did not open");
+    let capped = label_area(&wide, "Unspent attribute points").origin.x;
+    assert!(
+        (390.0..480.0).contains(&capped),
+        "the editor column starts at {capped}px on a 1600px window; it is not capped and centred"
+    );
+
+    let mut narrow = launch_unopened_at(fixture.save_dir.clone(), 900.0, 900.0);
+    assert!(
+        click_text(&mut narrow, "Level "),
+        "the savegame did not open"
+    );
+    let flush = label_area(&narrow, "Unspent attribute points").origin.x;
+    assert!(
+        flush < 300.0,
+        "the capped column should only apply on wide windows; it starts at {flush}px at 900"
+    );
+}
+
+fn count_labels_containing(test: &TestingRunner, needle: &str) -> usize {
+    test.find_many(|_, element| {
+        let label = Label::try_downcast(element)?;
+        label.text.contains(needle).then_some(())
+    })
+    .len()
+}
+
+#[test]
+fn clipped_names_show_the_full_text_in_a_tooltip() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_unopened(fixture.save_dir.clone(), 900.0);
+    let row = find_label_exact(&test, "Test Save").expect("the save row is missing");
+    let before = count_labels_containing(&test, "Test Save");
+    let area = row.layout().area;
+    test.move_cursor(CursorPoint::new(
+        f64::from(area.origin.x) + f64::from(area.size.width) / 2.0,
+        f64::from(area.origin.y) + f64::from(area.size.height) / 2.0,
+    ));
+    test.sync_and_update();
+    // The tooltip waits 500 ms before it appears, so poll the async task queue.
+    test.poll(
+        std::time::Duration::from_millis(20),
+        std::time::Duration::from_millis(800),
+    );
+    assert!(
+        count_labels_containing(&test, "Test Save") > before,
+        "hovering a clipped save name did not show its tooltip"
+    );
+}
+
+#[test]
+fn the_overview_save_path_can_be_copied() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    // Tall window: the Savegame card sits below the fold at the default size.
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(click_text(&mut test, "Copy path"), "no copy path button");
+    assert!(
+        find_label_text(&test, "clipboard").is_some(),
+        "copying the path did not report a status message"
+    );
+}
