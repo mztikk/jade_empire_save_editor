@@ -61,12 +61,28 @@ pub enum HoverKey {
     ItemSuggestion(u16),
     /// A style row, by struct index.
     Style(usize),
+    /// A learnable style suggestion, by style id.
+    StyleSuggestion(u16),
     /// An upgrade orb: style struct index and slot.
     Orb(usize, u16),
     /// A gem row, by struct index.
     Gem(usize),
     /// A companion row, by struct index.
     Companion(usize),
+}
+
+impl HoverKey {
+    /// Whether this hover belongs to the given style row.
+    ///
+    /// Orbs are drawn inside their style row, so hovering one keeps the whole
+    /// row highlighted. Treating the orb hover as a separate row state made the
+    /// row background blink on every step between two orbs.
+    pub(crate) fn is_style_row(self, struct_index: usize) -> bool {
+        match self {
+            Self::Style(index) | Self::Orb(index, _) => index == struct_index,
+            _ => false,
+        }
+    }
 }
 
 /// Entries a searchable picker renders per page (items, styles, gems).
@@ -925,5 +941,16 @@ mod tests {
         labels.sort_unstable();
         labels.dedup();
         assert_eq!(labels.len(), Tab::ALL.len());
+    }
+
+    #[test]
+    fn an_orb_hover_belongs_to_its_style_row() {
+        assert!(HoverKey::Style(3).is_style_row(3));
+        assert!(HoverKey::Orb(3, 0).is_style_row(3));
+        assert!(HoverKey::Orb(3, 4).is_style_row(3));
+        assert!(!HoverKey::Orb(4, 0).is_style_row(3));
+        assert!(!HoverKey::Style(4).is_style_row(3));
+        assert!(!HoverKey::StyleSuggestion(3).is_style_row(3));
+        assert!(!HoverKey::Item(3).is_style_row(3));
     }
 }

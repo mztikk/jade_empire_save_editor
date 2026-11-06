@@ -2642,6 +2642,161 @@ fn save_rows_show_the_character_and_modification_time() {
     assert!(value.contains(&character), "{value}");
 }
 
+/// Finds the style row that carries the given style name.
+fn find_style_row(test: &TestingRunner, name: &str) -> Option<freya_testing::TestingNode> {
+    let wanted = format!("{name} style");
+    test.find(|node, _| {
+        (a11y_role(&node) == "Group" && a11y_label(&node).as_deref() == Some(&wanted))
+            .then_some(node)
+    })
+}
+
+/// Solid background colour of the node, if it paints one.
+fn background_of(node: &freya_testing::TestingNode) -> Option<Color> {
+    let element = node.element();
+    element.style().background.as_color()
+}
+
+fn orb_detail_is_visible(test: &TestingRunner) -> bool {
+    find_label_text(test, "available: clicking buys").is_some()
+        || find_label_text(test, "owned: clicking removes").is_some()
+}
+
+/// Expands the first learned style and returns its name.
+fn expand_first_style(test: &mut TestingRunner) -> String {
+    let (_row, label) = test
+        .find(|node, _| {
+            if a11y_role(&node) != "Group" {
+                return None;
+            }
+            let label = a11y_label(&node)?;
+            label.ends_with(" style").then_some((node, label))
+        })
+        .expect("style row");
+    let name = label
+        .strip_suffix(" style")
+        .expect("the row label ends in ` style`")
+        .to_owned();
+    let toggle = test
+        .find(|node, _| {
+            (a11y_role(&node) == "Button"
+                && a11y_label(&node).is_some_and(|label| {
+                    label.starts_with(&format!("{name}, ")) && label.ends_with("Details")
+                }))
+            .then_some(node)
+        })
+        .expect("style toggle");
+    click_node(test, &toggle);
+    assert!(
+        find_label_text(test, "UPGRADES").is_some(),
+        "the style did not expand"
+    );
+    name
+}
+
+/// Layout bounds `(x, y, width, height)` of two adjacent orbs in one family.
+fn adjacent_orb_areas(test: &TestingRunner, name: &str) -> Option<[(f32, f32, f32, f32); 2]> {
+    let prefix = format!("{name}, ");
+    let mut orbs: Vec<freya_testing::TestingNode> = test.find_many(|node, _| {
+        (a11y_role(&node) == "Button"
+            && a11y_label(&node)
+                .is_some_and(|label| label.starts_with(&prefix) && label.contains(", tier ")))
+        .then_some(node)
+    });
+    orbs.sort_by(|left, right| {
+        let left = left.layout().area;
+        let right = right.layout().area;
+        left.origin
+            .y
+            .total_cmp(&right.origin.y)
+            .then(left.origin.x.total_cmp(&right.origin.x))
+    });
+    orbs.windows(2).find_map(|pair| {
+        let (first, second) = (&pair[0], &pair[1]);
+        let (a, b) = (first.layout().area, second.layout().area);
+        (a.origin.y.total_cmp(&b.origin.y).is_eq() && a.origin.x < b.origin.x).then_some([
+            (a.origin.x, a.origin.y, a.size.width, a.size.height),
+            (b.origin.x, b.origin.y, b.size.width, b.size.height),
+        ])
+    })
+}
+
+fn orb_center(area: (f32, f32, f32, f32)) -> CursorPoint {
+    CursorPoint::new(
+        f64::from(area.0) + f64::from(area.2) / 2.0,
+        f64::from(area.1) + f64::from(area.3) / 2.0,
+    )
+}
+
+#[test]
+fn sweeping_across_upgrade_orbs_keeps_the_style_hovered() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data to resolve upgrades");
+        return;
+    }
+
+    let mut test = launch_sized(fixture.save_dir.clone(), 1600.0);
+    assert!(click_label_exact(&mut test, "Styles"));
+    let name = expand_first_style(&mut test);
+    let Some([first, second]) = adjacent_orb_areas(&test, &name) else {
+        eprintln!("skipping: the expanded style has no two orbs on one row");
+        return;
+    };
+    let row_background =
+        |test: &TestingRunner| background_of(&find_style_row(test, &name).expect("style row"));
+
+    // The row stays highlighted while one of its own orbs is hovered. Losing
+    // this turned every step from one orb to the next into a blink.
+    test.move_cursor(orb_center(first));
+    test.sync_and_update();
+    assert_eq!(
+        row_background(&test),
+        Some(jadeforge_gui::theme::SURFACE_HOVER),
+        "hovering an orb dropped the style row highlight"
+    );
+    assert!(
+        orb_detail_is_visible(&test),
+        "the hovered orb is not explained"
+    );
+
+    // The gaps between the orbs belong to the orb hit target, so the hovered
+    // orb (and its detail line) survives the crossing instead of falling back
+    // to the row background for a moment.
+    let gap_y = f64::from(first.1) + f64::from(first.3) / 2.0;
+    for x in [
+        f64::from(first.0 + first.2) + 1.0,
+        f64::from(second.0) - 1.0,
+    ] {
+        test.move_cursor(CursorPoint::new(x, gap_y));
+        test.sync_and_update();
+        assert_eq!(
+            row_background(&test),
+            Some(jadeforge_gui::theme::SURFACE_HOVER),
+            "the style row lost its highlight in the gap between orbs"
+        );
+        assert!(
+            orb_detail_is_visible(&test),
+            "crossing the gap dropped the hovered orb"
+        );
+    }
+
+    test.move_cursor(orb_center(second));
+    test.sync_and_update();
+    assert_eq!(
+        row_background(&test),
+        Some(jadeforge_gui::theme::SURFACE_HOVER),
+        "the second orb did not keep the style row highlighted"
+    );
+    assert!(
+        orb_detail_is_visible(&test),
+        "the second orb is not explained"
+    );
+}
+
 #[test]
 fn hovering_an_upgrade_orb_explains_it() {
     let Some(fixture) = Fixture::create() else {
