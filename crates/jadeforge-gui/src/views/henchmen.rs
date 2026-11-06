@@ -26,7 +26,7 @@ pub fn view(ctx: &Ctx, henchmen: &[HenchRow]) -> Element {
             rect()
                 .vertical()
                 .width(Size::fill())
-                .spacing(4.)
+                .spacing(theme::space::XS)
                 .children(rows)
                 .into_element(),
             widgets::divider(),
@@ -66,25 +66,25 @@ fn henchman_row(ctx: &Ctx, henchman: &HenchRow) -> Element {
         .key(index)
         .a11y_role(AccessibilityRole::Group)
         .a11y_alt(format!("{} companion", henchman.name))
-        .spacing(10.)
+        .spacing(theme::space::LG)
         .content(Content::Flex)
-        .padding(Gaps::new_symmetric(6., 10.))
+        .padding(Gaps::new_symmetric(theme::space::SM, theme::space::LG))
         .background(theme::SURFACE)
-        .corner_radius(8.)
+        .corner_radius(theme::radius::MEDIUM)
         .child(
             rect()
                 .vertical()
-                .spacing(1.)
+                .spacing(theme::space::XXS)
                 .width(Size::flex(1.0))
                 .child(
                     widgets::a11y_text(henchman.name.clone())
-                        .font_size(13.)
+                        .font_size(theme::font::BODY)
                         .max_lines(1)
                         .color(theme::TEXT),
                 )
                 .child(
                     widgets::a11y_text(henchman.resref.clone())
-                        .font_size(10.)
+                        .font_size(theme::font::MICRO)
                         .color(theme::DIM),
                 ),
         )
@@ -96,8 +96,8 @@ fn henchman_row(ctx: &Ctx, henchman: &HenchRow) -> Element {
         .child(Button::new().compact().flat().child("−").on_press(lower))
         .child(
             widgets::a11y_text(format!("Lv {level}"))
-                .font_size(12.)
-                .width(Size::px(46.))
+                .font_size(theme::font::LABEL)
+                .width(Size::px(theme::layout::STEPPER_WIDTH))
                 .text_align(TextAlign::Center)
                 .color(theme::ACCENT),
         )

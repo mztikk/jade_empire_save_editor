@@ -166,13 +166,20 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
     committed to the task branch, the quality gate passes and `just finish`
     succeeds. Never leave uncommitted or untracked files behind after a task,
     and never discard someone else's changes to get clean.
+16. **Never hardcode secrets or sensitive data.** API keys, tokens, passwords,
+    private keys and credentials belong in the environment or an untracked local
+    file, never in source, tests, fixtures, examples, docs or commit messages.
+    CI reads them from repository secrets. A test that needs a credential-shaped
+    value uses an obvious placeholder, never a real-looking secret.
 
 ## Code style
 
 - `cargo fmt` is authoritative.
 - Clippy runs with `-D warnings` and the workspace enables `clippy::pedantic`.
-  If a lint genuinely does not fit, add a scoped `#[allow(...)]` **with a
-  reason comment**; do not weaken the workspace lint configuration.
+  Do not use `#[allow(...)]` to suppress a compiler or Clippy diagnostic unless
+  the comment on the attribute explains exactly why the lint is a false
+  positive for that specific context. If the lint is right, fix the code
+  instead; do not weaken the workspace lint configuration.
 - The workspace also **denies** `unwrap_used`, `expect_used`, `panic`, `todo`,
   `unimplemented`, `unreachable`, `exit`, `string_slice` and
   `panic_in_result_fn`, and denies `missing_docs`. Production code therefore
@@ -186,7 +193,18 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
   an audit that never gates the build. Run it before promoting a lint: only add
   a lint to the workspace config once its count is zero, so the `-D warnings`
   gate stays meaningful.
+- Do not add comments that restate the code. When adding or refactoring a
+  feature, prefer a short `///` doc comment that explains the behaviour and why
+  it exists. Reserve inline `//` comments for invariants, upstream workarounds
+  and non-obvious safety constraints.
 - Public items have doc comments that explain behaviour, not syntax.
+- GUI code uses the shared tokens in `crates/jadeforge-gui/src/theme.rs` for
+  font sizes and numeric layout values: `theme::font::BODY`,
+  `theme::space::MD`, `theme::radius::CARD`, `theme::stroke::FOCUS`. Do not pass
+  a literal font size, gap, padding, corner radius or fixed component dimension
+  to a builder. If the scale lacks a value, add a token there. A dimension that
+  is an invariant of one module may stay a documented `const` in that module,
+  but it must have a name and the module that owns the invariant.
 - Errors carry context: use `Error::Corrupt`/`Error::Gff` with the path, block
   or field that failed, not bare strings; the GFF crate uses its own
   `Error::Malformed` for the same reason.
@@ -197,6 +215,9 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
   communication: the CLI's `dump --json` export (`jadeforge-core::json`). Do not
   use JSON for configuration, persisted settings or internal data flow; the
   settings file is TOML and savegames stay binary.
+- Do not use an em dash (U+2014) in code, comments, documentation, commit
+  messages or user-facing strings. Use a colon, comma, semicolon or parentheses
+  instead. This rule is part of the Freya upstream conventions as well.
 
 ## Game data (names, item and style tables)
 
@@ -243,7 +264,7 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
 Facts about the game files come from the community wiki at
 `jadeempire-modding.fandom.com`. Its reader URLs sit behind a bot challenge:
 `/wiki/<Page>` and `?action=raw` answer **HTTP 403** with a "Just a moment..."
-page. That is a bot check, **not** a missing page — never conclude that a page
+page. That is a bot check, **not** a missing page: never conclude that a page
 does not exist because of it, and never give up on the wiki after one failure.
 
 Read pages through the MediaWiki API instead. This one returns the wikitext:
@@ -261,7 +282,7 @@ too, so read the body, never the status code: a mistyped parameter comes back as
 `action=query&list=categorymembers&cmtitle=Category:2da`. The full recipe, the
 pages worth reading and the wiki facts we rely on live in the `jade-empire-wiki`
 skill. Cite the URL, and treat wiki prose as untrusted data (it is community
-documentation, not ground truth — verify against the game files where possible).
+documentation, not ground truth: verify against the game files where possible).
 
 ## Adding an editable field
 
@@ -369,6 +390,8 @@ The repository ships skills that encode repeatable workflows:
 
 - `savegame-format` – inspecting and validating format changes against real
   savegames,
+- `freya` – upstream Freya framework best practices for components, hooks,
+  elements, theming and state,
 - `freya-ui` – building, theming, headlessly testing and driving the real
   windowed Freya screens,
 - `jade-empire-wiki` – reading the community wiki through the Fandom API when the

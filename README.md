@@ -101,8 +101,8 @@ or start the CLI against a save folder:
 
 ### Distribution builds
 
-`just publish` builds both binaries with the `dist` profile — release
-optimisation with fat LTO — and stages them in
+`just publish` builds both binaries with the `dist` profile (release
+optimisation with fat LTO) and stages them in
 `dist/jadeforge-<version>-<target>/` with the licence, README and the
 platform's icon files.
 
@@ -184,8 +184,8 @@ coverage` writes a line/function summary plus HTML and lcov reports to
 3. Pick a savegame on the left; the game's own screenshot and character summary
    appear above the list. The list can be sorted by name, level or play time,
    and that choice (like the save folder) is remembered for the next start.
-4. Edit the values on the tabs. Every change — text fields, items, styles,
-   gems and companions — is applied to the in-memory savegame immediately; the
+4. Edit the values on the tabs. Every change (text fields, items, styles,
+   gems and companions) is applied to the in-memory savegame immediately; the
    header shows "unsaved changes" and switching away is blocked until you save
    or revert. A field with invalid text is reported and not applied until it is
    fixed.

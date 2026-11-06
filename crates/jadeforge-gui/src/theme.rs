@@ -44,6 +44,153 @@ pub const SUCCESS: Color = Color::from_rgb(126, 190, 143);
 /// Warning colour, kept amber so a warning never reads as the accent.
 pub const WARNING: Color = Color::from_rgb(232, 180, 92);
 
+/// Named font sizes for the interface.
+///
+/// Views must use these instead of literal sizes. Keep the scale small and
+/// semantic; add a token here rather than a one-off value in a view.
+pub mod font {
+    /// Hero name on the overview.
+    pub const DISPLAY: f32 = 26.0;
+    /// Application title.
+    pub const TITLE: f32 = 22.0;
+    /// Empty-state heading.
+    pub const HEADING: f32 = 20.0;
+    /// Statistic value and other large readouts.
+    pub const SUBHEADING: f32 = 18.0;
+    /// Card and sidebar title.
+    pub const CARD_TITLE: f32 = 15.0;
+    /// Default reading size.
+    pub const BODY: f32 = 13.0;
+    /// Form labels and row values.
+    pub const LABEL: f32 = 12.0;
+    /// Hints, status messages and secondary text.
+    pub const CAPTION: f32 = 11.0;
+    /// Uppercase section labels and row metadata.
+    pub const MICRO: f32 = 10.0;
+    /// Line box of one line of [`CAPTION`] text.
+    pub const LINE_HEIGHT: f32 = 13.0;
+}
+
+/// Shared spacing scale in logical pixels.
+///
+/// The scale is even-valued and owns every gap, padding and wrap distance in
+/// the GUI. Component-specific names are aliases with the same values.
+pub mod space {
+    /// No spacing.
+    pub const NONE: f32 = 0.0;
+    /// Tight spacing inside a badge or between two text lines.
+    pub const XXS: f32 = 2.0;
+    /// Small spacing between closely related controls.
+    pub const XS: f32 = 4.0;
+    /// Spacing inside a compact row.
+    pub const SM: f32 = 6.0;
+    /// Default spacing between inline controls.
+    pub const MD: f32 = 8.0;
+    /// Spacing between a label and its control.
+    pub const LG: f32 = 10.0;
+    /// Spacing between groups in a row.
+    pub const XL: f32 = 12.0;
+    /// Spacing between form fields.
+    pub const FIELD: f32 = 14.0;
+    /// Spacing between sections inside a card.
+    pub const XXL: f32 = 16.0;
+    /// Padding inside a card.
+    pub const CARD: f32 = 18.0;
+    /// Spacing between large content blocks.
+    pub const HERO: f32 = 20.0;
+    /// Spacing between overview statistics.
+    pub const GRID: f32 = 24.0;
+    /// Padding around an empty state.
+    pub const PAGE: f32 = 28.0;
+}
+
+/// Shared corner radii in logical pixels.
+pub mod radius {
+    /// Small controls and focus targets.
+    pub const SMALL: f32 = 4.0;
+    /// Compact list rows.
+    pub const CONTROL: f32 = 6.0;
+    /// Standard rows, tabs and inputs.
+    pub const MEDIUM: f32 = 8.0;
+    /// Images and medium surfaces.
+    pub const LARGE: f32 = 10.0;
+    /// Cards and portrait frames.
+    pub const CARD: f32 = 12.0;
+    /// Large panels such as the overview hero.
+    pub const PANEL: f32 = 14.0;
+    /// Pills, badges and circular orbs.
+    pub const PILL: f32 = 99.0;
+}
+
+/// Shared stroke widths in logical pixels.
+pub mod stroke {
+    /// Dividers and hairlines.
+    pub const HAIRLINE: f32 = 1.0;
+    /// Focus rings and orb borders.
+    pub const FOCUS: f32 = 1.5;
+    /// Emphasised borders such as a focused orb.
+    pub const EMPHASIS: f32 = 2.0;
+}
+
+/// Fixed component dimensions that are part of the layout contract.
+pub mod layout {
+    /// Sidebar width as a percentage of the window.
+    pub const SIDEBAR_PERCENT: f32 = 24.0;
+    /// Smallest sidebar width.
+    pub const SIDEBAR_MIN_WIDTH: f32 = 230.0;
+    /// Largest sidebar width.
+    pub const SIDEBAR_MAX_WIDTH: f32 = 320.0;
+    /// Square savegame preview slot.
+    ///
+    /// The placeholder and the loaded screenshot share this square, so choosing
+    /// a savegame never reflows the sidebar and the save list stays usable at
+    /// the minimum window size.
+    pub const PREVIEW: f32 = 120.0;
+    /// Square character portrait on the overview.
+    pub const PORTRAIT: f32 = 164.0;
+    /// Height of one savegame row.
+    pub const SAVE_ROW_HEIGHT: f32 = 46.0;
+    /// Width of the selection bar on a savegame row.
+    pub const SELECTION_BAR_WIDTH: f32 = 3.0;
+    /// Diameter of an upgrade orb.
+    pub const ORB: f32 = 26.0;
+    /// Width of a read-only statistic.
+    pub const STAT_WIDTH: f32 = 120.0;
+    /// Width of one label grid cell.
+    pub const LABEL_GRID_WIDTH: f32 = 340.0;
+    /// Width of a level stepper value.
+    pub const STEPPER_WIDTH: f32 = 46.0;
+    /// Width of an item count.
+    pub const ITEM_COUNT_WIDTH: f32 = 30.0;
+    /// Width of an upgrade family label.
+    pub const UPGRADE_LABEL_WIDTH: f32 = 120.0;
+    /// Narrow form field.
+    pub const FIELD_NARROW: f32 = 100.0;
+    /// Medium form field.
+    pub const FIELD_MEDIUM: f32 = 150.0;
+    /// Wide form field.
+    pub const FIELD_WIDE: f32 = 220.0;
+    /// Width of the fixed sort-direction arrow slot.
+    ///
+    /// Every sort button reserves it, active or not, so changing the sort key
+    /// or direction cannot move the neighbouring buttons.
+    pub const SORT_ARROW_WIDTH: f32 = 16.0;
+    /// Height of the fixed sort-direction arrow slot.
+    pub const SORT_ARROW_HEIGHT: f32 = 12.0;
+    /// Hairline divider height.
+    pub const DIVIDER: f32 = 1.0;
+    /// Width of the scrollbar.
+    pub const SCROLLBAR: f32 = 9.0;
+    /// Default window width.
+    pub const WINDOW_WIDTH: f32 = 1180.0;
+    /// Default window height.
+    pub const WINDOW_HEIGHT: f32 = 760.0;
+    /// Smallest supported window width.
+    pub const MIN_WINDOW_WIDTH: f32 = 900.0;
+    /// Smallest supported window height.
+    pub const MIN_WINDOW_HEIGHT: f32 = 700.0;
+}
+
 /// The colour sheet used by every component theme.
 #[must_use]
 pub fn palette() -> ColorsSheet {
@@ -154,7 +301,7 @@ pub fn theme() -> Theme {
             thumb_background: Preference::Specific(BORDER),
             hover_thumb_background: Preference::Specific(SURFACE_ACTIVE),
             active_thumb_background: Preference::Specific(ACCENT),
-            size: Preference::Specific(9.),
+            size: Preference::Specific(layout::SCROLLBAR),
         },
     );
     theme.set(
@@ -163,7 +310,7 @@ pub fn theme() -> Theme {
             background: Preference::Specific(SURFACE_ACTIVE),
             border_fill: Preference::Specific(BORDER),
             color: Preference::Specific(TEXT),
-            font_size: Preference::Specific(11.),
+            font_size: Preference::Specific(font::CAPTION),
         },
     );
     theme
@@ -330,5 +477,111 @@ mod tests {
         }
         assert_ne!(ON_ACCENT, Color::WHITE);
         assert_ne!(TEXT, Color::WHITE);
+    }
+
+    #[test]
+    fn font_scale_is_ordered_and_semantic() {
+        let sizes = [
+            font::MICRO,
+            font::CAPTION,
+            font::LABEL,
+            font::BODY,
+            font::CARD_TITLE,
+            font::SUBHEADING,
+            font::HEADING,
+            font::TITLE,
+            font::DISPLAY,
+        ];
+        assert!(
+            sizes.windows(2).all(|pair| pair[0] < pair[1]),
+            "font tokens must stay strictly ordered"
+        );
+        let line_heights = [font::CAPTION, font::LINE_HEIGHT];
+        assert!(line_heights.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn spacing_scale_is_even_and_ordered() {
+        let spaces = [
+            space::NONE,
+            space::XXS,
+            space::XS,
+            space::SM,
+            space::MD,
+            space::LG,
+            space::XL,
+            space::FIELD,
+            space::XXL,
+            space::CARD,
+            space::HERO,
+            space::GRID,
+            space::PAGE,
+        ];
+        assert!(
+            spaces.windows(2).all(|pair| pair[0] < pair[1]),
+            "spacing tokens must stay strictly ordered"
+        );
+        assert!(spaces.iter().all(|value| value % 2.0 == 0.0));
+    }
+
+    #[test]
+    fn radius_and_stroke_tokens_are_positive() {
+        let radii = [
+            radius::SMALL,
+            radius::CONTROL,
+            radius::MEDIUM,
+            radius::LARGE,
+            radius::CARD,
+            radius::PANEL,
+            radius::PILL,
+        ];
+        assert!(radii.windows(2).all(|pair| pair[0] < pair[1]));
+        let strokes = [stroke::HAIRLINE, stroke::FOCUS, stroke::EMPHASIS];
+        assert!(strokes.iter().all(|value| *value > 0.0));
+        assert!(strokes.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn layout_tokens_are_positive_and_ordered() {
+        for value in [
+            layout::SIDEBAR_PERCENT,
+            layout::SIDEBAR_MIN_WIDTH,
+            layout::SIDEBAR_MAX_WIDTH,
+            layout::PREVIEW,
+            layout::PORTRAIT,
+            layout::SAVE_ROW_HEIGHT,
+            layout::SELECTION_BAR_WIDTH,
+            layout::ORB,
+            layout::STAT_WIDTH,
+            layout::LABEL_GRID_WIDTH,
+            layout::STEPPER_WIDTH,
+            layout::ITEM_COUNT_WIDTH,
+            layout::UPGRADE_LABEL_WIDTH,
+            layout::FIELD_NARROW,
+            layout::FIELD_MEDIUM,
+            layout::FIELD_WIDE,
+            layout::SORT_ARROW_WIDTH,
+            layout::SORT_ARROW_HEIGHT,
+            layout::DIVIDER,
+            layout::SCROLLBAR,
+            layout::WINDOW_WIDTH,
+            layout::WINDOW_HEIGHT,
+            layout::MIN_WINDOW_WIDTH,
+            layout::MIN_WINDOW_HEIGHT,
+        ] {
+            assert!(value > 0.0, "layout token must be positive");
+        }
+        let sidebar_widths = [layout::SIDEBAR_MIN_WIDTH, layout::SIDEBAR_MAX_WIDTH];
+        assert!(sidebar_widths.windows(2).all(|pair| pair[0] < pair[1]));
+        let window_widths = [layout::MIN_WINDOW_WIDTH, layout::WINDOW_WIDTH];
+        assert!(window_widths.windows(2).all(|pair| pair[0] < pair[1]));
+        let window_heights = [layout::MIN_WINDOW_HEIGHT, layout::WINDOW_HEIGHT];
+        assert!(window_heights.windows(2).all(|pair| pair[0] < pair[1]));
+        let field_widths = [
+            layout::FIELD_NARROW,
+            layout::FIELD_MEDIUM,
+            layout::FIELD_WIDE,
+        ];
+        assert!(field_widths.windows(2).all(|pair| pair[0] < pair[1]));
     }
 }

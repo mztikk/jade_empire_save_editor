@@ -10,12 +10,12 @@ use crate::form::Form;
 use crate::session::{GameStatus, MessageKind};
 use crate::theme;
 
-use super::{Ctx, PREVIEW_HEIGHT, STATUS_HEIGHT};
+use super::Ctx;
 
 #[allow(
-    clippy::too_many_arguments,
-    clippy::needless_pass_by_value,
-    clippy::too_many_lines
+    clippy::too_many_arguments, // one parameter per independent shell input
+    clippy::needless_pass_by_value, // the closures own the sync handle
+    clippy::too_many_lines // one declarative header keeps the rows together
 )]
 pub(super) fn header(
     ctx: &Ctx,
@@ -64,24 +64,29 @@ pub(super) fn header(
     rect()
         .vertical()
         .width(Size::fill())
-        .padding(Gaps::new(14., 18., 12., 18.))
-        .spacing(12.)
+        .padding(Gaps::new(
+            theme::space::FIELD,
+            theme::space::CARD,
+            theme::space::XL,
+            theme::space::CARD,
+        ))
+        .spacing(theme::space::XL)
         .background(theme::PANEL)
         .child(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(12.)
+                .spacing(theme::space::XL)
                 .content(Content::Flex)
                 .child(
                     crate::widgets::a11y_text(super::WINDOW_TITLE)
-                        .font_size(22.)
+                        .font_size(theme::font::TITLE)
                         .font_weight(FontWeight::BOLD)
                         .color(theme::ACCENT),
                 )
                 .child(
                     crate::widgets::a11y_text("Jade Empire save editor")
-                        .font_size(11.)
+                        .font_size(theme::font::CAPTION)
                         .color(theme::DIM),
                 )
                 .child(rect().width(Size::flex(1.0)))
@@ -102,11 +107,11 @@ pub(super) fn header(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(10.)
+                .spacing(theme::space::LG)
                 .content(Content::Flex)
                 .child(
                     crate::widgets::a11y_text("SAVE FOLDER")
-                        .font_size(10.)
+                        .font_size(theme::font::MICRO)
                         .font_weight(FontWeight::BOLD)
                         .color(theme::DIM),
                 )
@@ -145,7 +150,7 @@ pub(super) fn header(
             rect()
                 .vertical()
                 .width(Size::fill())
-                .height(Size::px(STATUS_HEIGHT))
+                .height(Size::px(theme::font::LINE_HEIGHT * 2.0))
                 .main_align(Alignment::Center)
                 .child(
                     crate::widgets::a11y_text(message.text.clone())
@@ -153,7 +158,7 @@ pub(super) fn header(
                             node.set_role(AccessibilityRole::Status);
                             node.set_live(status_live);
                         })
-                        .font_size(11.)
+                        .font_size(theme::font::CAPTION)
                         .max_lines(2)
                         .color(status_color),
                 ),
@@ -177,12 +182,12 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
     // during rapid tab/window changes.
     let frame = rect()
         .width(Size::fill())
-        .height(Size::px(PREVIEW_HEIGHT))
+        .height(Size::px(theme::layout::PREVIEW))
         .center()
         .key("save-preview-frame");
     let content = rect()
-        .width(Size::px(PREVIEW_HEIGHT))
-        .height(Size::px(PREVIEW_HEIGHT))
+        .width(Size::px(theme::layout::PREVIEW))
+        .height(Size::px(theme::layout::PREVIEW))
         .center()
         .key("save-preview-content");
     match preview {
@@ -190,9 +195,9 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
             .child(
                 content.child(
                     image(handle)
-                        .width(Size::px(PREVIEW_HEIGHT))
-                        .height(Size::px(PREVIEW_HEIGHT))
-                        .corner_radius(10.)
+                        .width(Size::px(theme::layout::PREVIEW))
+                        .height(Size::px(theme::layout::PREVIEW))
+                        .corner_radius(theme::radius::LARGE)
                         .sampling_mode(SamplingMode::Bilinear)
                         .aspect_ratio(AspectRatio::Min)
                         .key("save-preview-image"),
@@ -201,12 +206,15 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
             .into_element(),
         None => frame
             .child(
-                content.background(theme::SURFACE).corner_radius(10.).child(
-                    crate::widgets::a11y_text(message)
-                        .font_size(10.)
-                        .color(theme::DIM)
-                        .key("save-preview-placeholder"),
-                ),
+                content
+                    .background(theme::SURFACE)
+                    .corner_radius(theme::radius::LARGE)
+                    .child(
+                        crate::widgets::a11y_text(message)
+                            .font_size(theme::font::MICRO)
+                            .color(theme::DIM)
+                            .key("save-preview-placeholder"),
+                    ),
             )
             .into_element(),
     }
@@ -257,9 +265,14 @@ pub(super) fn footer(
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(10.)
+        .spacing(theme::space::LG)
         .content(Content::Flex)
-        .padding(Gaps::new(10., 18., 12., 18.))
+        .padding(Gaps::new(
+            theme::space::LG,
+            theme::space::CARD,
+            theme::space::XL,
+            theme::space::CARD,
+        ))
         .background(theme::PANEL)
         .child(Button::new().filled().child("Save to disk").on_press(save))
         .child(Button::new().flat().child("Revert").on_press(revert))
@@ -272,7 +285,7 @@ pub(super) fn footer(
             } else {
                 "Nothing to save."
             })
-            .font_size(10.)
+            .font_size(theme::font::MICRO)
             .color(if form_differs {
                 theme::WARNING
             } else if dirty {
@@ -293,25 +306,25 @@ pub(super) fn empty_state(savegames: usize) -> Element {
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(8.)
-        .padding(Gaps::new_all(28.))
+        .spacing(theme::space::MD)
+        .padding(Gaps::new_all(theme::space::PAGE))
         .child(
             crate::widgets::a11y_text("No savegame selected")
                 .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-                .font_size(20.)
+                .font_size(theme::font::HEADING)
                 .font_weight(FontWeight::BOLD)
                 .color(theme::TEXT),
         )
         .child(
             crate::widgets::a11y_text(text)
-                .font_size(12.)
+                .font_size(theme::font::LABEL)
                 .color(theme::MUTED),
         )
         .child(
             crate::widgets::a11y_text(
                 "JadeForge never writes a savegame without verifying it and keeping a backup.",
             )
-            .font_size(11.)
+            .font_size(theme::font::CAPTION)
             .color(theme::DIM),
         )
         .into_element()

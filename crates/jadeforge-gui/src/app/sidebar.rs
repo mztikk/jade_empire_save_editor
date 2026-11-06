@@ -11,12 +11,12 @@ use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
 
 use super::shell::preview_slot;
-use super::{Ctx, HoverKey, SORT_ARROW_WIDTH};
+use super::{Ctx, HoverKey};
 
 #[allow(
-    clippy::too_many_lines,
-    clippy::needless_pass_by_value,
-    clippy::too_many_arguments
+    clippy::too_many_lines, // one declarative sidebar layout keeps the rows together
+    clippy::needless_pass_by_value, // the closures own the sync handle
+    clippy::too_many_arguments // each argument is a distinct reactive handle
 )]
 pub(super) fn sidebar(
     ctx: &Ctx,
@@ -79,8 +79,8 @@ pub(super) fn sidebar(
                 rect()
                     .horizontal()
                     .width(Size::fill())
-                    .height(Size::px(46.))
-                    .corner_radius(8.)
+                    .height(Size::px(theme::layout::SAVE_ROW_HEIGHT))
+                    .corner_radius(theme::radius::MEDIUM)
                     .background(if is_selected {
                         theme::SURFACE_ACTIVE
                     } else if is_hovered || is_focused {
@@ -103,28 +103,31 @@ pub(super) fn sidebar(
                     // The bar is always present, transparent until the row
                     // is selected, so the row text does not shift by its
                     // width when the selection moves.
-                    .child(rect().width(Size::px(3.)).height(Size::fill()).background(
-                        if is_selected {
-                            theme::ACCENT
-                        } else {
-                            Color::TRANSPARENT
-                        },
-                    ))
+                    .child(
+                        rect()
+                            .width(Size::px(theme::layout::SELECTION_BAR_WIDTH))
+                            .height(Size::fill())
+                            .background(if is_selected {
+                                theme::ACCENT
+                            } else {
+                                Color::TRANSPARENT
+                            }),
+                    )
                     .child(
                         rect()
                             .vertical()
                             .width(Size::flex(1.0))
-                            .spacing(2.)
-                            .padding(Gaps::new_symmetric(7., 10.))
+                            .spacing(theme::space::XXS)
+                            .padding(Gaps::new_symmetric(theme::space::MD, theme::space::LG))
                             .child(
                                 crate::widgets::a11y_text(title)
-                                    .font_size(12.)
+                                    .font_size(theme::font::LABEL)
                                     .max_lines(1)
                                     .color(if broken { theme::DANGER } else { theme::TEXT }),
                             )
                             .child(
                                 crate::widgets::a11y_text(summary)
-                                    .font_size(10.)
+                                    .font_size(theme::font::MICRO)
                                     .color(theme::DIM),
                             ),
                     )
@@ -141,14 +144,14 @@ pub(super) fn sidebar(
     if rows.is_empty() {
         rows.push(
             rect()
-                .padding(Gaps::new_all(12.))
+                .padding(Gaps::new_all(theme::space::XL))
                 .child(
                     crate::widgets::a11y_text(if entries.is_empty() {
                         "No savegames in this folder."
                     } else {
                         "No savegame matches this filter."
                     })
-                    .font_size(11.)
+                    .font_size(theme::font::CAPTION)
                     .color(theme::DIM),
                 )
                 .into_element(),
@@ -162,7 +165,7 @@ pub(super) fn sidebar(
         |character| character.name.clone(),
     );
     let subtitle = character.as_ref().map_or_else(
-        || "—".to_owned(),
+        || "Select a savegame".to_owned(),
         |character| {
             format!(
                 "Level {} · {}",
@@ -174,30 +177,35 @@ pub(super) fn sidebar(
 
     rect()
         .vertical()
-        .width(Size::percent(24.))
-        .min_width(Size::px(230.))
-        .max_width(Size::px(320.))
+        .width(Size::percent(theme::layout::SIDEBAR_PERCENT))
+        .min_width(Size::px(theme::layout::SIDEBAR_MIN_WIDTH))
+        .max_width(Size::px(theme::layout::SIDEBAR_MAX_WIDTH))
         .height(Size::fill())
         .content(Content::Flex)
-        .padding(Gaps::new(14., 12., 14., 12.))
-        .spacing(10.)
+        .padding(Gaps::new(
+            theme::space::FIELD,
+            theme::space::XL,
+            theme::space::FIELD,
+            theme::space::XL,
+        ))
+        .spacing(theme::space::LG)
         .background(theme::BACKGROUND)
         .child(preview_block)
         .child(
             rect()
                 .vertical()
-                .spacing(1.)
+                .spacing(theme::space::XXS)
                 .child(
                     crate::widgets::a11y_text(title)
                         .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-                        .font_size(15.)
+                        .font_size(theme::font::CARD_TITLE)
                         .font_weight(FontWeight::BOLD)
                         .max_lines(1)
                         .color(theme::TEXT),
                 )
                 .child(
                     crate::widgets::a11y_text(subtitle)
-                        .font_size(10.)
+                        .font_size(theme::font::MICRO)
                         .color(theme::DIM),
                 ),
         )
@@ -207,7 +215,7 @@ pub(super) fn sidebar(
             } else {
                 format!("SAVEGAMES ({} of {})", visible.len(), entries.len())
             })
-            .font_size(10.)
+            .font_size(theme::font::MICRO)
             .font_weight(FontWeight::BOLD)
             .color(theme::DIM),
         )
@@ -286,7 +294,7 @@ impl Component for SaveList {
         rect()
             .vertical()
             .width(Size::fill())
-            .spacing(4.)
+            .spacing(theme::space::XS)
             .a11y_id(a11y_id)
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::ListBox)
@@ -298,9 +306,9 @@ impl Component for SaveList {
                     } else {
                         Color::TRANSPARENT
                     })
-                    .width(1.5),
+                    .width(theme::stroke::FOCUS),
             )
-            .on_pointer_press(move |_| a11y_id.request_focus())
+            .on_press(move |_| a11y_id.request_focus())
             .on_key_down(move |event: Event<KeyboardEventData>| {
                 let current = *focus.read();
                 let current = if visible.contains(&current) {
@@ -376,7 +384,7 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                     .horizontal()
                     .child(
                         crate::widgets::a11y_text(key.label())
-                            .font_size(10.)
+                            .font_size(theme::font::MICRO)
                             .color(if is_active { theme::ACCENT } else { theme::DIM }),
                     )
                     // The arrow lives in a fixed slot on every button. Its
@@ -385,15 +393,15 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                     // buttons.
                     .child(
                         rect()
-                            .width(Size::px(SORT_ARROW_WIDTH))
-                            .height(Size::px(12.))
+                            .width(Size::px(theme::layout::SORT_ARROW_WIDTH))
+                            .height(Size::px(theme::layout::SORT_ARROW_HEIGHT))
                             .center()
                             .child(if is_active {
                                 crate::widgets::a11y_text(arrow)
-                                    .font_size(10.)
+                                    .font_size(theme::font::MICRO)
                                     .color(theme::ACCENT)
                             } else {
-                                crate::widgets::a11y_text("").font_size(10.)
+                                crate::widgets::a11y_text("").font_size(theme::font::MICRO)
                             }),
                     ),
             )
@@ -404,11 +412,11 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(10.)
+        .spacing(theme::space::LG)
         .content(Content::Flex)
         .child(
             crate::widgets::a11y_text("SORT")
-                .font_size(10.)
+                .font_size(theme::font::MICRO)
                 .font_weight(FontWeight::BOLD)
                 .color(theme::DIM),
         )
