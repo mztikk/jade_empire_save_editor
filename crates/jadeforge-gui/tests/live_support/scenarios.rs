@@ -116,7 +116,7 @@ fn save_opens_and_tabs_switch(driver: &mut Driver) -> Result<(), String> {
         ("Styles", "Fighting styles"),
         ("Inventory", "ADD AN ITEM"),
         ("Gems", "Add a gem"),
-        ("Companions", "companions known"),
+        ("Companions", "Companion levels follow"),
         ("Overview", "At a glance"),
     ] {
         driver.click_exact(tab, STEP)?;

@@ -167,6 +167,8 @@ pub mod layout {
     pub const STAT_WIDTH: f32 = 120.0;
     /// Width of a level stepper value.
     pub const STEPPER_WIDTH: f32 = 46.0;
+    /// Width of the placeholder bar in a sidebar loading row.
+    pub const SKELETON_BAR_PERCENT: f32 = 62.0;
     /// Width of a style row's `Level N` readout.
     ///
     /// Wider than a stepper value because the text now spells out `Level`
@@ -631,6 +633,7 @@ mod tests {
             layout::ORB,
             layout::STAT_WIDTH,
             layout::BUSY_SLOT,
+            layout::SKELETON_BAR_PERCENT,
             layout::STEPPER_WIDTH,
             layout::LEVEL_WIDTH,
             layout::ITEM_COUNT_WIDTH,

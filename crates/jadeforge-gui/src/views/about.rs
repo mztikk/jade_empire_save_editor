@@ -45,14 +45,21 @@ pub fn view(ctx: &Ctx, sort: State<(SaveSort, bool)>, mut show_about: State<bool
     )
     .hover_background(theme::SURFACE_HOVER);
 
-    let mut settings = vec![
-        path_section(
+    let mut settings = Vec::new();
+    if save_folder.as_os_str().is_empty() {
+        settings.push(widgets::hint(
+            "No save folder has been chosen yet. Use Browse… or Ctrl+O to pick one.",
+        ));
+    } else {
+        settings.push(path_section(
             ctx,
             "Save folder",
             &save_folder.display().to_string(),
             save_folder.clone(),
             "savegame",
-        ),
+        ));
+    }
+    settings.extend([
         widgets::label_row(
             "Sort order",
             widgets::a11y_text(format!(
@@ -73,7 +80,7 @@ pub fn view(ctx: &Ctx, sort: State<(SaveSort, bool)>, mut show_about: State<bool
                 .font_size(theme::font::LABEL)
                 .color(theme::TEXT),
         ),
-    ];
+    ]);
     match &config_path {
         Some(path) => {
             let folder = path

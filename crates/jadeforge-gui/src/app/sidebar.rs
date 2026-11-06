@@ -182,7 +182,7 @@ fn loading_rows() -> Element {
                 .key(index)
                 .child(
                     rect()
-                        .width(Size::percent(62.0))
+                        .width(Size::percent(theme::layout::SKELETON_BAR_PERCENT))
                         .height(Size::px(theme::font::LINE_HEIGHT))
                         .background(theme::SURFACE_ACTIVE)
                         .corner_radius(theme::radius::SMALL),
