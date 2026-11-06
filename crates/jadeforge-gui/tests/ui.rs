@@ -580,6 +580,36 @@ fn editing_the_alignment_does_not_move_the_character_cards() {
 }
 
 #[test]
+fn dynamic_label_text_reaches_the_accessibility_tree() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 900.0);
+    assert!(
+        click_text(&mut test, "Level "),
+        "the savegame row is missing"
+    );
+    assert!(click_label_exact(&mut test, "Character"));
+
+    let before =
+        find_node_with_text(&test, "the game starts at").expect("the alignment hint is missing");
+    assert!(
+        a11y_value(&before).is_some_and(|value| value.contains("the game starts at")),
+        "the initial alignment hint has no accessible value"
+    );
+
+    focus_alignment_input(&mut test);
+    let after =
+        find_node_with_text(&test, "Alignment is a number").expect("the invalid hint is missing");
+    assert_eq!(
+        a11y_value(&after).as_deref(),
+        Some("Alignment is a number; below 128 is the Closed Fist, above is the Open Palm."),
+        "the changed hint did not reach the effective AccessKit node"
+    );
+}
+
+#[test]
 fn tabs_switch_the_content() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
@@ -1467,36 +1497,36 @@ fn unsaved_changes_are_protected() {
     assert!(!session.is_dirty());
 }
 
-fn a11y_role(node: &freya_testing::TestingNode) -> String {
+/// The AccessKit node the element contributes to the tree.
+///
+/// `finish_accessibility` is what Freya applies while building the real tree
+/// (it fills label and paragraph values from their text), so tests inspect that
+/// node instead of the raw builder to assert what assistive technology sees.
+fn a11y_node(node: &freya_testing::TestingNode) -> accesskit::Node {
     let element = node.element();
-    format!("{:?}", element.accessibility().builder.role())
+    let mut builder = element.accessibility().builder.clone();
+    element.finish_accessibility(&mut builder);
+    builder
+}
+
+fn a11y_role(node: &freya_testing::TestingNode) -> String {
+    format!("{:?}", a11y_node(node).role())
 }
 
 fn a11y_value(node: &freya_testing::TestingNode) -> Option<String> {
-    let element = node.element();
-    element
-        .accessibility()
-        .builder
+    a11y_node(node)
         .value()
         .map(std::string::ToString::to_string)
 }
 
 fn a11y_label(node: &freya_testing::TestingNode) -> Option<String> {
-    let element = node.element();
-    element
-        .accessibility()
-        .builder
+    a11y_node(node)
         .label()
         .map(std::string::ToString::to_string)
 }
 
 fn a11y_selected(node: &freya_testing::TestingNode) -> bool {
-    let element = node.element();
-    element
-        .accessibility()
-        .builder
-        .is_selected()
-        .unwrap_or(false)
+    a11y_node(node).is_selected().unwrap_or(false)
 }
 
 fn a11y_focusable(node: &freya_testing::TestingNode) -> bool {
@@ -1505,8 +1535,7 @@ fn a11y_focusable(node: &freya_testing::TestingNode) -> bool {
 }
 
 fn a11y_live(node: &freya_testing::TestingNode) -> String {
-    let element = node.element();
-    format!("{:?}", element.accessibility().builder.live())
+    format!("{:?}", a11y_node(node).live())
 }
 
 #[test]
@@ -1551,6 +1580,46 @@ fn static_text_is_exposed_to_assistive_technology() {
         name_group.len(),
         1,
         "the NAME field has no accessible group"
+    );
+}
+
+#[test]
+fn assistive_technology_can_activate_controls() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1000.0);
+    assert!(
+        find_label_exact(&test, "Identity").is_none(),
+        "the Character tab should not be rendered yet"
+    );
+
+    let tab = test
+        .find(|node, _| {
+            (a11y_role(&node) == "Tab" && a11y_label(&node).as_deref() == Some("Character"))
+                .then_some(node)
+        })
+        .expect("Character tab");
+    let target = tab
+        .element()
+        .accessibility()
+        .a11y_id
+        .expect("the tab has no accessibility id");
+    let request = accesskit::ActionRequest {
+        action: accesskit::Action::Click,
+        target_tree: accesskit::TreeId::ROOT,
+        target_node: target,
+        data: None,
+    };
+    assert!(
+        test.send_accessibility_action(request),
+        "the accessible tree does not know the Character tab"
+    );
+    test.sync_and_update();
+    assert!(
+        find_label_exact(&test, "Identity").is_some(),
+        "a screen reader Click did not activate the Character tab"
     );
 }
 
