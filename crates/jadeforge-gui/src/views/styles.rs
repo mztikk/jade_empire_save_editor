@@ -39,7 +39,7 @@ pub fn view(
     if rows.is_empty() {
         rows.push(match ctx.session.borrow().section_error(Section::Styles) {
             Some(error) => {
-                widgets::hint(fill("styles.section_error", &[("error", &error.message)]))
+                widgets::hint(super::section_unreadable(Section::Styles, &error.message))
             }
             None => widgets::hint(t("styles.empty_hint")),
         });
@@ -186,7 +186,7 @@ fn style_row(
         let name = style.name.clone();
         Action::new(move || {
             if !crate::dialog::confirm(
-                t("styles.remove.title"),
+                &fill("dialog.remove", &[("kind", t("count.style.one"))]),
                 &fill("styles.remove.confirm", &[("name", &name)]),
             ) {
                 return;

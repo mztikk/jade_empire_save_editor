@@ -741,8 +741,7 @@ impl Session {
         let mut session = Self::unloaded(directory);
         if session.directory.as_os_str().is_empty() {
             session.game_status = GameStatus::Missing;
-            session.message =
-                Message::info(message::tr("status.choose.the.folder.that.contains.your"));
+            session.message = Message::info(message::tr("status.choose_save_folder"));
         } else {
             session.game_status = GameStatus::Loading;
             let directory = session.directory.display().to_string();
@@ -864,13 +863,13 @@ impl Session {
             ))
         } else if broken == total {
             Message::error(message::fill(
-                "status.found.in.but.none.of.them",
+                "status.scan_none_readable",
                 &[("savegames", &savegames), ("directory", &directory)],
             ))
         } else {
             let broken = broken.to_string();
             Message::error(message::fill(
-                "status.found.in.of.them.cannot.be",
+                "status.scan_partial",
                 &[
                     ("savegames", &savegames),
                     ("directory", &directory),
@@ -938,13 +937,12 @@ impl Session {
     pub fn begin_scan(&mut self, directory: impl Into<PathBuf>) -> Option<ScanRequest> {
         let directory = directory.into();
         if self.is_dirty() {
-            self.message = Message::info(message::tr("status.unsaved_scan"));
+            self.message = Message::info(message::tr("status.unsaved_first"));
             self.settle_loading_game_data();
             return None;
         }
         if directory.as_os_str().is_empty() {
-            self.message =
-                Message::info(message::tr("status.choose.the.folder.that.contains.your"));
+            self.message = Message::info(message::tr("status.choose_save_folder"));
             self.settle_loading_game_data();
             return None;
         }
@@ -1010,7 +1008,7 @@ impl Session {
         }
         let directory = request.directory.display().to_string();
         self.message = Message::error(message::fill(
-            "status.could.not.scan.the.savegame.reader",
+            "status.scan_failed",
             &[("directory", &directory)],
         ));
         self.settle_loading_game_data();
@@ -1028,7 +1026,7 @@ impl Session {
         }
         self.scan_token = self.scan_token.wrapping_add(1);
         self.settle_loading_game_data();
-        self.message = Message::info(message::tr("status.scan.cancelled.the.savegames.on.screen"));
+        self.message = Message::info(message::tr("status.scan_cancelled"));
         true
     }
 
@@ -1136,16 +1134,14 @@ impl Session {
                 // now, so every derived row has to be rebuilt.
                 self.rebuild_rows();
                 let root = root.display().to_string();
-                self.message = Message::success(message::fill(
-                    "status.using.the.game.data.in",
-                    &[("root", &root)],
-                ));
+                self.message =
+                    Message::success(message::fill("status.using_game_data", &[("root", &root)]));
                 true
             }
             Err(error) => {
                 let root = root.display().to_string();
                 self.message = Message::error(message::fill(
-                    "status.is.not.a.readable.jade.empire",
+                    "status.game_data_unreadable",
                     &[("root", &root), ("error", &error.to_string())],
                 ));
                 false
@@ -1171,17 +1167,16 @@ impl Session {
             return true;
         }
         if self.is_dirty() {
-            self.message = Message::info(message::tr("status.unsaved_open"));
+            self.message = Message::info(message::tr("status.unsaved_first"));
             return false;
         }
         let Some(entry) = self.entries.get(index) else {
-            self.message =
-                Message::error(message::tr("status.that.savegame.no.longer.exists.scan"));
+            self.message = Message::error(message::tr("status.savegame_gone"));
             return false;
         };
         if let Some(error) = &entry.error {
             self.message = Message::error(message::fill(
-                "status.cannot.open.the.scan.found.it",
+                "status.cannot_open_scan",
                 &[("label", &entry.label), ("error", error)],
             ));
             return false;
@@ -1243,7 +1238,7 @@ impl Session {
                     problems.extend(warnings);
                     let problems = problems.join("; ");
                     Message::error(message::fill(
-                        "status.opened.but.some.sections.could.not",
+                        "status.opened_with_problems",
                         &[("label", &label), ("problems", &problems)],
                     ))
                 };
@@ -1628,7 +1623,7 @@ impl Session {
     /// Undoes the last applied action and restores the typed views.
     pub fn undo(&mut self) -> bool {
         if self.history_cursor == 0 {
-            self.message = Message::info(message::tr("status.there.is.nothing.to.undo"));
+            self.message = Message::info(message::tr("status.nothing_to_undo"));
             return false;
         }
         let entry = self.history[self.history_cursor - 1].clone();
@@ -1644,7 +1639,7 @@ impl Session {
     /// Reapplies the most recently undone action.
     pub fn redo(&mut self) -> bool {
         if self.history_cursor >= self.history.len() {
-            self.message = Message::info(message::tr("status.there.is.nothing.to.redo"));
+            self.message = Message::info(message::tr("status.nothing_to_redo"));
             return false;
         }
         let entry = self.history[self.history_cursor].clone();
@@ -1685,7 +1680,7 @@ impl Session {
                 changes: vec![PendingChange::new(
                     message::tr("status.block.layout"),
                     message::tr("status.as.opened"),
-                    message::tr("status.structs.were.added.or.orphaned"),
+                    message::tr("status.structs_added_or_orphaned"),
                 )],
             });
         }
@@ -1732,14 +1727,13 @@ impl Session {
             return Err(SessionError::NoSavegame);
         };
         if self.dirty {
-            self.message =
-                Message::error(message::tr("status.reloading.from.disk.would.discard.the"));
+            self.message = Message::error(message::tr("status.reload_would_discard"));
             return Err(SessionError::CannotReload);
         }
         if !self.load(index) {
             return Err(SessionError::CannotReload);
         }
-        self.message = Message::info(message::tr("status.reloaded.the.savegame.from.disk"));
+        self.message = Message::info(message::tr("status.reloaded"));
         Ok(())
     }
 
@@ -1772,7 +1766,7 @@ impl Session {
             return Err(SessionError::NoSavegame);
         };
         if self.dirty {
-            self.message = Message::error(message::tr("status.save.or.revert.the.current.edits"));
+            self.message = Message::error(message::tr("status.save_or_revert_before_restore"));
             return Err(SessionError::CannotReload);
         }
         let known = self
@@ -1780,7 +1774,7 @@ impl Session {
             .into_iter()
             .any(|candidate| candidate.path == backup);
         if !known {
-            self.message = Message::error(message::tr("status.that.file.is.not.a.backup"));
+            self.message = Message::error(message::tr("status.not_a_backup"));
             return Err(SessionError::CannotReload);
         }
         match restore_backup(backup, &path) {
@@ -1793,7 +1787,7 @@ impl Session {
                 let backup_path = backup.display().to_string();
                 let safety_path = safety.display().to_string();
                 self.message = Message::success(message::fill(
-                    "status.restored.the.file.it.replaced.is",
+                    "status.restored_backup",
                     &[("backup", &backup_path), ("safety", &safety_path)],
                 ));
                 Ok(safety)
@@ -1981,8 +1975,7 @@ impl Session {
                 self.refresh_entry();
                 self.refresh_dirty();
                 if changes.is_empty() {
-                    self.message =
-                        Message::info(message::tr("status.nothing.changed.so.there.was.nothing"));
+                    self.message = Message::info(message::tr("status.nothing_to_apply"));
                 } else {
                     self.remember_edit(
                         message::tr("nav.character"),
@@ -2057,7 +2050,7 @@ impl Session {
             return Err(SessionError::NoSavegame);
         };
         if !self.dirty {
-            self.message = Message::info(message::tr("status.nothing.changed.so.there.is.nothing"));
+            self.message = Message::info(message::tr("status.nothing_to_write"));
             return Err(SessionError::NothingToSave);
         }
         match save.save(SaveOptions { backup: true }) {
@@ -2072,7 +2065,7 @@ impl Session {
                     Some(backup) => {
                         let backup = backup.display().to_string();
                         Message::success(message::fill(
-                            "status.saved.the.previous.file.is.kept",
+                            "status.saved_with_backup",
                             &[("path", &path_label), ("backup", &backup)],
                         ))
                     }
@@ -2088,7 +2081,7 @@ impl Session {
                 if matches!(error, jadeforge_core::Error::Conflict { .. }) {
                     self.disk_changed = true;
                     self.message = Message::error(message::fill(
-                        "status.the.savegame.changed.on.disk.since",
+                        "status.disk_changed",
                         &[("error", &error.to_string())],
                     ));
                 } else {
@@ -2124,7 +2117,7 @@ impl Session {
                 if let Some(first) = invalid.first() {
                     let path = path.display().to_string();
                     self.message = Message::info(message::fill(
-                        "status.saved.the.invalid.character.field.was",
+                        "status.saved_invalid_field",
                         &[("path", &path), ("error", &first.message)],
                     ));
                 }
@@ -2133,7 +2126,7 @@ impl Session {
             Err(error) => {
                 if let Some(first) = invalid.first() {
                     self.message = Message::error(message::fill(
-                        "status.the.character.form.also.has.an",
+                        "status.invalid_field_also",
                         &[("message", &self.message.text), ("error", &first.message)],
                     ));
                 }
@@ -2148,7 +2141,7 @@ impl Session {
             return Err(SessionError::NoSavegame);
         };
         if self.load(index) {
-            self.message = Message::info(message::tr("status.reloaded.the.savegame.from.disk"));
+            self.message = Message::info(message::tr("status.reloaded"));
             Ok(())
         } else {
             Err(SessionError::CannotReload)
@@ -2167,14 +2160,12 @@ impl Session {
         };
         let new_count = i32::from(current) + delta;
         if new_count > 255 {
-            self.message = Message::info(message::fill(
-                "status.a.stack.cannot.hold.more.than",
-                &[("name", &name)],
-            ));
+            self.message =
+                Message::info(message::fill("status.stack_too_large", &[("name", &name)]));
             return;
         }
         if new_count < 1 {
-            self.message = Message::info(message::tr("status.a.stack.needs.at.least.one"));
+            self.message = Message::info(message::tr("status.stack_minimum"));
             return;
         }
         let Some(save) = self.save.as_mut() else {
@@ -2209,7 +2200,7 @@ impl Session {
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot.change.item",
+                    "status.cannot_change",
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2229,7 +2220,7 @@ impl Session {
             return;
         };
         if count == 0 {
-            self.message = Message::info(message::tr("status.a.stack.needs.at.least.one"));
+            self.message = Message::info(message::tr("status.stack_minimum"));
             return;
         }
         let Some(save) = self.save.as_mut() else {
@@ -2269,7 +2260,7 @@ impl Session {
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot.change.item",
+                    "status.cannot_change",
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2284,7 +2275,7 @@ impl Session {
             if let Some(info) = self.game.as_ref().and_then(|game| game.item(item_id)) {
                 let Some(save_type) = info.save_type else {
                     let error = message::fill(
-                        "status.item.has.no.savegame.category.type",
+                        "status.item_no_category",
                         &[("item_id", &item_id.to_string())],
                     );
                     self.message = Message::error(error.clone());
@@ -2312,8 +2303,12 @@ impl Session {
         match save.add_item(item_id, save_type, 1) {
             Ok(index) => {
                 self.rebuild_rows();
+                let label = message::capitalize(&message::fill(
+                    "status.added_label",
+                    &[("kind", message::tr("count.item.one"))],
+                ));
                 self.remember_edit(
-                    message::tr("status.item.added"),
+                    &label,
                     vec![PendingChange::new(
                         format!("ItemList[{index}] ({name})"),
                         message::tr("status.not.present"),
@@ -2326,7 +2321,7 @@ impl Session {
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot.add.item",
+                    "status.cannot_add",
                     &[("error", &error.to_string())],
                 ));
                 Err(SessionError::Item(error.to_string()))
@@ -2350,8 +2345,12 @@ impl Session {
         match save.remove_item(struct_index) {
             Ok(true) => {
                 Rc::make_mut(&mut self.items).retain(|item| item.struct_index != struct_index);
+                let label = message::capitalize(&message::fill(
+                    "status.removed_label_template",
+                    &[("kind", message::tr("count.item.one"))],
+                ));
                 self.remember_edit(
-                    message::tr("status.item.removed"),
+                    &label,
                     vec![PendingChange::new(
                         format!("ItemList[{struct_index}] ({name})"),
                         format!("#{item_id} x{count}"),
@@ -2363,11 +2362,14 @@ impl Session {
                     Message::success(message::fill("status.removed_sentence", &[("what", &name)]));
             }
             Ok(false) => {
-                self.message = Message::info(message::tr("status.the.item.was.already.gone"));
+                self.message = Message::info(message::fill(
+                    "status.already_gone",
+                    &[("kind", message::tr("count.item.one"))],
+                ));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot.remove.item",
+                    "status.cannot_remove",
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2586,7 +2588,7 @@ impl Session {
                     );
                 }
                 self.message = if changed == 0 {
-                    Message::info(message::tr("status.that.upgrade.is.already.in.the"))
+                    Message::info(message::tr("status.upgrade_unchanged"))
                 } else {
                     let upgrades = format::plural(
                         usize::try_from(changed).unwrap_or(usize::MAX),
@@ -2607,7 +2609,7 @@ impl Session {
             Err(error) => {
                 self.rebuild_rows();
                 self.message = Message::error(message::fill(
-                    "status.cannot.change.the.upgrade",
+                    "status.cannot_change",
                     &[("error", &error.to_string())],
                 ));
                 false
@@ -2719,7 +2721,10 @@ impl Session {
             .and_then(|game| game.gem(item_id))
             .cloned()
         else {
-            self.message = Message::error(message::tr("status.that.gem.is.not.in.the"));
+            self.message = Message::error(message::fill(
+                "status.not_in_game_data",
+                &[("kind", message::tr("count.gem.one"))],
+            ));
             return;
         };
         let Some(save) = self.save.as_mut() else {
@@ -2728,8 +2733,12 @@ impl Session {
         match save.add_gem(item_id, &gem.effects, gem.duration) {
             Ok(index) => {
                 self.gems = Rc::new(self.build_gem_rows().0);
+                let label = message::capitalize(&message::fill(
+                    "status.added_label",
+                    &[("kind", message::tr("count.gem.one"))],
+                ));
                 self.remember_edit(
-                    message::tr("status.gem.added"),
+                    &label,
                     vec![PendingChange::new(
                         format!("GemList[{index}] ({})", gem.name),
                         message::tr("status.not.present"),
@@ -2742,7 +2751,7 @@ impl Session {
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot.add.the.gem",
+                    "status.cannot_add",
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2782,10 +2791,10 @@ impl Session {
                         None,
                     );
                 }
-                self.message = Message::success(message::tr(match location {
-                    GemLocation::Amulet => "widget.gem.socketed.into.the.amulet",
-                    GemLocation::Inventory => "Gem moved to the inventory.",
-                }));
+                self.message = Message::success(match location {
+                    GemLocation::Amulet => message::tr("status.gem_socketed"),
+                    GemLocation::Inventory => message::tr("status.gem_moved_to_inventory"),
+                });
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
@@ -2810,9 +2819,14 @@ impl Session {
         match save.remove_gem(struct_index) {
             Ok(()) => {
                 self.gems = Rc::new(self.build_gem_rows().0);
+                let removed_name = before.as_ref().map(|(name, _)| name.clone());
                 if let Some((name, location)) = before {
+                    let label = message::capitalize(&message::fill(
+                        "status.removed_label_template",
+                        &[("kind", message::tr("count.gem.one"))],
+                    ));
                     self.remember_edit(
-                        message::tr("status.gem.removed"),
+                        &label,
                         vec![PendingChange::new(
                             format!("GemList[{struct_index}] ({name})"),
                             format!("{location:?}"),
@@ -2821,11 +2835,15 @@ impl Session {
                         None,
                     );
                 }
-                self.message = Message::success(format!("{}.", message::tr("status.gem.removed")));
+                let what = removed_name
+                    .as_deref()
+                    .unwrap_or_else(|| message::tr("count.gem.one"));
+                self.message =
+                    Message::success(message::fill("status.removed_sentence", &[("what", what)]));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot.remove.the.gem",
+                    "status.cannot_remove",
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2878,11 +2896,14 @@ impl Session {
             .and_then(|game| game.style(style_id))
             .cloned()
         else {
-            self.message = Message::error(message::tr("status.that.style.is.not.in.the"));
+            self.message = Message::error(message::fill(
+                "status.not_in_game_data",
+                &[("kind", message::tr("count.style.one"))],
+            ));
             return;
         };
         let Some(template) = self.styles.first().map(|style| style.struct_index) else {
-            self.message = Message::error(message::tr("status.learn.a.style.first.so.jadeforge"));
+            self.message = Message::error(message::tr("status.learn_style_first"));
             return;
         };
         let identity = StyleIdentity {
@@ -2899,8 +2920,12 @@ impl Session {
         match save.add_style(template, &identity) {
             Ok(index) => {
                 self.rebuild_rows();
+                let label = message::capitalize(&message::fill(
+                    "status.added_label",
+                    &[("kind", message::tr("count.style.one"))],
+                ));
                 self.remember_edit(
-                    message::tr("status.style.added"),
+                    &label,
                     vec![PendingChange::new(
                         format!("StyleList[{index}] ({})", info.name),
                         message::tr("status.not.present"),
@@ -2913,7 +2938,7 @@ impl Session {
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot.add.style",
+                    "status.cannot_add",
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2932,7 +2957,7 @@ impl Session {
             return;
         };
         if self.styles.len() <= 1 {
-            self.message = Message::error(message::tr("status.keep.at.least.one.style.jadeforge"));
+            self.message = Message::error(message::tr("status.keep_one_style"));
             return;
         }
         let Some(save) = self.save.as_mut() else {
@@ -2941,8 +2966,12 @@ impl Session {
         match save.remove_style(struct_index) {
             Ok(true) => {
                 Rc::make_mut(&mut self.styles).retain(|style| style.struct_index != struct_index);
+                let label = message::capitalize(&message::fill(
+                    "status.removed_label_template",
+                    &[("kind", message::tr("count.style.one"))],
+                ));
                 self.remember_edit(
-                    message::tr("status.style.removed"),
+                    &label,
                     vec![PendingChange::new(
                         format!("StyleList[{struct_index}] ({name})"),
                         format!("style #{style_id}"),
@@ -2954,11 +2983,14 @@ impl Session {
                     Message::success(message::fill("status.removed_sentence", &[("what", &name)]));
             }
             Ok(false) => {
-                self.message = Message::info(message::tr("status.the.style.was.already.gone"));
+                self.message = Message::info(message::fill(
+                    "status.already_gone",
+                    &[("kind", message::tr("count.style.one"))],
+                ));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot.remove.style",
+                    "status.cannot_remove",
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2969,7 +3001,7 @@ impl Session {
     /// Changes the level of a companion.
     pub fn set_henchman_level(&mut self, struct_index: usize, level: u8) {
         if !(1..=60).contains(&level) {
-            self.message = Message::info(message::tr("status.companion.levels.go.from.1.to"));
+            self.message = Message::info(message::tr("status.companion_level_range"));
             return;
         }
         let known = self
@@ -3006,7 +3038,7 @@ impl Session {
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot.change.companion",
+                    "status.cannot_change",
                     &[("error", &error.to_string())],
                 ));
             }
@@ -3056,7 +3088,7 @@ impl Session {
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot.change.companion",
+                    "status.cannot_change",
                     &[("error", &error.to_string())],
                 ));
             }
@@ -3173,10 +3205,7 @@ fn directory_problem(directory: &Path) -> Option<String> {
         Err(error) => Some(match error.kind() {
             std::io::ErrorKind::NotFound => {
                 let directory = directory.display().to_string();
-                message::fill(
-                    "status.the.save.folder.does.not.exist",
-                    &[("directory", &directory)],
-                )
+                message::fill("status.folder_missing", &[("directory", &directory)])
             }
             std::io::ErrorKind::PermissionDenied => {
                 let directory = directory.display().to_string();
@@ -3193,14 +3222,14 @@ fn directory_problem(directory: &Path) -> Option<String> {
         Ok(metadata) if !metadata.is_dir() => {
             let directory = directory.display().to_string();
             Some(message::fill(
-                "status.is.a.file.not.a.save",
+                "status.not_a_folder",
                 &[("directory", &directory)],
             ))
         }
         Ok(_) => std::fs::read_dir(directory).err().map(|error| {
             let directory = directory.display().to_string();
             message::fill(
-                "status.the.save.folder.cannot.be.listed",
+                "status.folder_list_failed",
                 &[("directory", &directory), ("error", &error.to_string())],
             )
         }),
@@ -4306,7 +4335,7 @@ mod tests {
         let index = session.items[0].struct_index;
         set_field(&mut session, "PlayerCreature.ItemList", Value::Byte(1));
         session.remove_item(index);
-        assert!(session.message.text.contains("Cannot remove item"));
+        assert!(session.message.text.contains("Cannot remove"));
 
         let (_, mut session) = fixture();
         let before = session.items.len();
@@ -4315,7 +4344,7 @@ mod tests {
         assert!(session.message.text.contains("Added"));
         set_field(&mut session, "PlayerCreature.ItemList", Value::Byte(1));
         assert!(session.add_item(5).is_err());
-        assert!(session.message.text.contains("Cannot add item"));
+        assert!(session.message.text.contains("Cannot add"));
 
         let mut empty = Session::empty(directory.path());
         let message = empty.message.text.clone();
@@ -4349,13 +4378,13 @@ mod tests {
             session.gems.iter().all(|row| row.empty),
             "the amulet placeholders remain after removing the only gem"
         );
-        assert!(session.message.text.contains("Gem removed"));
+        assert!(session.message.text.contains("Removed"));
 
         let (_, mut session) = fixture();
         let rows = session.gems.len();
         session.remove_gem(9999);
         assert_eq!(session.gems.len(), rows);
-        assert!(session.message.text.contains("Cannot remove the gem"));
+        assert!(session.message.text.contains("Cannot remove"));
 
         let (_, mut session) = fixture();
         let rows = session.gems.len();
@@ -4416,7 +4445,7 @@ mod tests {
         let index = add_fake_second_style(&mut session);
         set_field(&mut session, "PlayerCreature.Stats.Styles", Value::Byte(1));
         session.remove_style(index);
-        assert!(session.message.text.contains("Cannot remove style"));
+        assert!(session.message.text.contains("Cannot remove"));
         assert_eq!(session.styles.len(), 2);
 
         let (_, mut session) = fixture();
@@ -4447,7 +4476,7 @@ mod tests {
         session.set_henchman_level(index, 61);
         assert!(session.message.text.contains("1 to 60"));
         session.set_henchman_level(999, 12);
-        assert!(session.message.text.contains("Cannot change companion"));
+        assert!(session.message.text.contains("Cannot change"));
 
         assert!(session.henchmen[0].available);
         session.toggle_henchman_available(index);

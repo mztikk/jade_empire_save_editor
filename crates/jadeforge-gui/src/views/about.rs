@@ -297,7 +297,7 @@ pub fn view(
                 session.notify(if copied {
                     t("about.diagnostics.copied")
                 } else {
-                    t("about.diagnostics.copy_failed")
+                    t("error.clipboard_unavailable")
                 });
             });
         })

@@ -36,10 +36,7 @@ pub fn view(
     }
     if rows.is_empty() {
         rows.push(match ctx.session.borrow().section_error(Section::Items) {
-            Some(error) => widgets::hint(fill(
-                "inventory.section_error",
-                &[("error", &error.message)],
-            )),
+            Some(error) => widgets::hint(super::section_unreadable(Section::Items, &error.message)),
             None => widgets::hint(t("inventory.empty_hint")),
         });
     }
@@ -273,7 +270,7 @@ fn item_row(
         let name = item.name.clone();
         Action::new(move || {
             if !crate::dialog::confirm(
-                t("inventory.remove.title"),
+                &fill("dialog.remove", &[("kind", t("count.item.one"))]),
                 &fill("inventory.remove.confirm", &[("name", &name)]),
             ) {
                 return;

@@ -35,39 +35,39 @@ complete = true
 "shell.all_changes_saved" = "all changes saved"
 "shell.no_savegame_open" = "no savegame open"
 "shell.unsaved_changes" = "unsaved changes"
-"shell.this.savegame.has.unsaved.changes.save" = "This savegame has unsaved changes: save them or press Revert before choosing another folder."
-"shell.no.folder.was.chosen.the.save" = "No folder was chosen; the save folder on screen is unchanged."
-"shell.copied.the.status.message.to.the" = "Copied the status message to the clipboard."
-"shell.could.not.copy.the.status.message" = "Could not copy the status message: the system clipboard is not available."
+# context: Guards scanning, opening a savegame and changing the folder.
+"status.unsaved_first" = "Save or revert the unsaved changes first."
+"shell.folder_unchanged_save" = "No folder was chosen; the save folder on screen is unchanged."
+"shell.status_copied" = "Copied the status message to the clipboard."
 "shell.loading.game.data" = "loading game data…"
 "shell.english.names.loaded" = "English names loaded"
 "shell.game.data.not.found" = "game data not found"
 "shell.game.data.unreadable" = "game data unreadable"
-"shell.no.folder.was.chosen.the.game" = "No folder was chosen; the game data folder is unchanged."
+"shell.folder_unchanged_game" = "No folder was chosen; the game data folder is unchanged."
 "shell.scanning" = "Scanning…"
 "shell.scan" = "Scan"
 "shell.no.screenshot" = "no screenshot"
 "shell.select.a.save" = "select a save"
 "shell.discard.changes" = "Discard changes?"
-"shell.reload.the.savegame.from.disk.and" = "Reload the savegame from disk and discard every change that is only in memory?"
-"shell.open.a.savegame.to.edit.it" = "Open a savegame to edit it."
+"shell.reload_discard_confirm" = "Reload the savegame from disk and discard every change that is only in memory?"
+"shell.empty.open_save" = "Open a savegame to edit it."
 "shell.invalid_fields_savable" = "Some character fields are invalid and were not applied; your other edits can still be saved."
 "shell.invalid_fields_fix" = "Some character fields are invalid and were not applied; fix the highlighted fields to apply them."
-"shell.changes.are.only.in.memory.until" = "Changes are only in memory until you save."
-"shell.all.changes.are.saved.there.is" = "All changes are saved. There is nothing to write."
-"shell.point.jadeforge.at.the.folder.that" = "Point JadeForge at the folder that contains your Jade Empire savegames and press Scan."
-"shell.pick.a.savegame.on.the.left" = "Pick a savegame on the left to start editing."
+"shell.memory_only" = "Changes are only in memory until you save."
+"shell.nothing_to_write" = "All changes are saved. There is nothing to write."
+"shell.empty.point_to_folder" = "Point JadeForge at the folder that contains your Jade Empire savegames and press Scan."
+"shell.empty.pick_save" = "Pick a savegame on the left to start editing."
 "shell.disk_changed_dirty" = "This savegame changed on disk since it was opened. Saving will be refused; reloading discards the unsaved edits on screen and shows the file that is on disk."
 "shell.disk_changed" = "This savegame changed on disk since it was opened. Reload it to edit the current file."
-"shell.the.savegame.changed.on.disk.outside" = "The savegame changed on disk outside JadeForge. Reloading discards every unsaved edit on screen."
+"shell.disk_changed_external" = "The savegame changed on disk outside JadeForge. Reloading discards every unsaved edit on screen."
 # args: items
 "shell.loaded" = "{items} loaded"
 
 # Save browser
 "save_browser.clear_filter" = "Clear the savegame filter"
 "save_browser.select.a.savegame" = "Select a savegame"
-"save_browser.no.savegames.in.this.folder" = "No savegames in this folder."
-"save_browser.no.savegame.matches.this.filter" = "No savegame matches this filter."
+"save_browser.empty_folder" = "No savegames in this folder."
+"save_browser.no_match" = "No savegame matches this filter."
 # args: shown, total
 "save_browser.of" = "{shown} OF {total}"
 # args: level, time
@@ -145,15 +145,12 @@ complete = true
 "styles.no_match" = "No styles match this search."
 "styles.learn" = "Learn"
 "styles.learn_list" = "Styles you can learn"
-"styles.remove.title" = "Remove style?"
 "styles.read_only_hint" = "This style has no level-up table in the game data, so its upgrades are read-only here."
 "styles.upgrade_needs_data" = "Upgrade details need the game data: point JadeForge at the game installation to see them."
 "styles.owned_action" = "owned: clicking removes this tier and every tier above it"
 "styles.available_action" = "available: clicking buys every missing tier up to this one"
 "styles.no_effect" = "no listed effect"
 "styles.no_cost" = "no style point cost"
-# args: error
-"styles.section_error" = "The styles section could not be read: {error}"
 # args: name
 "styles.accessible" = "{name} style"
 # args: name
@@ -193,9 +190,6 @@ complete = true
 "inventory.add_list" = "Items you can add"
 "inventory.all_chip" = "All items"
 "inventory.all_chip.description" = "Show items from every category"
-"inventory.remove.title" = "Remove item?"
-# args: error
-"inventory.section_error" = "The inventory section could not be read: {error}"
 # args: name
 "inventory.accessible" = "{name} item"
 # args: kind
@@ -231,11 +225,6 @@ complete = true
 "gems.move_to_amulet" = "Move to amulet"
 "gems.amulet_full" = "Amulet full"
 "gems.remove" = "Remove"
-"gems.remove.title" = "Remove gem?"
-# args: error
-"gems.amulet_error" = "The amulet section could not be read: {error}"
-# args: error
-"gems.section_error" = "The gems section could not be read: {error}"
 # args: name, effects
 "gems.accessible" = "{name} gem, {effects}"
 # args: name
@@ -258,8 +247,6 @@ complete = true
 "companions.hidden" = "hidden"
 "companions.hide" = "Hide"
 "companions.make_available" = "Make available"
-# args: error
-"companions.section_error" = "The companions section could not be read: {error}"
 # args: name
 "companions.level_error" = "{name}: enter a level from 1 to 60."
 # args: name
@@ -346,7 +333,6 @@ complete = true
 "about.diagnostics.title" = "JadeForge diagnostics"
 "about.diagnostics.unavailable" = "unavailable"
 "about.diagnostics.copied" = "Copied the diagnostics to the clipboard."
-"about.diagnostics.copy_failed" = "Could not copy the diagnostics: the system clipboard is not available."
 "sort.descending" = "descending"
 "sort.ascending" = "ascending"
 "about.settings_file" = "Settings file"
@@ -379,7 +365,6 @@ complete = true
 # args: name, subtitle, state
 "widget.details" = "{name}, {subtitle}, {state}, Details"
 "theme.system.description" = "Follow the operating system's light or dark preference"
-"widget.gem.socketed.into.the.amulet" = "Gem socketed into the amulet."
 
 # Count nouns: singular and plural
 "count.gem.one" = "gem"
@@ -431,6 +416,9 @@ complete = true
 
 # Dialogs
 "dialog.choose_save_folder" = "Choose the Jade Empire save folder"
+# args: kind
+# context: Confirmation title for removing an item, gem or style.
+"dialog.remove" = "Remove {kind}?"
 "dialog.unsaved_changes.explanation" = "This savegame has changes that are only in memory. Save them before closing, discard them, or cancel and keep editing."
 # context: Close dialog button; distinct from the footer save action.
 "dialog.save" = "Save"
@@ -473,8 +461,6 @@ complete = true
 # args: what
 "path.copied" = "Copied the {what} path to the clipboard."
 # args: what
-"path.copy_failed" = "Could not copy the {what} path: the system clipboard is not available."
-# args: what
 "path.opened" = "Opened the {what} folder in the file manager."
 # args: what, folder, error
 "path.open_failed" = "Could not open the {what} folder {folder}: {error}"
@@ -509,51 +495,50 @@ complete = true
 "style.kind.transformation" = "Transformation"
 "style.kind.improvised" = "Improvised"
 "style.kind.unique" = "Unique"
-"status.choose.the.folder.that.contains.your" = "Choose the folder that contains your Jade Empire savegames."
+"status.choose_save_folder" = "Choose the folder that contains your Jade Empire savegames."
 "status.scanning" = "Scanning for savegames…"
-"status.unsaved_scan" = "This savegame has unsaved changes: save them or press Revert before scanning."
-"status.scan.cancelled.the.savegames.on.screen" = "Scan cancelled; the savegames on screen are unchanged."
-"status.unsaved_open" = "This savegame has unsaved changes: save them or press Revert first."
-"status.that.savegame.no.longer.exists.scan" = "That savegame no longer exists; scan the folder again."
-"status.there.is.nothing.to.undo" = "There is nothing to undo."
-"status.there.is.nothing.to.redo" = "There is nothing to redo."
+"status.scan_cancelled" = "Scan cancelled; the savegames on screen are unchanged."
+"status.savegame_gone" = "That savegame no longer exists; scan the folder again."
+"status.nothing_to_undo" = "There is nothing to undo."
+"status.nothing_to_redo" = "There is nothing to redo."
 "status.savegame.structure" = "Savegame structure"
 "status.block.layout" = "Block layout"
 "status.as.opened" = "as opened"
-"status.structs.were.added.or.orphaned" = "structs were added or orphaned"
+"status.structs_added_or_orphaned" = "structs were added or orphaned"
 "status.no.savegame.is.open" = "No savegame is open."
-"status.reloading.from.disk.would.discard.the" = "Reloading from disk would discard the unsaved changes. Save or revert them first."
-"status.reloaded.the.savegame.from.disk" = "Reloaded the savegame from disk."
-"status.save.or.revert.the.current.edits" = "Save or revert the current edits before restoring a backup."
-"status.that.file.is.not.a.backup" = "That file is not a backup of the open savegame."
-"status.nothing.changed.so.there.was.nothing" = "Nothing changed, so there was nothing to apply."
-"status.nothing.changed.so.there.is.nothing" = "Nothing changed, so there is nothing to write."
-"status.a.stack.needs.at.least.one" = "A stack needs at least one item; use Remove instead."
+"status.reload_would_discard" = "Reloading from disk would discard the unsaved changes. Save or revert them first."
+"status.reloaded" = "Reloaded the savegame from disk."
+"status.save_or_revert_before_restore" = "Save or revert the current edits before restoring a backup."
+"status.not_a_backup" = "That file is not a backup of the open savegame."
+"status.nothing_to_apply" = "Nothing changed, so there was nothing to apply."
+"status.nothing_to_write" = "Nothing changed, so there is nothing to write."
+"status.stack_minimum" = "A stack needs at least one item; use Remove instead."
 "status.item.stack" = "Item stack"
-"status.item.added" = "Item added"
+# args: kind
+# context: Pending-change label; the session capitalizes it for the undo history.
+"status.added_label" = "{kind} added"
 "status.not.present" = "not present"
-"status.item.removed" = "Item removed"
+# args: kind
+# context: Pending-change label; the session capitalizes it for the undo history.
+"status.removed_label_template" = "{kind} removed"
 # context: Pending-change label; the sentence appends a period.
 "status.removed_label" = "removed"
-"status.the.item.was.already.gone" = "The item was already gone."
+# args: kind
+"status.already_gone" = "The {kind} was already gone."
 "status.style.upgrade" = "Style upgrade"
-"status.that.upgrade.is.already.in.the" = "That upgrade is already in the requested state."
+"status.upgrade_unchanged" = "That upgrade is already in the requested state."
 "status.empty.socket" = "Empty socket"
-"status.that.gem.is.not.in.the" = "That gem is not in the game data."
-"status.gem.added" = "Gem added"
+# args: kind
+"status.not_in_game_data" = "That {kind} is not in the game data."
 # context: Tab caption, overview glance label and gem location value.
 "label.inventory" = "inventory"
 # context: Card caption and gem location value.
 "label.amulet" = "amulet"
 "status.gem.moved" = "Gem moved"
-"status.gem.removed" = "Gem removed"
-"status.that.style.is.not.in.the" = "That style is not in the game data."
-"status.learn.a.style.first.so.jadeforge" = "Learn a style first so JadeForge can copy the field layout."
-"status.style.added" = "Style added"
-"status.keep.at.least.one.style.jadeforge" = "Keep at least one style: JadeForge needs an existing style as the layout template for learning one."
-"status.style.removed" = "Style removed"
-"status.the.style.was.already.gone" = "The style was already gone."
-"status.companion.levels.go.from.1.to" = "Companion levels go from 1 to 60."
+"status.gem_socketed" = "Gem socketed into the amulet."
+"status.learn_style_first" = "Learn a style first so JadeForge can copy the field layout."
+"status.keep_one_style" = "Keep at least one style: JadeForge needs an existing style as the layout template for learning one."
+"status.companion_level_range" = "Companion levels go from 1 to 60."
 "status.companion.level" = "Companion level"
 "status.companion.availability" = "Companion availability"
 # args: directory
@@ -563,22 +548,22 @@ complete = true
 # args: savegames, directory
 "status.found.in" = "Found {savegames} in {directory}."
 # args: savegames, directory
-"status.found.in.but.none.of.them" = "Found {savegames} in {directory}, but none of them can be read."
+"status.scan_none_readable" = "Found {savegames} in {directory}, but none of them can be read."
 # args: savegames, directory, broken
-"status.found.in.of.them.cannot.be" = "Found {savegames} in {directory}; {broken} of them cannot be read."
+"status.scan_partial" = "Found {savegames} in {directory}; {broken} of them cannot be read."
 # args: directory
-"status.could.not.scan.the.savegame.reader" = "Could not scan {directory}: the savegame reader stopped unexpectedly."
+"status.scan_failed" = "Could not scan {directory}: the savegame reader stopped unexpectedly."
 # args: root
-"status.using.the.game.data.in" = "Using the game data in {root}."
+"status.using_game_data" = "Using the game data in {root}."
 # args: root, error
-"status.is.not.a.readable.jade.empire" = "{root} is not a readable Jade Empire installation: {error}"
+"status.game_data_unreadable" = "{root} is not a readable Jade Empire installation: {error}"
 # args: label, error
-"status.cannot.open.the.scan.found.it" = "Cannot open {label}: the scan found it unreadable ({error})."
+"status.cannot_open_scan" = "Cannot open {label}: the scan found it unreadable ({error})."
 # context: Args: label. Also used for the sibling template with a problems suffix.
 # args: label
 "status.opened" = "Opened {label}."
 # args: label, problems
-"status.opened.but.some.sections.could.not" = "Opened {label}, but some sections could not be read: {problems}"
+"status.opened_with_problems" = "Opened {label}, but some sections could not be read: {problems}"
 # args: path, error
 "status.cannot.open" = "Cannot open {path}: {error}"
 # args: item_id
@@ -592,59 +577,47 @@ complete = true
 # args: label
 "status.redid" = "Redid {label}."
 # args: backup, safety
-"status.restored.the.file.it.replaced.is" = "Restored {backup}. The file it replaced is kept as {safety}."
+"status.restored_backup" = "Restored {backup}. The file it replaced is kept as {safety}."
 # args: error
 "status.cannot.restore.the.backup" = "Cannot restore the backup: {error}"
 # args: changes
 "status.applied.in.memory" = "Applied {changes} in memory."
 # args: path, backup
-"status.saved.the.previous.file.is.kept" = "Saved {path}. The previous file is kept as {backup}."
+"status.saved_with_backup" = "Saved {path}. The previous file is kept as {backup}."
 # args: path
 "status.saved" = "Saved {path}."
 # args: error
-"status.the.savegame.changed.on.disk.since" = "The savegame changed on disk since it was opened, so it was not overwritten. Reload it to keep the file on disk, or restore a backup. ({error})"
+"status.disk_changed" = "The savegame changed on disk since it was opened, so it was not overwritten. Reload it to keep the file on disk, or restore a backup. ({error})"
 # args: error
 "status.cannot.save" = "Cannot save: {error}"
 # args: path, error
-"status.saved.the.invalid.character.field.was" = "Saved {path}. The invalid character field was not applied: {error}"
+"status.saved_invalid_field" = "Saved {path}. The invalid character field was not applied: {error}"
 # args: message, error
-"status.the.character.form.also.has.an" = "{message} The character form also has an invalid field: {error}"
+"status.invalid_field_also" = "{message} The character form also has an invalid field: {error}"
 # args: name
-"status.a.stack.cannot.hold.more.than" = "{name}: a stack cannot hold more than 255."
+"status.stack_too_large" = "{name}: a stack cannot hold more than 255."
 # args: name, count
 "status.in.the.stack" = "{name}: {count} in the stack."
 # args: error
-"status.cannot.change.item" = "Cannot change item: {error}"
+"status.cannot_change" = "Cannot change: {error}"
 # args: item_id
-"status.item.has.no.savegame.category.type" = "item {item_id} has no savegame category type"
+"status.item_no_category" = "item {item_id} has no savegame category type"
 # args: name
 "status.added" = "Added {name}."
 # args: error
-"status.cannot.add.item" = "Cannot add item: {error}"
+"status.cannot_add" = "Cannot add: {error}"
 # args: error
-"status.cannot.remove.item" = "Cannot remove item: {error}"
+"status.cannot_remove" = "Cannot remove: {error}"
 # args: advance
 "status.upgrade" = "Upgrade {advance}"
 # args: upgrades
 "status.bought" = "Bought {upgrades}."
-# args: error
-"status.cannot.change.the.upgrade" = "Cannot change the upgrade: {error}"
 # args: item_id
 "status.gem" = "Gem {item_id}"
 # args: error
-"status.cannot.add.the.gem" = "Cannot add the gem: {error}"
-# args: error
 "status.cannot.move.the.gem" = "Cannot move the gem: {error}"
-# args: error
-"status.cannot.remove.the.gem" = "Cannot remove the gem: {error}"
-# args: error
-"status.cannot.add.style" = "Cannot add style: {error}"
-# args: error
-"status.cannot.remove.style" = "Cannot remove style: {error}"
 # args: level
 "status.companion.level.set.to" = "Companion level set to {level}."
-# args: error
-"status.cannot.change.companion" = "Cannot change companion: {error}"
 # args: name, state
 "status.is.now" = "{name} is now {state}."
 # args: kind
@@ -652,17 +625,24 @@ complete = true
 # args: value, kind
 "status.unsaved_effect" = "{value} effect {kind}"
 # args: directory
-"status.the.save.folder.does.not.exist" = "The save folder {directory} does not exist. Check the path or use Browse."
+"status.folder_missing" = "The save folder {directory} does not exist. Check the path or use Browse."
 # args: directory
 "status.folder_permission" = "The save folder {directory} cannot be read: permission denied."
 # args: directory, error
 "status.folder_unreadable" = "The save folder {directory} cannot be read: {error}."
 # args: directory
-"status.is.a.file.not.a.save" = "{directory} is a file, not a save folder."
+"status.not_a_folder" = "{directory} is a file, not a save folder."
 # args: directory, error
-"status.the.save.folder.cannot.be.listed" = "The save folder {directory} cannot be listed: {error}."
-"status.gem.moved.to.the.inventory" = "Gem moved to the inventory."
+"status.folder_list_failed" = "The save folder {directory} cannot be listed: {error}."
+"status.gem_moved_to_inventory" = "Gem moved to the inventory."
 "status.unknown" = "unknown"
+
+# Shared errors
+# args: section, error
+# context: Shared by every tab whose savegame section could not be read.
+"error.section_unreadable" = "The {section} section could not be read: {error}"
+# context: Copy actions in the shell, About and the path cards.
+"error.clipboard_unavailable" = "The system clipboard is not available."
 
 # Merged labels
 # context: Diagnostics caption and settings section heading; the section displays it uppercased.

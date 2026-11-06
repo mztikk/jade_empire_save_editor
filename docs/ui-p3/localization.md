@@ -3,15 +3,18 @@
 ## Current state
 
 The interface is keyed by stable semantic ids. English is the source-of-truth
-catalog and is complete; the German catalog currently has 376 empty ids and is
-marked `complete = false`, so it is offered as a preview. About shows it as
-**Deutsch (Vorschau)**. A filled id renders German; an empty id renders a
+catalog and is complete; the German catalog currently has 354 empty ids out of
+473 and is marked `complete = false`, so it is offered as a preview. About shows
+it as **Deutsch (Vorschau)**. A filled id renders German; an empty id renders a
 bracketed id marker and never falls back to English.
 
 The catalog no longer uses English source strings as keys, so editing an
 English label cannot orphan a translation. The German text that existed before
 this pass is preserved byte for byte, including the 10 merged labels that were
-prefilled from an existing translation.
+prefilled from an existing translation. The final consolidation renamed the
+remaining sentence-slug ids and merged repeated wrappers: 22 duplicate ids are
+gone, and every removed id was empty in German, so the filled count is
+unchanged.
 
 ## Crate layout
 
@@ -37,7 +40,7 @@ views keep using `crate::i18n::*`.
 complete = false
 
 [messages]
-"shell.header.save" = "Save to disk"
+"shell.save" = "Save to disk"
 ```
 
 Both files use `complete` plus a `messages` table. Parsing uses
@@ -62,18 +65,28 @@ semantic, not numeric and not English sentences:
 
 - `shell.about`, `shell.save`
 - `shell.loading_savegames`, `save_browser.sort_by`
-- `overview.level`, `overview.time_played`
-- `character.name`, `character.chapter`
+- `overview.time_played`, `character.level`
 - `field.name.range`, `field.range`, `field.max`
 - `count.item.one`, `count.item.other`
-- `dialog.unsaved_changes`
+- `dialog.unsaved_changes.explanation`
 - `about.diagnostics.version`
-- `status.opened`, `status.saved`
+- `status.opened`, `status.nothing_to_undo`
+- `status.cannot_add`, `status.added_label`
+- `error.section_unreadable`, `error.clipboard_unavailable`
+- `save_browser.no_match`, `shell.empty.pick_save`
 - `count.weapon.other`, `theme.system`
 
 Long paragraphs use a short semantic id such as `about.backup.explanation` or
 `about.license.summary`. The full English text lives in the value, not in the
 key.
+
+Sentence-slug ids were a transitional artifact of the source-string migration.
+The final consolidation renamed them to `area.subject.action` names and merged
+repeated wrappers into one template with a placeholder: the five section-read
+wrappers share `error.section_unreadable`, the add/remove/change failures share
+`status.cannot_add`/`status.cannot_remove`/`status.cannot_change`, and the
+pending labels share `status.added_label`/`status.removed_label_template`.
+A new id that repeats an English sentence is a bug, not a naming choice.
 
 ## Runtime
 

@@ -347,9 +347,10 @@ mod tests {
         assert_eq!(t("shell.about"), "Über JadeForge");
         assert_eq!(t("unknown.id"), "⟦unknown.id⟧");
         if !is_complete(Locale::German) {
-            let empty_id = "dialog.save";
-            assert!(deutsch_is_empty(empty_id));
-            assert_eq!(t(empty_id), format!("⟦{empty_id}⟧").as_str());
+            for empty_id in ["status.unsaved_first", "error.section_unreadable"] {
+                assert!(deutsch_is_empty(empty_id));
+                assert_eq!(t(empty_id), format!("⟦{empty_id}⟧").as_str());
+            }
         }
         install(Locale::English);
     }

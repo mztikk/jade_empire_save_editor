@@ -19,6 +19,17 @@ pub mod overview;
 pub mod review;
 pub mod styles;
 
+/// Text for a savegame section that could not be read.
+///
+/// The section name comes from the shared session label, so the notice uses
+/// the same vocabulary as the tab caption.
+pub(crate) fn section_unreadable(section: crate::session::Section, error: &str) -> String {
+    fill(
+        "error.section_unreadable",
+        &[("section", t(section.label())), ("error", error)],
+    )
+}
+
 /// Copy and open actions for a path shown in a card.
 ///
 /// The path is also rendered as a wrapping paragraph by the caller; these
@@ -33,7 +44,7 @@ pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: &'stati
             let message = if crate::clipboard::copy(path.clone()) {
                 fill("path.copied", &[("what", what)])
             } else {
-                fill("path.copy_failed", &[("what", what)])
+                t("error.clipboard_unavailable").to_owned()
             };
             ctx.run(|session| session.notify(&message));
         })

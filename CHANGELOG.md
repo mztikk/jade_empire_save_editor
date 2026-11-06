@@ -35,8 +35,10 @@ All notable changes are documented here. The format follows
   markers rather than falling back to English. Key parity, placeholder parity,
   English completeness and the source scans are enforced by tests. The session
   calls the shared catalog directly through `message::tr`/`message::fill`; the
-  GUI re-exports the catalog API. 376 German ids are still awaiting
-  translation.
+  GUI re-exports the catalog API. The final consolidation renamed the
+  sentence-slug ids to semantic `area.subject.action` names and merged the
+  repeated section, action-error, pending-label and clipboard wrappers, leaving
+  473 ids with 354 German ids still awaiting translation.
 - About/help now shows version, savegame block count and size, theme, scale,
   language, renderer override and backup folder, with a Copy diagnostics
   action and a complete keyboard shortcut sheet (Ctrl+/ opens it). Window size

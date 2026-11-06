@@ -16,7 +16,7 @@ and 1600 px. The windowed suite is never run without explicit permission
 | 1 | light/system-following theme | [theme-light.md](theme-light.md) | implemented |
 | 2 | high contrast and forced colours | [high-contrast.md](high-contrast.md) | implemented manually; the platform contrast signal is a documented follow-up |
 | 3 | text scaling to 200 % | [text-scaling.md](text-scaling.md) | implemented |
-| 4 | UI localization | [localization.md](localization.md) | Stable-id English/German peer catalogs in `jadeforge-i18n`; English complete, German preview (`Deutsch (Vorschau)`), markers instead of English fallback, strict key/placeholder/completeness tests and source scans; 376 German ids still await translation |
+| 4 | UI localization | [localization.md](localization.md) | Stable-id English/German peer catalogs in `jadeforge-i18n`; English complete, German preview (`Deutsch (Vorschau)`), markers instead of English fallback, strict key/placeholder/completeness tests and source scans; the final consolidation left 473 ids, with 354 German ids still awaiting translation |
 | 5 | virtualized browser and pickers | [virtual-lists.md](virtual-lists.md) | implemented |
 | 6 | per-action undo/redo | [undo-redo.md](undo-redo.md) | implemented |
 | 7 | pending-changes diff before save | [pending-diff.md](pending-diff.md) | implemented |

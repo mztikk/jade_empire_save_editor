@@ -21,9 +21,9 @@ pub fn view(
     if rows.is_empty() {
         rows.push(
             match ctx.session.borrow().section_error(Section::Companions) {
-                Some(error) => widgets::hint(fill(
-                    "companions.section_error",
-                    &[("error", &error.message)],
+                Some(error) => widgets::hint(super::section_unreadable(
+                    Section::Companions,
+                    &error.message,
                 )),
                 None => widgets::hint(t("companions.empty_hint")),
             },

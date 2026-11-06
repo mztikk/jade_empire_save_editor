@@ -146,7 +146,10 @@ target (see `crates/jadeforge-cli/tests`).
 ## `jadeforge-i18n`
 
 The interface catalog is keyed by stable semantic ids, not English sentences.
-The crate owns the two peer catalogs, the locale enum and the strictness rules:
+After the final consolidation the ids use `area.subject.action` names and
+repeated wrappers share one template with a placeholder (`error.section_unreadable`,
+`status.cannot_add`, `status.added_label`). The crate owns the two peer
+catalogs, the locale enum and the strictness rules:
 
 | module | responsibility |
 | --- | --- |

@@ -28,7 +28,7 @@ pub(super) fn choose_folder(
 ) -> bool {
     if ctx.session.borrow().is_dirty() {
         ctx.run(|session| {
-            session.set_error(t("shell.this.savegame.has.unsaved.changes.save"));
+            session.set_error(t("status.unsaved_first"));
         });
         return false;
     }
@@ -37,7 +37,7 @@ pub(super) fn choose_folder(
         crate::dialog::PickOutcome::Picked(folder) => folder,
         crate::dialog::PickOutcome::Cancelled => {
             ctx.run(|session| {
-                session.inform(t("shell.no.folder.was.chosen.the.save"));
+                session.inform(t("shell.folder_unchanged_save"));
             });
             return false;
         }
@@ -56,9 +56,9 @@ pub(super) fn choose_folder(
 /// Copies a status message to the system clipboard.
 pub(super) fn copy_status(ctx: &Ctx, text: String) {
     let message = if crate::clipboard::copy(text) {
-        t("shell.copied.the.status.message.to.the").to_owned()
+        t("shell.status_copied").to_owned()
     } else {
-        t("shell.could.not.copy.the.status.message").to_owned()
+        t("error.clipboard_unavailable").to_owned()
     };
     ctx.run(|session| session.notify(&message));
 }
@@ -157,7 +157,7 @@ pub(super) fn header(
                 crate::dialog::PickOutcome::Picked(folder) => folder,
                 crate::dialog::PickOutcome::Cancelled => {
                     ctx.run(|session| {
-                        session.inform(t("shell.no.folder.was.chosen.the.game"));
+                        session.inform(t("shell.folder_unchanged_game"));
                     });
                     return;
                 }
@@ -535,7 +535,7 @@ pub(super) fn footer(
             if dirty
                 && !crate::dialog::confirm(
                     t("shell.discard.changes"),
-                    t("shell.reload.the.savegame.from.disk.and"),
+                    t("shell.reload_discard_confirm"),
                 )
             {
                 return;
@@ -550,18 +550,15 @@ pub(super) fn footer(
     let can_save = has_save && dirty;
     let can_revert = has_save && dirty;
     let (hint_text, hint_color) = if !has_save {
-        (t("shell.open.a.savegame.to.edit.it"), theme::dim())
+        (t("shell.empty.open_save"), theme::dim())
     } else if !form_errors.is_empty() && dirty {
         (t("shell.invalid_fields_savable"), theme::warning())
     } else if !form_errors.is_empty() {
         (t("shell.invalid_fields_fix"), theme::warning())
     } else if dirty {
-        (
-            t("shell.changes.are.only.in.memory.until"),
-            theme::warning(),
-        )
+        (t("shell.memory_only"), theme::warning())
     } else {
-        (t("shell.all.changes.are.saved.there.is"), theme::dim())
+        (t("shell.nothing_to_write"), theme::dim())
     };
 
     rect()
@@ -667,9 +664,9 @@ pub(super) fn empty_state(
     start_scan: Rc<dyn Fn(PathBuf) -> bool>,
 ) -> Element {
     let text = if savegames == 0 {
-        t("shell.point.jadeforge.at.the.folder.that")
+        t("shell.empty.point_to_folder")
     } else {
-        t("shell.pick.a.savegame.on.the.left")
+        t("shell.empty.pick_save")
     };
     let choose = {
         let ctx = ctx.clone();
@@ -727,7 +724,7 @@ pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element 
             if dirty
                 && !crate::dialog::confirm(
                     &format!("{}?", t("shell.reload")),
-                    t("shell.the.savegame.changed.on.disk.outside"),
+                    t("shell.disk_changed_external"),
                 )
             {
                 return;

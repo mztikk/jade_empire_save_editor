@@ -41,39 +41,39 @@ complete = false
 "shell.all_changes_saved" = "Alle Änderungen gespeichert"
 "shell.no_savegame_open" = "Kein Spielstand geöffnet"
 "shell.unsaved_changes" = "Ungespeicherte Änderungen"
-"shell.this.savegame.has.unsaved.changes.save" = ""
-"shell.no.folder.was.chosen.the.save" = ""
-"shell.copied.the.status.message.to.the" = ""
-"shell.could.not.copy.the.status.message" = ""
+# context: Guards scanning, opening a savegame and changing the folder.
+"status.unsaved_first" = ""
+"shell.folder_unchanged_save" = ""
+"shell.status_copied" = ""
 "shell.loading.game.data" = ""
 "shell.english.names.loaded" = ""
 "shell.game.data.not.found" = ""
 "shell.game.data.unreadable" = ""
-"shell.no.folder.was.chosen.the.game" = ""
+"shell.folder_unchanged_game" = ""
 "shell.scanning" = ""
 "shell.scan" = ""
 "shell.no.screenshot" = ""
 "shell.select.a.save" = ""
 "shell.discard.changes" = ""
-"shell.reload.the.savegame.from.disk.and" = ""
-"shell.open.a.savegame.to.edit.it" = ""
+"shell.reload_discard_confirm" = ""
+"shell.empty.open_save" = ""
 "shell.invalid_fields_savable" = ""
 "shell.invalid_fields_fix" = ""
-"shell.changes.are.only.in.memory.until" = ""
-"shell.all.changes.are.saved.there.is" = ""
-"shell.point.jadeforge.at.the.folder.that" = ""
-"shell.pick.a.savegame.on.the.left" = ""
+"shell.memory_only" = ""
+"shell.nothing_to_write" = ""
+"shell.empty.point_to_folder" = ""
+"shell.empty.pick_save" = ""
 "shell.disk_changed_dirty" = ""
 "shell.disk_changed" = ""
-"shell.the.savegame.changed.on.disk.outside" = ""
+"shell.disk_changed_external" = ""
 # args: items
 "shell.loaded" = ""
 
 # Save browser
 "save_browser.clear_filter" = "Spielstand-Filter löschen"
 "save_browser.select.a.savegame" = ""
-"save_browser.no.savegames.in.this.folder" = ""
-"save_browser.no.savegame.matches.this.filter" = ""
+"save_browser.empty_folder" = ""
+"save_browser.no_match" = ""
 # args: shown, total
 "save_browser.of" = ""
 # args: level, time
@@ -151,15 +151,12 @@ complete = false
 "styles.no_match" = ""
 "styles.learn" = ""
 "styles.learn_list" = ""
-"styles.remove.title" = ""
 "styles.read_only_hint" = ""
 "styles.upgrade_needs_data" = ""
 "styles.owned_action" = ""
 "styles.available_action" = ""
 "styles.no_effect" = ""
 "styles.no_cost" = ""
-# args: error
-"styles.section_error" = ""
 # args: name
 "styles.accessible" = ""
 # args: name
@@ -199,9 +196,6 @@ complete = false
 "inventory.add_list" = ""
 "inventory.all_chip" = ""
 "inventory.all_chip.description" = ""
-"inventory.remove.title" = ""
-# args: error
-"inventory.section_error" = ""
 # args: name
 "inventory.accessible" = ""
 # args: kind
@@ -237,11 +231,6 @@ complete = false
 "gems.move_to_amulet" = ""
 "gems.amulet_full" = ""
 "gems.remove" = ""
-"gems.remove.title" = ""
-# args: error
-"gems.amulet_error" = ""
-# args: error
-"gems.section_error" = ""
 # args: name, effects
 "gems.accessible" = ""
 # args: name
@@ -264,8 +253,6 @@ complete = false
 "companions.hidden" = "versteckt"
 "companions.hide" = ""
 "companions.make_available" = ""
-# args: error
-"companions.section_error" = ""
 # args: name
 "companions.level_error" = ""
 # args: name
@@ -352,7 +339,6 @@ complete = false
 "about.diagnostics.title" = ""
 "about.diagnostics.unavailable" = ""
 "about.diagnostics.copied" = ""
-"about.diagnostics.copy_failed" = ""
 "sort.descending" = ""
 "sort.ascending" = ""
 "about.settings_file" = ""
@@ -385,7 +371,6 @@ complete = false
 # args: name, subtitle, state
 "widget.details" = ""
 "theme.system.description" = ""
-"widget.gem.socketed.into.the.amulet" = ""
 
 # Count nouns: singular and plural
 "count.gem.one" = ""
@@ -437,6 +422,9 @@ complete = false
 
 # Dialogs
 "dialog.choose_save_folder" = ""
+# args: kind
+# context: Confirmation title for removing an item, gem or style.
+"dialog.remove" = ""
 "dialog.unsaved_changes.explanation" = ""
 # context: Close dialog button; distinct from the footer save action.
 "dialog.save" = ""
@@ -479,8 +467,6 @@ complete = false
 # args: what
 "path.copied" = ""
 # args: what
-"path.copy_failed" = ""
-# args: what
 "path.opened" = ""
 # args: what, folder, error
 "path.open_failed" = ""
@@ -515,51 +501,50 @@ complete = false
 "style.kind.transformation" = ""
 "style.kind.improvised" = ""
 "style.kind.unique" = ""
-"status.choose.the.folder.that.contains.your" = ""
+"status.choose_save_folder" = ""
 "status.scanning" = ""
-"status.unsaved_scan" = ""
-"status.scan.cancelled.the.savegames.on.screen" = ""
-"status.unsaved_open" = ""
-"status.that.savegame.no.longer.exists.scan" = ""
-"status.there.is.nothing.to.undo" = ""
-"status.there.is.nothing.to.redo" = ""
+"status.scan_cancelled" = ""
+"status.savegame_gone" = ""
+"status.nothing_to_undo" = ""
+"status.nothing_to_redo" = ""
 "status.savegame.structure" = ""
 "status.block.layout" = ""
 "status.as.opened" = ""
-"status.structs.were.added.or.orphaned" = ""
+"status.structs_added_or_orphaned" = ""
 "status.no.savegame.is.open" = ""
-"status.reloading.from.disk.would.discard.the" = ""
-"status.reloaded.the.savegame.from.disk" = ""
-"status.save.or.revert.the.current.edits" = ""
-"status.that.file.is.not.a.backup" = ""
-"status.nothing.changed.so.there.was.nothing" = ""
-"status.nothing.changed.so.there.is.nothing" = ""
-"status.a.stack.needs.at.least.one" = ""
+"status.reload_would_discard" = ""
+"status.reloaded" = ""
+"status.save_or_revert_before_restore" = ""
+"status.not_a_backup" = ""
+"status.nothing_to_apply" = ""
+"status.nothing_to_write" = ""
+"status.stack_minimum" = ""
 "status.item.stack" = ""
-"status.item.added" = ""
+# args: kind
+# context: Pending-change label; the session capitalizes it for the undo history.
+"status.added_label" = ""
 "status.not.present" = ""
-"status.item.removed" = ""
+# args: kind
+# context: Pending-change label; the session capitalizes it for the undo history.
+"status.removed_label_template" = ""
 # context: Pending-change label; the sentence appends a period.
 "status.removed_label" = ""
-"status.the.item.was.already.gone" = ""
+# args: kind
+"status.already_gone" = ""
 "status.style.upgrade" = ""
-"status.that.upgrade.is.already.in.the" = ""
+"status.upgrade_unchanged" = ""
 "status.empty.socket" = ""
-"status.that.gem.is.not.in.the" = ""
-"status.gem.added" = ""
+# args: kind
+"status.not_in_game_data" = ""
 # context: Tab caption, overview glance label and gem location value.
 "label.inventory" = "Inventar"
 # context: Card caption and gem location value.
 "label.amulet" = "Amulett"
 "status.gem.moved" = ""
-"status.gem.removed" = ""
-"status.that.style.is.not.in.the" = ""
-"status.learn.a.style.first.so.jadeforge" = ""
-"status.style.added" = ""
-"status.keep.at.least.one.style.jadeforge" = ""
-"status.style.removed" = ""
-"status.the.style.was.already.gone" = ""
-"status.companion.levels.go.from.1.to" = ""
+"status.gem_socketed" = ""
+"status.learn_style_first" = ""
+"status.keep_one_style" = ""
+"status.companion_level_range" = ""
 "status.companion.level" = ""
 "status.companion.availability" = ""
 # args: directory
@@ -569,22 +554,22 @@ complete = false
 # args: savegames, directory
 "status.found.in" = ""
 # args: savegames, directory
-"status.found.in.but.none.of.them" = ""
+"status.scan_none_readable" = ""
 # args: savegames, directory, broken
-"status.found.in.of.them.cannot.be" = ""
+"status.scan_partial" = ""
 # args: directory
-"status.could.not.scan.the.savegame.reader" = ""
+"status.scan_failed" = ""
 # args: root
-"status.using.the.game.data.in" = ""
+"status.using_game_data" = ""
 # args: root, error
-"status.is.not.a.readable.jade.empire" = ""
+"status.game_data_unreadable" = ""
 # args: label, error
-"status.cannot.open.the.scan.found.it" = ""
+"status.cannot_open_scan" = ""
 # context: Args: label. Also used for the sibling template with a problems suffix.
 # args: label
 "status.opened" = ""
 # args: label, problems
-"status.opened.but.some.sections.could.not" = ""
+"status.opened_with_problems" = ""
 # args: path, error
 "status.cannot.open" = ""
 # args: item_id
@@ -598,59 +583,47 @@ complete = false
 # args: label
 "status.redid" = ""
 # args: backup, safety
-"status.restored.the.file.it.replaced.is" = ""
+"status.restored_backup" = ""
 # args: error
 "status.cannot.restore.the.backup" = ""
 # args: changes
 "status.applied.in.memory" = ""
 # args: path, backup
-"status.saved.the.previous.file.is.kept" = ""
+"status.saved_with_backup" = ""
 # args: path
 "status.saved" = ""
 # args: error
-"status.the.savegame.changed.on.disk.since" = ""
+"status.disk_changed" = ""
 # args: error
 "status.cannot.save" = ""
 # args: path, error
-"status.saved.the.invalid.character.field.was" = ""
+"status.saved_invalid_field" = ""
 # args: message, error
-"status.the.character.form.also.has.an" = ""
+"status.invalid_field_also" = ""
 # args: name
-"status.a.stack.cannot.hold.more.than" = ""
+"status.stack_too_large" = ""
 # args: name, count
 "status.in.the.stack" = ""
 # args: error
-"status.cannot.change.item" = ""
+"status.cannot_change" = ""
 # args: item_id
-"status.item.has.no.savegame.category.type" = ""
+"status.item_no_category" = ""
 # args: name
 "status.added" = ""
 # args: error
-"status.cannot.add.item" = ""
+"status.cannot_add" = ""
 # args: error
-"status.cannot.remove.item" = ""
+"status.cannot_remove" = ""
 # args: advance
 "status.upgrade" = ""
 # args: upgrades
 "status.bought" = ""
-# args: error
-"status.cannot.change.the.upgrade" = ""
 # args: item_id
 "status.gem" = ""
 # args: error
-"status.cannot.add.the.gem" = ""
-# args: error
 "status.cannot.move.the.gem" = ""
-# args: error
-"status.cannot.remove.the.gem" = ""
-# args: error
-"status.cannot.add.style" = ""
-# args: error
-"status.cannot.remove.style" = ""
 # args: level
 "status.companion.level.set.to" = ""
-# args: error
-"status.cannot.change.companion" = ""
 # args: name, state
 "status.is.now" = ""
 # args: kind
@@ -658,17 +631,24 @@ complete = false
 # args: value, kind
 "status.unsaved_effect" = ""
 # args: directory
-"status.the.save.folder.does.not.exist" = ""
+"status.folder_missing" = ""
 # args: directory
 "status.folder_permission" = ""
 # args: directory, error
 "status.folder_unreadable" = ""
 # args: directory
-"status.is.a.file.not.a.save" = ""
+"status.not_a_folder" = ""
 # args: directory, error
-"status.the.save.folder.cannot.be.listed" = ""
-"status.gem.moved.to.the.inventory" = ""
+"status.folder_list_failed" = ""
+"status.gem_moved_to_inventory" = ""
 "status.unknown" = ""
+
+# Shared errors
+# args: section, error
+# context: Shared by every tab whose savegame section could not be read.
+"error.section_unreadable" = ""
+# context: Copy actions in the shell, About and the path cards.
+"error.clipboard_unavailable" = ""
 
 # Merged labels
 # context: Diagnostics caption and settings section heading; the section displays it uppercased.

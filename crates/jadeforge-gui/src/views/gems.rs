@@ -49,9 +49,9 @@ pub fn view(
     let amulet_error = ctx.session.borrow().section_error(Section::Amulet).cloned();
     let gems_error = ctx.session.borrow().section_error(Section::Gems).cloned();
     let amulet_rows: Vec<Element> = if let Some(error) = &amulet_error {
-        vec![widgets::hint(fill(
-            "gems.amulet_error",
-            &[("error", &error.message)],
+        vec![widgets::hint(super::section_unreadable(
+            Section::Amulet,
+            &error.message,
         ))]
     } else if amulet.is_none() {
         vec![widgets::hint(t("gems.amulet_locked"))]
@@ -64,9 +64,9 @@ pub fn view(
             .collect()
     };
     let inventory_rows: Vec<Element> = if let Some(error) = &gems_error {
-        vec![widgets::hint(fill(
-            "gems.section_error",
-            &[("error", &error.message)],
+        vec![widgets::hint(super::section_unreadable(
+            Section::Gems,
+            &error.message,
         ))]
     } else if inventory.is_empty() {
         vec![widgets::hint(t("gems.empty_inventory"))]
@@ -284,7 +284,7 @@ fn gem_row(
                 t("gems.remove"),
                 Action::new(move || {
                     if !crate::dialog::confirm(
-                        t("gems.remove.title"),
+                        &fill("dialog.remove", &[("kind", t("count.gem.one"))]),
                         &fill("gems.remove.confirm", &[("name", &remove_name)]),
                     ) {
                         return;

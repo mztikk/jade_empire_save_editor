@@ -313,9 +313,9 @@ impl Component for SaveList {
                 .padding(Gaps::new_all(theme::space::xl()))
                 .child(
                     crate::widgets::a11y_text(if self.data.entries.is_empty() {
-                        t("save_browser.no.savegames.in.this.folder")
+                        t("save_browser.empty_folder")
                     } else {
-                        t("save_browser.no.savegame.matches.this.filter")
+                        t("save_browser.no_match")
                     })
                     .font_size(theme::font::caption())
                     .color(theme::dim()),
