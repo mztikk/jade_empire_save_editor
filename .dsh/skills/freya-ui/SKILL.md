@@ -5,13 +5,16 @@ description: Use when building or changing the JadeForge desktop UI with Freya 0
 
 # Building the JadeForge UI with Freya 0.4
 
+General framework guidance lives in the `freya` skill. This skill covers the
+JadeForge-specific structure, layout, theming and test loop.
+
 ## Structure that must not be broken
 
 - `crates/jadeforge-session/src/session.rs` owns every behaviour and has **no
   Freya types**. It is unit tested and re-exported by the GUI crate.
 - `app.rs` is the shell (header, save list, tabs, action bar); `views/` holds one
   module per tab; `widgets.rs` holds cards/fields/badges; `theme.rs` holds the
-  palette.
+  palette, type scale, spacing scale, radii, strokes and fixed layout tokens.
 - `Session` lives in an `Rc<RefCell<..>>` created with `use_hook`. Callbacks
   mutate it through `Ctx::run` and bump a `use_state(u32)` revision.
 - The root component **must read** the revision (`let _ = *revision.read();`).
@@ -37,6 +40,11 @@ The style upgrade orbs are the one deliberate gold exception: they mimic the
 game's level-up screen and use `theme::ORB`, so do not repaint them with the
 accent.
 
+Font sizes and numeric layout values come from named tokens, never literals:
+`theme::font::BODY`, `theme::space::MD`, `theme::radius::CARD`,
+`theme::stroke::FOCUS`, and the fixed dimensions in `theme::layout`. Add a token
+when the scale lacks a value instead of putting a magic number in a view.
+
 ## Layout rules learned the hard way
 
 - `Size::flex(1.0)` only works inside a parent with `.content(Content::Flex)`.
@@ -51,13 +59,16 @@ accent.
   space and can make the row grow. `assert_compact_action_rows` in
   `tests/ui.rs` checks both the vertical pitch and the right edge of action
   labels; extend it when adding a new list action.
-- The sidebar save preview is deliberately a fixed 120x120, aspect-preserving
+- The sidebar save preview is deliberately a fixed
+  `theme::layout::PREVIEW` square, aspect-preserving
   image. Do not make it fill the responsive sidebar: that is what caused the
-  zoom/crop regression. The UI test asserts both dimensions, and the 900x700
+  zoom/crop regression. The UI test asserts both dimensions, and the
+  `theme::layout::MIN_WINDOW_WIDTH` by `theme::layout::MIN_WINDOW_HEIGHT`
   minimum-window test asserts that at least four save rows remain visible.
 - Focus rings must reserve their space even when unfocused; otherwise keyboard
   navigation moves tabs, sort controls and rows. `AccessibleButton` always
-  carries a transparent 1.5 px border and only recolours it on focus.
+  carries a transparent `theme::stroke::FOCUS` border and only recolours it on
+  focus.
 - Every dynamic list item, conditional tab root and preview subtree needs a
   stable key. Freya 0.4's diff can panic (`runner.rs`, `Option::unwrap`) when
   unkeyed or differently-rooted elements are replaced; this reproduced when
@@ -70,12 +81,13 @@ accent.
   columns keep their width when invisible, and the active tab keeps a constant
   font weight. Cover it with a headless test that compares the position of an
   element below the changing content.
-- Form fields wrap with `.content(Content::wrap_spacing(14.0))`.
+- Form fields wrap with `.content(Content::wrap_spacing(theme::space::FIELD))`.
 - Scroll views need a constrained parent (`Size::flex(1.0)` in a flex column).
 - Responsive sizes come from the layout, not from measuring the window: the
-  sidebar is `Size::percent(24.)` with `min_width`/`max_width`, and rows that
+  sidebar is `Size::percent(theme::layout::SIDEBAR_PERCENT)` with
+  `theme::layout::SIDEBAR_MIN_WIDTH`/`SIDEBAR_MAX_WIDTH`, and rows that
   must wrap use `Content::wrap_spacing`. Labels that should never break are
-  `max_lines(1)` — without it a squeezed tab renders `Comp\nanions`.
+  `max_lines(1)`: without it a squeezed tab renders `Comp\nanions`.
 - The folder dialog is the native one (`rfd`) in `dialog.rs`; the headless
   tests cannot open it, so they queue an answer with
   `dialog::set_next_pick_for_tests`. Do not put the dialog on a background

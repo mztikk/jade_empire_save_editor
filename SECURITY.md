@@ -31,3 +31,12 @@ opens it for writing is in scope.
 The project does not implement its own cryptography. Release signing and
 notarisation depend on platform credentials and are documented in
 `ci/README.md`.
+
+## Secrets
+
+Never hardcode secrets or other sensitive data in the repository. API keys,
+tokens, passwords, private keys, certificates and signing credentials belong in
+the environment or in untracked local files. CI reads them from repository
+secrets. Tests, fixtures, examples and documentation use obvious placeholders,
+never real-looking credentials. A committed secret must be rotated and removed
+from history, not merely deleted in a later commit.

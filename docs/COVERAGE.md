@@ -3,9 +3,9 @@
 Line and function coverage measured with `cargo llvm-cov nextest` over the whole
 workspace. Two numbers matter:
 
-- **full corpus** — with a real installation, so the tests that need savegames
+- **full corpus**: with a real installation, so the tests that need savegames
   and game data run;
-- **no game data** — what CI sees, because the real-data tests return early when
+- **no game data**: what CI sees, because the real-data tests return early when
   `JADEFORGE_SAVE_DIR`/`JADEFORGE_GAME_DIR` are unset.
 
 `just coverage` runs the suite once, prints the summary, and writes

@@ -462,13 +462,13 @@ properties are enforced across every savegame:
 
 Community documentation, used for the semantics of the game data tables:
 
-* [Gems.2da](https://jadeempire-modding.fandom.com/wiki/Gems.2da) — effect
+* [Gems.2da](https://jadeempire-modding.fandom.com/wiki/Gems.2da): effect
   columns, unique sets, alignment requirement (0 = Closed Fist, 255 = Open Palm).
-* [Effects.2da](https://jadeempire-modding.fandom.com/wiki/Effects.2da) — the
+* [Effects.2da](https://jadeempire-modding.fandom.com/wiki/Effects.2da): the
   columns and the effect id list.
-* [Items.2da](https://jadeempire-modding.fandom.com/wiki/Items.2da) — item
+* [Items.2da](https://jadeempire-modding.fandom.com/wiki/Items.2da): item
   categories, including styles being filed under powerups.
 * [Styleadvance.2da](https://jadeempire-modding.fandom.com/wiki/Styleadvance.2da)
-  — style upgrade effects and costs.
-* [2DA Files](https://jadeempire-modding.fandom.com/wiki/2DA_Files) — index of
+  for style upgrade effects and costs.
+* [2DA Files](https://jadeempire-modding.fandom.com/wiki/2DA_Files): index of
   the tables.
