@@ -157,7 +157,12 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
     compositor input, focus, presentation, HiDPI or window-manager interaction),
     or when the bug is in the actual windowed GUI or a mismatch between the
     headless and real window. Otherwise use the headless suite and snapshots.
-    The same rule applies to scripts and CI: the suite is not a CI target.
+    Do not use this permission rule as a reason to skip the question: for a
+    major Freya/winit upgrade or another window-path change, asking for
+    permission is part of the hand-over. Compile-only coverage is not
+    verification. For minor view, layout, text or theme changes covered by the
+    headless suite, use the headless suite and do not ask. The same rule applies
+    to scripts and CI: the suite is not a CI target.
 14. **Never work on `main`.** Every task, including a one-line fix or a
     documentation change, starts on its own branch from `origin/main` with
     `just start <type>/<slug>`; `main` only receives merged task branches. The
@@ -324,12 +329,18 @@ documentation, not ground truth: verify against the game files where possible).
   test (`assert_compact_action_rows`): the controls must stay inside the card
   and the row pitch must stay compact. Every tab must render at both narrow and
   wide widths.
-- Changes to window creation, input handling, focus or presentation may need
-  `just live`, the windowed suite, but **never run it without explicit
-  permission** (rule 13). It opens real windows and takes focus; only use it
-  when the headless runner cannot cover the case or the bug is in the real
-  window. Keep its scenarios small and window-level, because exhaustive layout
-  coverage belongs in the headless suite. See `docs/LIVE-UI.md`.
+- Windowed coverage is a risk-based escalation, not a routine step. Compiling
+  with `--all-targets` proves the live support code builds; it does not prove
+  the window path works. For a major Freya/winit/window-stack upgrade, a window
+  creation/configuration/close/focus/input/presentation change, a live-probe
+  change, or a bug that only reproduces in a real window, ask for explicit
+  permission to run `just live` before `just finish` and wait for the answer.
+  View, layout, text, theme, form, session and core changes covered by the
+  headless suite and snapshots do not need it. If unsure, ask. If a window-path
+  change cannot be run (no permission or no display), say so explicitly in the
+  hand-over; do not present compile-only coverage as verification. Keep its
+  scenarios small and window-level, because exhaustive layout coverage belongs
+  in the headless suite. See `docs/LIVE-UI.md` and rule 13.
 - Every dynamic UI list item and every conditional tab root must have a stable
   key. Freya 0.5 fixed several diff panics, including the unkeyed replacement
   crash that 0.4 hit, but keyed identity is still what reconciles reordered rows
