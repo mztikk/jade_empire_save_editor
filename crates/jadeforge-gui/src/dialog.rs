@@ -20,11 +20,36 @@ enum Answer {
     Picked(PathBuf),
 }
 
+/// Result of the native folder dialog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PickOutcome {
+    /// The user chose this existing folder.
+    Picked(PathBuf),
+    /// The user closed the dialog without choosing a folder.
+    ///
+    /// This is distinct from an unreadable or empty folder: the caller reports
+    /// the cancellation and leaves the current save folder untouched.
+    Cancelled,
+}
+
+/// What the user chose in the unsaved-changes close dialog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloseChoice {
+    /// Write the applied edits, then close.
+    Save,
+    /// Close without writing, discarding the in-memory edits.
+    Discard,
+    /// Keep the window open and keep editing.
+    Cancel,
+}
+
 thread_local! {
     /// Answer the next dialog call instead of opening a native dialog.
     static NEXT_PICK: RefCell<Option<Answer>> = const { RefCell::new(None) };
     /// Answer the next confirmation instead of opening a native dialog.
     static NEXT_CONFIRM: RefCell<Option<bool>> = const { RefCell::new(None) };
+    /// Answer the next close dialog instead of opening a native dialog.
+    static NEXT_CLOSE: RefCell<Option<CloseChoice>> = const { RefCell::new(None) };
 }
 
 /// Answers the next [`pick_folder`] call with `path`.
@@ -39,21 +64,26 @@ pub fn set_next_pick_for_tests(path: Option<PathBuf>) {
 
 /// Opens the native folder dialog.
 ///
-/// `start` is used as the initial directory when it exists. Returns the chosen
-/// folder, or `None` when the user cancelled.
+/// `start` is used as the initial directory when it exists. A closed dialog is
+/// reported as [`PickOutcome::Cancelled`] so the caller can say that nothing
+/// changed instead of treating it like an empty folder. The `rfd` API folds a
+/// backend failure into the same `None`, so callers still validate a picked
+/// path before scanning it.
 #[must_use]
-pub fn pick_folder(start: Option<&Path>) -> Option<PathBuf> {
+pub fn pick_folder(start: Option<&Path>) -> PickOutcome {
     if let Some(answer) = NEXT_PICK.with(|slot| slot.borrow_mut().take()) {
         return match answer {
-            Answer::Cancelled => None,
-            Answer::Picked(path) => Some(path),
+            Answer::Cancelled => PickOutcome::Cancelled,
+            Answer::Picked(path) => PickOutcome::Picked(path),
         };
     }
     let mut dialog = rfd::FileDialog::new().set_title("Choose the Jade Empire save folder");
     if let Some(start) = start.filter(|path| path.is_dir()) {
         dialog = dialog.set_directory(start);
     }
-    dialog.pick_folder()
+    dialog
+        .pick_folder()
+        .map_or(PickOutcome::Cancelled, PickOutcome::Picked)
 }
 
 /// Answers the next [`confirm`] call with `confirmed`.
@@ -86,6 +116,55 @@ pub fn confirm(title: &str, description: &str) -> bool {
     )
 }
 
+/// Answers the next [`ask_close_choice`] call with `choice`.
+///
+/// Test seam: the window close hook is only exercised by a real window, so the
+/// headless suite can at least verify the choice plumbing without a modal.
+#[doc(hidden)]
+pub fn set_next_close_choice_for_tests(choice: CloseChoice) {
+    NEXT_CLOSE.with(|slot| *slot.borrow_mut() = Some(choice));
+}
+
+/// Asks what to do with unsaved changes before closing the window.
+///
+/// The native dialog uses explicit `Save`, `Discard` and `Cancel` labels
+/// instead of Yes/No so the destructive choice cannot be guessed from a
+/// generic button. On Windows the custom labels need the
+/// `common-controls-v6` feature and the application manifest.
+#[must_use]
+pub fn ask_close_choice() -> CloseChoice {
+    if let Some(choice) = NEXT_CLOSE.with(|slot| slot.borrow_mut().take()) {
+        return choice;
+    }
+    let result = rfd::MessageDialog::new()
+        .set_title("Unsaved changes")
+        .set_description(
+            "This savegame has changes that are only in memory. Save them before closing, discard them, or cancel and keep editing.",
+        )
+        .set_buttons(rfd::MessageButtons::YesNoCancelCustom(
+            "Save".to_owned(),
+            "Discard".to_owned(),
+            "Cancel".to_owned(),
+        ))
+        .set_level(rfd::MessageLevel::Warning)
+        .show();
+    close_choice(&result)
+}
+
+/// Maps the native dialog result onto the explicit close choice.
+///
+/// `YesNoCancelCustom` keeps the Yes/No/Cancel result ids for its three custom
+/// labels, so Yes is Save and No is Discard.
+fn close_choice(result: &rfd::MessageDialogResult) -> CloseChoice {
+    match result {
+        rfd::MessageDialogResult::Yes => CloseChoice::Save,
+        rfd::MessageDialogResult::No => CloseChoice::Discard,
+        rfd::MessageDialogResult::Ok
+        | rfd::MessageDialogResult::Cancel
+        | rfd::MessageDialogResult::Custom(_) => CloseChoice::Cancel,
+    }
+}
+
 /// Folder the dialog should start in: the current one, else the home folder.
 #[must_use]
 pub fn start_directory(current: &str) -> Option<PathBuf> {
@@ -106,11 +185,20 @@ mod tests {
     #[test]
     fn queued_answers_are_consumed_once() {
         set_next_pick_for_tests(Some(PathBuf::from("/tmp/saves")));
-        assert_eq!(pick_folder(None), Some(PathBuf::from("/tmp/saves")));
+        assert_eq!(
+            pick_folder(None),
+            PickOutcome::Picked(PathBuf::from("/tmp/saves"))
+        );
         // The queue is empty now; the next call would open the real dialog, so
         // only assert that the seam was consumed.
         let consumed = NEXT_PICK.with(|slot| slot.borrow().is_none());
         assert!(consumed);
+    }
+
+    #[test]
+    fn a_cancelled_picker_is_reported_as_a_cancellation() {
+        set_next_pick_for_tests(None);
+        assert_eq!(pick_folder(None), PickOutcome::Cancelled);
     }
 
     #[test]
@@ -119,5 +207,29 @@ mod tests {
         assert!(!confirm("Remove", "Remove the item?"));
         let consumed = NEXT_CONFIRM.with(|slot| slot.borrow().is_none());
         assert!(consumed);
+    }
+
+    #[test]
+    fn close_dialog_answers_are_consumed_once() {
+        set_next_close_choice_for_tests(CloseChoice::Discard);
+        assert_eq!(ask_close_choice(), CloseChoice::Discard);
+        let consumed = NEXT_CLOSE.with(|slot| slot.borrow().is_none());
+        assert!(consumed);
+    }
+
+    #[test]
+    fn the_custom_buttons_map_to_explicit_close_choices() {
+        use rfd::MessageDialogResult;
+        assert_eq!(close_choice(&MessageDialogResult::Yes), CloseChoice::Save);
+        assert_eq!(close_choice(&MessageDialogResult::No), CloseChoice::Discard);
+        assert_eq!(
+            close_choice(&MessageDialogResult::Cancel),
+            CloseChoice::Cancel
+        );
+        assert_eq!(close_choice(&MessageDialogResult::Ok), CloseChoice::Cancel);
+        assert_eq!(
+            close_choice(&MessageDialogResult::Custom("other".to_owned())),
+            CloseChoice::Cancel
+        );
     }
 }

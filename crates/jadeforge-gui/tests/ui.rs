@@ -134,12 +134,13 @@ fn find_label_text(test: &TestingRunner, needle: &str) -> Option<String> {
     })
 }
 
-/// Finds the `n of m` page counter, ignoring item names that contain " of ".
+/// Finds the `n of m <noun>` page counter, ignoring item names with " of ".
 fn find_counter(test: &TestingRunner) -> Option<String> {
     test.find(|_, element| {
         let label = Label::try_downcast(element)?;
         let label_text = label.text.as_ref();
-        let (count, total) = label_text.split_once(" of ")?;
+        let (count, rest) = label_text.split_once(" of ")?;
+        let total = rest.split_whitespace().next()?;
         let digits = |value: &str| {
             !value.is_empty() && value.chars().all(|character| character.is_ascii_digit())
         };
@@ -347,7 +348,7 @@ fn opening_a_save_does_not_move_the_sidebar() {
     }
     let mut test = launch_unopened(fixture.save_dir.clone(), 800.0);
 
-    let before = find_node_with_text(&test, "SAVEGAMES")
+    let before = find_node_with_text(&test, "SAVEGAME")
         .expect("the savegame heading is missing")
         .layout()
         .area;
@@ -365,7 +366,7 @@ fn opening_a_save_does_not_move_the_sidebar() {
     // The preview is decoded before the session re-renders, so the image has
     // to be part of the very next frame.
     let image = find_image(&test).expect("the screenshot was not rendered");
-    let after = find_node_with_text(&test, "SAVEGAMES")
+    let after = find_node_with_text(&test, "SAVEGAME")
         .expect("the savegame heading is missing")
         .layout()
         .area;
@@ -392,6 +393,39 @@ fn opening_a_save_does_not_move_the_sidebar() {
         "the screenshot is {}x{} px; it must stay a fixed 120x120 square",
         image_area.size.width,
         image_area.size.height
+    );
+}
+
+#[test]
+fn the_overview_shows_one_preview_aligned_with_the_sidebar_identity() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.screenshot {
+        eprintln!("skipping: the savegame has no screenshot");
+        return;
+    }
+    let test = launch_sized(fixture.save_dir.clone(), 900.0);
+    // The sidebar already shows the savegame screenshot; a second copy in the
+    // overview hero would duplicate it.
+    let images = test.find_many(|node, element| Image::try_downcast(element).map(|_| node));
+    assert_eq!(
+        images.len(),
+        1,
+        "the overview shows {} screenshots; the sidebar preview must be the only one",
+        images.len()
+    );
+    let image_area = images[0].layout().area;
+    let heading = find_node_with_text(&test, "SAVEGAME")
+        .expect("the sidebar heading is missing")
+        .layout()
+        .area;
+    assert!(
+        (image_area.origin.x - heading.origin.x).abs() < 1.0,
+        "the sidebar preview starts at {} px but the identity block starts at {} px",
+        image_area.origin.x,
+        heading.origin.x
     );
 }
 
@@ -541,7 +575,7 @@ fn sorting_does_not_move_the_sort_buttons() {
     );
 
     // Moving the arrow to another column changes both neighbouring widths.
-    assert!(click_label_exact(&mut test, "Played"));
+    assert!(click_label_exact(&mut test, "Time played"));
     let level_after_move = find_label_exact(&test, "Level")
         .expect("the Level sort button is missing")
         .layout()
@@ -739,7 +773,7 @@ fn every_list_is_browsable_and_labelled_the_same_way() {
     assert!(click_text(&mut test, "Styles"));
     // Without a query the whole learnable list is shown, not nothing.
     assert!(
-        find_label_text(&test, "ALL STYLES").is_some(),
+        find_label_text(&test, "STYLES TO LEARN").is_some(),
         "the style list is not browsable without a search"
     );
     // Owned and learnable rows share the `label · #id` subtitle.
@@ -747,7 +781,7 @@ fn every_list_is_browsable_and_labelled_the_same_way() {
         find_label_text(&test, " · #").is_some(),
         "styles do not show the shared label and id subtitle"
     );
-    assert!(find_label_text(&test, "Lv ").is_some());
+    assert!(find_label_text(&test, "Level ").is_some());
 
     assert!(click_text(&mut test, "Inventory"));
     assert!(
@@ -812,6 +846,53 @@ fn gem_and_companion_rows_stay_compact_and_inside_the_card() {
 }
 
 #[test]
+fn companion_availability_uses_one_vocabulary() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let Some(companion) = session.henchmen().first().cloned() else {
+        eprintln!("skipping: the fixture has no companions");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_text(&mut test, "Companions"));
+    if companion.available {
+        assert!(find_label_text(&test, "available").is_some());
+        assert!(
+            click_a11y_label(&mut test, &format!("Hide {}", companion.name)),
+            "the available companion has no Hide action"
+        );
+        assert!(
+            find_label_text(&test, "hidden").is_some(),
+            "hiding a companion does not show the hidden state"
+        );
+        assert!(
+            find_label_text(&test, "Unlock").is_none(),
+            "the hidden state still offers Unlock instead of Make available"
+        );
+        assert!(
+            click_a11y_label(&mut test, &format!("Make {} available", companion.name)),
+            "the hidden companion has no Make available action"
+        );
+        assert!(find_label_text(&test, "available").is_some());
+    } else {
+        assert!(
+            click_a11y_label(&mut test, &format!("Make {} available", companion.name)),
+            "the hidden companion has no Make available action"
+        );
+        assert!(
+            click_a11y_label(&mut test, &format!("Hide {}", companion.name)),
+            "the available companion has no Hide action"
+        );
+    }
+}
+
+#[test]
 fn style_rows_stay_compact_and_inside_the_card() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
@@ -841,6 +922,150 @@ fn count_labels(test: &TestingRunner) -> usize {
             .then_some(())
     })
     .len()
+}
+
+#[test]
+fn the_style_picker_lists_only_unlearned_styles() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_text(&mut test, "Styles"));
+    assert!(
+        find_label_text(&test, "STYLES TO LEARN").is_some(),
+        "the unlearned style list is still called ALL STYLES"
+    );
+    assert!(
+        find_label_text(&test, "ALL STYLES").is_none(),
+        "the style list still claims to show all styles"
+    );
+    if let Some(style) = session.styles().first() {
+        // `Lv` read; the row now uses the same `Level` wording as the rest of
+        // the application, and the kind badge is title-cased.
+        assert!(
+            find_label_text(&test, &format!("Level {}", style.level)).is_some(),
+            "the style row does not show its level as `Level N`"
+        );
+        assert!(
+            find_label_text(&test, "Lv ").is_none(),
+            "the style row still abbreviates Level as Lv"
+        );
+        assert!(
+            find_label_text(&test, &jadeforge_gui::session::style_kind_label(style.kind)).is_some(),
+            "the style kind badge does not use the friendly label for {}",
+            style.kind
+        );
+    }
+}
+
+#[test]
+fn the_item_picker_can_filter_by_category() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data to browse");
+        return;
+    }
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(click_text(&mut test, "Inventory"));
+    assert!(
+        find_label_text(&test, "CATEGORY").is_some(),
+        "the item picker has no category filter"
+    );
+    assert!(
+        click_a11y_label(&mut test, "Show only Gems"),
+        "the Gems category chip is missing"
+    );
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "GEMS").is_some(),
+        "the item picker did not switch to the Gems category"
+    );
+    assert!(
+        find_label_text(&test, "Gems · #").is_some(),
+        "a non-gem item survived the category filter"
+    );
+    assert!(
+        find_label_text(&test, "Weapons · #").is_none(),
+        "a weapon survived the Gems category filter"
+    );
+    assert!(
+        click_a11y_label(&mut test, "Show items from every category"),
+        "the All items chip is missing"
+    );
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "ALL ITEMS").is_some(),
+        "the category filter could not be cleared"
+    );
+}
+
+#[test]
+fn the_styles_tab_filter_does_not_filter_the_save_list() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_text(&mut test, "Styles"));
+    // Both filters exist, but they are targeted by their own placeholders.
+    assert!(
+        find_paragraph(&test, "Filter by name or character").is_some(),
+        "the savegame filter is missing"
+    );
+    let style_filter =
+        find_paragraph(&test, "Filter the style list").expect("the style filter is missing");
+    click_node(&mut test, &style_filter);
+    test.write_text("no-such-style");
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "No styles match this search.").is_some(),
+        "typing into the style filter did not filter the style list"
+    );
+    assert!(
+        find_label_text(&test, "1 SAVEGAME").is_some(),
+        "the save list was filtered instead of the style list"
+    );
+}
+
+#[test]
+fn the_save_filter_matches_the_character_name() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let Some(name) = session.character().map(|character| character.name.clone()) else {
+        eprintln!("skipping: the fixture has no character");
+        return;
+    };
+    if name.trim().is_empty() {
+        eprintln!("skipping: the fixture character has no name");
+        return;
+    }
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    let filter = find_paragraph(&test, "Filter by name or character").expect("save filter");
+    click_node(&mut test, &filter);
+    test.write_text(&name);
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "1 SAVEGAME").is_some(),
+        "the save filter did not match the character name {name:?}"
+    );
+    assert!(
+        find_label_text(&test, "0 OF").is_none(),
+        "filtering by the character name hid the only savegame"
+    );
 }
 
 #[test]
@@ -1091,7 +1316,7 @@ fn gems_can_be_moved_and_removed() {
 }
 
 #[test]
-fn predefined_gems_can_be_added() {
+fn gems_from_the_game_data_can_be_added() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
         return;
@@ -1104,7 +1329,7 @@ fn predefined_gems_can_be_added() {
     assert!(session.open(0));
     let available = session.available_gems();
     if available.is_empty() {
-        eprintln!("skipping: no predefined gems");
+        eprintln!("skipping: no gems");
         return;
     }
     let before = session.gems().len();
@@ -1128,10 +1353,55 @@ fn the_gems_tab_lists_amulet_and_inventory() {
     assert!(click_text(&mut test, "Gems"));
     assert!(find_label_text(&test, "Amulet").is_some());
     assert!(
-        find_label_text(&test, "socketed").is_some()
+        find_label_text(&test, "sockets filled").is_some()
             || find_label_text(&test, "No amulet yet").is_some(),
         "the amulet card did not render its state"
     );
+}
+
+#[test]
+fn an_empty_carried_gems_list_does_not_report_a_gem() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let has_amulet = probe_session(&fixture).is_some_and(|session| session.amulet().is_some());
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(click_text(&mut test, "Gems"));
+    // Remove every real gem through the visible row action; empty socket rows
+    // have no Remove button, so this also exercises the amulet placeholders.
+    for _ in 0..40 {
+        jadeforge_gui::dialog::set_next_confirm_for_tests(true);
+        if !click_text(&mut test, "Remove") {
+            break;
+        }
+        test.sync_and_update();
+    }
+    assert!(
+        find_label_text(&test, "0 carried gems").is_some(),
+        "the empty carried-gems hint still counts its own placeholder row"
+    );
+    assert!(
+        find_label_text(&test, "No gems carried in the inventory.").is_some(),
+        "the empty carried-gems list has no empty hint"
+    );
+    assert!(
+        find_label_text(&test, "1 gem").is_none(),
+        "the empty carried-gems hint claims there is a gem"
+    );
+    if has_amulet {
+        // The amulet summary names both numbers and the tier.
+        assert!(
+            find_label_text(&test, "sockets filled").is_some(),
+            "the amulet summary does not name the socket count"
+        );
+        assert!(
+            find_label_text(&test, "amulet tier").is_some(),
+            "the amulet summary does not name the tier"
+        );
+    } else {
+        assert!(find_label_text(&test, "No amulet yet").is_some());
+    }
 }
 
 #[test]
@@ -1190,7 +1460,7 @@ fn pickers_share_the_same_page_size() {
             "the page step is not the shared page size"
         );
     } else {
-        eprintln!("skipping gem page size: only {gems} predefined gems");
+        eprintln!("skipping gem page size: only {gems} gems");
     }
 }
 
@@ -1355,15 +1625,15 @@ fn savegames_can_be_filtered_and_sorted() {
     .expect("copy savegame");
 
     let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
-    assert!(find_label_text(&test, "SAVEGAMES (2)").is_some());
+    assert!(find_label_text(&test, "2 SAVEGAMES").is_some());
 
     // Filter by name.
-    let filter = find_paragraph(&test, "Filter by name").expect("filter input");
+    let filter = find_paragraph(&test, "Filter by name or character").expect("filter input");
     click_node(&mut test, &filter);
     test.write_text("Other");
     test.sync_and_update();
     assert!(
-        find_label_text(&test, "SAVEGAMES (1 of 2)").is_some(),
+        find_label_text(&test, "1 OF 2 SAVEGAMES").is_some(),
         "the list was not filtered"
     );
 
@@ -1372,10 +1642,10 @@ fn savegames_can_be_filtered_and_sorted() {
     test.sync_and_update();
 
     // Sorting: the active key shows a direction arrow, clicking it flips.
-    assert!(find_label_text(&test, "Played").is_some());
-    assert!(click_text(&mut test, "Played"));
+    assert!(find_label_exact(&test, "Time played").is_some());
+    assert!(click_label_exact(&mut test, "Time played"));
     assert!(find_label_text(&test, "↑").is_some());
-    assert!(click_text(&mut test, "Played"));
+    assert!(click_label_exact(&mut test, "Time played"));
     assert!(find_label_text(&test, "↓").is_some());
 }
 
@@ -1450,6 +1720,98 @@ fn the_browse_button_uses_the_folder_dialog() {
     jadeforge_gui::dialog::set_next_pick_for_tests(None);
     assert!(click_text(&mut test, "Browse"));
     wait_for_text(&mut test, "Found 1 savegame");
+}
+
+#[test]
+fn the_folder_picker_reports_cancellation_and_unreadable_paths() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+
+    // Cancelling the native dialog is its own state, not an empty folder.
+    jadeforge_gui::dialog::set_next_pick_for_tests(None);
+    assert!(click_text(&mut test, "Browse"), "no browse button");
+    assert!(
+        find_label_text(&test, "No folder was chosen").is_some(),
+        "cancelling the folder dialog is not reported"
+    );
+    assert!(
+        find_label_text(&test, "1 SAVEGAME").is_some(),
+        "cancelling the folder dialog changed the save list"
+    );
+
+    // A picked path that is not a folder is reported distinctly.
+    let file = fixture.root.join("not-a-folder");
+    std::fs::write(&file, b"x").expect("write file");
+    jadeforge_gui::dialog::set_next_pick_for_tests(Some(file));
+    assert!(click_text(&mut test, "Browse"));
+    assert!(
+        find_label_text(&test, "is a file, not a save folder").is_some(),
+        "picking a file is not reported as a distinct failure"
+    );
+    assert!(find_label_text(&test, "1 SAVEGAME").is_some());
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let unreadable = fixture.root.join("unreadable");
+        std::fs::create_dir_all(&unreadable).expect("create folder");
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000))
+            .expect("chmod");
+        let denied = std::fs::read_dir(&unreadable).is_err();
+        if denied {
+            jadeforge_gui::dialog::set_next_pick_for_tests(Some(unreadable.clone()));
+            assert!(click_text(&mut test, "Browse"));
+            assert!(
+                find_label_text(&test, "cannot be listed").is_some(),
+                "a permission failure is not reported as a read error"
+            );
+            assert!(find_label_text(&test, "1 SAVEGAME").is_some());
+        } else {
+            eprintln!("skipping the permission check: this user can read 0o000 folders");
+        }
+        let _ = std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o755));
+    }
+}
+
+#[test]
+fn the_character_form_shows_units_and_the_optional_gold_field() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_text(&mut test, "Character"));
+    assert!(
+        find_label_text(&test, "health points").is_some(),
+        "the health fields do not show their unit"
+    );
+    assert!(
+        find_label_text(&test, "1 to 255 (level)").is_some(),
+        "the level field does not combine its range and unit"
+    );
+    assert!(
+        find_label_text(&test, "1 to 1000000 health points").is_some(),
+        "the maximum health field does not show its unit"
+    );
+    assert!(
+        find_label_text(&test, "0 to 100 (chapter)").is_some(),
+        "the chapter field does not say what it counts"
+    );
+    assert!(
+        find_label_text(&test, "0 to 1000000 (index)").is_some(),
+        "the appearance field does not say it is an index"
+    );
+    assert!(
+        find_label_text(&test, "128 balanced").is_some(),
+        "the alignment field does not explain its balanced value"
+    );
+    assert!(
+        find_label_text(&test, "Gold is optional in the savegame").is_some(),
+        "the optional Gold field is not explained"
+    );
 }
 
 #[test]
@@ -1588,7 +1950,7 @@ fn static_text_is_exposed_to_assistive_technology() {
     for text in [
         "JadeForge",
         "SAVE FOLDER",
-        "SAVEGAMES (1)",
+        "1 SAVEGAME",
         "all changes saved",
         "Identity",
         "NAME",
@@ -2013,40 +2375,30 @@ fn identity_fields_use_three_columns_at_the_default_and_minimum_size() {
 }
 
 #[test]
-fn overview_grids_reflow_at_900_and_1280() {
+fn overview_glance_rows_use_the_full_width_at_every_size() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
         return;
     };
 
-    let mut narrow = launch_unopened_at(fixture.save_dir.clone(), 900.0, 900.0);
-    assert!(
-        click_text(&mut narrow, "Level "),
-        "the savegame did not open"
-    );
-    // One column at the supported minimum: every glance cell starts a row.
-    assert_different_rows(&narrow, "Unspent attribute points", "Body / Mind / Spirit");
-    assert_different_rows(
-        &narrow,
-        "Body / Mind / Spirit",
-        "Charm / Intuition / Intimidate",
-    );
-    // The four hero stats are a 2x2 grid instead of wrapping 3+1.
-    assert_same_row(&narrow, "GOLD", "HEALTH");
-    assert_same_row(&narrow, "CHI", "FOCUS");
-    assert_different_rows(&narrow, "GOLD", "CHI");
-
-    let mut wide = launch_unopened_at(fixture.save_dir.clone(), 1280.0, 900.0);
-    assert!(click_text(&mut wide, "Level "), "the savegame did not open");
-    // Two columns: 2+2+1.
-    assert_same_row(&wide, "Unspent attribute points", "Body / Mind / Spirit");
-    assert_different_rows(
-        &wide,
-        "Charm / Intuition / Intimidate",
-        "Body / Mind / Spirit",
-    );
-    assert_same_row(&wide, "GOLD", "HEALTH");
-    assert_different_rows(&wide, "GOLD", "CHI");
+    for width in [900.0, 1280.0, 1600.0] {
+        let mut test = launch_unopened_at(fixture.save_dir.clone(), width, 900.0);
+        assert!(click_text(&mut test, "Level "), "the savegame did not open");
+        // Every glance value is one full-width row: no fixed 340 px cell can
+        // leave half of a 900 px card empty while the next row starts below.
+        // The labels are chosen from the glance section only; "Inventory" and
+        // "Styles" are also tab labels on one row.
+        assert_different_rows(&test, "Unspent attribute points", "Body / Mind / Spirit");
+        assert_different_rows(
+            &test,
+            "Body / Mind / Spirit",
+            "Charm / Intuition / Intimidate",
+        );
+        // The four hero stats stay a 2x2 grid instead of wrapping 3+1.
+        assert_same_row(&test, "GOLD", "HEALTH");
+        assert_same_row(&test, "CHI", "FOCUS");
+        assert_different_rows(&test, "GOLD", "CHI");
+    }
 }
 
 #[test]
@@ -2123,6 +2475,80 @@ fn the_overview_save_path_can_be_copied() {
     assert!(
         find_label_text(&test, "clipboard").is_some(),
         "copying the path did not report a status message"
+    );
+}
+
+#[test]
+fn the_about_page_shows_the_version_settings_and_backups() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let _ = jadeforge_gui::config::ensure_test_path();
+    let mut config = jadeforge_gui::config::Config::load();
+    config.sort = Some("level".to_owned());
+    config.sort_descending = true;
+    config.store().expect("store the test settings");
+    let settings_path = jadeforge_gui::config::Config::path().expect("a test settings path");
+
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 1200.0);
+    assert!(click_label_exact(&mut test, "About"), "no About button");
+    assert!(
+        find_label_text(&test, "About JadeForge").is_some(),
+        "the About page did not open"
+    );
+    assert!(
+        find_label_text(&test, &format!("Version {}", jadeforge_gui::APP_VERSION)).is_some(),
+        "the About page does not show the version"
+    );
+    assert!(
+        find_label_text(&test, "SETTINGS").is_some(),
+        "the About page has no settings section"
+    );
+    assert!(
+        find_label_text(&test, "BACKUPS").is_some(),
+        "the About page has no backup explanation"
+    );
+    assert!(
+        find_label_text(&test, "Level, descending").is_some(),
+        "the remembered sort order is not exposed"
+    );
+    assert!(
+        find_text_node(&test, "jadeforge-backup").is_some(),
+        "the backup explanation does not name the backup files"
+    );
+    assert!(
+        find_text_node(&test, &settings_path.display().to_string()).is_some(),
+        "the settings file path is not shown"
+    );
+    assert!(
+        find_text_node(&test, &fixture.save_dir.display().to_string()).is_some(),
+        "the remembered save folder is not shown"
+    );
+
+    assert!(
+        click_a11y_label(&mut test, "Copy the settings path"),
+        "the settings file has no copy action"
+    );
+    assert!(
+        find_label_text(&test, "Copied the settings path").is_some(),
+        "copying the settings path did not report success"
+    );
+    jadeforge_gui::paths::capture_next_open_for_tests();
+    assert!(
+        click_a11y_label(&mut test, "Open the settings folder"),
+        "the settings file has no open action"
+    );
+    assert_eq!(
+        jadeforge_gui::paths::last_opened_for_tests(),
+        settings_path.parent().map(std::path::Path::to_path_buf),
+        "the settings action opened the wrong folder"
+    );
+
+    assert!(click_label_exact(&mut test, "Close"), "no Close button");
+    assert!(
+        find_label_text(&test, "No savegame selected").is_some(),
+        "closing About did not return to the editor"
     );
 }
 
@@ -2210,7 +2636,7 @@ fn browsing_checks_for_unsaved_changes_before_the_dialog() {
     // The dialog answer must not have been consumed: the folder was refused
     // before opening it, so the save list still belongs to the original folder.
     assert!(
-        find_label_text(&test, "SAVEGAMES (1)").is_some(),
+        find_label_text(&test, "1 SAVEGAME").is_some(),
         "Browse changed the folder despite unsaved changes"
     );
 }
@@ -2272,17 +2698,17 @@ fn every_filter_has_a_clear_button() {
     .expect("copy savegame");
 
     let mut test = launch_sized(fixture.save_dir.clone(), 1000.0);
-    assert!(find_label_text(&test, "SAVEGAMES (2)").is_some());
-    let filter = find_paragraph(&test, "Filter by name").expect("filter input");
+    assert!(find_label_text(&test, "2 SAVEGAMES").is_some());
+    let filter = find_paragraph(&test, "Filter by name or character").expect("filter input");
     click_node(&mut test, &filter);
     test.write_text("Other");
     test.sync_and_update();
-    assert!(find_label_text(&test, "SAVEGAMES (1 of 2)").is_some());
+    assert!(find_label_text(&test, "1 OF 2 SAVEGAMES").is_some());
     assert!(
         click_a11y_label(&mut test, "Clear the savegame filter"),
         "the save filter has no clear button"
     );
-    assert!(find_label_text(&test, "SAVEGAMES (2)").is_some());
+    assert!(find_label_text(&test, "2 SAVEGAMES").is_some());
 
     assert!(click_text(&mut test, "Inventory"));
     let filter = find_paragraph(&test, "Filter the item database").expect("item filter");
@@ -2327,7 +2753,7 @@ fn the_no_save_state_disables_editing() {
     // The primary action scans the picked folder.
     jadeforge_gui::dialog::set_next_pick_for_tests(Some(fixture.save_dir.clone()));
     assert!(click_text(&mut test, "Choose save folder"));
-    wait_for_text(&mut test, "SAVEGAMES (1)");
+    wait_for_text(&mut test, "1 SAVEGAME");
     assert!(
         click_text(&mut test, "Level "),
         "the scanned save did not open"
@@ -2438,7 +2864,7 @@ fn a_rejected_scan_restores_the_real_folder_path() {
         .is_some(),
         "the rejected path stayed in the folder input"
     );
-    assert!(find_label_text(&test, "SAVEGAMES (1)").is_some());
+    assert!(find_label_text(&test, "1 SAVEGAME").is_some());
 }
 
 #[test]
@@ -2491,6 +2917,117 @@ fn save_focuses_the_first_invalid_field_and_still_saves() {
     assert!(
         find_label_text(&test, "invalid field").is_some(),
         "the invalid field disappeared instead of staying for a fix"
+    );
+}
+
+#[test]
+fn save_and_revert_only_act_when_there_are_changes() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+
+    // Nothing has changed since the savegame was opened: both actions are
+    // disabled and must not run.
+    assert!(click_text(&mut test, "Save to disk"));
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "Nothing changed").is_none(),
+        "Save ran with nothing to save"
+    );
+    assert!(click_text(&mut test, "Revert"));
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "Reloaded").is_none(),
+        "Revert ran with nothing to discard"
+    );
+
+    // Make an edit, save, and keep the success confirmation on screen while
+    // the actions become unavailable again.
+    assert!(click_text(&mut test, "Character"));
+    assert!(click_text(&mut test, "+1 point"), "no quick-add button");
+    as_many_updates(&mut test);
+    assert!(find_label_text(&test, "unsaved changes").is_some());
+    assert!(click_text(&mut test, "Save to disk"));
+    wait_for_text(&mut test, "Saved ");
+    assert!(
+        find_label_text(&test, "all changes saved").is_some(),
+        "the saved state is not reported"
+    );
+    assert!(
+        find_label_text(&test, "Saved ").is_some(),
+        "the success confirmation did not stay visible"
+    );
+    assert!(click_text(&mut test, "Save to disk"));
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "Nothing changed").is_none(),
+        "Save ran again after it had already saved"
+    );
+    assert!(
+        find_label_text(&test, "Saved ").is_some(),
+        "the success confirmation disappeared after the disabled Save click"
+    );
+}
+
+#[test]
+fn a_save_surfaces_the_backup_and_opens_the_save_folder() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 2000.0);
+    assert!(click_text(&mut test, "Character"));
+    assert!(click_text(&mut test, "+1 point"), "no quick-add button");
+    as_many_updates(&mut test);
+    assert!(click_text(&mut test, "Save to disk"));
+    wait_for_text(&mut test, "Saved ");
+    assert!(click_label_exact(&mut test, "Overview"));
+
+    // The backup is not just mentioned; its exact path and actions appear on
+    // the Savegame card after a successful save.
+    assert!(
+        find_label_text(&test, "Backup").is_some(),
+        "the overview does not show the backup row"
+    );
+    assert!(
+        find_text_node(&test, "jadeforge-backup").is_some(),
+        "the backup path is not shown"
+    );
+    assert!(
+        click_a11y_label(&mut test, "Copy the backup path"),
+        "the backup path has no copy action"
+    );
+    assert!(
+        find_label_text(&test, "Copied the backup path").is_some(),
+        "copying the backup path did not report success"
+    );
+
+    jadeforge_gui::paths::capture_next_open_for_tests();
+    assert!(
+        click_a11y_label(&mut test, "Open the backup folder"),
+        "the backup folder has no open action"
+    );
+    assert_eq!(
+        jadeforge_gui::paths::last_opened_for_tests(),
+        Some(fixture.save_dir.join("Test Save")),
+        "the backup action opened the wrong folder"
+    );
+    assert!(
+        find_label_text(&test, "Opened the backup folder").is_some(),
+        "opening the backup folder did not report success"
+    );
+
+    jadeforge_gui::paths::capture_next_open_for_tests();
+    assert!(
+        click_a11y_label(&mut test, "Open the savegame folder"),
+        "the savegame folder has no open action"
+    );
+    assert_eq!(
+        jadeforge_gui::paths::last_opened_for_tests(),
+        Some(fixture.save_dir.clone()),
+        "the save folder action opened the wrong folder"
     );
 }
 
@@ -2553,7 +3090,7 @@ fn the_gem_picker_shows_effect_lines_before_adding() {
         .into_iter()
         .find(|gem| !gem.effects.is_empty())
     else {
-        eprintln!("skipping: no predefined gem has effects");
+        eprintln!("skipping: no gem has effects");
         return;
     };
     let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
@@ -2718,6 +3255,7 @@ fn desktop_shortcuts_drive_the_shell() {
         return;
     }
     let mut test = launch_sized(fixture.save_dir.clone(), 1200.0);
+    let savegames = if total == 1 { "SAVEGAME" } else { "SAVEGAMES" };
 
     // Ctrl+F focuses the save filter of the active tab (Overview on start) and
     // Escape clears it again. The save filter exists with and without game
@@ -2729,12 +3267,12 @@ fn desktop_shortcuts_drive_the_shell() {
     test.write_text("zzzz-no-such-save");
     test.sync_and_update();
     assert!(
-        find_label_text(&test, &format!("SAVEGAMES (0 of {total})")).is_some(),
+        find_label_text(&test, &format!("0 OF {total} {savegames}")).is_some(),
         "Ctrl+F did not focus the save filter"
     );
     test.press_key(Key::Named(NamedKey::Escape));
     assert!(
-        find_label_text(&test, &format!("SAVEGAMES ({total})")).is_some(),
+        find_label_text(&test, &format!("{total} {savegames}")).is_some(),
         "Escape did not clear the save filter"
     );
 
@@ -2788,6 +3326,10 @@ fn save_rows_show_the_character_and_modification_time() {
     let value = a11y_label(&row)
         .or_else(|| a11y_value(&row))
         .unwrap_or_default();
+    assert!(
+        value.contains("Time played"),
+        "the save row does not use the same Time played wording: {value}"
+    );
     assert!(
         value.contains("UTC"),
         "the save row does not show the modification time: {value}"
@@ -3000,7 +3542,7 @@ fn controls_meet_the_minimum_target_size() {
     };
     let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
 
-    for label in ["Name", "Level", "Played"] {
+    for label in ["Name", "Level", "Time played"] {
         let node = test
             .find(|node, _| {
                 a11y_label(&node)
@@ -3135,13 +3677,13 @@ fn eighty_nine_saves_render_within_the_frame_budget() {
     }
     let mut test = launch_unopened_at(fixture.save_dir.clone(), 1180.0, 760.0);
     for _ in 0..2000 {
-        if find_label_text(&test, "SAVEGAMES (89)").is_some() {
+        if find_label_text(&test, "89 SAVEGAMES").is_some() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(2));
         test.sync_and_update();
     }
-    assert!(find_label_text(&test, "SAVEGAMES (89)").is_some());
+    assert!(find_label_text(&test, "89 SAVEGAMES").is_some());
 
     let started = std::time::Instant::now();
     let _ = test.render();
@@ -3192,25 +3734,41 @@ fn the_first_frame_shows_the_scan_in_progress() {
         "the first frame does not report the scan in progress"
     );
     assert!(
-        find_label_text(&test, "SAVEGAMES (1)").is_none(),
+        find_label_text(&test, "Loading savegames…").is_some(),
+        "the editor has no loading skeleton during the first scan"
+    );
+    assert!(
+        find_label_text(&test, "LOADING SAVEGAMES…").is_some(),
+        "the sidebar has no loading state during the first scan"
+    );
+    assert!(
+        find_label_text(&test, "SCANNING…").is_some(),
+        "the tab bar has no visible busy state during the first scan"
+    );
+    assert!(
+        find_label_text(&test, "1 SAVEGAME").is_none(),
         "the first frame already waited for the scan"
     );
 
     // Poll until the worker applies the result.
     for _ in 0..500 {
-        if find_label_text(&test, "SAVEGAMES (1)").is_some() {
+        if find_label_text(&test, "1 SAVEGAME").is_some() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(2));
         test.sync_and_update();
     }
     assert!(
-        find_label_text(&test, "SAVEGAMES (1)").is_some(),
+        find_label_text(&test, "1 SAVEGAME").is_some(),
         "the startup scan never settled"
     );
     assert!(
         find_label_text(&test, "Scanning ").is_none(),
         "the in-flight state stayed after the scan settled"
+    );
+    assert!(
+        find_label_text(&test, "SCANNING…").is_none(),
+        "the tab-bar busy state stayed after the scan settled"
     );
     jadeforge_gui::session::set_scan_delay_for_tests(std::time::Duration::ZERO);
 }
@@ -3227,6 +3785,10 @@ fn a_scan_can_be_cancelled_without_losing_the_save() {
     assert!(
         find_label_text(&test, "Scanning ").is_some(),
         "the Scan action did not enter the in-flight state"
+    );
+    assert!(
+        find_label_text(&test, "SCANNING…").is_some(),
+        "a manual scan has no visible busy state in the tab bar"
     );
     assert!(
         find_label_text(&test, "Cancel scan").is_some(),
@@ -3246,7 +3808,7 @@ fn a_scan_can_be_cancelled_without_losing_the_save() {
         "the cancel control stayed after cancelling"
     );
     assert!(
-        find_label_text(&test, "SAVEGAMES (1)").is_some(),
+        find_label_text(&test, "1 SAVEGAME").is_some(),
         "cancelling cleared the save list"
     );
     // The open savegame is still open.
@@ -3258,12 +3820,16 @@ fn a_scan_can_be_cancelled_without_losing_the_save() {
     test.sync_and_update();
     test.sync_and_update();
     assert!(
-        find_label_text(&test, "SAVEGAMES (1)").is_some(),
+        find_label_text(&test, "1 SAVEGAME").is_some(),
         "a cancelled scan applied its result anyway"
     );
     assert!(
         find_label_text(&test, "Scanning ").is_none(),
         "a cancelled scan left the in-flight state behind"
+    );
+    assert!(
+        find_label_text(&test, "SCANNING…").is_none(),
+        "a cancelled scan left the tab-bar busy state behind"
     );
     jadeforge_gui::session::set_scan_delay_for_tests(std::time::Duration::ZERO);
 }
@@ -3309,21 +3875,21 @@ fn scanning_another_folder_resets_the_filter_after_the_scan() {
     .expect("copy savegame");
 
     let mut test = launch_sized(fixture.save_dir.clone(), 1200.0);
-    let filter = find_paragraph(&test, "Filter by name").expect("save filter");
+    let filter = find_paragraph(&test, "Filter by name or character").expect("save filter");
     click_node(&mut test, &filter);
     test.write_text("does-not-match");
     test.sync_and_update();
     assert!(
-        find_label_text(&test, "SAVEGAMES (0 of 1)").is_some(),
+        find_label_text(&test, "0 OF 1 SAVEGAME").is_some(),
         "the filter did not apply"
     );
 
     jadeforge_gui::dialog::set_next_pick_for_tests(Some(second_root));
     assert!(click_text(&mut test, "Browse"), "no browse button");
     // The new folder scan is applied and the document reset clears the filter.
-    wait_for_text(&mut test, "SAVEGAMES (1)");
+    wait_for_text(&mut test, "Found 1 savegame");
     assert!(
-        find_label_text(&test, "SAVEGAMES (0 of").is_none(),
+        find_label_text(&test, "0 OF").is_none(),
         "the filter survived a folder scan"
     );
     assert!(

@@ -39,15 +39,11 @@ pub fn view(
         .iter()
         .filter(|gem| gem.location == GemLocation::Amulet && !gem.empty)
         .count();
+    let carried = inventory.iter().filter(|gem| !gem.empty).count();
     let can_socket = amulet.is_some_and(|amulet| socketed < usize::from(amulet.sockets));
     let amulet_title = amulet.map_or_else(
         || "No amulet yet".to_owned(),
-        |amulet| {
-            format!(
-                "{socketed} socketed · tier {} ({} sockets)",
-                amulet.tier, amulet.sockets
-            )
-        },
+        |amulet| amulet_summary(amulet, socketed),
     );
     let amulet_error = ctx.session.borrow().section_error(Section::Amulet).cloned();
     let gems_error = ctx.session.borrow().section_error(Section::Gems).cloned();
@@ -159,11 +155,11 @@ pub fn view(
     }
     let mut add_children = vec![widgets::filter_input(
         query,
-        "Filter the gem list, or leave empty to browse it",
+        crate::app::GEM_FILTER_PLACEHOLDER,
         "Clear the gem filter",
         filter_id,
     )];
-    if matching.len() > shown {
+    {
         let mut gem_limit = gem_limit;
         add_children.push(
             rect()
@@ -172,21 +168,27 @@ pub fn view(
                 .spacing(theme::space::MD)
                 .content(Content::Flex)
                 .child(
-                    widgets::a11y_text(format!(
-                        "{shown} of {}",
-                        widgets::plural(matching.len(), "gem", "gems")
-                    ))
+                    widgets::a11y_text(if matching.is_empty() {
+                        widgets::plural(0, "gem", "gems")
+                    } else {
+                        format!(
+                            "{shown} of {}",
+                            widgets::plural(matching.len(), "gem", "gems")
+                        )
+                    })
                     .font_size(theme::font::MICRO)
                     .color(theme::DIM),
                 )
                 .child(rect().width(Size::flex(1.0)))
-                .child(
-                    Button::new()
-                        .compact()
-                        .outline()
-                        .child("Show more")
-                        .on_press(move |_| *gem_limit.write() += crate::app::PAGE_SIZE),
-                )
+                .maybe(matching.len() > shown, |el| {
+                    el.child(
+                        Button::new()
+                            .compact()
+                            .outline()
+                            .child("Show more")
+                            .on_press(move |_| *gem_limit.write() += crate::app::PAGE_SIZE),
+                    )
+                })
                 .into_element(),
         );
     }
@@ -200,7 +202,7 @@ pub fn view(
     );
     let add_card = widgets::card(
         "Add a gem",
-        Some("predefined gems".to_owned()),
+        Some("From the game data".to_owned()),
         add_children,
     );
 
@@ -228,10 +230,12 @@ pub fn view(
                 children
             },
         ))
-        .child(add_card)
+        // The carried gems come before the long picker: the owned list is what
+        // the player looks at first, and the 95-row add list would otherwise
+        // push the inventory card below the fold.
         .child(widgets::card(
             "Inventory",
-            Some(widgets::plural(inventory_rows.len(), "gem", "gems")),
+            Some(widgets::plural(carried, "carried gem", "carried gems")),
             vec![
                 rect()
                     .vertical()
@@ -244,7 +248,22 @@ pub fn view(
                 ),
             ],
         ))
+        .child(add_card)
         .into_element()
+}
+
+/// Summary of the amulet state shown in the card hint.
+///
+/// The socket count is the number of unlocked sockets, not the seven physical
+/// entries of `Amulet.OpenGemsList`; the helper keeps the noun singular and
+/// names the tier so the hint cannot read like a bare count.
+#[must_use]
+pub fn amulet_summary(amulet: AmuletInfo, socketed: usize) -> String {
+    format!(
+        "{socketed} of {} filled · amulet tier {}",
+        widgets::plural(usize::from(amulet.sockets), "socket", "sockets"),
+        amulet.tier
+    )
 }
 
 #[allow(clippy::too_many_lines)] // one declarative row keeps the actions together
@@ -359,4 +378,33 @@ fn gem_row(
         )
         .children(actions)
         .into_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_amulet_summary_names_both_counts_and_the_tier() {
+        assert_eq!(
+            amulet_summary(
+                AmuletInfo {
+                    tier: 2,
+                    sockets: 5
+                },
+                1
+            ),
+            "1 of 5 sockets filled · amulet tier 2"
+        );
+        assert_eq!(
+            amulet_summary(
+                AmuletInfo {
+                    tier: 1,
+                    sockets: 3
+                },
+                0
+            ),
+            "0 of 3 sockets filled · amulet tier 1"
+        );
+    }
 }

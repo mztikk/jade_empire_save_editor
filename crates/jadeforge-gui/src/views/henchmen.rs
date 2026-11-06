@@ -31,7 +31,11 @@ pub fn view(
 
     widgets::card(
         "Companions",
-        Some(format!("{} known", henchmen.len())),
+        Some(widgets::plural(
+            henchmen.len(),
+            "companion known",
+            "companions known",
+        )),
         vec![
             rect()
                 .vertical()
@@ -170,7 +174,7 @@ fn henchman_row(
             } else {
                 format!("Make {name} available")
             },
-            if available { "Hide" } else { "Unlock" },
+            if available { "Hide" } else { "Make available" },
             toggle,
         ))
         .into_element()

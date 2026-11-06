@@ -165,10 +165,13 @@ pub mod layout {
     pub const ORB: f32 = 26.0;
     /// Width of a read-only statistic.
     pub const STAT_WIDTH: f32 = 120.0;
-    /// Width of one label grid cell.
-    pub const LABEL_GRID_WIDTH: f32 = 340.0;
     /// Width of a level stepper value.
     pub const STEPPER_WIDTH: f32 = 46.0;
+    /// Width of a style row's `Level N` readout.
+    ///
+    /// Wider than a stepper value because the text now spells out `Level`
+    /// instead of the old `Lv` abbreviation.
+    pub const LEVEL_WIDTH: f32 = 84.0;
     /// Width of an item count.
     pub const ITEM_COUNT_WIDTH: f32 = 30.0;
     /// Width of an upgrade family label.
@@ -185,13 +188,6 @@ pub mod layout {
     /// identity grid reflows from three columns to two instead of leaving one
     /// field alone on its own row.
     pub const FIELD_MIN_WIDTH: f32 = 132.0;
-    /// Width of an overview label cell as a percentage of its row.
-    ///
-    /// Just under half, so two cells and their spacing share a row on the
-    /// default window while the supported minimum shows one per row.
-    pub const LABEL_CELL_PERCENT: f32 = 48.0;
-    /// Smallest width of an overview label cell.
-    pub const LABEL_CELL_MIN_WIDTH: f32 = 300.0;
     /// Smallest width of a fluid overview statistic.
     pub const STAT_MIN_WIDTH: f32 = 110.0;
     /// Largest width of the editor column.
@@ -209,11 +205,16 @@ pub mod layout {
     pub const TARGET_MIN: f32 = 28.0;
     /// Width of the disclosure chevron slot on a row.
     pub const CHEVRON_WIDTH: f32 = 12.0;
+    /// Width of the reserved scan-status slot in the tab bar.
+    ///
+    /// The slot is always present so starting or finishing a scan cannot move
+    /// the tabs beside it.
+    pub const BUSY_SLOT: f32 = 118.0;
     /// Width of the fixed sort-direction arrow slot.
     ///
     /// Every sort button reserves it, active or not, so changing the sort key
     /// or direction cannot move the neighbouring buttons.
-    pub const SORT_ARROW_WIDTH: f32 = 16.0;
+    pub const SORT_ARROW_WIDTH: f32 = 12.0;
     /// Height of the fixed sort-direction arrow slot.
     pub const SORT_ARROW_HEIGHT: f32 = 12.0;
     /// Hairline divider height.
@@ -629,8 +630,9 @@ mod tests {
             layout::SELECTION_BAR_WIDTH,
             layout::ORB,
             layout::STAT_WIDTH,
-            layout::LABEL_GRID_WIDTH,
+            layout::BUSY_SLOT,
             layout::STEPPER_WIDTH,
+            layout::LEVEL_WIDTH,
             layout::ITEM_COUNT_WIDTH,
             layout::UPGRADE_LABEL_WIDTH,
             layout::FIELD_NARROW,

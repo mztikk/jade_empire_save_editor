@@ -33,8 +33,14 @@ pub(super) fn choose_folder(
         return false;
     }
     let start = crate::dialog::start_directory(directory.read().as_str());
-    let Some(folder) = crate::dialog::pick_folder(start.as_deref()) else {
-        return false;
+    let folder = match crate::dialog::pick_folder(start.as_deref()) {
+        crate::dialog::PickOutcome::Picked(folder) => folder,
+        crate::dialog::PickOutcome::Cancelled => {
+            ctx.run(|session| {
+                session.inform("No folder was chosen; the save folder on screen is unchanged.");
+            });
+            return false;
+        }
     };
     let folder_label = folder.display().to_string();
     if start_scan(folder) {
@@ -73,6 +79,7 @@ pub(super) fn header(
     has_save: bool,
     form_errors: &[FieldError],
     scanning: bool,
+    show_about: State<bool>,
     start_scan: Rc<dyn Fn(PathBuf) -> bool>,
     cancel_scan: Rc<dyn Fn()>,
 ) -> Element {
@@ -141,8 +148,14 @@ pub(super) fn header(
         let mut game_directory = game_directory;
         move |_| {
             let start = crate::dialog::start_directory(game_directory.read().as_str());
-            let Some(folder) = crate::dialog::pick_folder(start.as_deref()) else {
-                return;
+            let folder = match crate::dialog::pick_folder(start.as_deref()) {
+                crate::dialog::PickOutcome::Picked(folder) => folder,
+                crate::dialog::PickOutcome::Cancelled => {
+                    ctx.run(|session| {
+                        session.inform("No folder was chosen; the game data folder is unchanged.");
+                    });
+                    return;
+                }
             };
             let label = folder.display().to_string();
             if ctx.run(|session| session.set_game_directory(folder)) {
@@ -172,11 +185,7 @@ pub(super) fn header(
     }
     if !form_errors.is_empty() {
         badges.push(crate::widgets::badge(
-            format!(
-                "{} invalid field{}",
-                form_errors.len(),
-                if form_errors.len() == 1 { "" } else { "s" }
-            ),
+            crate::widgets::plural(form_errors.len(), "invalid field", "invalid fields"),
             theme::SURFACE_ACTIVE,
             theme::WARNING,
         ));
@@ -210,6 +219,7 @@ pub(super) fn header(
             .child(rect().width(Size::flex(1.0)))
             .children(badges)
             .child(crate::widgets::badge(game_text, theme::SURFACE, game_color))
+            .child(about_button(show_about))
             .into_element(),
         rect()
             .horizontal()
@@ -341,6 +351,23 @@ pub(super) fn header(
         .into_element()
 }
 
+/// Top-bar button that opens the About / help surface.
+fn about_button(mut show_about: State<bool>) -> Element {
+    AccessibleButton::new(
+        "About JadeForge, version and settings",
+        Action::new(move || show_about.set(true)),
+        rect()
+            .padding(Gaps::new_symmetric(theme::space::XS, theme::space::MD))
+            .child(
+                crate::widgets::a11y_text("About")
+                    .font_size(theme::font::MICRO)
+                    .color(theme::MUTED),
+            ),
+    )
+    .hover_background(theme::SURFACE_HOVER)
+    .into_element()
+}
+
 /// Renders the savegame screenshot slot.
 ///
 /// The frame has a fixed height so that the placeholder and a decoded
@@ -358,7 +385,8 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
     let frame = rect()
         .width(Size::fill())
         .height(Size::px(theme::layout::PREVIEW))
-        .center()
+        .main_align(Alignment::Start)
+        .cross_align(Alignment::Start)
         .key("save-preview-frame");
     let content = rect()
         .width(Size::px(theme::layout::PREVIEW))
@@ -372,7 +400,7 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
                     image(handle)
                         .width(Size::px(theme::layout::PREVIEW))
                         .height(Size::px(theme::layout::PREVIEW))
-                        .corner_radius(theme::radius::LARGE)
+                        .corner_radius(theme::radius::CARD)
                         .sampling_mode(SamplingMode::Bilinear)
                         .aspect_ratio(AspectRatio::Min)
                         .key("save-preview-image"),
@@ -383,7 +411,7 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
             .child(
                 content
                     .background(theme::SURFACE)
-                    .corner_radius(theme::radius::LARGE)
+                    .corner_radius(theme::radius::CARD)
                     .child(
                         crate::widgets::a11y_text(message)
                             .font_size(theme::font::MICRO)
@@ -442,17 +470,27 @@ pub(super) fn footer(
         }
     };
 
+    let can_save = has_save && dirty;
+    let can_revert = has_save && dirty;
     let (hint_text, hint_color) = if !has_save {
         ("Open a savegame to edit it.", theme::DIM)
+    } else if !form_errors.is_empty() && dirty {
+        (
+            "Some character fields are invalid and were not applied; your other edits can still be saved.",
+            theme::WARNING,
+        )
     } else if !form_errors.is_empty() {
         (
-            "The character form has invalid fields, they are not applied; valid edits still save.",
+            "Some character fields are invalid and were not applied; fix the highlighted fields to apply them.",
             theme::WARNING,
         )
     } else if dirty {
         ("Changes are only in memory until you save.", theme::WARNING)
     } else {
-        ("Nothing to save.", theme::DIM)
+        (
+            "All changes are saved. There is nothing to write.",
+            theme::DIM,
+        )
     };
 
     rect()
@@ -471,14 +509,14 @@ pub(super) fn footer(
         .child(
             Button::new()
                 .filled()
-                .enabled(has_save)
+                .enabled(can_save)
                 .child("Save to disk")
                 .on_press(save),
         )
         .child(
             Button::new()
                 .flat()
-                .enabled(has_save)
+                .enabled(can_revert)
                 .child("Revert")
                 .on_press(revert),
         )
@@ -488,6 +526,53 @@ pub(super) fn footer(
                 .font_size(theme::font::MICRO)
                 .color(hint_color),
         )
+        .into_element()
+}
+
+/// First-start placeholder while the scan worker reads the save folder.
+///
+/// The save list and the editor would otherwise both render their empty states
+/// for a moment and then jump to the real content. Fixed card blocks keep the
+/// layout close to the eventual editor while the status says what is happening.
+pub(super) fn loading_state() -> Element {
+    rect()
+        .vertical()
+        .width(Size::fill())
+        .spacing(theme::space::XXL)
+        .padding(Gaps::new_all(theme::space::PAGE))
+        .child(
+            crate::widgets::a11y_text("Loading savegames…")
+                .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
+                .font_size(theme::font::HEADING)
+                .font_weight(FontWeight::BOLD)
+                .color(theme::TEXT),
+        )
+        .child(
+            crate::widgets::a11y_text(
+                "JadeForge is reading the save folder and the game data. \
+                 The save list appears as soon as the scan finishes.",
+            )
+            .font_size(theme::font::LABEL)
+            .color(theme::MUTED),
+        )
+        .child(skeleton_block(SKELETON_HERO_HEIGHT))
+        .child(skeleton_block(SKELETON_CARD_HEIGHT))
+        .child(skeleton_block(SKELETON_CARD_HEIGHT))
+        .into_element()
+}
+
+/// Height of the simulated overview hero in the loading state.
+const SKELETON_HERO_HEIGHT: f32 = 180.0;
+/// Height of one simulated overview card in the loading state.
+const SKELETON_CARD_HEIGHT: f32 = 110.0;
+
+/// A neutral placeholder card for the loading state.
+fn skeleton_block(height: f32) -> Element {
+    rect()
+        .width(Size::fill())
+        .height(Size::px(height))
+        .background(theme::PANEL)
+        .corner_radius(theme::radius::PANEL)
         .into_element()
 }
 

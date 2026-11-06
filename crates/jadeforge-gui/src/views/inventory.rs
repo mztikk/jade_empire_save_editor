@@ -5,7 +5,7 @@ use freya::prelude::*;
 use crate::app::Ctx;
 use crate::session::{ItemRow, ItemSuggestion, Section};
 use crate::theme;
-use crate::widgets::{self, Action};
+use crate::widgets::{self, AccessibleButton, Action};
 
 /// Renders the inventory tab.
 #[allow(
@@ -16,6 +16,8 @@ pub fn view(
     ctx: &Ctx,
     items: &[ItemRow],
     query: State<String>,
+    category: State<Option<String>>,
+    categories: &[String],
     results: &[ItemSuggestion],
     game_ready: bool,
     game_loading: bool,
@@ -55,41 +57,56 @@ pub fn view(
     if game_ready {
         children.push(widgets::filter_input(
             query,
-            "Filter the item database, or leave empty to browse it",
+            crate::app::ITEM_FILTER_PLACEHOLDER,
             "Clear the item database filter",
             filter_id,
         ));
+        if !categories.is_empty() {
+            children.push(category_filter(category, categories));
+        }
+        let active_category = category.read().clone();
         if results.is_empty() {
             children.push(widgets::hint(if query.read().trim().is_empty() {
-                "The item database is empty."
+                if active_category.is_some() {
+                    "No items in this category."
+                } else {
+                    "The item database is empty."
+                }
             } else {
-                "No items match this search."
+                "No items match this search and category."
             }));
         } else {
             let shown = results.len();
-            let browsing = query.read().trim().is_empty();
+            let browsing = query.read().trim().is_empty() && active_category.is_none();
             let total = if browsing { total_items } else { matching };
+            let heading_text = active_category.as_deref().map_or_else(
+                || {
+                    if browsing {
+                        "ALL ITEMS".to_owned()
+                    } else {
+                        "SEARCH RESULTS".to_owned()
+                    }
+                },
+                |category| crate::session::item_category_label(category).to_uppercase(),
+            );
+            let count_text = match (browsing, shown == total) {
+                (true, _) => format!("{shown} of {}", widgets::plural(total, "item", "items")),
+                (false, true) => widgets::plural(total, "match", "matches"),
+                (false, false) => {
+                    format!("{shown} of {}", widgets::plural(total, "match", "matches"))
+                }
+            };
             let heading = rect()
                 .horizontal()
                 .width(Size::fill())
                 .spacing(theme::space::LG)
                 .content(Content::Flex)
-                .child(widgets::section_label(if browsing {
-                    "ALL ITEMS"
-                } else {
-                    "SEARCH RESULTS"
-                }))
+                .child(widgets::section_label(&heading_text))
                 .child(rect().width(Size::flex(1.0)))
                 .child(
-                    widgets::a11y_text(match (browsing, shown == total) {
-                        (true, _) => format!("{shown} of {total}"),
-                        (false, true) => widgets::plural(total, "match", "matches"),
-                        (false, false) => {
-                            format!("{shown} of {}", widgets::plural(total, "match", "matches"))
-                        }
-                    })
-                    .font_size(theme::font::MICRO)
-                    .color(theme::DIM),
+                    widgets::a11y_text(count_text)
+                        .font_size(theme::font::MICRO)
+                        .color(theme::DIM),
                 )
                 .maybe(shown < total, |el| {
                     el.child(
@@ -144,9 +161,79 @@ pub fn view(
 #[must_use]
 pub fn item_subtitle(item_id: u16, category: Option<&str>, kind: u8) -> String {
     match category {
-        Some(category) => format!("{category} · #{item_id}"),
+        Some(category) => format!(
+            "{} · #{item_id}",
+            crate::session::item_category_label(category)
+        ),
         None => format!("type {kind}"),
     }
+}
+
+/// Category chips for the item picker.
+///
+/// The database is 291 rows long, so a category filter is the difference
+/// between browsing and scrolling. `All` is a chip as well, so clearing the
+/// category never depends on knowing that pressing the active chip toggles it.
+fn category_filter(mut category: State<Option<String>>, categories: &[String]) -> Element {
+    let mut sorted: Vec<&String> = categories.iter().collect();
+    sorted.sort_by_key(|raw| crate::session::item_category_label(raw));
+    let active = category.read().clone();
+    let mut chips: Vec<Element> = Vec::new();
+    chips.push(category_chip(
+        "All items".to_owned(),
+        "Show items from every category".to_owned(),
+        active.is_none(),
+        Action::new(move || category.set(None)),
+    ));
+    for raw in sorted {
+        let label = crate::session::item_category_label(raw);
+        let mut category = category;
+        let selected = active.as_deref() == Some(raw.as_str());
+        let value = raw.clone();
+        chips.push(category_chip(
+            label.clone(),
+            format!("Show only {label}"),
+            selected,
+            Action::new(move || category.set(Some(value.clone()))),
+        ));
+    }
+    rect()
+        .horizontal()
+        .width(Size::fill())
+        .spacing(theme::space::SM)
+        .content(Content::wrap_spacing(theme::space::SM))
+        .child(widgets::section_label("CATEGORY"))
+        .children(chips)
+        .into_element()
+}
+
+/// One category chip.
+fn category_chip(label: String, accessible: String, selected: bool, action: Action) -> Element {
+    AccessibleButton::new(
+        accessible,
+        action,
+        rect()
+            .padding(Gaps::new_symmetric(theme::space::XXS, theme::space::MD))
+            .background(if selected {
+                theme::SURFACE_ACTIVE
+            } else {
+                theme::SURFACE
+            })
+            .corner_radius(theme::radius::PILL)
+            .child(
+                widgets::a11y_text(label)
+                    .font_size(theme::font::MICRO)
+                    .color(if selected {
+                        theme::ACCENT
+                    } else {
+                        theme::MUTED
+                    }),
+            ),
+    )
+    .role(AccessibilityRole::RadioButton)
+    .selected(selected)
+    .hover_background(theme::SURFACE_HOVER)
+    .into_element()
 }
 
 #[allow(clippy::too_many_lines)] // one declarative row keeps the actions together
@@ -343,8 +430,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn item_subtitle_keeps_the_category_and_id_together() {
-        assert_eq!(item_subtitle(42, Some("plot_items"), 6), "plot_items · #42");
+    fn item_subtitle_keeps_the_friendly_category_and_id_together() {
+        assert_eq!(item_subtitle(42, Some("plot_items"), 6), "Plot items · #42");
+        assert_eq!(item_subtitle(42, Some("improve"), 8), "Improvements · #42");
         assert_eq!(item_subtitle(42, None, 9), "type 9");
     }
 }

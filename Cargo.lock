@@ -1982,6 +1982,7 @@ dependencies = [
  "jadeforge-core",
  "jadeforge-gamedata",
  "jadeforge-session",
+ "open",
  "rfd",
  "serde_json",
  "wayland-client",

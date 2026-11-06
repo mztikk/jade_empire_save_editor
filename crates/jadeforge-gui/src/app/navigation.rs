@@ -8,12 +8,21 @@ use crate::widgets::{AccessibleButton, Action};
 use super::Tab;
 
 #[allow(clippy::too_many_lines)] // one declarative tab bar keeps the states together
-pub(super) fn tab_bar(tab: State<Tab>, active: Tab, enabled: bool) -> Element {
+pub(super) fn tab_bar(
+    tab: State<Tab>,
+    active: Tab,
+    enabled: bool,
+    scanning: bool,
+    mut show_about: State<bool>,
+) -> Element {
     let mut buttons: Vec<Element> = Vec::new();
     for candidate in Tab::ALL {
         let mut tab = tab;
         let is_active = candidate == active;
-        let action = Action::new(move || *tab.write() = candidate);
+        let action = Action::new(move || {
+            *tab.write() = candidate;
+            show_about.set(false);
+        });
         let content = rect()
             .vertical()
             .padding(Gaps::new_symmetric(theme::space::SM, theme::space::XL))
@@ -69,6 +78,7 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab, enabled: bool) -> Element {
                     // keyboard focus; Home and End jump to the ends.
                     .on_key({
                         let mut tab = tab;
+                        let mut show_about = show_about;
                         move |event: Event<KeyboardEventData>| {
                             let target = match event.key {
                                 Key::Named(NamedKey::ArrowLeft) => {
@@ -85,6 +95,7 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab, enabled: bool) -> Element {
                                 && let Some(next) = Tab::ALL.get(target)
                             {
                                 *tab.write() = *next;
+                                show_about.set(false);
                                 event.stop_propagation();
                             }
                         }
@@ -112,16 +123,25 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab, enabled: bool) -> Element {
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::XS)
-                .content(Content::wrap_spacing(theme::space::XS))
+                .spacing(theme::space::MD)
+                .content(Content::Flex)
+                .cross_align(Alignment::Center)
                 .padding(Gaps::new(
                     theme::space::LG,
                     theme::space::CARD,
                     theme::space::MD,
                     theme::space::CARD,
                 ))
-                .a11y_role(AccessibilityRole::TabList)
-                .children(buttons)
+                .child(
+                    rect()
+                        .horizontal()
+                        .width(Size::flex(1.0))
+                        .spacing(theme::space::XS)
+                        .content(Content::wrap_spacing(theme::space::XS))
+                        .a11y_role(AccessibilityRole::TabList)
+                        .children(buttons),
+                )
+                .child(busy_slot(scanning))
                 .into_element(),
         )
         .child(
@@ -130,6 +150,33 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab, enabled: bool) -> Element {
                 .height(Size::px(theme::layout::DIVIDER))
                 .background(theme::BORDER)
                 .into_element(),
+        )
+        .into_element()
+}
+
+/// Reserved scan-status slot at the end of the tab bar.
+///
+/// It is always rendered, empty when idle, so starting or cancelling a manual
+/// scan never moves the tab row. The header already has the verbose status;
+/// this is the persistent "work is happening" cue next to the content.
+fn busy_slot(scanning: bool) -> Element {
+    rect()
+        .width(Size::px(theme::layout::BUSY_SLOT))
+        .height(Size::px(theme::font::LINE_HEIGHT))
+        .main_align(Alignment::Center)
+        .cross_align(Alignment::End)
+        .child(
+            crate::widgets::a11y_text(if scanning { "SCANNING…" } else { "" })
+                .a11y_builder(move |node| {
+                    if scanning {
+                        node.set_role(AccessibilityRole::Status);
+                        node.set_live(accesskit::Live::Polite);
+                    }
+                })
+                .font_size(theme::font::MICRO)
+                .font_weight(FontWeight::BOLD)
+                .max_lines(1)
+                .color(theme::WARNING),
         )
         .into_element()
 }
