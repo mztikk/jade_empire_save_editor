@@ -465,7 +465,7 @@ pub fn family_title(family: &str) -> String {
 
 /// Secondary line shown for a style, owned or not.
 ///
-/// `None` when the game data is missing; [`saved_style_subtitle`] then uses the
+/// `None` when the game data is missing; the private fallback then uses the
 /// fields the savegame itself stores.
 #[must_use]
 pub fn style_subtitle(style_id: u16, label: &str) -> Option<String> {
