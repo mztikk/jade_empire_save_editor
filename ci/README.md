@@ -57,7 +57,7 @@ ci/assemble-release.sh dist vX.Y.Z  # zip the folders, write SHA256SUMS and note
 just checksums      # dist/SHA256SUMS for the staged (unzipped) files
 just sbom           # dist/sbom.cdx.json
 just icons          # regenerate the icon PNG/ICO/ICNS assets from icon.svg
-just install-desktop # Linux GUI + launcher entry + hicolor icons
+just install-desktop # Linux GUI + CLI + launcher entry + hicolor icons
 ci/test-icon-staging.sh # smoke-test the macOS bundle and Linux share staging
 cargo bench -p jadeforge-core --bench save_corpus
 cargo +nightly fuzz run gff   # long local run; see fuzz/README.md

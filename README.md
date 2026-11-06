@@ -312,20 +312,20 @@ just live                              # windowed UI tests; ask first (rule 13)
 A branch is ready for review only when the worktree is clean and `just finish`
 passes; see [CONTRIBUTING.md](CONTRIBUTING.md) for the full checklist.
 
-To install only the GUI binary into `~/.cargo/bin` (which must be on `PATH`),
-tuned for the current machine's CPU:
+To install the GUI and CLI binaries into `~/.cargo/bin` (which must be on
+`PATH`), tuned for the current machine's CPU:
 
 ```sh
 just install
 ```
 
-This uses `-C target-cpu=native`, so the resulting binary can use every CPU
-feature the build host has; it is not portable to other machines. Use
+This uses `-C target-cpu=native`, so the resulting binaries can use every CPU
+feature the build host has; they are not portable to other machines. Use
 `just publish` / `just publish-linux` for distribution binaries. Skia is still
 the prebuilt library, so only the Rust code gets native code generation.
 
-On Linux, `just install-desktop` installs everything in one step: the GUI
-binary, the desktop entry and the hicolor icons. The launcher and Wayland
+On Linux, `just install-desktop` installs everything in one step: the GUI and
+CLI binaries, the desktop entry and the hicolor icons. The launcher and Wayland
 compositors can then resolve the icon by app id:
 
 ```sh

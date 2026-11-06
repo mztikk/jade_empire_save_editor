@@ -101,18 +101,19 @@ run:
 cli *args:
     cargo run -q -p jadeforge-cli -- "$@"
 
-# Install the GUI into ~/.cargo/bin, tuned for this machine's CPU. Not portable:
-# use `just publish` for binaries meant for other machines.
+# Install the GUI and CLI into ~/.cargo/bin, tuned for this machine's CPU. Not
+# portable: use `just publish` for binaries meant for other machines.
 install:
     RUSTFLAGS="-C target-cpu=native" cargo install --path crates/jadeforge-gui --locked --profile dist --force
+    RUSTFLAGS="-C target-cpu=native" cargo install --path crates/jadeforge-cli --locked --profile dist --force
 
 # Regenerate the PNG, ICO and ICNS application icon assets from assets/icon.svg.
 icons:
     python3 ci/icons.py
 
-# Install the GUI, the Linux launcher entry and hicolor icons for the current
-# user, so Wayland compositors can find the icon by app id. The launcher entry
-# expects `jadeforge` on PATH (the location `just install` uses).
+# Install the GUI and CLI, the Linux launcher entry and hicolor icons for the
+# current user, so Wayland compositors can find the icon by app id. The
+# launcher entry expects `jadeforge` on PATH (the location `just install` uses).
 [linux]
 install-desktop: install
     install -Dm644 crates/jadeforge-gui/assets/linux/jadeforge.desktop "$HOME/.local/share/applications/jadeforge.desktop"
