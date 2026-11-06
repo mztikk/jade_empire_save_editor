@@ -64,6 +64,17 @@ in the real window. See [AGENTS.md](AGENTS.md) rule 13 and
   parser or editing path.
 - Do not commit savegames, game data, `target/`, `scratch/`, or generated
   coverage reports.
-- Do not weaken the workspace lints. A scoped `#[allow]` needs a reason comment.
+- Never commit secrets or sensitive data. Keep credentials in the environment
+  or an untracked local file; use obvious placeholders in tests and examples.
+- Do not use an em dash (U+2014) in code, comments, documentation, commit
+  messages or UI strings.
+- Do not weaken the workspace lints. A scoped `#[allow]` must explain in a
+  comment why the lint is a false positive for that exact context; otherwise
+  fix the code.
+- Use the named GUI tokens in `crates/jadeforge-gui/src/theme.rs` instead of
+  literal font sizes, spacing, padding, corner radii or fixed dimensions.
+- Do not add comments that restate the code. Prefer a short `///` doc comment
+  for new or refactored behaviour, and reserve inline comments for invariants
+  and non-obvious constraints.
 - Preserve untouched blocks byte for byte and never bypass
   `SaveGame::save_to`.

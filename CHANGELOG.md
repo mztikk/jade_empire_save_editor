@@ -6,6 +6,22 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Repository rules for secrets, unnecessary comments, lint suppressions, the
+  named GUI design tokens, and the no-em-dash convention.
+- The upstream Freya framework skill at `.dsh/skills/freya/SKILL.md`, adapted
+  for the pinned Freya 0.4.3 and linked from `AGENTS.md`.
+
+### Changed
+
+- GUI font sizes, spacing, padding, corner radii, stroke widths and fixed
+  component dimensions now use shared named tokens in `theme.rs` instead of
+  literal values in the views.
+- The savegame and overview placeholders use readable text instead of an em
+  dash, and interactive controls use `on_press` so keyboard activation stays
+  available.
+
 ## [0.2.0] - 2026-11-05
 
 ### Added
