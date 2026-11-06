@@ -153,12 +153,16 @@ pub fn ask_close_choice() -> CloseChoice {
 
 /// Maps the native dialog result onto the explicit close choice.
 ///
-/// `YesNoCancelCustom` keeps the Yes/No/Cancel result ids for its three custom
-/// labels, so Yes is Save and No is Discard.
+/// Every rfd backend returns `Custom(label)` for a custom button rather than
+/// Yes/No/Cancel (the GTK, macOS, TaskDialog and zenity paths all do), so the
+/// labels are the contract. Yes/No remain accepted for the non-custom fallback
+/// on a Windows build without the ComCtl32 v6 manifest.
 fn close_choice(result: &rfd::MessageDialogResult) -> CloseChoice {
     match result {
         rfd::MessageDialogResult::Yes => CloseChoice::Save,
         rfd::MessageDialogResult::No => CloseChoice::Discard,
+        rfd::MessageDialogResult::Custom(label) if label == "Save" => CloseChoice::Save,
+        rfd::MessageDialogResult::Custom(label) if label == "Discard" => CloseChoice::Discard,
         rfd::MessageDialogResult::Ok
         | rfd::MessageDialogResult::Cancel
         | rfd::MessageDialogResult::Custom(_) => CloseChoice::Cancel,
@@ -227,6 +231,18 @@ mod tests {
             CloseChoice::Cancel
         );
         assert_eq!(close_choice(&MessageDialogResult::Ok), CloseChoice::Cancel);
+        assert_eq!(
+            close_choice(&MessageDialogResult::Custom("Save".to_owned())),
+            CloseChoice::Save
+        );
+        assert_eq!(
+            close_choice(&MessageDialogResult::Custom("Discard".to_owned())),
+            CloseChoice::Discard
+        );
+        assert_eq!(
+            close_choice(&MessageDialogResult::Custom("Cancel".to_owned())),
+            CloseChoice::Cancel
+        );
         assert_eq!(
             close_choice(&MessageDialogResult::Custom("other".to_owned())),
             CloseChoice::Cancel
