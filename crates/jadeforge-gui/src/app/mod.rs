@@ -466,6 +466,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         .child(
                             ScrollView::new_controlled(scrolls[active_tab.index()])
                                 .show_scrollbar(true)
+                                .auto_hide_scrollbars(false)
                                 .width(Size::fill())
                                 .height(Size::flex(1.0))
                                 .child(

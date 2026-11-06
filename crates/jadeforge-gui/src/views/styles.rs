@@ -334,7 +334,7 @@ struct UpgradeOrb {
 }
 
 impl KeyExt for UpgradeOrb {
-    fn write_key(&mut self) -> &mut DiffKey {
+    fn key_mut(&mut self) -> &mut DiffKey {
         &mut self.key
     }
 }
@@ -400,15 +400,14 @@ impl Component for UpgradeOrb {
                 });
             })
             .on_pointer_enter(move |_| {
-                Cursor::set(CursorIcon::Pointer);
                 *hovered.write() = Some(key);
             })
             .on_pointer_leave(move |_| {
-                Cursor::set(CursorIcon::default());
                 if *hovered.read() == Some(key) {
                     *hovered.write() = None;
                 }
             })
+            .cursor(CursorIcon::Pointer)
             .on_press(move |_| {
                 a11y_id.request_focus();
                 session.0.borrow_mut().change_upgrade(struct_index, slot);

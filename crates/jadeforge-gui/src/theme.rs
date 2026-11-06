@@ -301,7 +301,16 @@ pub fn theme() -> Theme {
             thumb_background: Preference::Specific(BORDER),
             hover_thumb_background: Preference::Specific(SURFACE_ACTIVE),
             active_thumb_background: Preference::Specific(ACCENT),
-            size: Preference::Specific(layout::SCROLLBAR),
+            // Freya 0.5 replaced the single `size` field with a resting and an
+            // expanded width plus their opacities and gaps. JadeForge keeps the
+            // 0.4 look: a slim, always visible 9 px bar that does not grow on
+            // hover, which the scroll views pair with `auto_hide_scrollbars(false)`.
+            thumb_cross_size: Preference::Specific(layout::SCROLLBAR),
+            expanded_thumb_cross_size: Preference::Specific(layout::SCROLLBAR),
+            opacity: Preference::Specific(255.0),
+            expanded_opacity: Preference::Specific(255.0),
+            cross_gap: Preference::Specific(0.0),
+            expanded_cross_gap: Preference::Specific(0.0),
         },
     );
     theme.set(

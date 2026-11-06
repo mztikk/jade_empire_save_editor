@@ -228,6 +228,7 @@ pub(super) fn sidebar(
         .child(
             ScrollView::new()
                 .show_scrollbar(true)
+                .auto_hide_scrollbars(false)
                 .width(Size::fill())
                 .height(Size::flex(1.0))
                 .child(
@@ -276,7 +277,7 @@ struct SaveList {
 }
 
 impl KeyExt for SaveList {
-    fn write_key(&mut self) -> &mut DiffKey {
+    fn key_mut(&mut self) -> &mut DiffKey {
         &mut self.key
     }
 }
