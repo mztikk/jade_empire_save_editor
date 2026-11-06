@@ -1,8 +1,8 @@
 # Desktop UI review: status and remaining work
 
 **Reviewed:** 2026-11-05 · **Base:** `main` at `9151c2a`
-**Scope:** the Freya 0.4 desktop UI in `crates/jadeforge-gui`, the session state it renders, and the real 89-savegame corpus.
-**Status:** P0 release blockers are addressed. P1/P2/P3 work is tracked in GitHub issues; upstream accessibility blockers remain open.
+**Scope:** the Freya 0.5 desktop UI in `crates/jadeforge-gui`, the session state it renders, and the real 89-savegame corpus.
+**Status:** P0 release blockers are addressed. P1/P2/P3 work is tracked in GitHub issues; the remaining upstream blocker is the missing `Input` label association.
 
 ![JadeForge overview](screenshot.png)
 
@@ -62,13 +62,19 @@ Strategic work:
 
 ## Upstream accessibility blockers
 
-These are not fixable from this repository alone and are tracked as open issues:
+These are not fixable from this repository alone.
+
+Freya 0.5 resolved two of the three blockers: an element with `on_press` now
+registers the AccessKit `Click` action and handles the action request, label
+and paragraph values are filled while the accessibility tree is built, and
+accessibility nodes are refreshed when their diff says so. The headless suite
+activates a tab through a synthetic AccessKit `Click` and asserts that dynamic
+label text reaches the effective AccessKit node. The remaining blocker is
+tracked as an open issue:
 
 | Issue | Blocker |
 | --- | --- |
-| [#2](https://github.com/mztikk/jade_empire_save_editor/issues/2) | Freya 0.4.3 does not report focus or dispatch AccessKit action requests ([upstream #966](https://github.com/marc2332/freya/issues/966)); screen readers cannot know focus or activate controls. |
 | [#3](https://github.com/mztikk/jade_empire_save_editor/issues/3) | `Input` has no label/labelled-by API; fields are still named by their current value or placeholder, even though captions are exposed as groups. |
-| [#4](https://github.com/mztikk/jade_empire_save_editor/issues/4) | Freya does not refresh AT-SPI names for an existing label whose value changes; `a11y_text` keys labels by content until this is fixed. |
 
 ## Verification
 

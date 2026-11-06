@@ -1,9 +1,9 @@
 ---
 name: freya-ui
-description: Use when building or changing the JadeForge desktop UI with Freya 0.4, when a view renders incorrectly or looks off-theme, or when the headless UI tests fail.
+description: Use when building or changing the JadeForge desktop UI with Freya 0.5, when a view renders incorrectly or looks off-theme, or when the headless UI tests fail.
 ---
 
-# Building the JadeForge UI with Freya 0.4
+# Building the JadeForge UI with Freya 0.5
 
 General framework guidance lives in the `freya` skill. This skill covers the
 JadeForge-specific structure, layout, theming and test loop.
@@ -29,6 +29,14 @@ from `dark_theme()` and then:
 1. replaces `theme.colors` with `theme::palette()`,
 2. overrides the `button`, `filled_button`, `outline_button`, `flat_button`,
    `input`, `flat_input`, `scrollbar` and `tooltip` component themes.
+
+Freya 0.5's scrollbar theme has separate resting and expanded widths, opacities
+and cross gaps instead of the old single `size`. JadeForge keeps the 0.4 look
+on purpose: `thumb_cross_size` and `expanded_thumb_cross_size` are both the
+`theme::layout::SCROLLBAR` token, both opacities are 255, and both scroll views
+set `.auto_hide_scrollbars(false)`, so the bar stays the same 9 px and always
+visible. If a view starts hiding its scrollbar or expanding it on hover, check
+those two settings before adding per-view overrides.
 
 The palette is unit tested: every surface must stay dark (`luminance < 0.25`),
 the accent must be jade green (green dominant, with more blue than red) and meet
@@ -70,11 +78,19 @@ when the scale lacks a value instead of putting a magic number in a view.
   carries a transparent `theme::stroke::FOCUS` border and only recolours it on
   focus.
 - Every dynamic list item, conditional tab root and preview subtree needs a
-  stable key. Freya 0.4's diff can panic (`runner.rs`, `Option::unwrap`) when
-  unkeyed or differently-rooted elements are replaced; this reproduced when
-  switching Gems -> Inventory on a large save. `AccessibleButton` and
+  stable key. Freya 0.5 fixed several diff panics, including the unkeyed
+  replacement crash 0.4 hit, but keys are still what reconcile reordered rows
+  without duplicating or dropping state. `AccessibleButton` and
   `ExpandingName` implement `KeyExt`; tab content and preview roots are keyed.
-  Do not remove these keys or change an element's root type between renders.
+  Do not remove these keys.
+- Pointer cursors are per element in 0.5: use `.cursor(CursorIcon::Pointer)` on
+  the hovered element instead of the removed `Cursor::set` calls. The headless
+  suite asserts the tab cursor, so a dropped `.cursor(...)` fails a test.
+- Accessibility comes from Freya 0.5: labels and paragraphs fill their AccessKit
+  value while the tree is built, and `on_press` registers and handles the
+  AccessKit `Click` action. Do not add manual `set_value` builders to plain
+  labels; the headless suite reads the effective node and activates a tab
+  through `send_accessibility_action`.
 - No layout shifts: anything whose size changes with its content gets a fixed
   slot instead of natural sizing. The save preview and its placeholder share one
   height, status messages reserve their maximum lines, selection bars and arrow
@@ -100,12 +116,13 @@ when the scale lacks a value instead of putting a magic number in a view.
 
 ```sh
 cargo check -p jadeforge-gui
+cargo check --workspace --all-targets       # includes the Linux live-suite support code
 cargo test -p jadeforge-gui                 # headless UI tests
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/ui.png all
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/inv.png Inventory --height 1900 --query "Drachen"
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/small.png Overview --width 900 --height 600
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/wide.png all --width 1600 --height 900
-just live                              # ask first; see the Windowed tests rule
+just live                              # ask first for a window-path change; see the Windowed tests rule
 ```
 
 Check narrow windows too: rows with `spacing` overflow silently at 900 px unless
@@ -125,6 +142,13 @@ interaction), or when the bug is in the actual windowed GUI or a mismatch
 between the headless and real window. Otherwise use the headless suite and
 snapshots.
 
+This is a risk-based escalation, not a routine step. Ask for a major Freya or
+winit upgrade, a window configuration/close/focus/input/presentation change, a
+live-probe change, or a bug that only reproduces in a real window. Do not ask
+for view, layout, text, theme, form or session changes that the headless suite
+and snapshots cover. If the change is borderline, ask. Before `just finish`,
+state whether the suite was run; compiling it is not running it.
+
 Once permission is given: `just live` launches the real application through
 `freya-winit` and drives a real Wayland window. On KDE it injects pointer and
 key events through KWin's fake-input protocol and captures the window with
@@ -143,6 +167,12 @@ presentation changes, not for layout assertions. See `docs/LIVE-UI.md` and
 - content below the fold cannot be clicked; launch the runner with a tall window
   for those tests (`(1280.0_f32, 1800.0_f32).into()`).
 - clicks: take `node.layout().area`, use its centre with `click_cursor`.
+- accessibility: read the effective node with
+  `element.finish_accessibility(&mut builder)` before asserting `value()` or
+  `label()`; labels fill their value there in 0.5. Screen-reader activation is
+  `NodeId` plus `send_accessibility_action(ActionRequest { action: Click, .. })`.
+- cursor feedback: `test.move_cursor(...)` then `test.cursor_icon()`; the tab
+  test pins `CursorIcon::Pointer` for `AccessibleButton`.
 
 ## Before you finish
 

@@ -7,7 +7,7 @@ description: Freya Rust GUI framework best practices, patterns, and conventions.
 
 Adapted from the upstream Freya skill at
 <https://github.com/marc2332/freya/blob/main/skills/freya/SKILL.md> (MIT).
-It mirrors Freya `main`; JadeForge pins Freya 0.4.3, so verify
+It mirrors Freya `main`; JadeForge pins Freya 0.5.0, so verify
 version-specific APIs against the pinned source before using them. Pair this
 skill with the repository-specific `freya-ui` skill.
 
@@ -243,11 +243,17 @@ impl Component for FocusableBox {
 - `Focus::Keyboard` - focused via Tab (render a focus ring).
 - `focus.is_focused()` matches `Pointer` or `Keyboard`.
 
-`on_press` already fires on Enter/Space when focused, so keyboard activation is free. For raw key handling, `KeyboardEventExt::is_press_event(&event)` detects the OS activation gesture (Enter/Space; Ctrl+Alt+Space on macOS with VoiceOver).
+`on_press` already fires on Enter/Space when focused, and it registers the
+AccessKit `Click` action and handles action requests from assistive technology,
+so screen-reader activation comes free too. For raw key handling,
+`KeyboardEventExt::is_press_event(&event)` detects the OS activation gesture
+(Enter/Space; Ctrl+Alt+Space on macOS with VoiceOver).
+
+Read the focused id of the current window via
+`PlatformWindow::get().focused_accessibility_id`; `Platform::get()` holds the
+application-wide facts shared by every window.
 
 Other a11y builders: `.a11y_role(...)`, `.a11y_alt("description")`, `.a11y_auto_focus(true)`, `.a11y_member_of(other_id)`, `.a11y_builder(|node| { /* raw accesskit::Node */ })`.
-
-Read the focused id globally via `Platform::get().focused_accessibility_id`.
 
 ## Hooks
 
@@ -487,7 +493,7 @@ use_hook(move || {
 });
 ```
 
-`use_hook` runs once on mount, making it the right place for one-shot side effects. `spawn` returns a `TaskHandle` you can cancel if needed.
+`use_hook` runs once on mount, making it the right place for one-shot side effects. `spawn` returns a `TaskHandle` you can cancel if needed. Freya 0.5 split the long-lived variants: `spawn_in_window` lives as long as its window, while `spawn_global` is independent of any window. Prefer `spawn` for component-owned work.
 
 ### Async functions in components
 
@@ -506,6 +512,12 @@ use_hook(move || {
 ### use_future
 
 `use_future` wraps this pattern: it starts an async task on mount and exposes its state as `FutureState<D>` (`Pending`, `Loading`, `Fulfilled(D)`):
+
+Freya 0.5 made the callback reactive: a `State` read in the callback before the
+async block becomes a dependency, and changing it restarts the task. Reads
+inside the async block do not subscribe. Keep that in mind before reading state
+at the top of the callback; a future that writes the state it also reads will
+restart itself.
 
 ```rust
 let task = use_future(|| async {
@@ -596,7 +608,7 @@ fn app() -> impl IntoElement {
 }
 ```
 
-Use `use_init_root_theme` to register at the root scope. To follow the OS preference, convert `Platform::get().preferred_theme` via the `FromPreference::to_theme` extension.
+Use `use_init_root_theme` to register at the root scope. To follow the OS preference, convert `PlatformWindow::get().preferred_theme` via the `FromPreference::to_theme` extension.
 
 ### Theme extensions
 
@@ -854,6 +866,21 @@ assert_eq!(*state.peek(), 1);
 
 Call `runner.render_to_file("out.png")` to snapshot the current UI.
 
+Freya 0.5 dispatches AccessKit action requests to the elements. An element with
+`on_press` registers the `Click` action, so a headless test can prove
+screen-reader activation with `TestingRunner::send_accessibility_action`:
+
+```rust
+let request = accesskit::ActionRequest {
+    action: accesskit::Action::Click,
+    target_tree: accesskit::TreeId::ROOT,
+    target_node: node.element().accessibility().a11y_id.unwrap(),
+    data: None,
+};
+assert!(runner.send_accessibility_action(request));
+runner.sync_and_update();
+```
+
 ## Icons
 
 Enable with `features = ["icons"]`. Uses Lucide icons rendered as SVGs:
@@ -1007,7 +1034,8 @@ freya = { version = "...", features = ["router", "radio"] }
 
 - `.dsh/skills/freya-ui/SKILL.md` for JadeForge's layout, theming and headless
   testing rules.
-- The pinned Freya 0.4.3 source under
-  `~/.cargo/registry/src/*/freya-*0.4.3/` for exact APIs.
+- The pinned Freya 0.5.0 source under
+  `~/.cargo/registry/src/*/freya-*0.5.0/` for exact APIs. The platform split
+  means `Platform` is application-wide while `PlatformWindow` is per window.
 - <https://freyaui.dev> and the upstream repository for current documentation
   and examples.

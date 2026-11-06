@@ -136,10 +136,11 @@ Notes:
   companion buttons and inventory count interactions to close the remaining
   view branches.
 - Headless accessibility assertions now cover static text values, headings,
-  live status, tab/list roles, selected and expanded states, and the single
-  Tab stop of the save list. Remaining: associate labels with `Input`s (needs a
-  Freya Input API), expose platform focus/click actions (Freya 0.4 ignores
-  `ActionRequested`), and give every repeated row action a contextual name.
+  live status, tab/list roles, selected and expanded states, the single Tab
+  stop of the save list, and activation of a tab through a synthetic AccessKit
+  `Click` action (`TestingRunner::send_accessibility_action`). Remaining:
+  associate labels with `Input`s (still needs a Freya Input label API) and give
+  every repeated row action a contextual name.
 
 ### 2. Small error paths
 

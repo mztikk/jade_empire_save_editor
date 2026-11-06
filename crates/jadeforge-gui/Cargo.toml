@@ -24,7 +24,10 @@ path = "tests/live.rs"
 harness = false
 
 [dependencies]
-accesskit = "0.24.1"
+# Keep on the accesskit 0.25 line Freya 0.5 links: the views set AccessKit
+# roles, states and live regions directly, and the headless tests build
+# ActionRequests with the same accesskit types.
+accesskit = "0.25.1"
 futures-channel = "0.3"
 jadeforge-core.workspace = true
 jadeforge-session.workspace = true
@@ -40,7 +43,7 @@ winresource = { version = "0.1", default-features = false }
 workspace = true
 
 [dev-dependencies]
-freya-testing = "0.4.3"
+freya-testing = "0.5.0"
 jadeforge-gamedata.workspace = true
 
 # The windowed suite drives the real Freya window through winit's plugin API
@@ -48,11 +51,12 @@ jadeforge-gamedata.workspace = true
 # below is Linux-only so the crate still builds on Windows and macOS.
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 # Keep these caret ranges in step with `freya`: the probe passes freya-core
-# event types to freya-winit's plugin handle, so both must resolve to the exact
-# versions freya links. Exact pins here would allow a second copy after a freya
-# patch update and turn that into a type error.
-freya-core = "0.4.3"
-freya-winit = "0.4.3"
+# event types and freya-winit's platform event actions to the plugin handle, so
+# both must resolve to the exact versions freya links. Exact pins here would
+# allow a second copy after a freya patch update and turn that into a type
+# error.
+freya-core = "0.5.0"
+freya-winit = "0.5.0"
 image = { version = "0.25", default-features = false, features = ["png"] }
 serde_json.workspace = true
 wayland-client = "0.31"

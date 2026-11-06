@@ -8,25 +8,12 @@ use freya::prelude::*;
 
 use crate::theme;
 
-/// A text label that is also exposed to assistive technology.
-///
-/// Freya 0.4 gives a label the `Label` role but does not fill its AccessKit
-/// `value`, and AccessKit does not use `label` as the name for that role. Every
-/// visible string therefore goes through this helper: the same text is both the
-/// rendered content and the screen-reader value.
+/// A text label. Freya 0.5 fills a label's AccessKit value from its text when
+/// the accessibility tree is built, and the AT-SPI adapter reads a `Label`
+/// node's name from that value, so no extra accessibility builder is needed.
+/// The helper keeps every visible string on the same element.
 pub fn a11y_text(content: impl Into<String>) -> Label {
-    let content = content.into();
-    let value = content.clone();
-    let name = content.clone();
-    // Keying by the rendered text makes a changed label a new accessibility
-    // node. Freya's AT-SPI adapter does not refresh the name of an existing
-    // label when only its value changes, so this keeps counts, status messages
-    // and values current for screen readers.
-    let key = content.clone();
-    label().text(content).key(key).a11y_builder(move |node| {
-        node.set_value(value);
-        node.set_label(name);
-    })
+    label().text(content.into())
 }
 
 /// A card with a title, an optional hint and a vertical body.
@@ -82,7 +69,7 @@ pub fn field(label_text: &'static str, input: impl IntoElement, width: f32) -> E
         .vertical()
         .spacing(theme::space::SM)
         .width(Size::px(width))
-        // Freya 0.4 has no Input::label API yet. Naming the field group at
+        // Freya 0.5 still has no Input::label API. Naming the field group at
         // least gives a screen reader the caption before it reaches the input's
         // own value; the true label association is an upstream follow-up.
         .a11y_role(AccessibilityRole::Group)
@@ -246,7 +233,7 @@ impl<T> KeyExt for ExpandingName<T>
 where
     T: Copy + Hash + PartialEq + 'static,
 {
-    fn write_key(&mut self) -> &mut DiffKey {
+    fn key_mut(&mut self) -> &mut DiffKey {
         &mut self.key
     }
 }
@@ -288,8 +275,7 @@ where
             .a11y_role(AccessibilityRole::Button)
             .a11y_alt(accessible)
             .a11y_builder(move |node| node.set_expanded(is_expanded))
-            .on_pointer_enter(|_| Cursor::set(CursorIcon::Pointer))
-            .on_pointer_leave(|_| Cursor::set(CursorIcon::default()))
+            .cursor(CursorIcon::Pointer)
             .on_press(move |_| {
                 a11y_id.request_focus();
                 let current = *expanded.read();
@@ -429,7 +415,7 @@ impl AccessibleButton {
 }
 
 impl KeyExt for AccessibleButton {
-    fn write_key(&mut self) -> &mut DiffKey {
+    fn key_mut(&mut self) -> &mut DiffKey {
         &mut self.key
     }
 }
@@ -447,12 +433,11 @@ impl Component for AccessibleButton {
             .a11y_role(self.role)
             .a11y_alt(self.label.clone())
             .a11y_builder(move |node| node.set_selected(selected))
+            .cursor(CursorIcon::Pointer)
             .on_press(move |_| {
                 a11y_id.request_focus();
                 action.call();
             })
-            .on_pointer_enter(|_| Cursor::set(CursorIcon::Pointer))
-            .on_pointer_leave(|_| Cursor::set(CursorIcon::default()))
             // Reserve the focus ring even when unfocused, so tabbing through
             // the shell never shifts tabs, sort controls or savegame rows.
             .border(

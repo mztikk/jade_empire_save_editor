@@ -25,6 +25,26 @@ window-level path.
 > between the headless and real window. This is [AGENTS.md](../AGENTS.md) rule
 > 13.
 
+## When to ask
+
+The suite is not a routine check for every change. Ask for permission when the
+change is in the window path:
+
+- a major Freya, winit, renderer, Wayland or accessibility-backend upgrade, or
+  any upgrade that changes the live-probe or window dependencies;
+- window creation or configuration, the close guard, focus, keyboard or pointer
+  input, presentation, HiDPI, plugins or compositor integration;
+- a change to `tests/live_support/` or the live probe;
+- a bug that reproduces only in the real window or differs from the headless
+  result.
+
+Do not ask for view, layout, text, theme, form, session or core changes that the
+headless suite and snapshots cover; those stay in the fast loop. If the change
+is borderline, ask. Compiling the live target is required when it changed, but
+"it compiles" is not a substitute for running it. When the suite is in scope,
+ask before `just finish`, wait for the answer, and record the result in the
+hand-over. When it is out of scope, say why the headless suite is sufficient.
+
 ## Running it
 
 ```sh

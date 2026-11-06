@@ -16,7 +16,7 @@ pushes to `main`, pull requests, tags and manual dispatches.
   tests that the previous workflow missed. On Windows it also checks the GUI so
   the `winresource` build script really embeds the `.exe` icon, and on macOS it
   checks that the GUI still compiles even though macOS is not released yet.
-- `msrv`: `cargo check` with the declared MSRV (currently 1.88) on Linux.
+- `msrv`: `cargo check` with the declared MSRV (currently 1.99) on Linux.
 - `gui`: installs the X11/Wayland/EGL development packages, runs the headless
   `freya-testing` UI suite, clippy and the release icon staging smoke test. The
   UI suite builds a synthetic savegame and game installation when
