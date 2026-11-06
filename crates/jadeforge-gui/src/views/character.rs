@@ -3,7 +3,8 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::session::format;
+use crate::form::Form;
+use crate::session::{CharacterField, FieldError, format};
 use crate::theme;
 use crate::widgets;
 
@@ -29,48 +30,35 @@ pub fn alignment_hint(value: &str) -> String {
 
 /// Renders the character tab.
 #[allow(clippy::too_many_lines)] // one declarative tree keeps the visual order auditable
-pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
+pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldError]) -> Element {
     let form = ctx.form;
 
     let identity = widgets::card(
         "Identity",
         Some("Every valid change is applied in memory immediately".to_owned()),
         vec![
+            // Three fields per row at every supported width: six narrow fields
+            // of fixed width used to overflow the card and leave KILLS alone on
+            // a second row.
             widgets::field_grid(vec![
-                widgets::field("NAME", Input::new(form.name).width(Size::fill()), theme::layout::FIELD_WIDE),
-                widgets::field("LEVEL", Input::new(form.level).width(Size::fill()), theme::layout::FIELD_NARROW),
-                widgets::field(
-                    "EXPERIENCE",
-                    Input::new(form.experience).width(Size::fill()),
-                    theme::layout::FIELD_MEDIUM,
+                checked(&form, CharacterField::Name, errors),
+                checked(&form, CharacterField::Level, errors),
+                checked(&form, CharacterField::Experience, errors),
+            ]),
+            widgets::field_grid(vec![
+                widgets::field_checked(
+                    CharacterField::Gold,
+                    input(&form, CharacterField::Gold).placeholder("not set"),
+                    widgets::field_error(errors, CharacterField::Gold),
                 ),
-                widgets::field(
-                    "GOLD",
-                    Input::new(form.gold)
-                        .placeholder("not set")
-                        .width(Size::fill()),
-                    theme::layout::FIELD_MEDIUM,
-                ),
-                widgets::field("CHAPTER", Input::new(form.chapter).width(Size::fill()), theme::layout::FIELD_NARROW),
-                widgets::field("KILLS", Input::new(form.kills).width(Size::fill()), theme::layout::FIELD_NARROW),
+                checked(&form, CharacterField::Chapter, errors),
+                checked(&form, CharacterField::Kills, errors),
             ]),
             widgets::divider(),
             widgets::field_grid(vec![
-                widgets::field(
-                    "ALIGNMENT",
-                    Input::new(form.alignment).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "APPEARANCE",
-                    Input::new(form.appearance).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "UNSPENT ATTRIBUTE POINTS",
-                    Input::new(form.attribute_points).width(Size::fill()),
-                    theme::layout::FIELD_MEDIUM,
-                ),
+                checked(&form, CharacterField::Alignment, errors),
+                checked(&form, CharacterField::Appearance, errors),
+                checked(&form, CharacterField::AttributePoints, errors),
             ]),
             alignment_note(alignment_hint(&form.alignment.read())),
             rect()
@@ -90,39 +78,15 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
         None,
         vec![
             widgets::field_grid(vec![
-                widgets::field(
-                    "HEALTH",
-                    Input::new(form.health).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "HEALTH MAX",
-                    Input::new(form.health_max).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "CHI",
-                    Input::new(form.chi).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "CHI MAX",
-                    Input::new(form.chi_max).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
+                checked(&form, CharacterField::Health, errors),
+                checked(&form, CharacterField::HealthMax, errors),
+                checked(&form, CharacterField::Chi, errors),
+                checked(&form, CharacterField::ChiMax, errors),
             ]),
             widgets::divider(),
             widgets::field_grid(vec![
-                widgets::field(
-                    "FOCUS",
-                    Input::new(form.focus).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "FOCUS MAX",
-                    Input::new(form.focus_max).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
+                checked(&form, CharacterField::Focus, errors),
+                checked(&form, CharacterField::FocusMax, errors),
             ]),
             widgets::hint(
                 "Current values may stay below the maximum; the game fills them on rest.",
@@ -135,39 +99,15 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
         None,
         vec![
             widgets::field_grid(vec![
-                widgets::field(
-                    "BODY",
-                    Input::new(form.body).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "MIND",
-                    Input::new(form.mind).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "SPIRIT",
-                    Input::new(form.spirit).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
+                checked(&form, CharacterField::Body, errors),
+                checked(&form, CharacterField::Mind, errors),
+                checked(&form, CharacterField::Spirit, errors),
             ]),
             widgets::divider(),
             widgets::field_grid(vec![
-                widgets::field(
-                    "CHARM",
-                    Input::new(form.charm).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "INTUITION",
-                    Input::new(form.intuition).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
-                widgets::field(
-                    "INTIMIDATE",
-                    Input::new(form.intimidate).width(Size::fill()),
-                    theme::layout::FIELD_NARROW,
-                ),
+                checked(&form, CharacterField::Charm, errors),
+                checked(&form, CharacterField::Intuition, errors),
+                checked(&form, CharacterField::Intimidate, errors),
             ]),
         ],
     );
@@ -208,6 +148,22 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character) -> Element {
         .child(attributes)
         .child(summary)
         .into_element()
+}
+
+/// One character input bound to its form field and accessibility id.
+fn input(form: &Form, field: CharacterField) -> Input {
+    Input::new(form.state(field))
+        .width(Size::fill())
+        .a11y_id(form.id(field))
+}
+
+/// A field with its caption, range or validation message and error border.
+fn checked(form: &Form, field: CharacterField, errors: &[FieldError]) -> Element {
+    widgets::field_checked(
+        field,
+        input(form, field),
+        widgets::field_error(errors, field),
+    )
 }
 
 /// The alignment explanation in a fixed-height slot so typing cannot reflow

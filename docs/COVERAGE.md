@@ -24,60 +24,67 @@ env -u JADEFORGE_SAVE_DIR -u JADEFORGE_GAME_DIR -u JADEFORGE_CONFIG_DIR \
     just coverage
 ```
 
-## Baseline (2026-11-05)
+## Baseline (2026-11-06, after the P1 UI work)
 
 | metric | full corpus | no game data |
 | --- | --- | --- |
-| lines | **15 954 / 17 898 = 89.1 %** | **15 980 / 17 898 = 89.3 %** |
-| functions | **946 / 1 218 = 77.7 %** | **950 / 1 218 = 78.0 %** |
-| regions | **9 674 / 10 789 = 89.7 %** | **9 691 / 10 789 = 89.8 %** |
-| tests run | 306 | 306 |
+| lines | **12 482 / 14 053 = 88.8 %** | **12 536 / 14 053 = 89.2 %** |
+| functions | **1 252 / 1 565 = 80.0 %** | **1 260 / 1 565 = 80.5 %** |
+| regions | **20 244 / 22 885 = 88.5 %** | **20 338 / 22 885 = 88.9 %** |
+| tests run | 395 | 395 |
 
 Several crates keep unit tests inside `src/`, so those test lines are part of
-the totals above. The previous non-test-only table was measured with a smaller
-suite and is not directly comparable, so it is not repeated here.
+the totals above.
 
 | crate | full corpus | no game data |
 | --- | --- | --- |
-| `jadeforge-cli` | 89.8 % | 89.8 % |
-| `jadeforge-core` | 83.6 % | 83.1 % |
-| `jadeforge-gamedata` | 95.8 % | 95.6 % |
-| `jadeforge-gff` | 89.7 % | 89.7 % |
-| `jadeforge-gui` | 88.1 % | 90.0 % |
-| `jadeforge-session` | 92.3 % | 91.8 % |
+| `jadeforge-cli` | 90.3 % | 90.3 % |
+| `jadeforge-core` | 83.8 % | 83.5 % |
+| `jadeforge-gamedata` | 95.6 % | 95.3 % |
+| `jadeforge-gff` | 92.5 % | 92.5 % |
+| `jadeforge-gui` | 88.4 % | 89.7 % |
+| `jadeforge-session` | 88.4 % | 88.8 % |
 
 Notes:
 
 - Branch coverage is not collected; the report is line/function/region based.
 - No test is `#[ignore]`d. Real-corpus tests return early without
   `JADEFORGE_SAVE_DIR`, while the GUI suite builds its synthetic fixture and
-  still runs all 42 headless tests. `nextest` reports 306 run; the only skip
-  is the opt-in windowed suite.
+  still runs all headless tests without game data. `nextest` reports 395 run;
+  the only skip is the opt-in windowed suite. (One extra headless reset test
+  landed after this measurement; it does not change the rounded percentages.)
 - GUI numbers are inflated by declarative view code that runs on every render.
   Treat GUI coverage as a regression signal, not as a quality target.
 - The full-corpus GUI number is lower because the real-corpus fixture copies the
   smallest savegame, which has no amulet; the synthetic no-game fixture exercises
   the gem view.
+- The P1 work added geometry, window-fit, validation, memoisation, target-size,
+  focus-restoration, worker-scan progress/cancellation and an 89-save render
+  test. `gui/src/geometry.rs` is covered
+  by its own unit tests but its winit monitor path cannot run headlessly;
+  `session/src/session/form.rs` is lower than the rest of the session crate
+  because the per-field validation branches for every numeric type are not all
+  exercised by one fixture.
 - CLI coverage is real binary coverage: the tests invoke
   `CARGO_BIN_EXE_jadeforge-cli` and cover `add-item`, every editable field type
   and the no-game-data fallbacks.
 - GFF and game-data coverage is now almost entirely synthetic: both crates are
-  above 95 % without a game installation.
+  above 92 % without a game installation.
 
 ## Where the gaps are
 
 | file | full corpus | no game data | why it matters |
 | --- | ---: | ---: | --- |
-| `gui/src/views/gems.rs` | 59.2 % | 81.1 % | the real-corpus fixture has no amulet; the synthetic one does |
-| `gui/src/views/styles.rs` | 84.8 % | 82.4 % | all views need an opened savegame |
+| `gui/src/views/gems.rs` | 50.9 % | 79.9 % | the real-corpus fixture has no amulet; the synthetic one does |
+| `gui/src/views/styles.rs` | 87.3 % | 83.5 % | all views need an opened savegame |
 | `gui/src/views/character.rs` | 100 % | 100 % | fully exercised by the synthetic save |
-| `gui/src/dialog.rs` | 63.2 % | 63.2 % | native folder dialog; not headless-testable |
-| `core/src/henchmen.rs` | 82.0 % | 82.0 % | the remaining lines are defensive/unreachable |
-| `core/src/screenshot.rs` | 79.8 % | 79.8 % | malformed TGA error paths |
-| `session/src/session.rs` | 92.3 % | 91.9 % | a few game-data helpers |
-| `gff/src/value.rs` | 94.6 % | 94.6 % | the remaining decode/accessor lines are unreachable or defensive |
-| `gff/src/lib.rs` | 88.9 % | 88.9 % | add/remove branches and duplicate-stack guards |
-| `gamedata/src/gamedata.rs` | 98.2 % | 98.2 % | stale test-root/env discovery and a non-UTF-8 filename branch |
+| `gui/src/geometry.rs` | 79.8 % | 79.8 % | the pure fit tests run; the monitor query needs a real event loop |
+| `gui/src/dialog.rs` | 64.5 % | 64.5 % | native folder dialog; not headless-testable |
+| `session/src/session/form.rs` | 71.5 % | 71.5 % | per-field validation has one branch per numeric type |
+| `core/src/save.rs` | 78.4 % | 78.0 % | canonical-block comparison and write error paths |
+| `core/src/henchmen.rs` | 82.0 % | 81.0 % | the remaining lines are defensive/unreachable |
+| `gff/src/lib.rs` | 88.8 % | 88.8 % | add/remove branches and duplicate-stack guards |
+| `gamedata/src/gamedata.rs` | 98.1 % | 97.3 % | stale test-root/env discovery and a non-UTF-8 filename branch |
 
 ## Recently completed
 

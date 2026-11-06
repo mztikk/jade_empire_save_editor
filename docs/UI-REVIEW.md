@@ -1,8 +1,8 @@
 # Desktop UI review: status and remaining work
 
-**Reviewed:** 2026-11-05 · **Base:** `main` at `9151c2a`
+**Reviewed:** 2026-11-05, P1 follow-up 2026-11-06 · **Base:** `main` at `6e1d4b8`
 **Scope:** the Freya 0.5 desktop UI in `crates/jadeforge-gui`, the session state it renders, and the real 89-savegame corpus.
-**Status:** P0 release blockers are addressed. P1/P2/P3 work is tracked in GitHub issues; the remaining upstream blocker is the missing `Input` label association.
+**Status:** P0 release blockers are addressed and the P1 follow-ups are implemented and verified on `fix/ui-p1-followups` (the remaining scroll caveat is listed under P1). P2/P3 work is tracked in GitHub issues; the remaining upstream blocker is the missing `Input` label association.
 
 ![JadeForge overview](screenshot.png)
 
@@ -32,15 +32,32 @@ The GitHub issues are the source of truth for checklists. This section is a shor
 
 ### P1: [#7](https://github.com/mztikk/jade_empire_save_editor/issues/7)
 
-High-value follow-ups:
+Addressed on the `fix/ui-p1-followups` branch:
 
-- **Responsive composition:** default 1180×760 still wraps `KILLS` alone; the Overview grids use fixed 340/120 px cells; wide windows have no content cap; window geometry/DPI is not remembered.
-- **State safety:** Scan clears the open save; Browse opens the dialog before the dirty check; filters/page limits/expanded ids/scroll leak across saves and folders; an invalid character form blocks saving unrelated edits; dirty is a sticky flag, not content equality.
-- **Feedback and recovery:** no-save state leaves tabs and Save/Revert enabled; status messages are clipped and ephemeral; folder errors look empty; game data cannot be located from the UI.
-- **Discoverability:** expandable rows have no chevron; orbs have no effect/cost preview; read-only styles are silent; descriptions truncate at five lines; gem effects are hidden until added.
-- **Editing UX:** no keyboard shortcuts; stack size and companion level are stepper-only; save rows omit the character name and modified time.
-- **Accessibility polish:** targets below 24×24 (sort 38×12, ± 23×25), 10–11 px secondary type, low non-text contrast for inputs/scrollbars, colour-only active tab, green overload for unsaved/success, missing hover states.
-- **Performance:** manual Scan blocks the UI thread; per-frame derived lists and all-row hover rebuilds; no instrumentation or 89-save render test.
+| Area | Result |
+| --- | --- |
+| Responsive composition | Fluid 3+3 identity grid at 1180×760 and 900×700, overview glance cells 1-up → 2+2+1, hero stats 2×2, 1100 px editor cap and a 720 px text measure; descriptions expand in full. |
+| Window geometry | `geometry::fit_window` clamps the default and remembered size to the monitor, lowers the minimum on short screens and keeps a stored position on screen; a plugin remembers the rectangle. Tested for 1366×768 at 125 %. |
+| Clipped names | Ellipsis plus a tooltip on save, item, companion and sidebar names; the overview path wraps and has a Copy path action. |
+| State safety | Scan keeps the open savegame for the same folder and re-locates it by path; Browse checks dirty state before the dialog; filters, paging, expanded rows and scroll positions reset on a document change; every filter has a Clear button. |
+| Save vs. form | Each field validates on its own and shows its range; valid fields apply even when another is invalid; Save writes applied edits, reports the invalid form separately and focuses the first invalid field. |
+| Dirty state | Content comparison against canonical block payloads: edit-then-restore clears the flag. |
+| No-save and feedback | Tabs and Save/Revert are disabled without a savegame and the empty state has a primary folder action; status is a persistent three-line, copyable slot with a success glyph; unreadable sections are not shown as empty lists; folder and game-installation errors are distinct. |
+| Discoverability | Chevron/Details rows, orb hover and focus details with the buy/remove explanation, a read-only style notice, gem effect lines in the picker. |
+| Editing UX | Contextual accessible names, Ctrl+S/O/F, F5, Enter, Escape and tab arrow keys, direct numeric stack/level editing, character name and UTC modification time in save rows. |
+| Accessibility | 28 px row targets, 11 px micro / 14 px body type, 3:1 control borders, tab underline, amber unsaved state, focus restoration after a removal, focusable keyboard scroll view. |
+| Performance | Manual Scan (startup, button, Enter, F5 and Browse) runs on a worker with an in-flight status and cancellation; save filter/sort, item suggestions, learnable styles and the form reparse are memoised; save rows keep stable `Action` objects and paint hover without a rebuild; frame-time instrumentation and an 89-save render test. |
+
+Remaining verification caveat for #7:
+
+- `just live` passes six windowed scenarios, including `window_geometry_restarts`,
+  which runs twice with one config directory. The first launch is seeded with a
+  1000x720 rectangle and an off-screen position; after it closes, the harness
+  verifies that the geometry plugin replaced the seed with the real rectangle,
+  and the relaunch opens at the stored 1000x720 inner size. Real window
+  creation, presentation, pointer input and keyboard navigation are verified.
+  The scroll-view paging keys only have their focus target asserted, so the
+  real scroll offset remains unverified.
 
 ### P2: [#8](https://github.com/mztikk/jade_empire_save_editor/issues/8)
 
@@ -78,10 +95,11 @@ tracked as an open issue:
 
 ## Verification
 
-- `just check`: 306 workspace tests, 42 headless UI tests, clippy and formatting clean.
-- `just live`: all 5 windowed scenarios pass, including `keyboard_navigates_the_save_list` (Tab → list box, Down → second save, Enter → opens) through real KWin input.
-- Live AT-SPI check: static text, count, status, tab selected state and the focusable save list box were current; the desktop accessibility setting was restored afterwards.
-- The P0 work is merged on `main`; the remaining work above is tracked in #7, #8, #9 and the three upstream issues.
+- `just check`: 396 workspace tests passed (1 skipped: the opt-in live suite), clippy and formatting clean after the P1 work (see `docs/COVERAGE.md` for coverage).
+- Headless coverage of the P1 work: geometry at 1180x760, 900x700 and 1600x900; DPI geometry for 1366x768 at 125 %; scan-keeps-save; dirty content comparison; invalid-form save independence; first-invalid-field focus; focus restoration after removal; target sizes; keyboard scrolling focus; the 89-save render test.
+- `just live`: all six windowed scenarios passed on Wayland with the KWin input backend. The window opened at the configured size, save opening and tab switching, item filtering, keyboard save-list navigation and real frame presentation all worked; the captured frame was written to the ignored `target/live-ui/presented.png`. The two-pass `window_geometry_restarts` scenario opened at the seeded 1000x720, the plugin stored the real rectangle on close, and the relaunch restored 1000x720. Each scenario uses its own settings directory; the two geometry passes deliberately share one.
+- Live screen-reader check: Orca 51.1 (Speech Dispatcher 0.12.1, espeak-ng 1.52) announced the polite scan statuses and the assertive folder error in a manual run. The AT-SPI event log showed the full text with politeness level 1 for the scan messages and level 2 for "The save folder … does not exist …". This closes the P1 status live-region check.
+- The P0 work is merged on `main`; the remaining P1 items and #8/#9 are tracked in the issues above.
 
 ## Notes
 

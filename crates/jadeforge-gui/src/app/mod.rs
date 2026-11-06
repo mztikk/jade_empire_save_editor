@@ -16,6 +16,7 @@ use crate::form::Form;
 use crate::session::{CharacterForm, GameStatus, Preview, Session, default_save_dir};
 use crate::theme;
 use crate::views;
+use crate::widgets::Action;
 use crate::{APP_ID, ICON_PNG};
 
 mod navigation;
@@ -54,8 +55,6 @@ impl Ctx {
 /// Which interactive row is currently hovered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HoverKey {
-    /// A savegame row, by index in `Session::entries`.
-    Save(usize),
     /// An inventory row, by item id.
     Item(usize),
     /// An item-database suggestion, by item id.
@@ -64,6 +63,10 @@ pub enum HoverKey {
     Style(usize),
     /// An upgrade orb: style struct index and slot.
     Orb(usize, u16),
+    /// A gem row, by struct index.
+    Gem(usize),
+    /// A companion row, by struct index.
+    Companion(usize),
 }
 
 /// Entries a searchable picker renders per page (items, styles, gems).
@@ -154,18 +157,39 @@ pub fn window_config<E>(app: impl Fn() -> E + 'static) -> WindowConfig
 where
     E: IntoElement + 'static,
 {
+    use freya::winit::dpi::{LogicalPosition, LogicalSize};
+
+    let preferred = (
+        f64::from(theme::layout::WINDOW_WIDTH),
+        f64::from(theme::layout::WINDOW_HEIGHT),
+    );
+    let minimum = (
+        f64::from(theme::layout::MIN_WINDOW_WIDTH),
+        f64::from(theme::layout::MIN_WINDOW_HEIGHT),
+    );
+    let stored = crate::config::Config::load().window;
+    // Without a monitor (a headless start or a failed query) the preferred
+    // rectangle is used; the attributes hook replaces it with the fitted one
+    // once the real monitor is known.
+    let fallback = crate::geometry::fit_window(preferred, stored, None, minimum);
+
     WindowConfig::new(app)
         .with_title(WINDOW_TITLE)
         .with_icon(LaunchConfig::window_icon(ICON_PNG))
         .with_app_id(APP_ID)
-        .with_size(
-            theme::layout::WINDOW_WIDTH.into(),
-            theme::layout::WINDOW_HEIGHT.into(),
-        )
-        .with_min_size(
-            theme::layout::MIN_WINDOW_WIDTH.into(),
-            theme::layout::MIN_WINDOW_HEIGHT.into(),
-        )
+        .with_size(fallback.width, fallback.height)
+        .with_min_size(fallback.min_width, fallback.min_height)
+        .with_window_attributes(move |attributes, event_loop| {
+            let work = crate::geometry::monitor_work_area(event_loop);
+            let fitted = crate::geometry::fit_window(preferred, stored, work, minimum);
+            let attributes = attributes
+                .with_inner_size(LogicalSize::new(fitted.width, fitted.height))
+                .with_min_inner_size(LogicalSize::new(fitted.min_width, fitted.min_height));
+            match (fitted.x, fitted.y) {
+                (Some(x), Some(y)) => attributes.with_position(LogicalPosition::new(x, y)),
+                _ => attributes,
+            }
+        })
         .with_on_close(|_, _| {
             if !ui_is_dirty() {
                 return CloseDecision::Close;
@@ -192,40 +216,24 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     use_init_theme(theme::theme);
 
     let session: Rc<RefCell<Session>> =
-        use_hook(move || Rc::new(RefCell::new(Session::empty(directory))));
+        use_hook(move || Rc::new(RefCell::new(Session::pending(directory))));
     let revision = use_state(|| 0_u32);
-    // Scan savegames on a worker thread; the future applies the result and
-    // bumps the revision, so the first frame never waits for the scan.
-    let scan = use_future({
+    // The scan currently in flight. Startup, the Scan button, Enter on the
+    // folder field and F5 all only set this state; the worker future below does
+    // the reading and applies the result when the request is still current.
+    let scan_job = use_state({
         let session = session.clone();
         move || {
-            let session = session.clone();
-            let mut revision = revision;
-            async move {
-                let directory = session.borrow().directory().to_path_buf();
-                let token = session.borrow().scan_token();
-                let (tx, rx) = futures_channel::oneshot::channel();
-                let worker_directory = directory.clone();
-                std::thread::spawn(move || {
-                    let _ = tx.send(Session::scan_entries(&worker_directory));
-                });
-                let applied = match rx.await {
-                    Ok(entries) => session
-                        .borrow_mut()
-                        .apply_entries_for(&directory, token, entries),
-                    Err(_) => session
-                        .borrow_mut()
-                        .report_scan_failure_for(&directory, token),
-                };
-                if applied {
-                    *revision.write() += 1;
-                }
-            }
+            let directory = session.borrow().directory().to_path_buf();
+            session.borrow_mut().begin_scan(directory)
         }
     });
-    let _ = scan.state();
     let form = Form::new();
     let directory_state = use_state(|| session.borrow().directory().display().to_string());
+    let game_directory = use_state(|| match session.borrow().game_status() {
+        GameStatus::Loaded { root, .. } => root.display().to_string(),
+        _ => String::new(),
+    });
     let tab = use_state(|| Tab::Overview);
     let item_query = use_state(String::new);
     let style_query = use_state(String::new);
@@ -239,6 +247,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let expanded_style = use_state(|| None::<u16>);
     let save_query = use_state(String::new);
     let save_focus = use_state(|| 0_usize);
+    // One press action per savegame row, kept across renders so hovering a row
+    // cannot invalidate it and rebuild every row.
+    let save_actions: Rc<RefCell<std::collections::HashMap<usize, Action>>> =
+        use_hook(|| Rc::new(RefCell::new(std::collections::HashMap::new())));
     let save_sort = use_state(|| {
         let config = crate::config::Config::load();
         let sort = config
@@ -260,8 +272,22 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         use_scroll_controller(ScrollConfig::default),
     ];
 
-    // Subscribe to session changes.
+    // Stable accessibility ids for the four filter inputs, so Ctrl+F can move
+    // focus to the filter of the active tab.
+    let save_filter_id = use_a11y();
+    let item_filter_id = use_a11y();
+    let style_filter_id = use_a11y();
+    let gem_filter_id = use_a11y();
+    // One focus target for the editor's scroll view: static content below the
+    // fold is reachable with the arrow and paging keys, not only the wheel.
+    let editor_scroll_id = use_a11y();
+    let editor_scroll_focus = use_focus(editor_scroll_id);
+
+    // Subscribe to session changes and to the in-flight scan, so starting,
+    // cancelling or settling a scan re-renders the header even though most of
+    // the scan state lives in the session rather than in reactive state.
     let _ = *revision.read();
+    let _ = *scan_job.read();
 
     let ctx = Ctx {
         session: session.clone(),
@@ -269,10 +295,27 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         form,
     };
 
+    // Record how long a state-changing render took. Reading the revision and
+    // the active tab subscribes the effect to the renders that do real work.
+    {
+        let rendered_at = use_hook(|| std::cell::Cell::new(std::time::Instant::now()));
+        use_side_effect(move || {
+            let _ = *revision.read();
+            let _ = *tab.read();
+            let now = std::time::Instant::now();
+            crate::perf::record_frame(now.duration_since(rendered_at.replace(now)));
+        });
+    }
+
     // Apply valid character edits as they happen, so the form behaves exactly
     // like the item, style and gem edits: everything lives in memory until the
     // user saves. Invalid input stays in the fields for the user to fix.
-    let form_snapshot = form.snapshot();
+    // The snapshot is a dependency of the side effect below; it is memoised so
+    // the 21 inputs are only re-read when one of them changes.
+    let form_snapshot = {
+        let snapshot = use_memo(move || form.snapshot());
+        snapshot.read().clone()
+    };
     {
         let mut ctx = ctx.clone();
         use_side_effect_with_deps(&form_snapshot, move |_| {
@@ -285,6 +328,38 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             }
         });
     }
+
+    // Opening another savegame or scanning another folder starts a fresh
+    // document: filters, paging, expanded rows and every tab's scroll position
+    // belong to the previous one and would otherwise leak across.
+    //
+    // The reset runs from the actions that change the document instead of an
+    // effect: reading a scroll controller inside an effect subscribes it to the
+    // layout bounds, which would rerun the reset after every render.
+    let reset: Rc<dyn Fn()> = {
+        let session = session.clone();
+        Rc::new(move || {
+            // Each call copies the handles, so the closure stays an `Fn` that
+            // the shell can share between the header, the sidebar and the
+            // empty state.
+            reset_pickers(
+                save_query,
+                item_query,
+                style_query,
+                gem_query,
+                item_limit,
+                style_limit,
+                gem_limit,
+                expanded_item,
+                expanded_suggestion,
+                expanded_style,
+                hovered,
+                directory_state,
+                &session,
+                &scrolls,
+            );
+        })
+    };
 
     // Snapshot everything the shell needs so the borrow stays short.
     let active_tab = *tab.read();
@@ -305,11 +380,22 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let game_status = session.borrow().game_status().clone();
     let has_save = session.borrow().opened_save().is_some();
 
-    let form_differs = character
-        .as_ref()
-        .is_some_and(|character| form.differs_from(character));
+    // The invalid badge comes from parsing the fields, not from "differs":
+    // a field that cannot be parsed is invalid even before it is applied. The
+    // per-field reparse is memoised against the session revision and the form
+    // inputs instead of running on every frame.
+    let form_errors = {
+        let session = session.clone();
+        let errors = use_memo(move || {
+            let _ = *revision.read();
+            let form = form.read();
+            session.borrow().form_errors(&form)
+        });
+        errors.read().clone()
+    };
     let preview_handle = cached_preview(&preview_cache, preview.as_deref());
     let game_ready = matches!(game_status, GameStatus::Loaded { .. });
+    let game_loading = matches!(game_status, GameStatus::Loading);
     let names_ready = session.borrow().has_bundled_names();
     let items_ready = session.borrow().items_ready();
     let total_items = if active_tab == Tab::Inventory {
@@ -317,33 +403,43 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     } else {
         0
     };
-    let (item_results, item_matches) = if active_tab == Tab::Inventory {
-        let query = item_query.read().clone();
-        session.borrow().search_items(&query, *item_limit.read())
-    } else {
-        (Vec::new(), 0)
+    // Filtering the whole item database and the learnable style list is
+    // derived work: memoise it against the session revision, the filter and the
+    // page limit instead of rebuilding 291 suggestions every frame.
+    let (item_results, item_matches) = {
+        let session = session.clone();
+        let results = use_memo(move || {
+            let _ = *revision.read();
+            let query = item_query.read().clone();
+            let limit = *item_limit.read();
+            session.borrow().search_items(&query, limit)
+        });
+        results.read().clone()
     };
-    let (style_matches, style_matches_total, total_missing) = if active_tab == Tab::Styles {
-        let query = style_query.read().trim().to_lowercase();
-        let limit = *style_limit.read();
-        let missing = session.borrow().missing_styles();
-        let total_missing = missing.len();
-        let matching: Vec<_> = missing
-            .into_iter()
-            .filter(|style| {
-                query.is_empty()
-                    || style.name.to_lowercase().contains(&query)
-                    || style.label.to_lowercase().contains(&query)
-            })
-            .collect();
-        let total = matching.len();
-        (
-            matching.into_iter().take(limit).collect::<Vec<_>>(),
-            total,
-            total_missing,
-        )
-    } else {
-        (Vec::new(), 0, 0)
+    let (style_matches, style_matches_total, total_missing) = {
+        let session = session.clone();
+        let results = use_memo(move || {
+            let _ = *revision.read();
+            let query = style_query.read().trim().to_lowercase();
+            let limit = *style_limit.read();
+            let missing = session.borrow().missing_styles();
+            let total_missing = missing.len();
+            let matching: Vec<_> = missing
+                .into_iter()
+                .filter(|style| {
+                    query.is_empty()
+                        || style.name.to_lowercase().contains(&query)
+                        || style.label.to_lowercase().contains(&query)
+                })
+                .collect();
+            let total = matching.len();
+            (
+                matching.into_iter().take(limit).collect::<Vec<_>>(),
+                total,
+                total_missing,
+            )
+        });
+        results.read().clone()
     };
 
     let sync: Rc<dyn Fn()> = {
@@ -356,6 +452,107 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         })
     };
 
+    // One worker scan for every path. The future triggers whenever `scan_job`
+    // changes, starts the filesystem and game-data read on a thread, and
+    // applies the result only while the request is still current. A cancel or a
+    // superseding scan clears the job, which drops this task and discards the
+    // worker result through the session token.
+    let scan = use_future({
+        let session = session.clone();
+        let reset = reset.clone();
+        let sync = sync.clone();
+        move || {
+            // Reading the job subscribes the future to new scan requests.
+            let job = scan_job.read().clone();
+            let session = session.clone();
+            let reset = reset.clone();
+            let sync = sync.clone();
+            let scan_job = scan_job;
+            let mut revision = revision;
+            let directory_state = directory_state;
+            async move {
+                let mut scan_job = scan_job;
+                let mut directory_state = directory_state;
+                let Some(job) = job else {
+                    return;
+                };
+                let (tx, rx) = futures_channel::oneshot::channel();
+                let worker_job = job.clone();
+                std::thread::spawn(move || {
+                    let _ = tx.send(crate::session::ScanOutcome::run(&worker_job));
+                });
+                let result = rx.await;
+                let applied = {
+                    let mut session = session.borrow_mut();
+                    match result {
+                        Ok(outcome) => session.complete_scan(&job, outcome),
+                        Err(_) => {
+                            if session.fail_scan(&job) {
+                                crate::session::ScanApply::Failed
+                            } else {
+                                crate::session::ScanApply::Stale
+                            }
+                        }
+                    }
+                };
+                match applied {
+                    crate::session::ScanApply::Applied(completion) => {
+                        let real = session.borrow().directory().display().to_string();
+                        directory_state.set(real);
+                        if completion.directory_changed {
+                            reset();
+                            sync();
+                        }
+                        *revision.write() += 1;
+                        // Clear the in-flight marker last: changing the state
+                        // this future subscribes to may restart it.
+                        scan_job.set(None);
+                    }
+                    crate::session::ScanApply::Failed => {
+                        let real = session.borrow().directory().display().to_string();
+                        directory_state.set(real);
+                        *revision.write() += 1;
+                        scan_job.set(None);
+                    }
+                    crate::session::ScanApply::Stale => {}
+                }
+            }
+        }
+    });
+    let _ = scan.state();
+
+    // Starts a scan for a path. A rejected folder leaves the previous entries,
+    // savegame and remembered path untouched and only reports why.
+    let start_scan: Rc<dyn Fn(PathBuf) -> bool> = {
+        let session = session.clone();
+        Rc::new(move |path| {
+            let mut scan_job = scan_job;
+            let mut revision = revision;
+            let request = session.borrow_mut().begin_scan(path);
+            let accepted = request.is_some();
+            if let Some(request) = request {
+                scan_job.set(Some(request));
+            }
+            // The rejection message lives in the session, which is not reactive
+            // by itself, so both outcomes refresh the header.
+            *revision.write() += 1;
+            accepted
+        })
+    };
+    // Cancels the in-flight scan; the savegame and entry list stay on screen.
+    let cancel_scan: Rc<dyn Fn()> = {
+        let session = session.clone();
+        Rc::new(move || {
+            let mut scan_job = scan_job;
+            let mut directory_state = directory_state;
+            if session.borrow_mut().cancel_scan() {
+                scan_job.set(None);
+                let real = session.borrow().directory().display().to_string();
+                directory_state.set(real);
+            }
+        })
+    };
+
     let content = match (active_tab, &character) {
         (Tab::Overview, Some(character)) => views::overview::view(
             &ctx,
@@ -364,7 +561,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             items.len(),
             styles.len(),
         ),
-        (Tab::Character, Some(character)) => views::character::view(&ctx, character),
+        (Tab::Character, Some(character)) => views::character::view(&ctx, character, &form_errors),
         (Tab::Styles, _) => {
             let mut style_limit = style_limit;
             views::styles::view(
@@ -373,11 +570,13 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 style_query,
                 &style_matches,
                 game_ready,
+                game_loading,
                 names_ready,
                 game_ready.then_some(total_missing),
                 style_matches_total,
                 expanded_style,
                 hovered,
+                style_filter_id,
                 move |_| *style_limit.write() += PAGE_SIZE,
             )
         }
@@ -389,11 +588,13 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 item_query,
                 &item_results,
                 items_ready,
+                game_loading,
                 item_matches,
                 total_items,
                 expanded_item,
                 expanded_suggestion,
                 hovered,
+                item_filter_id,
                 move |_| *item_limit.write() += PAGE_SIZE,
             )
         }
@@ -401,10 +602,19 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             let available = session.borrow().available_gems();
             let amulet = session.borrow().amulet();
             let gems = session.borrow().gems();
-            views::gems::view(&ctx, &gems, gem_query, &available, amulet, gem_limit)
+            views::gems::view(
+                &ctx,
+                &gems,
+                gem_query,
+                &available,
+                amulet,
+                gem_limit,
+                hovered,
+                gem_filter_id,
+            )
         }
-        (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen),
-        (_, None) => shell::empty_state(entries.len()),
+        (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen, hovered),
+        (_, None) => shell::empty_state(&ctx, entries.len(), directory_state, start_scan.clone()),
     };
 
     let content = rect()
@@ -413,18 +623,30 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         .child(content)
         .into_element();
 
+    let scanning = session.borrow().is_scanning();
     let header = shell::header(
         &ctx,
         directory_state,
+        game_directory,
         &message,
         &game_status,
         dirty,
-        form_differs,
-        sync.clone(),
+        has_save,
+        &form_errors,
+        scanning,
+        start_scan.clone(),
+        cancel_scan.clone(),
     );
-    let (sort_key, sort_descending) = *save_sort.read();
-    let visible =
-        crate::session::visible_entries(&entries, &save_query.read(), sort_key, sort_descending);
+    let visible = {
+        let session = session.clone();
+        let filtered = use_memo(move || {
+            let _ = *revision.read();
+            let entries = session.borrow().entries();
+            let (sort, descending) = *save_sort.read();
+            crate::session::visible_entries(&entries, &save_query.read(), sort, descending)
+        });
+        filtered.read().clone()
+    };
     let sidebar = sidebar::sidebar(
         &ctx,
         &entries,
@@ -433,14 +655,82 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         save_focus,
         preview_handle,
         character.as_ref(),
-        form_differs,
+        &save_actions,
         save_query,
+        save_filter_id,
         save_sort,
-        hovered,
+        reset.clone(),
         sync.clone(),
     );
-    let tabs = navigation::tab_bar(tab, active_tab);
-    let footer = shell::footer(&ctx, form, dirty, form_differs, sync);
+    let tabs = navigation::tab_bar(tab, active_tab, has_save);
+    let footer = shell::footer(&ctx, form, dirty, has_save, &form_errors, sync.clone());
+
+    // Desktop shortcuts. Save and Scan duplicate the footer/header actions so
+    // they work no matter which control has focus.
+    let shortcut = {
+        let ctx = ctx.clone();
+        let sync = sync.clone();
+        let start_scan = start_scan.clone();
+        let directory = directory_state;
+        let active = active_tab;
+        let filter_ids = [
+            save_filter_id,
+            item_filter_id,
+            style_filter_id,
+            gem_filter_id,
+        ];
+        let mut save_query = save_query;
+        let mut item_query = item_query;
+        let mut style_query = style_query;
+        let mut gem_query = gem_query;
+        move |event: Event<KeyboardEventData>| {
+            let ctrl = event.modifiers.contains(Modifiers::CONTROL);
+            match &event.key {
+                Key::Character(character) if ctrl => match character.to_lowercase().as_str() {
+                    "s" => {
+                        let errors = ctx.run(|session| session.form_errors(&form.read()));
+                        if let Some(first) = errors.first() {
+                            form.focus(first.field);
+                        }
+                        let saved = ctx.run(|session| session.save_applied(&form.read()));
+                        if errors.is_empty() && saved.is_ok() {
+                            sync();
+                        }
+                    }
+                    "o" => {
+                        shell::choose_folder(&ctx, directory, &start_scan);
+                    }
+                    "f" => {
+                        let id = match active {
+                            Tab::Inventory => filter_ids[1],
+                            Tab::Styles => filter_ids[2],
+                            Tab::Gems => filter_ids[3],
+                            Tab::Overview | Tab::Character | Tab::Companions => filter_ids[0],
+                        };
+                        id.request_focus();
+                    }
+                    _ => {}
+                },
+                Key::Named(NamedKey::F5) => {
+                    let mut directory = directory;
+                    let path = PathBuf::from(directory.read().as_str());
+                    if !start_scan(path) {
+                        let real = ctx.session.borrow().directory().display().to_string();
+                        *directory.write() = real;
+                    }
+                }
+                Key::Named(NamedKey::Escape) => match active {
+                    Tab::Inventory => item_query.set(String::new()),
+                    Tab::Styles => style_query.set(String::new()),
+                    Tab::Gems => gem_query.set(String::new()),
+                    Tab::Overview | Tab::Character | Tab::Companions => {
+                        save_query.set(String::new());
+                    }
+                },
+                _ => {}
+            }
+        }
+    };
 
     rect()
         .vertical()
@@ -464,31 +754,136 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         .content(Content::Flex)
                         .child(tabs)
                         .child(
-                            ScrollView::new_controlled(scrolls[active_tab.index()])
-                                .show_scrollbar(true)
-                                .auto_hide_scrollbars(false)
+                            rect()
+                                .a11y_id(editor_scroll_id)
+                                .a11y_focusable(true)
+                                .a11y_role(AccessibilityRole::ScrollView)
                                 .width(Size::fill())
                                 .height(Size::flex(1.0))
-                                .child(
-                                    rect()
-                                        .vertical()
-                                        .width(Size::fill())
-                                        .padding(Gaps::new(
-                                            theme::space::XXL,
-                                            theme::space::CARD,
-                                            theme::space::XXL,
-                                            theme::space::CARD,
-                                        ))
-                                        .child(if has_save {
-                                            content
+                                .content(Content::Flex)
+                                .border(
+                                    Border::new()
+                                        .fill(if editor_scroll_focus() == Focus::Keyboard {
+                                            theme::TEXT
                                         } else {
-                                            shell::empty_state(entries.len())
-                                        }),
+                                            Color::TRANSPARENT
+                                        })
+                                        .width(theme::stroke::FOCUS),
+                                )
+                                .on_key_down({
+                                    let mut scroll = scrolls[active_tab.index()];
+                                    move |event: Event<KeyboardEventData>| {
+                                        let current = scroll.position().y as i32;
+                                        let target = match event.key {
+                                            Key::Named(NamedKey::ArrowDown) => current + 48,
+                                            Key::Named(NamedKey::ArrowUp) => current - 48,
+                                            Key::Named(NamedKey::PageDown) => current + 320,
+                                            Key::Named(NamedKey::PageUp) => current - 320,
+                                            Key::Named(NamedKey::Home) => i32::MIN,
+                                            Key::Named(NamedKey::End) => i32::MAX,
+                                            _ => return,
+                                        };
+                                        scroll.scroll_to_y(target);
+                                        event.stop_propagation();
+                                    }
+                                })
+                                .child(
+                                    ScrollView::new_controlled(scrolls[active_tab.index()])
+                                        .show_scrollbar(true)
+                                        .auto_hide_scrollbars(false)
+                                        .width(Size::fill())
+                                        .height(Size::fill())
+                                        .child(
+                                            rect()
+                                                .vertical()
+                                                .width(Size::fill())
+                                                .cross_align(Alignment::Center)
+                                                .padding(Gaps::new(
+                                                    theme::space::XXL,
+                                                    theme::space::CARD,
+                                                    theme::space::XXL,
+                                                    theme::space::CARD,
+                                                ))
+                                                // Wide windows stop stretching the
+                                                // cards: past this width a paragraph
+                                                // becomes a 150-character line.
+                                                .child(
+                                                    rect()
+                                                        .vertical()
+                                                        .width(Size::fill())
+                                                        .max_width(Size::px(
+                                                            theme::layout::EDITOR_MAX_WIDTH,
+                                                        ))
+                                                        .child(if has_save {
+                                                            content
+                                                        } else {
+                                                            shell::empty_state(
+                                                                &ctx,
+                                                                entries.len(),
+                                                                directory_state,
+                                                                start_scan.clone(),
+                                                            )
+                                                        }),
+                                                ),
+                                        ),
                                 ),
                         ),
                 ),
         )
         .child(footer)
+        .on_global_key_down(shortcut)
+}
+
+/// Clears every per-document picker and scroll state.
+///
+/// Kept as a free function so the reset stays a `Fn`: each state handle is
+/// copied into a mutable local before it is written.
+#[allow(clippy::too_many_arguments)] // one handle per independent piece of state
+fn reset_pickers(
+    save_query: State<String>,
+    item_query: State<String>,
+    style_query: State<String>,
+    gem_query: State<String>,
+    item_limit: State<usize>,
+    style_limit: State<usize>,
+    gem_limit: State<usize>,
+    expanded_item: State<Option<usize>>,
+    expanded_suggestion: State<Option<u16>>,
+    expanded_style: State<Option<u16>>,
+    hovered: State<Option<HoverKey>>,
+    directory_state: State<String>,
+    session: &Rc<RefCell<Session>>,
+    scrolls: &[ScrollController; 6],
+) {
+    let mut save_query = save_query;
+    save_query.set(String::new());
+    let mut item_query = item_query;
+    item_query.set(String::new());
+    let mut style_query = style_query;
+    style_query.set(String::new());
+    let mut gem_query = gem_query;
+    gem_query.set(String::new());
+    let mut item_limit = item_limit;
+    item_limit.set(PAGE_SIZE);
+    let mut style_limit = style_limit;
+    style_limit.set(PAGE_SIZE);
+    let mut gem_limit = gem_limit;
+    gem_limit.set(PAGE_SIZE);
+    let mut expanded_item = expanded_item;
+    expanded_item.set(None);
+    let mut expanded_suggestion = expanded_suggestion;
+    expanded_suggestion.set(None);
+    let mut expanded_style = expanded_style;
+    expanded_style.set(None);
+    let mut hovered = hovered;
+    hovered.set(None);
+    let mut directory_state = directory_state;
+    directory_state.set(session.borrow().directory().display().to_string());
+    for scroll in scrolls {
+        let mut scroll = *scroll;
+        scroll.scroll_to_x(0);
+        scroll.scroll_to_y(0);
+    }
 }
 
 /// Builds an [`ImageHandle`] for the preview, cached by generation.

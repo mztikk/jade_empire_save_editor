@@ -8,6 +8,8 @@
 pub mod app;
 pub mod dialog;
 pub mod form;
+pub mod geometry;
+pub mod perf;
 pub mod theme;
 pub mod views;
 pub mod widgets;

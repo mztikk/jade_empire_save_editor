@@ -3,31 +3,42 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::session::{ItemRow, ItemSuggestion};
+use crate::session::{ItemRow, ItemSuggestion, Section};
 use crate::theme;
-use crate::widgets;
+use crate::widgets::{self, Action};
 
 /// Renders the inventory tab.
-#[allow(clippy::too_many_arguments)] // one argument per reactive tab input; grouping would only rename them
+#[allow(
+    clippy::too_many_arguments, // one argument per reactive tab input; grouping would only rename them
+    clippy::too_many_lines // one declarative tab tree keeps the visual order auditable
+)]
 pub fn view(
     ctx: &Ctx,
     items: &[ItemRow],
     query: State<String>,
     results: &[ItemSuggestion],
     game_ready: bool,
+    game_loading: bool,
     matching: usize,
     total_items: usize,
     expanded: State<Option<usize>>,
     expanded_suggestion: State<Option<u16>>,
     hovered: State<Option<crate::app::HoverKey>>,
+    filter_id: AccessibilityId,
     show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for item in items {
-        rows.push(item_row(ctx, item, expanded, hovered));
+        rows.push(item_row(ctx, item, expanded, hovered, filter_id));
     }
     if rows.is_empty() {
-        rows.push(widgets::hint("The inventory is empty."));
+        rows.push(match ctx.session.borrow().section_error(Section::Items) {
+            Some(error) => widgets::hint(format!(
+                "The inventory section could not be read: {}",
+                error.message
+            )),
+            None => widgets::hint("The inventory is empty."),
+        });
     }
 
     let mut children = vec![
@@ -42,12 +53,12 @@ pub fn view(
     ];
 
     if game_ready {
-        children.push(
-            Input::new(query)
-                .placeholder("Filter the item database, or leave empty to browse it")
-                .width(Size::fill())
-                .into_element(),
-        );
+        children.push(widgets::filter_input(
+            query,
+            "Filter the item database, or leave empty to browse it",
+            "Clear the item database filter",
+            filter_id,
+        ));
         if results.is_empty() {
             children.push(widgets::hint(if query.read().trim().is_empty() {
                 "The item database is empty."
@@ -108,6 +119,10 @@ pub fn view(
                     .into_element(),
             );
         }
+    } else if game_loading {
+        children.push(widgets::hint(
+            "Reading the game data; existing items can already be edited and removed.",
+        ));
     } else {
         children.push(widgets::hint(
             "The game data was not found, so items can only be removed, not added. \
@@ -134,29 +149,31 @@ pub fn item_subtitle(item_id: u16, category: Option<&str>, kind: u8) -> String {
     }
 }
 
+#[allow(clippy::too_many_lines)] // one declarative row keeps the actions together
 fn item_row(
     ctx: &Ctx,
     item: &ItemRow,
     expanded: State<Option<usize>>,
     mut hovered: State<Option<crate::app::HoverKey>>,
+    filter_id: AccessibilityId,
 ) -> Element {
     let key = crate::app::HoverKey::Item(item.struct_index);
     let is_hovered = *hovered.read() == Some(key);
     let minus = {
         let ctx = ctx.clone();
         let index = item.struct_index;
-        move |_| ctx.run(|session| session.adjust_item_count(index, -1))
+        Action::new(move || ctx.run(|session| session.adjust_item_count(index, -1)))
     };
     let plus = {
         let ctx = ctx.clone();
         let index = item.struct_index;
-        move |_| ctx.run(|session| session.adjust_item_count(index, 1))
+        Action::new(move || ctx.run(|session| session.adjust_item_count(index, 1)))
     };
     let remove = {
         let ctx = ctx.clone();
         let index = item.struct_index;
         let name = item.name.clone();
-        move |_| {
+        Action::new(move || {
             if !crate::dialog::confirm(
                 "Remove item?",
                 &format!(
@@ -166,6 +183,23 @@ fn item_row(
                 return;
             }
             ctx.run(|session| session.remove_item(index));
+            // The focused Remove button just disappeared; keep the keyboard
+            // user inside the list by focusing its filter.
+            filter_id.request_focus();
+        })
+    };
+    let set_count = {
+        let ctx = ctx.clone();
+        let index = item.struct_index;
+        let name = item.name.clone();
+        move |text: String| {
+            let Ok(count) = text.trim().parse::<u8>() else {
+                ctx.run(|session| {
+                    session.set_error(&format!("{name}: enter a stack size from 1 to 255."));
+                });
+                return;
+            };
+            ctx.run(|session| session.set_item_count(index, count));
         }
     };
     let is_expanded = *expanded.read() == Some(item.struct_index);
@@ -192,8 +226,9 @@ fn item_row(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::LG)
+                .spacing(theme::space::SM)
                 .content(Content::Flex)
+                .cross_align(Alignment::Center)
                 .padding(Gaps::new_symmetric(theme::space::XS, theme::space::SM))
                 .child(widgets::expanding_name(
                     item.struct_index,
@@ -202,21 +237,30 @@ fn item_row(
                     expanded,
                     theme::font::BODY,
                 ))
-                .child(Button::new().compact().flat().child("−").on_press(minus))
+                .child(widgets::row_action(
+                    format!("Decrease {} stack", item.name),
+                    "−",
+                    minus,
+                ))
                 .child(
-                    widgets::a11y_text(item.count.to_string())
-                        .font_size(theme::font::BODY)
+                    // Direct numeric editing: a 254-item stack is one edit,
+                    // not 254 stepper clicks. Enter applies the value.
+                    Input::new(WritableSetter::new(item.count.to_string(), |_: String| {}))
                         .width(Size::px(theme::layout::ITEM_COUNT_WIDTH))
-                        .text_align(TextAlign::Center),
-                )
-                .child(Button::new().compact().flat().child("+").on_press(plus))
-                .child(
-                    Button::new()
+                        .text_align(TextAlign::Center)
                         .compact()
-                        .flat()
-                        .child("Remove")
-                        .on_press(remove),
-                ),
+                        .on_submit(set_count),
+                )
+                .child(widgets::row_action(
+                    format!("Increase {} stack", item.name),
+                    "+",
+                    plus,
+                ))
+                .child(widgets::row_action(
+                    format!("Remove {}", item.name),
+                    "Remove",
+                    remove,
+                )),
         )
         .maybe_child(if is_expanded {
             widgets::details(item.description.as_deref())
@@ -237,11 +281,11 @@ fn suggestion_row(
     let add = {
         let ctx = ctx.clone();
         let item_id = suggestion.item_id;
-        move |_| {
+        Action::new(move || {
             ctx.run(|session| {
                 let _ = session.add_item(item_id);
             });
-        }
+        })
     };
     let is_expanded = *expanded.read() == Some(suggestion.item_id);
     rect()
@@ -280,7 +324,11 @@ fn suggestion_row(
                     expanded,
                     theme::font::LABEL,
                 ))
-                .child(Button::new().compact().outline().child("Add").on_press(add)),
+                .child(widgets::row_action(
+                    format!("Add {}", suggestion.name),
+                    "Add",
+                    add,
+                )),
         )
         .maybe_child(if is_expanded {
             widgets::details(suggestion.description.as_deref())

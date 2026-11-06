@@ -23,9 +23,14 @@ pub fn view(
     );
     let block_count = ctx.session.borrow().block_count();
     let file_size = ctx.session.borrow().file_size();
+    let game_loading = matches!(ctx.session.borrow().game_status(), GameStatus::Loading);
     let (game_text, game_ok) = {
         let session = ctx.session.borrow();
         match session.game_status() {
+            GameStatus::Loading => (
+                "Reading the game installation and its tables…".to_owned(),
+                false,
+            ),
             GameStatus::Loaded {
                 items,
                 styles,
@@ -139,38 +144,34 @@ pub fn view(
                     .font_size(theme::font::LABEL)
                     .color(theme::MUTED),
                 )
-                .child(
-                    rect()
-                        .horizontal()
-                        .content(Content::wrap_spacing(theme::space::GRID))
-                        .spacing(theme::space::GRID)
-                        .child(widgets::stat(
-                            "GOLD",
-                            character
-                                .gold
-                                .map_or_else(|| "Not set".to_owned(), format::amount),
-                        ))
-                        .child(widgets::stat(
-                            "HEALTH",
-                            format!(
-                                "{} / {}",
-                                format::number(character.health),
-                                character.health_max
-                            ),
-                        ))
-                        .child(widgets::stat(
-                            "CHI",
-                            format!("{} / {}", format::number(character.chi), character.chi_max),
-                        ))
-                        .child(widgets::stat(
-                            "FOCUS",
-                            format!(
-                                "{} / {}",
-                                format::number(character.focus),
-                                format::number(character.focus_max)
-                            ),
-                        )),
-                ),
+                .child(widgets::stat_grid(vec![
+                    widgets::stat(
+                        "GOLD",
+                        character
+                            .gold
+                            .map_or_else(|| "Not set".to_owned(), format::amount),
+                    ),
+                    widgets::stat(
+                        "HEALTH",
+                        format!(
+                            "{} / {}",
+                            format::number(character.health),
+                            character.health_max
+                        ),
+                    ),
+                    widgets::stat(
+                        "CHI",
+                        format!("{} / {}", format::number(character.chi), character.chi_max),
+                    ),
+                    widgets::stat(
+                        "FOCUS",
+                        format!(
+                            "{} / {}",
+                            format::number(character.focus),
+                            format::number(character.focus_max)
+                        ),
+                    ),
+                ])),
         )
         .into_element();
 
@@ -230,12 +231,39 @@ pub fn view(
         "Savegame",
         None,
         vec![
-            widgets::label_row(
-                "File",
-                widgets::a11y_text(path)
-                    .font_size(theme::font::LABEL)
-                    .color(theme::MUTED),
-            ),
+            rect()
+                .vertical()
+                .width(Size::fill())
+                .spacing(theme::space::XS)
+                .child(
+                    rect()
+                        .horizontal()
+                        .width(Size::fill())
+                        .spacing(theme::space::MD)
+                        .content(Content::Flex)
+                        .child(
+                            widgets::a11y_text("File")
+                                .font_size(theme::font::LABEL)
+                                .color(theme::MUTED),
+                        )
+                        .child(rect().width(Size::flex(1.0)))
+                        .child(copy_path_button(ctx, path.clone())),
+                )
+                .child(
+                    // Long savegame paths wrap instead of running off the card,
+                    // and stay copyable through the button above.
+                    paragraph()
+                        .width(Size::fill())
+                        .max_width(Size::px(theme::layout::TEXT_MEASURE))
+                        .font_size(theme::font::LABEL)
+                        .color(theme::MUTED)
+                        .a11y_builder({
+                            let path = path.clone();
+                            move |node| node.set_value(path)
+                        })
+                        .span(path.clone()),
+                )
+                .into_element(),
             widgets::divider(),
             widgets::label_row(
                 "Contents",
@@ -256,13 +284,25 @@ pub fn view(
                         .color(theme::MUTED),
                 )
                 .child(widgets::badge(
-                    if game_ok { "linked" } else { "not found" },
+                    if game_ok {
+                        "linked"
+                    } else if game_loading {
+                        "loading"
+                    } else {
+                        "not found"
+                    },
                     if game_ok {
                         theme::SURFACE
                     } else {
                         theme::SURFACE_ACTIVE
                     },
-                    if game_ok { theme::JADE } else { theme::WARNING },
+                    if game_ok {
+                        theme::JADE
+                    } else if game_loading {
+                        theme::DIM
+                    } else {
+                        theme::WARNING
+                    },
                 ))
                 .into_element(),
             widgets::hint(game_text),
@@ -281,5 +321,24 @@ pub fn view(
         .child(hero)
         .child(quick)
         .child(details)
+        .into_element()
+}
+
+/// Copies the absolute savegame path, since a wrapped path cannot be selected.
+fn copy_path_button(ctx: &Ctx, path: String) -> Element {
+    let ctx = ctx.clone();
+    Button::new()
+        .compact()
+        .outline()
+        .child("Copy path")
+        .on_press(move |_| {
+            let message = match Clipboard::set(path.clone()) {
+                Ok(()) => format!("Copied {path} to the clipboard."),
+                Err(_) => {
+                    format!("Could not copy {path}: the system clipboard is not available.")
+                }
+            };
+            ctx.run(|session| session.notify(&message));
+        })
         .into_element()
 }

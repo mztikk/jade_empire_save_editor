@@ -46,6 +46,33 @@ pub fn ensure_test_path() -> PathBuf {
     })
 }
 
+/// Window rectangle remembered between runs, in logical pixels.
+///
+/// The position is optional because Wayland compositors do not expose where a
+/// window was placed; a missing position lets the compositor place it.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WindowGeometry {
+    /// Window width in logical pixels.
+    pub width: u32,
+    /// Window height in logical pixels.
+    pub height: u32,
+    /// Horizontal position in logical pixels.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub x: Option<i32>,
+    /// Vertical position in logical pixels.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub y: Option<i32>,
+}
+
+impl WindowGeometry {
+    /// True when the remembered size is usable.
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        self.width >= 1 && self.height >= 1
+    }
+}
+
 /// Settings persisted between runs.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -58,9 +85,28 @@ pub struct Config {
     pub sort: Option<String>,
     /// Whether the savegame list is sorted descending.
     pub sort_descending: bool,
+    /// Game installation the user pointed `JadeForge` at.
+    ///
+    /// `JADEFORGE_GAME_DIR` still wins; this keeps a user-chosen installation
+    /// for the next start without hardcoding a machine path in the source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub game_dir: Option<PathBuf>,
+    /// Size and position of the main window.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window: Option<WindowGeometry>,
 }
 
 impl Config {
+    /// Remembers the window rectangle for the next start (best effort).
+    pub fn remember_window(geometry: WindowGeometry) {
+        if !geometry.is_valid() {
+            return;
+        }
+        let mut config = Self::load();
+        config.window = Some(geometry);
+        let _ = config.store();
+    }
+
     /// Loads the settings, falling back to the defaults when the file is
     /// missing or unreadable.
     #[must_use]
@@ -271,11 +317,19 @@ mod tests {
             save_dir: Some(PathBuf::from("/games/Jade Empire/Save")),
             sort: Some("played".to_owned()),
             sort_descending: true,
+            game_dir: Some(PathBuf::from("/games/Jade Empire")),
+            window: Some(WindowGeometry {
+                width: 1180,
+                height: 760,
+                x: Some(40),
+                y: Some(32),
+            }),
         };
         let text = config.to_text();
         assert!(text.contains("save_dir = \"/games/Jade Empire/Save\""));
         assert!(text.contains("sort = \"played\""));
         assert!(text.contains("sort_descending = true"));
+        assert!(text.contains("game_dir = \"/games/Jade Empire\""));
         assert_eq!(Config::parse(&text), config);
     }
 
@@ -291,6 +345,26 @@ mod tests {
     fn empty_and_broken_lines_are_ignored_in_legacy_files() {
         let config = Config::parse("# comment\n\nsave_dir=\nbroken\nsave_dir=/tmp/saves\n");
         assert_eq!(config.save_dir.as_deref(), Some(Path::new("/tmp/saves")));
+    }
+
+    #[test]
+    fn the_window_rectangle_round_trips() {
+        let config = Config {
+            window: Some(WindowGeometry {
+                width: 1180,
+                height: 760,
+                x: Some(-120),
+                y: Some(40),
+            }),
+            ..Config::default()
+        };
+        let text = config.to_text();
+        assert!(text.contains("width = 1180"), "{text}");
+        assert_eq!(Config::parse(&text), config);
+        assert!(
+            Config::parse("save_dir = \"/tmp/saves\"").window.is_none(),
+            "a settings file without a window must not invent one"
+        );
     }
 
     #[test]
@@ -323,6 +397,8 @@ mod tests {
             save_dir: Some(PathBuf::from("/games/Jade Empire/Save")),
             sort: Some("played".to_owned()),
             sort_descending: true,
+            game_dir: None,
+            window: None,
         };
         config.store().expect("store settings");
         assert_eq!(Config::load(), config);
@@ -364,6 +440,8 @@ mod tests {
             save_dir: Some(PathBuf::from("/games/Jade Empire/Save")),
             sort: Some("name".to_owned()),
             sort_descending: false,
+            game_dir: None,
+            window: None,
         };
         config.store().expect("store");
         let parent = path.parent().expect("parent");
@@ -388,6 +466,8 @@ mod tests {
             save_dir: Some(PathBuf::from("/tmp/saves")),
             sort: None,
             sort_descending: false,
+            game_dir: None,
+            window: None,
         };
         good.store().expect("store good settings");
         let before = std::fs::read(&path).expect("read config");
@@ -396,6 +476,8 @@ mod tests {
             save_dir: Some(PathBuf::from(OsString::from_vec(vec![0xff, b'x']))),
             sort: None,
             sort_descending: false,
+            game_dir: None,
+            window: None,
         };
         assert!(bad.store().is_err());
         assert_eq!(std::fs::read(&path).expect("read config"), before);
