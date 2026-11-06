@@ -86,6 +86,51 @@ impl Message {
     }
 }
 
+/// A savegame section the reader recovered from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Section {
+    /// Character sheet.
+    Character,
+    /// Inventory.
+    Items,
+    /// Fighting styles.
+    Styles,
+    /// Companions.
+    Companions,
+    /// Gems.
+    Gems,
+    /// The amulet.
+    Amulet,
+}
+
+impl Section {
+    /// Human-readable name used in notices.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Character => "Character",
+            Self::Items => "Inventory",
+            Self::Styles => "Styles",
+            Self::Companions => "Companions",
+            Self::Gems => "Gems",
+            Self::Amulet => "Amulet",
+        }
+    }
+}
+
+/// One savegame section that could not be read.
+///
+/// Kept apart from the status message so a view can say that its section is
+/// unreadable instead of rendering the same "empty" hint as a genuine empty
+/// list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SectionError {
+    /// Which section failed.
+    pub section: Section,
+    /// Reader error.
+    pub message: String,
+}
+
 /// State of the optional game data.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GameStatus {

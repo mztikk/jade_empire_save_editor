@@ -26,26 +26,24 @@ pub(super) fn sidebar(
     focus: State<usize>,
     preview: Option<ImageHandle>,
     character: Option<&Character>,
-    form_differs: bool,
     query: State<String>,
     sort: State<(SaveSort, bool)>,
     hovered: State<Option<HoverKey>>,
+    reset: Rc<dyn Fn()>,
     sync: Rc<dyn Fn()>,
 ) -> Element {
     let open = OpenSave::new({
         let ctx = ctx.clone();
+        let reset = reset.clone();
         let sync = sync.clone();
         move |index| {
-            if form_differs && selected != Some(index) {
-                ctx.run(|session| {
-                    session
-                        .set_error("Fix the invalid character fields before switching savegames.");
-                });
-                return;
-            }
-            ctx.run(|session| {
-                session.open(index);
+            let changed = ctx.run(|session| {
+                let before = session.selected();
+                session.open(index) && session.selected() != before
             });
+            if changed {
+                reset();
+            }
             sync();
         }
     });
@@ -223,11 +221,11 @@ pub(super) fn sidebar(
             .font_weight(FontWeight::BOLD)
             .color(theme::DIM),
         )
-        .child(
-            Input::new(query)
-                .placeholder("Filter by name")
-                .width(Size::fill()),
-        )
+        .child(crate::widgets::filter_input(
+            query,
+            "Filter by name",
+            "Clear the savegame filter",
+        ))
         .child(sort_bar(ctx, sort, *sort.read()))
         .child(
             ScrollView::new()

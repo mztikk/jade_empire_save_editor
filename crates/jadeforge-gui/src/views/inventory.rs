@@ -3,7 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::session::{ItemRow, ItemSuggestion};
+use crate::session::{ItemRow, ItemSuggestion, Section};
 use crate::theme;
 use crate::widgets;
 
@@ -27,7 +27,13 @@ pub fn view(
         rows.push(item_row(ctx, item, expanded, hovered));
     }
     if rows.is_empty() {
-        rows.push(widgets::hint("The inventory is empty."));
+        rows.push(match ctx.session.borrow().section_error(Section::Items) {
+            Some(error) => widgets::hint(format!(
+                "The inventory section could not be read: {}",
+                error.message
+            )),
+            None => widgets::hint("The inventory is empty."),
+        });
     }
 
     let mut children = vec![
@@ -42,12 +48,11 @@ pub fn view(
     ];
 
     if game_ready {
-        children.push(
-            Input::new(query)
-                .placeholder("Filter the item database, or leave empty to browse it")
-                .width(Size::fill())
-                .into_element(),
-        );
+        children.push(widgets::filter_input(
+            query,
+            "Filter the item database, or leave empty to browse it",
+            "Clear the item database filter",
+        ));
         if results.is_empty() {
             children.push(widgets::hint(if query.read().trim().is_empty() {
                 "The item database is empty."

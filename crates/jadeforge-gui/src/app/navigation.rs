@@ -7,43 +7,70 @@ use crate::widgets::{AccessibleButton, Action};
 
 use super::Tab;
 
-pub(super) fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
+pub(super) fn tab_bar(tab: State<Tab>, active: Tab, enabled: bool) -> Element {
     let mut buttons: Vec<Element> = Vec::new();
     for candidate in Tab::ALL {
         let mut tab = tab;
         let is_active = candidate == active;
         let action = Action::new(move || *tab.write() = candidate);
-        buttons.push(
-            AccessibleButton::new(
-                candidate.label(),
-                action,
+        let content = rect()
+            .vertical()
+            .spacing(theme::space::XS)
+            .padding(Gaps::new_symmetric(theme::space::SM, theme::space::XL))
+            .corner_radius(theme::radius::MEDIUM)
+            .background(if is_active && enabled {
+                theme::SURFACE_ACTIVE
+            } else {
+                Color::TRANSPARENT
+            })
+            .child(
+                crate::widgets::a11y_text(candidate.label())
+                    .font_size(theme::font::LABEL)
+                    .max_lines(1)
+                    // Keep the weight constant: bold text is wider,
+                    // so toggling it moved the active tab.
+                    .font_weight(FontWeight::BOLD)
+                    .color(if !enabled {
+                        theme::DIM
+                    } else if is_active {
+                        theme::ACCENT
+                    } else {
+                        theme::MUTED
+                    }),
+            )
+            // The underline is the non-colour cue: it is part of every tab so
+            // selecting one does not move the bar, but only the active tab
+            // shows it.
+            .child(
                 rect()
-                    .padding(Gaps::new_symmetric(theme::space::SM, theme::space::XL))
-                    .corner_radius(theme::radius::MEDIUM)
-                    .background(if is_active {
-                        theme::SURFACE_ACTIVE
+                    .width(Size::fill())
+                    .height(Size::px(theme::stroke::EMPHASIS))
+                    .corner_radius(theme::radius::PILL)
+                    .background(if is_active && enabled {
+                        theme::ACCENT
                     } else {
                         Color::TRANSPARENT
-                    })
-                    .child(
-                        crate::widgets::a11y_text(candidate.label())
-                            .font_size(theme::font::LABEL)
-                            .max_lines(1)
-                            // Keep the weight constant: bold text is wider,
-                            // so toggling it moved the active tab.
-                            .font_weight(FontWeight::BOLD)
-                            .color(if is_active {
-                                theme::ACCENT
-                            } else {
-                                theme::MUTED
-                            }),
-                    ),
+                    }),
             )
-            .role(AccessibilityRole::Tab)
-            .selected(is_active)
-            .key(candidate.index())
-            .into_element(),
-        );
+            .into_element();
+        if enabled {
+            buttons.push(
+                AccessibleButton::new(candidate.label(), action, content)
+                    .role(AccessibilityRole::Tab)
+                    .selected(is_active)
+                    .key(candidate.index())
+                    .into_element(),
+            );
+        } else {
+            buttons.push(
+                rect()
+                    .key(candidate.index())
+                    .child(content)
+                    .a11y_role(AccessibilityRole::Tab)
+                    .a11y_builder(accesskit::Node::set_disabled)
+                    .into_element(),
+            );
+        }
     }
 
     rect()

@@ -83,6 +83,16 @@ impl Block {
     pub fn mark_clean(&mut self) {
         self.modified = false;
     }
+
+    /// Serializes this block from its parsed tree, ignoring the copy-through
+    /// optimisation of [`SaveGame::to_bytes`].
+    ///
+    /// Two blocks with the same content produce the same bytes even when the
+    /// original block was not canonically encoded. Content comparisons use
+    /// this; writing a savegame never does.
+    pub fn to_canonical_bytes(&self) -> Result<Vec<u8>> {
+        Ok(self.gff.to_bytes_named(&self.name)?)
+    }
 }
 
 /// Options controlling how a savegame is written.
@@ -401,6 +411,15 @@ impl SaveGame {
     #[must_use]
     pub fn is_modified(&self) -> bool {
         self.blocks.iter().any(Block::is_modified)
+    }
+
+    /// Canonical payloads of every block, in file order.
+    ///
+    /// Used to compare the in-memory savegame with a baseline by content: an
+    /// edit that is undone produces the same payloads again, even for a block
+    /// that was not stored canonically on disk.
+    pub fn canonical_blocks(&self) -> Result<Vec<Vec<u8>>> {
+        self.blocks.iter().map(Block::to_canonical_bytes).collect()
     }
 
     /// Names of the blocks that were edited.

@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::app::HoverKey;
-use crate::session::{Session, StyleRow, StyleSuggestion, StyleUpgrade};
+use crate::session::{Section, Session, StyleRow, StyleSuggestion, StyleUpgrade};
 use crate::theme;
 use crate::widgets;
 
@@ -34,9 +34,13 @@ pub fn view(
         rows.push(style_row(ctx, style, expanded, hovered));
     }
     if rows.is_empty() {
-        rows.push(widgets::hint(
-            "The player has not learned any fighting styles.",
-        ));
+        rows.push(match ctx.session.borrow().section_error(Section::Styles) {
+            Some(error) => widgets::hint(format!(
+                "The styles section could not be read: {}",
+                error.message
+            )),
+            None => widgets::hint("The player has not learned any fighting styles."),
+        });
     }
 
     let mut children = vec![
@@ -55,12 +59,11 @@ pub fn view(
     ];
 
     if game_ready {
-        children.push(
-            Input::new(query)
-                .placeholder("Filter the style list, or leave empty to browse it")
-                .width(Size::fill())
-                .into_element(),
-        );
+        children.push(widgets::filter_input(
+            query,
+            "Filter the style list, or leave empty to browse it",
+            "Clear the style filter",
+        ));
         if matches.is_empty() {
             children.push(widgets::hint(if query.read().trim().is_empty() {
                 "Every style of the game is already known."

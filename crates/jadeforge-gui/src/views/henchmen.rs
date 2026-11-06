@@ -3,7 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::session::HenchRow;
+use crate::session::{HenchRow, Section};
 use crate::theme;
 use crate::widgets;
 
@@ -14,9 +14,15 @@ pub fn view(ctx: &Ctx, henchmen: &[HenchRow]) -> Element {
         rows.push(henchman_row(ctx, henchman));
     }
     if rows.is_empty() {
-        rows.push(widgets::hint(
-            "This savegame has no companions yet. They appear here once the story introduces them.",
-        ));
+        rows.push(match ctx.session.borrow().section_error(Section::Companions) {
+            Some(error) => widgets::hint(format!(
+                "The companions section could not be read: {}",
+                error.message
+            )),
+            None => widgets::hint(
+                "This savegame has no companions yet. They appear here once the story introduces them.",
+            ),
+        });
     }
 
     widgets::card(

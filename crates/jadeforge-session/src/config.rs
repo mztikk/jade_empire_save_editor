@@ -85,6 +85,12 @@ pub struct Config {
     pub sort: Option<String>,
     /// Whether the savegame list is sorted descending.
     pub sort_descending: bool,
+    /// Game installation the user pointed `JadeForge` at.
+    ///
+    /// `JADEFORGE_GAME_DIR` still wins; this keeps a user-chosen installation
+    /// for the next start without hardcoding a machine path in the source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub game_dir: Option<PathBuf>,
     /// Size and position of the main window.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window: Option<WindowGeometry>,
@@ -311,6 +317,7 @@ mod tests {
             save_dir: Some(PathBuf::from("/games/Jade Empire/Save")),
             sort: Some("played".to_owned()),
             sort_descending: true,
+            game_dir: Some(PathBuf::from("/games/Jade Empire")),
             window: Some(WindowGeometry {
                 width: 1180,
                 height: 760,
@@ -322,6 +329,7 @@ mod tests {
         assert!(text.contains("save_dir = \"/games/Jade Empire/Save\""));
         assert!(text.contains("sort = \"played\""));
         assert!(text.contains("sort_descending = true"));
+        assert!(text.contains("game_dir = \"/games/Jade Empire\""));
         assert_eq!(Config::parse(&text), config);
     }
 
@@ -389,6 +397,7 @@ mod tests {
             save_dir: Some(PathBuf::from("/games/Jade Empire/Save")),
             sort: Some("played".to_owned()),
             sort_descending: true,
+            game_dir: None,
             window: None,
         };
         config.store().expect("store settings");
@@ -431,6 +440,7 @@ mod tests {
             save_dir: Some(PathBuf::from("/games/Jade Empire/Save")),
             sort: Some("name".to_owned()),
             sort_descending: false,
+            game_dir: None,
             window: None,
         };
         config.store().expect("store");
@@ -456,6 +466,7 @@ mod tests {
             save_dir: Some(PathBuf::from("/tmp/saves")),
             sort: None,
             sort_descending: false,
+            game_dir: None,
             window: None,
         };
         good.store().expect("store good settings");
@@ -465,6 +476,7 @@ mod tests {
             save_dir: Some(PathBuf::from(OsString::from_vec(vec![0xff, b'x']))),
             sort: None,
             sort_descending: false,
+            game_dir: None,
             window: None,
         };
         assert!(bad.store().is_err());

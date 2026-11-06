@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use freya::prelude::*;
 
+use crate::session::{CharacterField, FieldError};
 use crate::theme;
 
 /// A text label. Freya 0.5 fills a label's AccessKit value from its text when
@@ -71,25 +72,68 @@ pub fn field_grid(children: Vec<Element>) -> Element {
 }
 
 /// A labelled input that shares its row with the other fields.
-pub fn field(label_text: &'static str, input: impl IntoElement) -> Element {
+///
+/// The line under the input always shows the field's allowed range and turns
+/// into the validation message when the value cannot be applied. Reserving the
+/// line keeps the cards still while a field is being fixed, and the wrapper
+/// border marks the offending input.
+pub fn field_checked(
+    field: CharacterField,
+    input: impl IntoElement,
+    error: Option<&FieldError>,
+) -> Element {
+    let message = error.map_or_else(|| field.range().to_owned(), |error| error.message.clone());
+    let invalid = error.is_some();
+    // Freya 0.5 still has no Input::label API. Naming the field group at
+    // least gives a screen reader the caption before it reaches the input's
+    // own value; the true label association is an upstream follow-up.
     rect()
         .vertical()
-        .spacing(theme::space::SM)
+        .spacing(theme::space::XS)
         .width(Size::flex(1.0))
         .min_width(Size::px(theme::layout::FIELD_MIN_WIDTH))
-        // Freya 0.5 still has no Input::label API. Naming the field group at
-        // least gives a screen reader the caption before it reaches the input's
-        // own value; the true label association is an upstream follow-up.
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(label_text)
+        .a11y_alt(field.label())
         .child(
-            a11y_text(label_text)
+            a11y_text(field.label())
                 .font_size(theme::font::MICRO)
                 .font_weight(FontWeight::BOLD)
-                .color(theme::DIM),
+                .color(if invalid { theme::DANGER } else { theme::DIM }),
         )
-        .child(input)
+        .child(
+            rect()
+                .width(Size::fill())
+                .border(
+                    Border::new()
+                        .fill(if invalid {
+                            theme::DANGER
+                        } else {
+                            Color::TRANSPARENT
+                        })
+                        .width(theme::stroke::FOCUS),
+                )
+                .child(input),
+        )
+        .child(
+            rect()
+                .width(Size::fill())
+                .height(Size::px(theme::font::LINE_HEIGHT))
+                .child(with_tooltip(
+                    message.clone(),
+                    a11y_text(message)
+                        .font_size(theme::font::MICRO)
+                        .max_lines(1)
+                        .text_overflow(TextOverflow::Ellipsis)
+                        .color(if invalid { theme::DANGER } else { theme::DIM }),
+                )),
+        )
         .into_element()
+}
+
+/// The validation error for one field, when it has one.
+#[must_use]
+pub fn field_error(errors: &[FieldError], field: CharacterField) -> Option<&FieldError> {
+    errors.iter().find(|error| error.field == field)
 }
 
 /// A read only statistic.
@@ -377,6 +421,48 @@ pub fn label_grid(rows: Vec<(String, Element)>) -> Element {
         .content(Content::wrap_spacing(theme::space::XXL))
         .spacing(theme::space::XXL)
         .children(cells)
+        .into_element()
+}
+
+/// A filter input with a clear button.
+///
+/// Every picker filter gets one, so a filter never has to be cleared by
+/// selecting the text and deleting it.
+pub fn filter_input(
+    query: State<String>,
+    placeholder: &'static str,
+    clear_name: &'static str,
+) -> Element {
+    let mut clear_query = query;
+    let clear = Action::new(move || {
+        clear_query.write().clear();
+    });
+    let empty = query.read().is_empty();
+    rect()
+        .horizontal()
+        .width(Size::fill())
+        .spacing(theme::space::MD)
+        .content(Content::Flex)
+        .cross_align(Alignment::Center)
+        .child(
+            Input::new(query)
+                .placeholder(placeholder)
+                .width(Size::flex(1.0)),
+        )
+        .child(
+            AccessibleButton::new(
+                clear_name,
+                clear,
+                rect()
+                    .padding(Gaps::new_symmetric(theme::space::XS, theme::space::MD))
+                    .child(
+                        a11y_text("Clear")
+                            .font_size(theme::font::MICRO)
+                            .color(if empty { theme::DIM } else { theme::MUTED }),
+                    ),
+            )
+            .focusable(!empty),
+        )
         .into_element()
 }
 

@@ -6,7 +6,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::session::GemRow;
+use crate::session::{GemRow, Section};
 use crate::theme;
 use crate::widgets;
 use jadeforge_core::{AmuletInfo, GemLocation};
@@ -44,7 +44,14 @@ pub fn view(
             )
         },
     );
-    let amulet_rows: Vec<Element> = if amulet.is_none() {
+    let amulet_error = ctx.session.borrow().section_error(Section::Amulet).cloned();
+    let gems_error = ctx.session.borrow().section_error(Section::Gems).cloned();
+    let amulet_rows: Vec<Element> = if let Some(error) = &amulet_error {
+        vec![widgets::hint(format!(
+            "The amulet section could not be read: {}",
+            error.message
+        ))]
+    } else if amulet.is_none() {
         vec![widgets::hint(
             "The amulet is unlocked early in the story; it has no sockets before that.",
         )]
@@ -56,7 +63,12 @@ pub fn view(
             .map(|gem| gem_row(ctx, gem, true, true, amulet.is_some()))
             .collect()
     };
-    let inventory_rows: Vec<Element> = if inventory.is_empty() {
+    let inventory_rows: Vec<Element> = if let Some(error) = &gems_error {
+        vec![widgets::hint(format!(
+            "The gems section could not be read: {}",
+            error.message
+        ))]
+    } else if inventory.is_empty() {
         vec![widgets::hint("No gems carried in the inventory.")]
     } else {
         inventory
@@ -117,12 +129,11 @@ pub fn view(
             "No gem matches this filter."
         }));
     }
-    let mut add_children = vec![
-        Input::new(query)
-            .placeholder("Filter the gem list, or leave empty to browse it")
-            .width(Size::fill())
-            .into_element(),
-    ];
+    let mut add_children = vec![widgets::filter_input(
+        query,
+        "Filter the gem list, or leave empty to browse it",
+        "Clear the gem filter",
+    )];
     if matching.len() > shown {
         let mut gem_limit = gem_limit;
         add_children.push(

@@ -247,6 +247,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let _ = scan.state();
     let form = Form::new();
     let directory_state = use_state(|| session.borrow().directory().display().to_string());
+    let game_directory = use_state(|| match session.borrow().game_status() {
+        GameStatus::Loaded { root, .. } => root.display().to_string(),
+        _ => String::new(),
+    });
     let tab = use_state(|| Tab::Overview);
     let item_query = use_state(String::new);
     let style_query = use_state(String::new);
@@ -307,6 +311,38 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         });
     }
 
+    // Opening another savegame or scanning another folder starts a fresh
+    // document: filters, paging, expanded rows and every tab's scroll position
+    // belong to the previous one and would otherwise leak across.
+    //
+    // The reset runs from the actions that change the document instead of an
+    // effect: reading a scroll controller inside an effect subscribes it to the
+    // layout bounds, which would rerun the reset after every render.
+    let reset: Rc<dyn Fn()> = {
+        let session = session.clone();
+        Rc::new(move || {
+            // Each call copies the handles, so the closure stays an `Fn` that
+            // the shell can share between the header, the sidebar and the
+            // empty state.
+            reset_pickers(
+                save_query,
+                item_query,
+                style_query,
+                gem_query,
+                item_limit,
+                style_limit,
+                gem_limit,
+                expanded_item,
+                expanded_suggestion,
+                expanded_style,
+                hovered,
+                directory_state,
+                &session,
+                &scrolls,
+            );
+        })
+    };
+
     // Snapshot everything the shell needs so the borrow stays short.
     let active_tab = *tab.read();
     let entries = session.borrow().entries();
@@ -326,9 +362,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let game_status = session.borrow().game_status().clone();
     let has_save = session.borrow().opened_save().is_some();
 
-    let form_differs = character
-        .as_ref()
-        .is_some_and(|character| form.differs_from(character));
+    // The invalid badge comes from parsing the fields, not from "differs":
+    // a field that cannot be parsed is invalid even before it is applied.
+    let form_errors = character.as_ref().map_or_else(Vec::new, |character| {
+        form.read().validate_against(character)
+    });
     let preview_handle = cached_preview(&preview_cache, preview.as_deref());
     let game_ready = matches!(game_status, GameStatus::Loaded { .. });
     let names_ready = session.borrow().has_bundled_names();
@@ -385,7 +423,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             items.len(),
             styles.len(),
         ),
-        (Tab::Character, Some(character)) => views::character::view(&ctx, character),
+        (Tab::Character, Some(character)) => views::character::view(&ctx, character, &form_errors),
         (Tab::Styles, _) => {
             let mut style_limit = style_limit;
             views::styles::view(
@@ -425,7 +463,13 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             views::gems::view(&ctx, &gems, gem_query, &available, amulet, gem_limit)
         }
         (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen),
-        (_, None) => shell::empty_state(entries.len()),
+        (_, None) => shell::empty_state(
+            &ctx,
+            entries.len(),
+            directory_state,
+            reset.clone(),
+            sync.clone(),
+        ),
     };
 
     let content = rect()
@@ -437,10 +481,13 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let header = shell::header(
         &ctx,
         directory_state,
+        game_directory,
         &message,
         &game_status,
         dirty,
-        form_differs,
+        has_save,
+        &form_errors,
+        reset.clone(),
         sync.clone(),
     );
     let (sort_key, sort_descending) = *save_sort.read();
@@ -454,14 +501,14 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         save_focus,
         preview_handle,
         character.as_ref(),
-        form_differs,
         save_query,
         save_sort,
         hovered,
+        reset.clone(),
         sync.clone(),
     );
-    let tabs = navigation::tab_bar(tab, active_tab);
-    let footer = shell::footer(&ctx, form, dirty, form_differs, sync);
+    let tabs = navigation::tab_bar(tab, active_tab, has_save);
+    let footer = shell::footer(&ctx, form, dirty, has_save, &form_errors, sync.clone());
 
     rect()
         .vertical()
@@ -514,7 +561,13 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                                                 .child(if has_save {
                                                     content
                                                 } else {
-                                                    shell::empty_state(entries.len())
+                                                    shell::empty_state(
+                                                        &ctx,
+                                                        entries.len(),
+                                                        directory_state,
+                                                        reset.clone(),
+                                                        sync.clone(),
+                                                    )
                                                 }),
                                         ),
                                 ),
@@ -522,6 +575,58 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 ),
         )
         .child(footer)
+}
+
+/// Clears every per-document picker and scroll state.
+///
+/// Kept as a free function so the reset stays a `Fn`: each state handle is
+/// copied into a mutable local before it is written.
+#[allow(clippy::too_many_arguments)] // one handle per independent piece of state
+fn reset_pickers(
+    save_query: State<String>,
+    item_query: State<String>,
+    style_query: State<String>,
+    gem_query: State<String>,
+    item_limit: State<usize>,
+    style_limit: State<usize>,
+    gem_limit: State<usize>,
+    expanded_item: State<Option<usize>>,
+    expanded_suggestion: State<Option<u16>>,
+    expanded_style: State<Option<u16>>,
+    hovered: State<Option<HoverKey>>,
+    directory_state: State<String>,
+    session: &Rc<RefCell<Session>>,
+    scrolls: &[ScrollController; 6],
+) {
+    let mut save_query = save_query;
+    save_query.set(String::new());
+    let mut item_query = item_query;
+    item_query.set(String::new());
+    let mut style_query = style_query;
+    style_query.set(String::new());
+    let mut gem_query = gem_query;
+    gem_query.set(String::new());
+    let mut item_limit = item_limit;
+    item_limit.set(PAGE_SIZE);
+    let mut style_limit = style_limit;
+    style_limit.set(PAGE_SIZE);
+    let mut gem_limit = gem_limit;
+    gem_limit.set(PAGE_SIZE);
+    let mut expanded_item = expanded_item;
+    expanded_item.set(None);
+    let mut expanded_suggestion = expanded_suggestion;
+    expanded_suggestion.set(None);
+    let mut expanded_style = expanded_style;
+    expanded_style.set(None);
+    let mut hovered = hovered;
+    hovered.set(None);
+    let mut directory_state = directory_state;
+    directory_state.set(session.borrow().directory().display().to_string());
+    for scroll in scrolls {
+        let mut scroll = *scroll;
+        scroll.scroll_to_x(0);
+        scroll.scroll_to_y(0);
+    }
 }
 
 /// Builds an [`ImageHandle`] for the preview, cached by generation.

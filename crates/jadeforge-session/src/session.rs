@@ -18,10 +18,10 @@ mod form;
 mod model;
 
 pub use error::SessionError;
-pub use form::{CharacterForm, FormError};
+pub use form::{CharacterField, CharacterForm, FieldError, FormError};
 pub use model::{
     GameStatus, GemRow, HenchRow, ItemRow, ItemSuggestion, Message, MessageKind, Preview,
-    SaveEntry, StyleRow, StyleSuggestion, StyleUpgrade,
+    SaveEntry, Section, SectionError, StyleRow, StyleSuggestion, StyleUpgrade,
 };
 
 /// Folder to start with: the environment override, the last folder used, or
@@ -298,6 +298,10 @@ pub struct Session {
     pub(crate) name_index: Option<&'static NameIndex>,
     /// Human readable state of the game data.
     pub(crate) game_status: GameStatus,
+    /// Sections that could not be read when the savegame was opened.
+    pub(crate) section_errors: Vec<SectionError>,
+    /// Character-section error of the savegame being loaded.
+    character_error: Option<SectionError>,
     /// Screenshot of the opened savegame.
     ///
     /// Shared so rendering can clone the handle without copying the RGBA
@@ -305,6 +309,13 @@ pub struct Session {
     pub(crate) preview: Option<Rc<Preview>>,
     /// Status of the last action.
     pub(crate) message: Message,
+    /// Canonical block payloads of the opened savegame.
+    ///
+    /// Comparing content per block means an edit that is undone clears the
+    /// dirty state even when the block on disk was not canonically encoded.
+    baseline: Option<Vec<Vec<u8>>>,
+    /// True when the in-memory savegame differs from the file on disk.
+    dirty: bool,
     file_size: Option<u64>,
     preview_generation: u64,
     scan_token: u64,
@@ -352,8 +363,12 @@ impl Session {
             game: None,
             name_index: NameIndex::bundled_english(),
             game_status: GameStatus::Missing,
+            section_errors: Vec::new(),
+            character_error: None,
             preview: None,
             message: Message::info("Scanning for savegames…"),
+            baseline: None,
+            dirty: false,
             file_size: None,
             preview_generation: 0,
             scan_token: 0,
@@ -364,8 +379,11 @@ impl Session {
 
     /// Changes the directory and scans it.
     ///
-    /// Refuses to throw away unsaved changes and reports whether the directory
-    /// was accepted, so the caller does not show a folder that was rejected.
+    /// Refuses to throw away unsaved changes, rejects a folder that cannot be
+    /// read instead of showing it as empty, and keeps the open savegame when
+    /// the folder did not actually change. The chosen folder is only persisted
+    /// after a successful scan, so a rejected Scan leaves the remembered path
+    /// alone.
     pub fn set_directory(&mut self, directory: impl Into<PathBuf>) -> bool {
         let directory = directory.into();
         if self.is_dirty() {
@@ -374,8 +392,22 @@ impl Session {
             );
             return false;
         }
+        if let Some(problem) = directory_problem(&directory) {
+            self.message = Message::error(problem);
+            return false;
+        }
+        let same = same_directory(&self.directory, &directory);
+        if !same {
+            self.clear_open_save();
+        }
         self.directory = directory;
+        self.scan();
         self.persist_directory();
+        true
+    }
+
+    /// Drops the opened savegame but keeps the entry list.
+    fn clear_open_save(&mut self) {
         self.selected = None;
         self.save = None;
         self.character = None;
@@ -386,15 +418,30 @@ impl Session {
         self.amulet = None;
         self.preview = None;
         self.file_size = None;
-        self.scan();
-        true
+        self.baseline = None;
+        self.dirty = false;
     }
 
     /// Replaces the entry list with the result of [`Session::scan_entries`].
+    ///
+    /// An opened savegame is re-located by its folder, so a refresh of the same
+    /// folder keeps it open even when the entry order changed.
     pub fn apply_entries(&mut self, entries: Vec<SaveEntry>) {
+        let open = self
+            .selected
+            .and_then(|index| self.entries.get(index))
+            .map(|entry| entry.path.clone());
         let total = entries.len();
         let broken = entries.iter().filter(|entry| entry.error.is_some()).count();
         self.entries = Rc::new(entries);
+        if let Some(path) = open {
+            self.selected = self.entries.iter().position(|entry| entry.path == path);
+            if self.selected.is_some() {
+                self.refresh_entry();
+            } else {
+                self.clear_open_save();
+            }
+        }
         let plural = if total == 1 { "" } else { "s" };
         let directory = self.directory.display();
         self.message = if total == 0 {
@@ -450,8 +497,20 @@ impl Session {
         if self.directory != directory || self.scan_token != token {
             return false;
         }
+        if let Some(problem) = directory_problem(directory) {
+            self.report_scan_problem(problem);
+            return true;
+        }
         self.apply_entries(entries);
         true
+    }
+
+    /// Reports a folder that disappeared or cannot be listed between the scan
+    /// and its result, instead of pretending it is empty.
+    fn report_scan_problem(&mut self, problem: String) {
+        self.message = Message::error(problem);
+        self.entries = Rc::new(Vec::new());
+        self.clear_open_save();
     }
 
     /// Reports a failed background scan only when it still belongs to the
@@ -493,7 +552,16 @@ impl Session {
 
     /// Loads the game installation that belongs to the save folder.
     fn load_game_data(&mut self) -> Vec<String> {
-        match GameData::discover_result(&self.directory) {
+        // A user-chosen installation from Settings is the fallback when the
+        // save folder has none; `JADEFORGE_GAME_DIR` and a broken discovery
+        // still win, exactly like the gamedata crate documents.
+        let configured = crate::config::Config::load().game_dir;
+        let result = match GameData::discover_result(&self.directory) {
+            Ok(Some(game)) => Ok(Some(game)),
+            Ok(None) => configured.map_or(Ok(None), |root| GameData::open(root).map(Some)),
+            Err(error) => Err(error),
+        };
+        match result {
             Ok(Some(game)) => {
                 self.game_status = GameStatus::Loaded {
                     items: game.playable_item_count(),
@@ -523,6 +591,49 @@ impl Session {
                 vec![format!("game data: {error}")]
             }
         }
+    }
+
+    /// Points `JadeForge` at a game installation chosen by the user.
+    ///
+    /// The installation is only read. The path is remembered in the settings
+    /// file (never in the source), and an invalid folder is reported instead of
+    /// replacing the working game data. Returns whether the folder was used.
+    pub fn set_game_directory(&mut self, root: impl Into<PathBuf>) -> bool {
+        let root = root.into();
+        match GameData::open(&root) {
+            Ok(game) => {
+                self.game_status = GameStatus::Loaded {
+                    items: game.playable_item_count(),
+                    styles: game.style_count(),
+                    root: game.root().to_path_buf(),
+                };
+                self.game = Some(Rc::new(game));
+                let mut config = crate::config::Config::load();
+                config.game_dir = Some(root.clone());
+                let _ = config.store();
+                // Names, descriptions and upgrade tables all become resolvable
+                // now, so every derived row has to be rebuilt.
+                self.rebuild_rows();
+                self.message =
+                    Message::success(format!("Using the game data in {}.", root.display()));
+                true
+            }
+            Err(error) => {
+                self.message = Message::error(format!(
+                    "{} is not a readable Jade Empire installation: {error}",
+                    root.display()
+                ));
+                false
+            }
+        }
+    }
+
+    /// Error of one section, when it could not be read.
+    #[must_use]
+    pub fn section_error(&self, section: Section) -> Option<&SectionError> {
+        self.section_errors
+            .iter()
+            .find(|error| error.section == section)
     }
 
     /// Opens the savegame at `index` of the entry list.
@@ -565,26 +676,41 @@ impl Session {
                 self.file_size = std::fs::metadata(&path).ok().map(|meta| meta.len());
                 let label = entry.label.clone();
                 let mut warnings = Vec::new();
+                self.character_error = None;
                 self.character = match save.character() {
                     Ok(character) => Some(character),
                     Err(error) => {
-                        warnings.push(format!("character: {error}"));
+                        self.character_error = Some(SectionError {
+                            section: Section::Character,
+                            message: error.to_string(),
+                        });
                         None
                     }
                 };
                 self.save = Some(save);
                 self.selected = Some(index);
-                warnings.extend(self.rebuild_rows());
+                self.accept_as_clean();
+                let mut section_errors = self.rebuild_rows();
+                if let Some(character) = &self.character_error {
+                    section_errors.insert(0, character.clone());
+                }
+                self.section_errors = section_errors;
                 self.load_preview(&path);
                 if self.game.is_none() {
                     warnings.extend(self.load_game_data());
                 }
-                self.message = if warnings.is_empty() {
+                self.message = if warnings.is_empty() && self.section_errors.is_empty() {
                     Message::success(format!("Opened {label}."))
                 } else {
+                    let mut problems: Vec<String> = self
+                        .section_errors
+                        .iter()
+                        .map(|error| format!("{}: {}", error.section.label(), error.message))
+                        .collect();
+                    problems.extend(warnings);
                     Message::error(format!(
                         "Opened {label}, but some sections could not be read: {}",
-                        warnings.join("; ")
+                        problems.join("; ")
                     ))
                 };
                 true
@@ -613,7 +739,7 @@ impl Session {
     /// Returns the section errors that were recovered from, so the UI can say
     /// that a savegame opened with missing sections instead of pretending every
     /// read succeeded.
-    fn rebuild_rows(&mut self) -> Vec<String> {
+    fn rebuild_rows(&mut self) -> Vec<SectionError> {
         let (items, styles, henchmen, mut warnings) = self.build_rows();
         self.items = Rc::new(items);
         self.styles = Rc::new(styles);
@@ -621,10 +747,18 @@ impl Session {
         let (gems, gem_warnings) = self.build_gem_rows();
         self.gems = Rc::new(gems);
         warnings.extend(gem_warnings);
+        self.section_errors.clone_from(&warnings);
         warnings
     }
 
-    fn build_rows(&self) -> (Vec<ItemRow>, Vec<StyleRow>, Vec<HenchRow>, Vec<String>) {
+    fn build_rows(
+        &self,
+    ) -> (
+        Vec<ItemRow>,
+        Vec<StyleRow>,
+        Vec<HenchRow>,
+        Vec<SectionError>,
+    ) {
         let Some(save) = self.save.as_ref() else {
             return (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         };
@@ -635,7 +769,10 @@ impl Session {
                 .map(|item| self.describe_item(&item))
                 .collect(),
             Err(error) => {
-                warnings.push(format!("items: {error}"));
+                warnings.push(SectionError {
+                    section: Section::Items,
+                    message: error.to_string(),
+                });
                 Vec::new()
             }
         };
@@ -645,14 +782,20 @@ impl Session {
                 .map(|style| self.describe_style(&style))
                 .collect(),
             Err(error) => {
-                warnings.push(format!("styles: {error}"));
+                warnings.push(SectionError {
+                    section: Section::Styles,
+                    message: error.to_string(),
+                });
                 Vec::new()
             }
         };
         let henchmen = match save.henchmen() {
             Ok(henchmen) => henchmen.into_iter().map(describe_henchman).collect(),
             Err(error) => {
-                warnings.push(format!("companions: {error}"));
+                warnings.push(SectionError {
+                    section: Section::Companions,
+                    message: error.to_string(),
+                });
                 Vec::new()
             }
         };
@@ -723,10 +866,52 @@ impl Session {
         }
     }
 
-    /// True when the opened savegame has unsaved changes.
+    /// True when the opened savegame differs from the file on disk.
+    ///
+    /// This is a content comparison, not the sticky per-block edit flag: typing
+    /// a value and restoring it clears the dirty state again, so the close
+    /// guard and the unsaved badge cannot report changes that are not there.
     #[must_use]
     pub fn is_dirty(&self) -> bool {
-        self.save.as_ref().is_some_and(SaveGame::is_modified)
+        self.dirty
+    }
+
+    /// Recomputes [`Session::is_dirty`] after a mutation.
+    ///
+    /// Only edited blocks are re-serialized, and they are compared with the
+    /// canonical form of the same block at load time. Restoring a value
+    /// therefore clears the flag instead of leaving a sticky "was touched"
+    /// marker behind.
+    fn refresh_dirty(&mut self) {
+        self.dirty = match (self.save.as_ref(), self.baseline.as_ref()) {
+            (Some(save), Some(baseline)) => {
+                save.blocks().iter().enumerate().any(|(index, block)| {
+                    block.is_modified()
+                        && block
+                            .to_canonical_bytes()
+                            .is_ok_and(|bytes| baseline.get(index) != Some(&bytes))
+                })
+            }
+            (Some(save), None) => save.is_modified(),
+            (None, _) => false,
+        };
+    }
+
+    /// Remembers the current in-memory content as the clean baseline.
+    fn accept_as_clean(&mut self) {
+        self.baseline = self
+            .save
+            .as_ref()
+            .and_then(|save| save.canonical_blocks().ok());
+        self.dirty = false;
+    }
+
+    /// Every field of `form` that cannot be applied, in field order.
+    #[must_use]
+    pub fn form_errors(&self, form: &CharacterForm) -> Vec<FieldError> {
+        self.character
+            .as_ref()
+            .map_or_else(Vec::new, |character| form.validate_against(character))
     }
 
     /// Folder that is currently scanned.
@@ -892,6 +1077,7 @@ impl Session {
                 self.character = Some(character);
                 self.rebuild_rows();
                 self.refresh_entry();
+                self.refresh_dirty();
                 if changes.is_empty() {
                     self.message = Message::info("Nothing to apply.");
                 } else {
@@ -907,18 +1093,17 @@ impl Session {
         }
     }
 
-    /// Applies the form to the in-memory savegame without a message.
+    /// Applies every valid field of the form to the in-memory savegame.
     ///
     /// Used by the shell to apply character edits as soon as they are valid, so
-    /// every edit behaves like the item/style/gem edits. Invalid input is left
-    /// in the form for the user to fix and reported by Save.
+    /// every edit behaves like the item/style/gem edits. One mistyped field
+    /// does not stop the other fields from applying; the invalid field is left
+    /// in the form for the user to fix.
     pub fn apply_form_silently(&mut self, form: &CharacterForm) -> bool {
         let Some(base) = self.character.as_ref() else {
             return false;
         };
-        let Ok(character) = form.to_character(base) else {
-            return false;
-        };
+        let (character, _) = form.to_character_partial(base);
         if self.character.as_ref() == Some(&character) {
             return false;
         }
@@ -929,6 +1114,7 @@ impl Session {
             Ok(changes) if !changes.is_empty() => {
                 self.character = Some(character);
                 self.refresh_entry();
+                self.refresh_dirty();
                 true
             }
             _ => false,
@@ -940,7 +1126,7 @@ impl Session {
         let Some(save) = self.save.as_mut() else {
             return Err(SessionError::NoSavegame);
         };
-        if !save.is_modified() {
+        if !self.dirty {
             self.message = Message::info("Nothing was changed, not writing a file.");
             return Err(SessionError::NothingToSave);
         }
@@ -949,11 +1135,43 @@ impl Session {
                 self.file_size = std::fs::metadata(&path).ok().map(|meta| meta.len());
                 self.message = Message::success(format!("Saved {}.", path.display()));
                 self.refresh_entry();
+                self.accept_as_clean();
                 Ok(path)
             }
             Err(error) => {
                 self.message = Message::error(format!("Cannot save: {error}"));
                 Err(SessionError::Save(error.to_string()))
+            }
+        }
+    }
+
+    /// Saves every applied edit even when the character form is invalid.
+    ///
+    /// The form's valid fields are applied first; an invalid field is reported
+    /// separately and stays in the form. This keeps item, style and gem edits
+    /// savable while one character number is mistyped.
+    pub fn save_applied(&mut self, form: &CharacterForm) -> Result<PathBuf, SessionError> {
+        let invalid = self.form_errors(form);
+        self.apply_form_silently(form);
+        match self.save() {
+            Ok(path) => {
+                if let Some(first) = invalid.first() {
+                    self.message = Message::info(format!(
+                        "Saved {}. The character form was not applied: {}",
+                        path.display(),
+                        first.message
+                    ));
+                }
+                Ok(path)
+            }
+            Err(error) => {
+                if let Some(first) = invalid.first() {
+                    self.message = Message::error(format!(
+                        "{} The character form also has an invalid field: {}",
+                        self.message.text, first.message
+                    ));
+                }
+                Err(error)
             }
         }
     }
@@ -1005,6 +1223,7 @@ impl Session {
             }
             Err(error) => self.message = Message::error(format!("Cannot change item: {error}")),
         }
+        self.refresh_dirty();
     }
 
     /// Adds an item stack by its `items.2da` row.
@@ -1067,6 +1286,7 @@ impl Session {
             Ok(false) => self.message = Message::info("The item was already gone."),
             Err(error) => self.message = Message::error(format!("Cannot remove item: {error}")),
         }
+        self.refresh_dirty();
     }
 
     /// Searches the item database.
@@ -1189,7 +1409,7 @@ impl Session {
         let Some(save) = self.save.as_mut() else {
             return false;
         };
-        match save.set_style_family_slot(struct_index, &family_slots, slot) {
+        let changed = match save.set_style_family_slot(struct_index, &family_slots, slot) {
             Ok(changed) => {
                 self.rebuild_rows();
                 self.message = if changed == 0 {
@@ -1209,10 +1429,12 @@ impl Session {
                 self.message = Message::error(format!("Cannot change the upgrade: {error}"));
                 false
             }
-        }
+        };
+        self.refresh_dirty();
+        changed
     }
 
-    fn build_gem_rows(&mut self) -> (Vec<GemRow>, Vec<String>) {
+    fn build_gem_rows(&mut self) -> (Vec<GemRow>, Vec<SectionError>) {
         let Some(save) = self.save.as_ref() else {
             return (Vec::new(), Vec::new());
         };
@@ -1220,14 +1442,20 @@ impl Session {
         let gems = match save.gems() {
             Ok(gems) => gems,
             Err(error) => {
-                warnings.push(format!("gems: {error}"));
+                warnings.push(SectionError {
+                    section: Section::Gems,
+                    message: error.to_string(),
+                });
                 Vec::new()
             }
         };
         let amulet = match save.amulet() {
             Ok(amulet) => amulet,
             Err(error) => {
-                warnings.push(format!("amulet: {error}"));
+                warnings.push(SectionError {
+                    section: Section::Amulet,
+                    message: error.to_string(),
+                });
                 None
             }
         };
@@ -1322,6 +1550,7 @@ impl Session {
                 self.message = Message::error(format!("Cannot add the gem: {error}"));
             }
         }
+        self.refresh_dirty();
     }
 
     /// Moves a gem between the amulet and the inventory.
@@ -1341,6 +1570,7 @@ impl Session {
                 self.message = Message::error(format!("Cannot move the gem: {error}"));
             }
         }
+        self.refresh_dirty();
     }
 
     /// Removes a gem from the inventory or the amulet.
@@ -1357,6 +1587,7 @@ impl Session {
                 self.message = Message::error(format!("Cannot remove the gem: {error}"));
             }
         }
+        self.refresh_dirty();
     }
 
     /// All styles from the game data that the player does not own yet.
@@ -1430,6 +1661,7 @@ impl Session {
             }
             Err(error) => self.message = Message::error(format!("Cannot add style: {error}")),
         }
+        self.refresh_dirty();
     }
 
     /// Removes a style from the player.
@@ -1459,6 +1691,7 @@ impl Session {
             Ok(false) => self.message = Message::info("The style was already gone."),
             Err(error) => self.message = Message::error(format!("Cannot remove style: {error}")),
         }
+        self.refresh_dirty();
     }
 
     /// Changes the level of a companion.
@@ -1484,6 +1717,7 @@ impl Session {
                 self.message = Message::error(format!("Cannot change companion: {error}"));
             }
         }
+        self.refresh_dirty();
     }
 
     /// Makes a companion available or unavailable.
@@ -1518,6 +1752,7 @@ impl Session {
                 self.message = Message::error(format!("Cannot change companion: {error}"));
             }
         }
+        self.refresh_dirty();
     }
 
     /// Reports a validation problem in the status line.
@@ -1546,6 +1781,50 @@ impl Session {
             entry.level = Some(character.level);
             entry.time_played = character.time_played;
         }
+    }
+}
+
+/// Describes why `directory` cannot be scanned as a save folder.
+///
+/// An existing but empty folder is not a problem: the scan reports that it
+/// holds no savegames, which is a different state from a missing folder.
+fn directory_problem(directory: &Path) -> Option<String> {
+    match std::fs::metadata(directory) {
+        Err(error) => Some(match error.kind() {
+            std::io::ErrorKind::NotFound => format!(
+                "The save folder {} does not exist. Check the path or use Browse.",
+                directory.display()
+            ),
+            std::io::ErrorKind::PermissionDenied => format!(
+                "The save folder {} cannot be read: permission denied.",
+                directory.display()
+            ),
+            _ => format!(
+                "The save folder {} cannot be read: {error}.",
+                directory.display()
+            ),
+        }),
+        Ok(metadata) if !metadata.is_dir() => Some(format!(
+            "{} is a file, not a save folder.",
+            directory.display()
+        )),
+        Ok(_) => std::fs::read_dir(directory).err().map(|error| {
+            format!(
+                "The save folder {} cannot be listed: {error}.",
+                directory.display()
+            )
+        }),
+    }
+}
+
+/// True when both paths name the same folder, resolving symlinks when possible.
+fn same_directory(left: &Path, right: &Path) -> bool {
+    if left == right {
+        return true;
+    }
+    match (std::fs::canonicalize(left), std::fs::canonicalize(right)) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
     }
 }
 
@@ -2548,9 +2827,15 @@ mod tests {
         assert!(session.open(0), "{}", session.message.text);
         assert_eq!(session.message.kind, MessageKind::Error);
         assert!(
-            session.message.text.contains("items"),
+            session.message.text.contains("Inventory"),
             "{}",
             session.message.text
+        );
+        assert_eq!(
+            session
+                .section_error(Section::Items)
+                .map(|error| error.section),
+            Some(Section::Items)
         );
         assert!(session.character.is_some());
         assert!(session.items.is_empty());
@@ -2566,5 +2851,234 @@ mod tests {
         assert!(session.gems.is_empty());
         assert!(session.amulet.is_none());
         assert!(session.save.is_none());
+    }
+    #[test]
+    fn dirty_is_a_content_comparison_not_a_sticky_flag() {
+        let (_directory, mut session) = fixture();
+        assert!(!session.is_dirty());
+        let character = session.character.as_ref().expect("character").clone();
+
+        let mut form = CharacterForm::from_character(&character);
+        form.level = "9".to_owned();
+        assert!(session.apply_form_silently(&form));
+        assert!(session.is_dirty(), "an edit must mark the save dirty");
+
+        form.level = character.level.to_string();
+        assert!(session.apply_form_silently(&form));
+        assert!(
+            !session.is_dirty(),
+            "restoring the original value must clear the dirty state"
+        );
+    }
+
+    #[test]
+    fn scanning_the_same_folder_keeps_the_save_open() {
+        let (directory, mut session) = fixture();
+        let path = session.current_path();
+        assert!(session.set_directory(directory.path().to_path_buf()));
+        assert_eq!(session.selected(), Some(0), "{}", session.message.text);
+        assert_eq!(session.current_path(), path);
+        assert!(session.character.is_some());
+    }
+
+    #[test]
+    fn scanning_another_folder_clears_the_save() {
+        let (_directory, mut session) = fixture();
+        let other = TempDir::new("other");
+        assert!(session.set_directory(other.path()));
+        assert_eq!(session.selected(), None);
+        assert!(session.character.is_none());
+        assert_eq!(session.directory(), other.path());
+    }
+
+    #[test]
+    fn a_missing_folder_is_rejected_and_not_persisted() {
+        let (directory, mut session) = fixture();
+        crate::config::ensure_test_path();
+        let original = session.directory().to_path_buf();
+        let mut config = crate::config::Config::load();
+        config.save_dir = Some(original.clone());
+        config.store().expect("store settings");
+
+        let missing = directory.path().join("does-not-exist");
+        assert!(!session.set_directory(missing));
+        assert_eq!(session.directory(), original);
+        assert!(
+            session.message().text.contains("does not exist"),
+            "{}",
+            session.message().text
+        );
+        assert_eq!(
+            crate::config::Config::load().save_dir,
+            Some(original),
+            "a rejected scan must not replace the remembered folder"
+        );
+    }
+
+    #[test]
+    fn a_file_is_not_a_save_folder() {
+        let (directory, mut session) = fixture();
+        let file = directory.path().join("not-a-folder");
+        fs::write(&file, b"x").expect("write file");
+        let original = session.directory().to_path_buf();
+        assert!(!session.set_directory(file));
+        assert_eq!(session.directory(), original);
+        assert!(
+            session.message().text.contains("is a file"),
+            "{}",
+            session.message().text
+        );
+    }
+
+    #[test]
+    fn an_empty_folder_is_reported_as_empty() {
+        let (_directory, mut session) = fixture();
+        let empty = TempDir::new("empty");
+        assert!(session.set_directory(empty.path()));
+        assert_eq!(session.entries.len(), 0);
+        assert!(
+            session.message.text.contains("No savegames found"),
+            "{}",
+            session.message.text
+        );
+    }
+
+    #[test]
+    fn a_valid_edit_saves_while_the_form_is_invalid() {
+        let (_directory, mut session) = fixture();
+        let path = session.current_path().expect("path");
+        let item_index = session.items[0].struct_index;
+        let before = session.items[0].count;
+        session.adjust_item_count(item_index, 1);
+        let character = session.character.as_ref().expect("character").clone();
+        let mut form = CharacterForm::from_character(&character);
+        form.level = "abc".to_owned();
+
+        session.save_applied(&form).expect("the applied edit saves");
+        assert!(
+            session
+                .message
+                .text
+                .contains("character form was not applied"),
+            "{}",
+            session.message.text
+        );
+        assert!(!session.is_dirty());
+
+        let reopened = SaveGame::open(&path).expect("reopen");
+        assert_eq!(
+            reopened.items().expect("items")[0].count,
+            before + 1,
+            "the item edit was not written"
+        );
+        assert_eq!(
+            reopened.character().expect("character").level,
+            character.level,
+            "the invalid level was written"
+        );
+    }
+
+    #[test]
+    fn valid_fields_apply_even_when_another_field_is_invalid() {
+        let (_directory, mut session) = fixture();
+        let character = session.character.as_ref().expect("character").clone();
+        let mut form = CharacterForm::from_character(&character);
+        form.level = "abc".to_owned();
+        form.gold = "1234".to_owned();
+
+        assert!(session.apply_form_silently(&form));
+        let updated = session.character.as_ref().expect("character");
+        assert_eq!(updated.gold, Some(1234));
+        assert_eq!(updated.level, character.level, "the invalid level applied");
+
+        let errors = session.form_errors(&form);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_eq!(errors[0].field, CharacterField::Level);
+        assert!(errors[0].message.contains("level"), "{}", errors[0].message);
+    }
+
+    #[test]
+    fn out_of_range_fields_report_their_allowed_range() {
+        let character = character();
+        let mut form = CharacterForm::from_character(&character);
+        form.level = "0".to_owned();
+        form.health_max = "0".to_owned();
+        let errors = form.validate_against(&character);
+        assert_eq!(errors.len(), 2, "{errors:?}");
+        assert_eq!(errors[0].field, CharacterField::Level);
+        assert!(
+            errors[0].message.contains("1 to 255"),
+            "{}",
+            errors[0].message
+        );
+        assert_eq!(errors[1].field, CharacterField::HealthMax);
+        assert!(form.to_character(&character).is_err());
+        assert_eq!(
+            CharacterField::Level.range(),
+            "1 to 255",
+            "the UI shows this range next to the field"
+        );
+    }
+
+    #[test]
+    fn a_failed_section_is_reported_apart_from_an_empty_list() {
+        let (directory, _session) = fixture();
+        let path = directory.path().join("save.sac");
+        {
+            let mut save = SaveGame::open(&path).expect("open fixture");
+            let field = save
+                .block_mut("save.sav")
+                .expect("save block")
+                .gff_mut()
+                .get_mut("PlayerCreature.ItemList")
+                .expect("item list");
+            field.type_id = 0;
+            field.value = Value::Byte(1);
+            save.save(SaveOptions { backup: false })
+                .expect("write fixture");
+        }
+        let mut session = Session::with_directory(directory.path());
+        assert!(session.open(0));
+        let error = session
+            .section_error(Section::Items)
+            .expect("the inventory section should be reported unreadable");
+        assert_eq!(error.section, Section::Items);
+        assert!(session.items().is_empty());
+        assert!(session.section_error(Section::Styles).is_none());
+    }
+
+    #[test]
+    fn a_readable_save_has_no_section_errors() {
+        let (_directory, session) = fixture();
+        assert!(session.section_error(Section::Items).is_none());
+        assert!(session.section_error(Section::Character).is_none());
+    }
+
+    #[test]
+    fn a_user_installation_is_rejected_when_it_is_not_a_game() {
+        let (_directory, mut session) = fixture();
+        let missing = std::env::temp_dir().join("jadeforge-not-a-game-installation");
+        assert!(!session.set_game_directory(missing));
+        assert!(
+            session.message.text.contains("not a readable"),
+            "{}",
+            session.message.text
+        );
+    }
+
+    #[test]
+    fn restoring_the_item_count_clears_dirty() {
+        let (_directory, mut session) = fixture();
+        let index = session.items[0].struct_index;
+        let before = session.items[0].count;
+        session.adjust_item_count(index, 1);
+        assert!(session.is_dirty(), "{}", session.message.text);
+        session.adjust_item_count(index, -1);
+        assert_eq!(session.items[0].count, before);
+        assert!(
+            !session.is_dirty(),
+            "restoring the count left the save dirty: {}",
+            session.message.text
+        );
     }
 }

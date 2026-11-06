@@ -5,7 +5,7 @@
 
 use freya::prelude::*;
 
-use crate::session::CharacterForm;
+use crate::session::{CharacterField, CharacterForm};
 
 /// State handles of every text input of the character editor.
 #[derive(Clone, Copy)]
@@ -52,6 +52,12 @@ pub struct Form {
     pub chapter: State<String>,
     /// Kills.
     pub kills: State<String>,
+    /// Accessibility ids of the inputs, one per [`CharacterField`].
+    ///
+    /// The ids are created here so a field can be focused from outside the
+    /// character view, for example the first invalid field when Save is
+    /// pressed.
+    ids: [AccessibilityId; CharacterField::ALL.len()],
 }
 
 impl Default for Form {
@@ -93,8 +99,72 @@ impl Form {
         )
     }
 
+    /// Text state of one field.
+    #[must_use]
+    pub fn state(&self, field: CharacterField) -> State<String> {
+        match field {
+            CharacterField::Name => self.name,
+            CharacterField::Level => self.level,
+            CharacterField::Experience => self.experience,
+            CharacterField::Gold => self.gold,
+            CharacterField::AttributePoints => self.attribute_points,
+            CharacterField::Health => self.health,
+            CharacterField::HealthMax => self.health_max,
+            CharacterField::Chi => self.chi,
+            CharacterField::ChiMax => self.chi_max,
+            CharacterField::Focus => self.focus,
+            CharacterField::FocusMax => self.focus_max,
+            CharacterField::Body => self.body,
+            CharacterField::Mind => self.mind,
+            CharacterField::Spirit => self.spirit,
+            CharacterField::Charm => self.charm,
+            CharacterField::Intuition => self.intuition,
+            CharacterField::Intimidate => self.intimidate,
+            CharacterField::Alignment => self.alignment,
+            CharacterField::Appearance => self.appearance,
+            CharacterField::Chapter => self.chapter,
+            CharacterField::Kills => self.kills,
+        }
+    }
+
+    /// Accessibility id of a field's input.
+    #[must_use]
+    pub fn id(&self, field: CharacterField) -> AccessibilityId {
+        self.ids[field.index()]
+    }
+
+    /// Moves keyboard focus to a field's input.
+    pub fn focus(&self, field: CharacterField) {
+        self.id(field).request_focus();
+    }
+
     /// Creates all state handles. Must be called in a stable order.
     pub fn new() -> Self {
+        // One id per field, in `CharacterField::ALL` order. The hooks are listed
+        // explicitly so their order can never drift from the array.
+        let ids = [
+            use_a11y(), // Name
+            use_a11y(), // Level
+            use_a11y(), // Experience
+            use_a11y(), // Gold
+            use_a11y(), // Attribute points
+            use_a11y(), // Health
+            use_a11y(), // Maximum health
+            use_a11y(), // Chi
+            use_a11y(), // Maximum chi
+            use_a11y(), // Focus
+            use_a11y(), // Maximum focus
+            use_a11y(), // Body
+            use_a11y(), // Mind
+            use_a11y(), // Spirit
+            use_a11y(), // Charm
+            use_a11y(), // Intuition
+            use_a11y(), // Intimidate
+            use_a11y(), // Alignment
+            use_a11y(), // Appearance
+            use_a11y(), // Chapter
+            use_a11y(), // Kills
+        ];
         Self {
             name: use_state(String::new),
             level: use_state(String::new),
@@ -117,6 +187,7 @@ impl Form {
             appearance: use_state(String::new),
             chapter: use_state(String::new),
             kills: use_state(String::new),
+            ids,
         }
     }
 
@@ -173,19 +244,6 @@ impl Form {
             appearance: value(self.appearance),
             chapter: value(self.chapter),
             kills: value(self.kills),
-        }
-    }
-
-    /// True when the inputs differ from the character in the savegame.
-    ///
-    /// Comparison goes through the parser, not through the raw strings: `10.0`
-    /// and `10` describe the same health value, and a leading zero in a level is
-    /// not invalid input. A form that cannot be parsed at all is reported as
-    /// different so navigation stays blocked until it is fixed.
-    pub fn differs_from(&self, character: &jadeforge_core::Character) -> bool {
-        match self.read().to_character(character) {
-            Ok(parsed) => parsed != *character,
-            Err(_) => true,
         }
     }
 }
