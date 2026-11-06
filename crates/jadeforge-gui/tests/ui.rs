@@ -154,6 +154,19 @@ fn find_node_with_text(test: &TestingRunner, needle: &str) -> Option<freya_testi
     })
 }
 
+/// Finds visible text in either a label or a wrapping paragraph.
+fn find_text_node(test: &TestingRunner, needle: &str) -> Option<freya_testing::TestingNode> {
+    test.find(|node, element| {
+        if let Some(label) = Label::try_downcast(element)
+            && label.text.contains(needle)
+        {
+            return Some(node);
+        }
+        let paragraph = Paragraph::try_downcast(element)?;
+        paragraph.to_string().contains(needle).then_some(node)
+    })
+}
+
 fn find_label_exact(test: &TestingRunner, wanted: &str) -> Option<freya_testing::TestingNode> {
     test.find(|node, element| {
         let label = Label::try_downcast(element)?;
@@ -2658,8 +2671,8 @@ fn background_of(node: &freya_testing::TestingNode) -> Option<Color> {
 }
 
 fn orb_detail_is_visible(test: &TestingRunner) -> bool {
-    find_label_text(test, "available: clicking buys").is_some()
-        || find_label_text(test, "owned: clicking removes").is_some()
+    find_text_node(test, "available: clicking buys").is_some()
+        || find_text_node(test, "owned: clicking removes").is_some()
 }
 
 /// Expands the first learned style and returns its name.
@@ -2828,8 +2841,8 @@ fn hovering_an_upgrade_orb_explains_it() {
     ));
     test.sync_and_update();
     assert!(
-        find_label_text(&test, "available: clicking buys").is_some()
-            || find_label_text(&test, "owned: clicking removes").is_some(),
+        find_text_node(&test, "available: clicking buys").is_some()
+            || find_text_node(&test, "owned: clicking removes").is_some(),
         "hovering an orb did not explain it"
     );
     let label = a11y_label(&orb).unwrap_or_default();
@@ -3177,4 +3190,62 @@ fn scanning_another_folder_resets_the_filter_after_the_scan() {
         find_paragraph(&test, "does-not-match").is_none(),
         "the filter input was not cleared"
     );
+}
+
+#[test]
+fn upgrade_detail_keeps_the_full_width() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data to resolve upgrades");
+        return;
+    }
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 1460.0, 900.0);
+    assert!(click_text(&mut test, "Level "));
+    assert!(click_label_exact(&mut test, "Styles"));
+    let name = expand_first_style(&mut test);
+    let prefix = format!("{name}, ");
+    let orbs: Vec<_> = test.find_many(|node, _| {
+        (a11y_role(&node) == "Button"
+            && a11y_label(&node)
+                .is_some_and(|label| label.starts_with(&prefix) && label.contains(", tier ")))
+        .then_some(node)
+    });
+    assert!(!orbs.is_empty(), "the expanded style has no upgrade orbs");
+
+    for orb in orbs {
+        let label = a11y_label(&orb).expect("orb label");
+        let tier = label
+            .split(", tier ")
+            .nth(1)
+            .and_then(|rest| rest.split(',').next())
+            .expect("orb tier");
+        let area = orb.layout().area;
+        test.move_cursor(CursorPoint::new(
+            f64::from(area.origin.x) + f64::from(area.size.width) / 2.0,
+            f64::from(area.origin.y) + f64::from(area.size.height) / 2.0,
+        ));
+        test.sync_and_update();
+        let title = find_text_node(&test, &format!("tier {tier}:"))
+            .unwrap_or_else(|| panic!("no detail title for tier {tier}"));
+        let title_area = title.layout().area;
+        assert!(
+            title_area.size.width > 300.0,
+            "the detail title for tier {tier} is squeezed into {} px at x {}",
+            title_area.size.width,
+            title_area.origin.x
+        );
+        let action = find_text_node(&test, "clicking buys")
+            .or_else(|| find_text_node(&test, "clicking removes"))
+            .unwrap_or_else(|| panic!("no detail action for tier {tier}"));
+        let action_area = action.layout().area;
+        assert!(
+            action_area.size.width > 300.0,
+            "the detail action for tier {tier} is squeezed into {} px at x {}",
+            action_area.size.width,
+            action_area.origin.x
+        );
+    }
 }
