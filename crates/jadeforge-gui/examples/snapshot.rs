@@ -88,7 +88,7 @@ fn main() {
                 if let Some(node) = find_label(&test, tab.label()) {
                     click(&mut test, &node);
                 }
-                type_query(&mut test, tab, query.as_deref());
+                type_query(&mut test, tab, query.as_deref(), false);
                 let stem = output
                     .file_stem()
                     .map_or_else(|| "ui".to_owned(), |stem| stem.to_string_lossy().into());
@@ -112,7 +112,7 @@ fn main() {
                 click(&mut test, &node);
             }
             match tab_from_label(tab) {
-                Some(tab) => type_query(&mut test, tab, query.as_deref()),
+                Some(tab) => type_query(&mut test, tab, query.as_deref(), true),
                 None if query.is_some() => {
                     eprintln!("warning: {tab:?} is not a tab; --query was not applied");
                 }
@@ -149,15 +149,17 @@ fn open_first_save(test: &mut TestingRunner) {
 /// The lookup is the exact placeholder of that tab's picker, so Styles can no
 /// longer capture the sidebar's savegame filter just because it also starts
 /// with "Filter ". Tabs without a picker are left alone.
-fn type_query(test: &mut TestingRunner, tab: Tab, query: Option<&str>) {
+fn type_query(test: &mut TestingRunner, tab: Tab, query: Option<&str>, warn: bool) {
     let Some(query) = query else {
         return;
     };
     let Some(placeholder) = tab.filter_placeholder() else {
-        eprintln!(
-            "warning: {} has no tab filter; --query was not applied",
-            tab.label()
-        );
+        if warn {
+            eprintln!(
+                "warning: {} has no tab filter; --query was not applied",
+                tab.label()
+            );
+        }
         return;
     };
     if let Some(node) = find_paragraph_exact(test, placeholder) {
