@@ -6,6 +6,11 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `just install` now installs `jadeforge-cli` alongside the `jadeforge` GUI
+  binary, so a source install provides both tools.
+
 ## [0.2.1] - 2026-11-06
 
 ### Added

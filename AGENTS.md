@@ -28,7 +28,7 @@ just setup
 just start fix/<slug>
 just finish                                   # clean tree + commits ahead of main
 
-# Install the GUI locally, tuned for this machine's CPU (not portable)
+# Install the GUI and CLI locally, tuned for this machine's CPU (not portable)
 just install
 
 # Tests against real savegames (skipped when the variable is not set)
