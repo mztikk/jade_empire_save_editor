@@ -76,7 +76,9 @@ acceptable, not while a presentation is being recorded.
 - The window is built with `jadeforge_gui::app::window_config`, so the title,
   icon, 1180x760 size, 900x700 minimum, application id and unsaved-changes close
   guard are the production ones. Tests only override the application id to a
-  unique value so KWin can find the test window.
+  unique value so KWin can find the test window. The orchestrator also
+  registers `WindowGeometryPlugin`, as `main.rs` does, so the live close handler
+  writes the remembered rectangle through the real settings path.
 - `freya_winit::launch` runs the actual winit event loop and the actual Skia/GL
   renderer.
 - On KDE Plasma, pointer motion, clicks and keystrokes are injected through
@@ -117,14 +119,18 @@ game installation, then re-executes itself once per scenario with
 scenario, closes the window through the plugin (bypassing the unsaved-changes
 dialog) and exits with its result. The orchestrator reports per-scenario
 results, continues after failures and kills a child that exceeds 120 seconds.
+`window_geometry_restarts` is the exception: the orchestrator seeds one config
+directory, runs the child twice with it, and checks the plugin-written settings
+between the launches.
 
 ## Fixture and isolation
 
 Each run builds the same synthetic installation the headless suite uses
 (`tests/support/mod.rs`): one `Test Save`, `dialog.tlk`, item/style tables and a
 screenshot. Every scenario gets its own `JADEFORGE_CONFIG_DIR`, so the developer's
-remembered sort order or save folder cannot leak in. The fixture lives in a
-temporary directory and is removed after the run.
+remembered sort order or save folder cannot leak in; the two
+`window_geometry_restarts` passes share that directory on purpose. The fixture
+lives in a temporary directory and is removed after the run.
 
 ## Desktop and VM runs
 
@@ -158,6 +164,9 @@ which is useful when a script must prove that the suite actually ran.
 4. If the scenario needs a screenshot, return `Ok(())` in plugin mode with a
    printed skip; do not make the suite depend on Spectacle for its other
    scenarios.
+5. A scenario that needs a real restart cannot create a second event loop. Have
+   the orchestrator run it twice with one config directory, as
+   `window_geometry_restarts` does, instead of launching twice in the child.
 
 ## Limitations
 

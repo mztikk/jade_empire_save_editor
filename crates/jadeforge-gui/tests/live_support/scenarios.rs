@@ -16,6 +16,13 @@ use super::probe::{NodeKind, Probe};
 /// Default timeout for one UI transition.
 pub const STEP: Duration = Duration::from_secs(10);
 
+/// Scenario that seeds a window rectangle, closes the window, and checks that
+/// the relaunch restores the stored rectangle.
+pub const GEOMETRY_SCENARIO: &str = "window_geometry_restarts";
+
+/// Logical inner size the geometry scenario stores and expects back.
+pub const GEOMETRY_SIZE: (u32, u32) = (1000, 720);
+
 /// One named scenario.
 pub type Scenario = fn(&mut Driver) -> Result<(), String>;
 
@@ -35,6 +42,7 @@ pub const SCENARIOS: &[(&str, Scenario)] = &[
         "the_window_is_really_presented",
         the_window_is_really_presented,
     ),
+    (GEOMETRY_SCENARIO, window_geometry_restarts),
 ];
 
 /// Runs one scenario against a live window.
@@ -75,6 +83,28 @@ fn window_opens_on_wayland(driver: &mut Driver) -> Result<(), String> {
     println!(
         "  window {}x{} at scale {}, {} frame(s); first save row: {:?}",
         window.width, window.height, window.scale, window.frames, save.text
+    );
+    Ok(())
+}
+
+fn window_geometry_restarts(driver: &mut Driver) -> Result<(), String> {
+    let window = driver.window();
+    if window.scale <= 0.0 {
+        return Err("the window has no scale factor yet".to_owned());
+    }
+    let width = (f64::from(window.width) / window.scale).round();
+    let height = (f64::from(window.height) / window.scale).round();
+    let expected = (f64::from(GEOMETRY_SIZE.0), f64::from(GEOMETRY_SIZE.1));
+    if (width, height) != expected {
+        return Err(format!(
+            "the window restored to {width}x{height} logical pixels, expected {}x{}",
+            GEOMETRY_SIZE.0, GEOMETRY_SIZE.1
+        ));
+    }
+    driver.wait_for_text(jadeforge_gui::app::WINDOW_TITLE, STEP)?;
+    println!(
+        "  window {}x{} at scale {}, restored from the remembered geometry",
+        window.width, window.height, window.scale
     );
     Ok(())
 }

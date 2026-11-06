@@ -8,18 +8,24 @@
 //! is a no-op, which keeps `cargo nextest run --workspace` from opening windows
 //! on a developer's desktop.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, ExitStatus};
 use std::time::{Duration, Instant};
 
 use jadeforge_gui::app::{app_with_directory, window_config};
+use jadeforge_gui::config::Config;
+use jadeforge_gui::geometry::WindowGeometryPlugin;
 
 use super::live_app_id;
 use super::probe::Probe;
-use super::scenarios::{SCENARIOS, run as run_scenario};
+use super::scenarios::{GEOMETRY_SCENARIO, GEOMETRY_SIZE, SCENARIOS, run as run_scenario};
 
 /// Timeout for one scenario child, including the initial render.
 const SCENARIO_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Off-screen position seeded before the geometry restart scenario. The
+/// plugin must replace it with the real (position-less on Wayland) rectangle.
+const GEOMETRY_SEED_POSITION: i32 = 100_000;
 
 /// Entry point for the `live` test target.
 pub fn run() -> ExitCode {
@@ -99,7 +105,8 @@ fn run_child() -> ExitCode {
         .with_window(
             window_config(move || app_with_directory(start.clone())).with_app_id(live_app_id()),
         )
-        .with_plugin(plugin);
+        .with_plugin(plugin)
+        .with_plugin(WindowGeometryPlugin);
     freya_winit::launch(config);
 
     let outcome = receiver
@@ -145,21 +152,15 @@ fn orchestrate() -> ExitCode {
     );
     let mut failures = Vec::new();
     for (name, _) in SCENARIOS {
-        println!("-- {name}");
         let config = root.join("config").join(name);
-        let mut command = Command::new(&executable);
-        command
-            .env("JADEFORGE_LIVE", "1")
-            .env("JADEFORGE_LIVE_APPROVED", "1")
-            .env("JADEFORGE_LIVE_SCENARIO", name)
-            .env("JADEFORGE_SAVE_DIR", &saves)
-            .env("JADEFORGE_GAME_DIR", &game)
-            .env("JADEFORGE_CONFIG_DIR", &config)
-            .env("JADEFORGE_LIVE_ARTIFACTS", &artifacts);
-        match spawn_and_wait(&mut command, SCENARIO_TIMEOUT) {
-            Ok(status) if status.success() => {}
-            Ok(status) => failures.push((*name, format!("child exited with {status}"))),
-            Err(error) => failures.push((*name, error)),
+        let result = if *name == GEOMETRY_SCENARIO {
+            run_geometry_restart(&executable, &saves, &game, &config, &artifacts)
+        } else {
+            println!("-- {name}");
+            run_scenario_child(&executable, name, &saves, &game, &config, &artifacts)
+        };
+        if let Err(error) = result {
+            failures.push((*name, error));
         }
     }
     let _ = std::fs::remove_dir_all(&root);
@@ -172,6 +173,96 @@ fn orchestrate() -> ExitCode {
         }
         ExitCode::FAILURE
     }
+}
+
+/// Runs one scenario child with the fixture paths the orchestrator prepared.
+fn run_scenario_child(
+    executable: &Path,
+    name: &str,
+    saves: &Path,
+    game: &Path,
+    config: &Path,
+    artifacts: &Path,
+) -> Result<(), String> {
+    let mut command = Command::new(executable);
+    command
+        .env("JADEFORGE_LIVE", "1")
+        .env("JADEFORGE_LIVE_APPROVED", "1")
+        .env("JADEFORGE_LIVE_SCENARIO", name)
+        .env("JADEFORGE_SAVE_DIR", saves)
+        .env("JADEFORGE_GAME_DIR", game)
+        .env("JADEFORGE_CONFIG_DIR", config)
+        .env("JADEFORGE_LIVE_ARTIFACTS", artifacts);
+    match spawn_and_wait(&mut command, SCENARIO_TIMEOUT)? {
+        status if status.success() => Ok(()),
+        status => Err(format!("child exited with {status}")),
+    }
+}
+
+/// Runs the geometry scenario twice with one config directory: the first launch
+/// is seeded with a rectangle, the relaunch must restore what the first stored.
+fn run_geometry_restart(
+    executable: &Path,
+    saves: &Path,
+    game: &Path,
+    config: &Path,
+    artifacts: &Path,
+) -> Result<(), String> {
+    std::fs::create_dir_all(config)
+        .map_err(|error| format!("cannot create {}: {error}", config.display()))?;
+    let settings = config.join("config");
+    let seed = format!(
+        "# JadeForge settings\n[window]\nwidth = {}\nheight = {}\nx = {GEOMETRY_SEED_POSITION}\ny = {GEOMETRY_SEED_POSITION}\n",
+        GEOMETRY_SIZE.0, GEOMETRY_SIZE.1
+    );
+    std::fs::write(&settings, seed)
+        .map_err(|error| format!("cannot seed {}: {error}", settings.display()))?;
+
+    println!("-- {GEOMETRY_SCENARIO} (first launch)");
+    run_scenario_child(
+        executable,
+        GEOMETRY_SCENARIO,
+        saves,
+        game,
+        config,
+        artifacts,
+    )?;
+    verify_stored_geometry(&settings)?;
+
+    println!("-- {GEOMETRY_SCENARIO} (relaunch)");
+    run_scenario_child(
+        executable,
+        GEOMETRY_SCENARIO,
+        saves,
+        game,
+        config,
+        artifacts,
+    )?;
+    verify_stored_geometry(&settings)
+}
+
+/// Checks that the plugin replaced the seeded off-screen position and stored
+/// the rectangle the launch actually used.
+fn verify_stored_geometry(path: &Path) -> Result<(), String> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let config = Config::parse(&text);
+    let window = config.window.ok_or_else(|| {
+        "the geometry plugin did not write a window rectangle when the window closed".to_owned()
+    })?;
+    if (window.width, window.height) != GEOMETRY_SIZE {
+        return Err(format!(
+            "the stored window is {}x{}, expected {}x{}",
+            window.width, window.height, GEOMETRY_SIZE.0, GEOMETRY_SIZE.1
+        ));
+    }
+    if window.x == Some(GEOMETRY_SEED_POSITION) || window.y == Some(GEOMETRY_SEED_POSITION) {
+        return Err(
+            "the seeded off-screen position survived, so the geometry plugin did not store the real rectangle"
+                .to_owned(),
+        );
+    }
+    Ok(())
 }
 
 fn spawn_and_wait(command: &mut Command, timeout: Duration) -> Result<ExitStatus, String> {
