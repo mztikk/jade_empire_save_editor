@@ -64,11 +64,12 @@ the game does, verifies the result and keeps a backup of the original.
 - **Large collections** – the save browser and the item/style/gem pickers are
   virtualized, so the full item database and a save folder with hundreds of
   entries stay responsive while only the visible rows are built.
-- **Localization-ready UI** – interface strings live in an English source
-  catalog plus a bundled German catalog (`locales/de.toml`) and a QA
-  pseudolocale. Missing German keys fall back to English, so the catalog can be
-  filled incrementally; adding a language means one TOML file and one locale
-  variant, not touching the views.
+- **Localization-ready UI** – interface strings use stable semantic ids in an
+  English source catalog plus a peer German catalog in
+  `crates/jadeforge-i18n/locales`, and a generated QA pseudolocale. English is
+  complete; German is a `Deutsch (Vorschau)` catalog that shows `⟦id⟧` markers
+  until filled, with no English fallback. Adding a language means one TOML file
+  and one locale variant, not touching the views.
 - **Help and diagnostics** – About shows the version, configuration and data
   folders, block count, theme, language and renderer preference, copies a
   diagnostics report, and lists every keyboard shortcut (Ctrl+/ opens it).

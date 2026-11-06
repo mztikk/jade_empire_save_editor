@@ -68,16 +68,16 @@ pub(super) fn sidebar(
     let show_preview = theme::text_scale() <= 1.25;
     let preview_block = preview_slot(preview, selected.is_some());
     let heading = if entries.is_empty() && scanning {
-        t("Loading savegames…").to_uppercase()
+        t("shell.loading_savegames").to_uppercase()
     } else if visible.len() == entries.len() {
-        crate::widgets::plural(entries.len(), "savegame", "savegames").to_uppercase()
+        crate::widgets::plural(entries.len(), "count.savegame.one", "count.savegame.other")
+            .to_uppercase()
     } else {
         let shown = visible.len().to_string();
-        let total = crate::widgets::plural(entries.len(), "savegame", "savegames").to_uppercase();
-        fill(
-            "{shown} OF {total}",
-            &[("shown", &shown), ("total", &total)],
-        )
+        let total =
+            crate::widgets::plural(entries.len(), "count.savegame.one", "count.savegame.other")
+                .to_uppercase();
+        fill("save_browser.of", &[("shown", &shown), ("total", &total)])
     };
     let list = if entries.is_empty() && scanning {
         loading_rows()
@@ -99,14 +99,14 @@ pub(super) fn sidebar(
     };
 
     let title = character.as_ref().map_or_else(
-        || t("No savegame selected").to_owned(),
+        || t("shell.no_savegame_selected").to_owned(),
         |character| character.name.clone(),
     );
     let subtitle = character.as_ref().map_or_else(
-        || t("Select a savegame").to_owned(),
+        || t("save_browser.select.a.savegame").to_owned(),
         |character| {
             fill(
-                "Level {level} · Time played {time}",
+                "session.row.level_time",
                 &[
                     ("level", &character.level.to_string()),
                     (
@@ -167,7 +167,7 @@ pub(super) fn sidebar(
         .child(crate::widgets::filter_input(
             query,
             crate::app::SAVE_FILTER_PLACEHOLDER,
-            "Clear the savegame filter",
+            "save_browser.clear_filter",
             filter_id,
         ))
         .child(sort_bar(ctx, sort, *sort.read()))
@@ -313,9 +313,9 @@ impl Component for SaveList {
                 .padding(Gaps::new_all(theme::space::xl()))
                 .child(
                     crate::widgets::a11y_text(if self.data.entries.is_empty() {
-                        t("No savegames in this folder.")
+                        t("save_browser.no.savegames.in.this.folder")
                     } else {
-                        t("No savegame matches this filter.")
+                        t("save_browser.no.savegame.matches.this.filter")
                     })
                     .font_size(theme::font::caption())
                     .color(theme::dim()),
@@ -345,7 +345,7 @@ impl Component for SaveList {
             .a11y_id(a11y_id)
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::ListBox)
-            .a11y_alt(capitalize(t("savegames")))
+            .a11y_alt(capitalize(t("count.savegame.other")))
             .border(
                 Border::new()
                     .fill(if is_focused {
@@ -564,21 +564,21 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
         });
         let accessible = if is_active {
             fill(
-                "Sort by {name} ({direction})",
+                "save_browser.sort_by.active",
                 &[
                     ("name", t(key.label())),
                     (
                         "direction",
                         if descending {
-                            t("descending")
+                            t("sort.descending")
                         } else {
-                            t("ascending")
+                            t("sort.ascending")
                         },
                     ),
                 ],
             )
         } else {
-            fill("Sort by {name}", &[("name", t(key.label()))])
+            fill("save_browser.sort_by", &[("name", t(key.label()))])
         };
         buttons.push(
             AccessibleButton::new(
@@ -611,7 +611,7 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                                     .font_size(theme::font::micro())
                                     .color(theme::accent())
                             } else {
-                                crate::widgets::a11y_text(t("")).font_size(theme::font::micro())
+                                crate::widgets::a11y_text("").font_size(theme::font::micro())
                             }),
                     ),
             )

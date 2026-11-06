@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde::{Deserialize, Serialize};
 
-use crate::locale::Locale;
+use crate::Locale;
 use crate::preferences::{ThemeChoice, normalize_text_scale};
 
 /// Distinguishes the temporary settings directories created by tests.

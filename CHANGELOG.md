@@ -28,19 +28,15 @@ All notable changes are documented here. The format follows
 - The item, style and gem pickers are virtualized: the full filtered list is
   browsable, only visible rows are built, and rows keep stable ids, accessible
   names and their description expansion.
-- An interface language catalog with English source strings, a QA
-  pseudolocale and an About selector, plus a bundled German catalog
-  (`crates/jadeforge-gui/locales/de.toml`) with one key per source string.
-  Empty German values fall back to English while the translation is filled in;
-  the catalog is coverage tested, and a `de` locale with `de-DE` tag detection
-  is selectable from About. Every remaining GUI string (status line, About
-  diagnostics and report, dialogs, empty states, row subtitles, tooltips,
-  accessible names, field captions and range hints) is catalogued, and a
-  `jadeforge_session::message` hook localizes session status templates,
-  pending-change labels and session-owned row labels. The catalog then merged
-  case-only duplicate labels, composed repeated field ranges and maximum
-  captions from templates, and reused 10 existing German values for the merged
-  keys. 376 keys are still awaiting translation.
+- A dedicated `jadeforge-i18n` crate with stable semantic ids, a complete
+  English source catalog (`crates/jadeforge-i18n/locales/en.toml`) and a peer
+  German catalog (`de.toml`). German is a preview while `complete = false` and
+  is shown in About as **Deutsch (Vorschau)**; empty ids render `⟦id⟧`
+  markers rather than falling back to English. Key parity, placeholder parity,
+  English completeness and the source scans are enforced by tests. The session
+  calls the shared catalog directly through `message::tr`/`message::fill`; the
+  GUI re-exports the catalog API. 376 German ids are still awaiting
+  translation.
 - About/help now shows version, savegame block count and size, theme, scale,
   language, renderer override and backup folder, with a Copy diagnostics
   action and a complete keyboard shortcut sheet (Ctrl+/ opens it). Window size

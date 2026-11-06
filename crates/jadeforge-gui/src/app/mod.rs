@@ -90,13 +90,13 @@ impl HoverKey {
 ///
 /// The filter matches the folder label and the character name, so the
 /// placeholder names both instead of promising a folder-name-only search.
-pub const SAVE_FILTER_PLACEHOLDER: &str = "Filter by name or character";
+pub const SAVE_FILTER_PLACEHOLDER: &str = "filter.savegame";
 /// Placeholder of the item-database filter.
-pub const ITEM_FILTER_PLACEHOLDER: &str = "Filter the item database, or leave empty to browse it";
+pub const ITEM_FILTER_PLACEHOLDER: &str = "filter.items";
 /// Placeholder of the learnable-style filter.
-pub const STYLE_FILTER_PLACEHOLDER: &str = "Filter the style list, or leave empty to browse it";
+pub const STYLE_FILTER_PLACEHOLDER: &str = "filter.styles";
 /// Placeholder of the gem-picker filter.
-pub const GEM_FILTER_PLACEHOLDER: &str = "Filter the gem list, or leave empty to browse it";
+pub const GEM_FILTER_PLACEHOLDER: &str = "filter.gems";
 
 /// Title of the main window.
 ///
@@ -196,16 +196,16 @@ impl Tab {
         }
     }
 
-    /// Label shown on the tab and used to identify it in the snapshot example.
+    /// Stable catalog id for the tab label and the snapshot example.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
-            Self::Overview => "Overview",
-            Self::Character => "Character",
-            Self::Styles => "styles",
-            Self::Inventory => "inventory",
-            Self::Gems => "gems",
-            Self::Companions => "Companions",
+            Self::Overview => "nav.overview",
+            Self::Character => "nav.character",
+            Self::Styles => "count.style.other",
+            Self::Inventory => "label.inventory",
+            Self::Gems => "count.gem.other",
+            Self::Companions => "nav.companions",
         }
     }
 
@@ -293,10 +293,6 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     // winit reports nothing, so the binary's startup detection and the portal
     // watcher installed here provide the System choice.
     let saved_config = use_hook(crate::config::Config::load);
-    // The session builds its status messages without depending on the GUI. The
-    // desktop entry point installs the catalog lookup once; every later message
-    // follows the thread-local locale because the actions run on this thread.
-    use_hook(|| crate::message::install_translator(crate::i18n::t));
     let theme_choice = use_state(|| saved_config.theme);
     let text_scale = use_state(|| saved_config.normalized_text_scale());
     let locale = use_state(|| saved_config.locale);
@@ -1174,6 +1170,28 @@ mod tests {
         labels.sort_unstable();
         labels.dedup();
         assert_eq!(labels.len(), Tab::ALL.len());
+    }
+
+    #[test]
+    fn tab_labels_and_filter_placeholders_are_catalogued_ids() {
+        for tab in Tab::ALL {
+            assert!(
+                crate::i18n::has_id(tab.label()),
+                "missing tab id {}",
+                tab.label()
+            );
+        }
+        for placeholder in [
+            SAVE_FILTER_PLACEHOLDER,
+            ITEM_FILTER_PLACEHOLDER,
+            STYLE_FILTER_PLACEHOLDER,
+            GEM_FILTER_PLACEHOLDER,
+        ] {
+            assert!(
+                crate::i18n::has_id(placeholder),
+                "missing filter placeholder id {placeholder}"
+            );
+        }
     }
 
     #[test]

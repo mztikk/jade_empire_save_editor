@@ -37,10 +37,10 @@ pub fn view(
     if rows.is_empty() {
         rows.push(match ctx.session.borrow().section_error(Section::Items) {
             Some(error) => widgets::hint(fill(
-                "The inventory section could not be read: {error}",
+                "inventory.section_error",
                 &[("error", &error.message)],
             )),
-            None => widgets::hint(t("The inventory is empty.")),
+            None => widgets::hint(t("inventory.empty_hint")),
         });
     }
 
@@ -52,14 +52,14 @@ pub fn view(
             .children(rows)
             .into_element(),
         widgets::divider(),
-        widgets::section_label(t("ADD AN ITEM")),
+        widgets::section_label(t("inventory.add_heading")),
     ];
 
     if game_ready {
         children.push(widgets::filter_input(
             query,
             crate::app::ITEM_FILTER_PLACEHOLDER,
-            "Clear the item database filter",
+            "inventory.clear_filter",
             filter_id,
         ));
         if !categories.is_empty() {
@@ -69,12 +69,12 @@ pub fn view(
         if results.is_empty() {
             children.push(widgets::hint(if query.read().trim().is_empty() {
                 if active_category.is_some() {
-                    t("No items in this category.")
+                    t("inventory.no_category")
                 } else {
-                    t("The item database is empty.")
+                    t("inventory.empty_database")
                 }
             } else {
-                t("No items match this search and category.")
+                t("inventory.no_match")
             }));
         } else {
             let browsing = query.read().trim().is_empty() && active_category.is_none();
@@ -82,17 +82,17 @@ pub fn view(
             let heading_text = active_category.as_deref().map_or_else(
                 || {
                     if browsing {
-                        t("All items").to_uppercase()
+                        t("inventory.all_chip").to_uppercase()
                     } else {
-                        t("SEARCH RESULTS").to_owned()
+                        t("inventory.search_results").to_owned()
                     }
                 },
                 |category| crate::session::item_category_label(category).to_uppercase(),
             );
             let count_text = if browsing {
-                widgets::plural(total, "item", "items")
+                widgets::plural(total, "count.item.one", "count.item.other")
             } else {
-                widgets::plural(total, "match", "matches")
+                widgets::plural(total, "count.match.one", "count.match.other")
             };
             let heading = rect()
                 .horizontal()
@@ -124,9 +124,9 @@ pub fn view(
                         Some(suggestion.category.as_str()),
                         suggestion.save_type,
                     ),
-                    accessible: fill("{name} item", &[("name", &suggestion.name)]),
-                    action_label: fill("Add {name}", &[("name", &suggestion.name)]),
-                    action_text: t("Add").to_owned(),
+                    accessible: fill("inventory.accessible", &[("name", &suggestion.name)]),
+                    action_label: fill("gems.add_action", &[("name", &suggestion.name)]),
+                    action_text: t("gems.add").to_owned(),
                     action: {
                         let ctx = ctx.clone();
                         let id = suggestion.item_id;
@@ -140,7 +140,7 @@ pub fn view(
                     selected: selected == Some(id),
                 });
             }
-            children.push(widgets::picker_list(t("Items you can add"), picker_rows));
+            children.push(widgets::picker_list(t("inventory.add_list"), picker_rows));
             if let Some(selected) = selected
                 && let Some(suggestion) = results.iter().find(|row| row.item_id == selected)
             {
@@ -148,19 +148,18 @@ pub fn view(
             }
         }
     } else if game_loading {
-        children.push(widgets::hint(t(
-            "Reading the game data; existing items can already be edited and removed.",
-        )));
+        children.push(widgets::hint(t("inventory.reading_hint")));
     } else {
-        children.push(widgets::hint(t(
-            "The game data was not found, so items can only be removed, not added. \
-             The category comes from the item type stored in the savegame.",
-        )));
+        children.push(widgets::hint(t("inventory.missing_hint")));
     }
 
     widgets::card(
-        capitalize(t("inventory")),
-        Some(widgets::plural(items.len(), "stack", "stacks")),
+        capitalize(t("label.inventory")),
+        Some(widgets::plural(
+            items.len(),
+            "count.stack.one",
+            "count.stack.other",
+        )),
         children,
     )
 }
@@ -176,7 +175,7 @@ pub fn item_subtitle(item_id: u16, category: Option<&str>, kind: u8) -> String {
             "{} · #{item_id}",
             crate::session::item_category_label(category)
         ),
-        None => fill("type {kind}", &[("kind", &kind.to_string())]),
+        None => fill("inventory.type", &[("kind", &kind.to_string())]),
     }
 }
 
@@ -191,8 +190,8 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
     let active = category.read().clone();
     let mut chips: Vec<Element> = Vec::new();
     chips.push(category_chip(
-        t("All items").to_owned(),
-        t("Show items from every category").to_owned(),
+        t("inventory.all_chip").to_owned(),
+        t("inventory.all_chip.description").to_owned(),
         active.is_none(),
         Action::new(move || category.set(None)),
     ));
@@ -203,7 +202,7 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
         let value = raw.clone();
         chips.push(category_chip(
             label.clone(),
-            fill("Show only {label}", &[("label", &label)]),
+            fill("inventory.category_filter", &[("label", &label)]),
             selected,
             Action::new(move || category.set(Some(value.clone()))),
         ));
@@ -213,7 +212,7 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
         .width(Size::fill())
         .spacing(theme::space::sm())
         .content(Content::wrap_spacing(theme::space::sm()))
-        .child(widgets::section_label(t("CATEGORY")))
+        .child(widgets::section_label(t("inventory.category")))
         .children(chips)
         .into_element()
 }
@@ -274,11 +273,8 @@ fn item_row(
         let name = item.name.clone();
         Action::new(move || {
             if !crate::dialog::confirm(
-                t("Remove item?"),
-                &fill(
-                    "Remove {name} from the inventory? You can still press Revert before saving.",
-                    &[("name", &name)],
-                ),
+                t("inventory.remove.title"),
+                &fill("inventory.remove.confirm", &[("name", &name)]),
             ) {
                 return;
             }
@@ -295,10 +291,7 @@ fn item_row(
         move |text: String| {
             let Ok(count) = text.trim().parse::<u8>() else {
                 ctx.run(|session| {
-                    session.set_error(&fill(
-                        "{name}: enter a stack size from 1 to 255.",
-                        &[("name", &name)],
-                    ));
+                    session.set_error(&fill("inventory.stack_error", &[("name", &name)]));
                 });
                 return;
             };
@@ -312,7 +305,7 @@ fn item_row(
         .width(Size::fill())
         .key(item.struct_index)
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(fill("{name} item", &[("name", &item.name)]))
+        .a11y_alt(fill("inventory.accessible", &[("name", &item.name)]))
         .background(if is_hovered {
             theme::surface_hover()
         } else {
@@ -341,7 +334,7 @@ fn item_row(
                     theme::font::body(),
                 ))
                 .child(widgets::row_action(
-                    fill("Decrease {name} stack", &[("name", &item.name)]),
+                    fill("inventory.decrease", &[("name", &item.name)]),
                     "−",
                     minus,
                 ))
@@ -355,13 +348,13 @@ fn item_row(
                         .on_submit(set_count),
                 )
                 .child(widgets::row_action(
-                    fill("Increase {name} stack", &[("name", &item.name)]),
+                    fill("inventory.increase", &[("name", &item.name)]),
                     "+",
                     plus,
                 ))
                 .child(widgets::row_action(
-                    fill("Remove {name}", &[("name", &item.name)]),
-                    t("Remove"),
+                    fill("gems.remove.action", &[("name", &item.name)]),
+                    t("gems.remove"),
                     remove,
                 )),
         )

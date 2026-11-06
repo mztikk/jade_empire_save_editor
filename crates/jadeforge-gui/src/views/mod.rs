@@ -31,15 +31,9 @@ pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: &'stati
         Action::new(move || {
             let what = t(what);
             let message = if crate::clipboard::copy(path.clone()) {
-                fill(
-                    "Copied the {what} path to the clipboard.",
-                    &[("what", what)],
-                )
+                fill("path.copied", &[("what", what)])
             } else {
-                fill(
-                    "Could not copy the {what} path: the system clipboard is not available.",
-                    &[("what", what)],
-                )
+                fill("path.copy_failed", &[("what", what)])
             };
             ctx.run(|session| session.notify(&message));
         })
@@ -48,14 +42,11 @@ pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: &'stati
         let ctx = ctx.clone();
         Action::new(move || match crate::paths::open_folder(&folder) {
             Ok(()) => ctx.run(|session| {
-                session.notify(&fill(
-                    "Opened the {what} folder in the file manager.",
-                    &[("what", t(what))],
-                ));
+                session.notify(&fill("path.opened", &[("what", t(what))]));
             }),
             Err(error) => ctx.run(|session| {
                 session.set_error(&fill(
-                    "Could not open the {what} folder {folder}: {error}",
+                    "path.open_failed",
                     &[
                         ("what", t(what)),
                         ("folder", &folder.display().to_string()),
@@ -70,13 +61,13 @@ pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: &'stati
         .spacing(theme::space::md())
         .content(Content::wrap_spacing(theme::space::md()))
         .child(path_button(
-            fill("Copy the {what} path", &[("what", t(what))]),
-            t("Copy path"),
+            fill("path.copy_action", &[("what", t(what))]),
+            t("path.copy"),
             copy,
         ))
         .child(path_button(
-            fill("Open the {what} folder", &[("what", t(what))]),
-            t("Open folder"),
+            fill("path.open_action", &[("what", t(what))]),
+            t("path.open"),
             open,
         ))
         .into_element()

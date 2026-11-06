@@ -43,7 +43,7 @@ pub fn card(title: impl Into<String>, hint: Option<String>, children: Vec<Elemen
                 )
                 .child(rect().width(Size::flex(1.0)))
                 .child(hint.map_or_else(
-                    || a11y_text(t("")).font_size(theme::font::caption()),
+                    || a11y_text("").font_size(theme::font::caption()),
                     |hint| {
                         a11y_text(hint)
                             .font_size(theme::font::caption())
@@ -84,7 +84,7 @@ pub fn field_checked(
     input: impl IntoElement,
     error: Option<&FieldError>,
 ) -> Element {
-    let message = error.map_or_else(|| field.range(), |error| error.message.clone());
+    let message = error.map_or_else(|| field.range_text(), |error| error.message.clone());
     let caption = field.caption().to_uppercase();
     let invalid = error.is_some();
     // Freya 0.5 still has no Input::label API. Naming the field group at
@@ -355,16 +355,16 @@ where
         let id = self.id;
         let is_expanded = *expanded.read() == Some(id);
         let accessible = fill(
-            "{name}, {subtitle}, {state}, Details",
+            "widget.details",
             &[
                 ("name", &self.name),
                 ("subtitle", &self.subtitle),
                 (
                     "state",
                     if is_expanded {
-                        t("expanded")
+                        t("widget.expanded")
                     } else {
-                        t("collapsed")
+                        t("widget.collapsed")
                     },
                 ),
             ],
@@ -490,7 +490,7 @@ pub fn filter_input(
                 rect()
                     .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
                     .child(
-                        a11y_text(t("Clear"))
+                        a11y_text(t("widget.clear"))
                             .font_size(theme::font::micro())
                             .color(if empty { theme::dim() } else { theme::muted() }),
                     ),
@@ -759,9 +759,18 @@ mod tests {
 
     #[test]
     fn plural_counts_use_the_singular_only_for_one() {
-        assert_eq!(plural(0, "effect", "effects"), "0 effects");
-        assert_eq!(plural(1, "effect", "effects"), "1 effect");
-        assert_eq!(plural(2, "stack", "stacks"), "2 stacks");
+        assert_eq!(
+            plural(0, "count.effect.one", "count.effect.other"),
+            "0 effects"
+        );
+        assert_eq!(
+            plural(1, "count.effect.one", "count.effect.other"),
+            "1 effect"
+        );
+        assert_eq!(
+            plural(2, "count.stack.one", "count.stack.other"),
+            "2 stacks"
+        );
     }
 }
 

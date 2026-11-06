@@ -19,22 +19,23 @@ pub fn view(
         rows.push(henchman_row(ctx, henchman, hovered));
     }
     if rows.is_empty() {
-        rows.push(match ctx.session.borrow().section_error(Section::Companions) {
-            Some(error) => widgets::hint(fill(
-                "The companions section could not be read: {error}",
-                &[("error", &error.message)],
-            )),
-            None => widgets::hint(t("This savegame has no companions yet. They appear here once the story introduces them."),
-            ),
-        });
+        rows.push(
+            match ctx.session.borrow().section_error(Section::Companions) {
+                Some(error) => widgets::hint(fill(
+                    "companions.section_error",
+                    &[("error", &error.message)],
+                )),
+                None => widgets::hint(t("companions.empty_hint")),
+            },
+        );
     }
 
     widgets::card(
-        t("Companions"),
+        t("nav.companions"),
         Some(widgets::plural(
             henchmen.len(),
-            "companion known",
-            "companions known",
+            "count.companion.known.one",
+            "count.companion.known.other",
         )),
         vec![
             rect()
@@ -44,10 +45,7 @@ pub fn view(
                 .children(rows)
                 .into_element(),
             widgets::divider(),
-            widgets::hint(t(
-                "Companion levels follow the player through the game; raising them here only \
-                 changes what the companion starts with.",
-            )),
+            widgets::hint(t("companions.level_hint")),
         ],
     )
 }
@@ -95,10 +93,7 @@ fn henchman_row(
         move |text: String| {
             let Ok(value) = text.trim().parse::<u8>() else {
                 ctx.run(|session| {
-                    session.set_error(&fill(
-                        "{name}: enter a level from 1 to 60.",
-                        &[("name", &name)],
-                    ));
+                    session.set_error(&fill("companions.level_error", &[("name", &name)]));
                 });
                 return;
             };
@@ -111,7 +106,7 @@ fn henchman_row(
         .width(Size::fill())
         .key(index)
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(fill("{name} companion", &[("name", &henchman.name)]))
+        .a11y_alt(fill("companions.accessible", &[("name", &henchman.name)]))
         .spacing(theme::space::lg())
         .content(Content::Flex)
         .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::lg()))
@@ -147,14 +142,18 @@ fn henchman_row(
                 ),
         )
         .child(if available {
-            widgets::badge(t("available"), theme::surface_active(), theme::jade())
+            widgets::badge(
+                t("companions.available"),
+                theme::surface_active(),
+                theme::jade(),
+            )
         } else {
             // Hidden is a resting state, not a failure: a calmer colour than
             // the danger red that made an unavailable companion look broken.
-            widgets::badge(t("hidden"), theme::surface(), theme::muted())
+            widgets::badge(t("companions.hidden"), theme::surface(), theme::muted())
         })
         .child(widgets::row_action(
-            fill("Decrease {name} level", &[("name", &name)]),
+            fill("companions.decrease", &[("name", &name)]),
             "−",
             lower,
         ))
@@ -167,20 +166,20 @@ fn henchman_row(
                 .on_submit(set_level),
         )
         .child(widgets::row_action(
-            fill("Increase {name} level", &[("name", &name)]),
+            fill("companions.increase", &[("name", &name)]),
             "+",
             raise,
         ))
         .child(widgets::row_action(
             if available {
-                fill("Hide {name}", &[("name", &name)])
+                fill("companions.hide_action", &[("name", &name)])
             } else {
-                fill("Make {name} available", &[("name", &name)])
+                fill("companions.make_available_action", &[("name", &name)])
             },
             if available {
-                t("Hide")
+                t("companions.hide")
             } else {
-                t("Make available")
+                t("companions.make_available")
             },
             toggle,
         ))

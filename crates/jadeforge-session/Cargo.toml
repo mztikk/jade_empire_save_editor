@@ -13,6 +13,7 @@ readme.workspace = true
 [dependencies]
 jadeforge-core.workspace = true
 jadeforge-gamedata.workspace = true
+jadeforge-i18n.workspace = true
 serde.workspace = true
 toml.workspace = true
 

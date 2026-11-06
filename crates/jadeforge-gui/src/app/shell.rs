@@ -28,9 +28,7 @@ pub(super) fn choose_folder(
 ) -> bool {
     if ctx.session.borrow().is_dirty() {
         ctx.run(|session| {
-            session.set_error(t(
-                "This savegame has unsaved changes: save them or press Revert before choosing another folder.",
-            ));
+            session.set_error(t("shell.this.savegame.has.unsaved.changes.save"));
         });
         return false;
     }
@@ -39,9 +37,7 @@ pub(super) fn choose_folder(
         crate::dialog::PickOutcome::Picked(folder) => folder,
         crate::dialog::PickOutcome::Cancelled => {
             ctx.run(|session| {
-                session.inform(t(
-                    "No folder was chosen; the save folder on screen is unchanged.",
-                ));
+                session.inform(t("shell.no.folder.was.chosen.the.save"));
             });
             return false;
         }
@@ -60,9 +56,9 @@ pub(super) fn choose_folder(
 /// Copies a status message to the system clipboard.
 pub(super) fn copy_status(ctx: &Ctx, text: String) {
     let message = if crate::clipboard::copy(text) {
-        t("Copied the status message to the clipboard.").to_owned()
+        t("shell.copied.the.status.message.to.the").to_owned()
     } else {
-        t("Could not copy the status message: the system clipboard is not available.").to_owned()
+        t("shell.could.not.copy.the.status.message").to_owned()
     };
     ctx.run(|session| session.notify(&message));
 }
@@ -98,14 +94,17 @@ pub(super) fn header(
         MessageKind::Info | MessageKind::Success => accesskit::Live::Polite,
     };
     let game_text = match game_status {
-        GameStatus::Loading => t("loading game data…").to_owned(),
+        GameStatus::Loading => t("shell.loading.game.data").to_owned(),
         GameStatus::Loaded { items, .. } => fill(
-            "{items} loaded",
-            &[("items", &crate::widgets::plural(*items, "item", "items"))],
+            "shell.loaded",
+            &[(
+                "items",
+                &crate::widgets::plural(*items, "count.item.one", "count.item.other"),
+            )],
         ),
-        GameStatus::NamesOnly { .. } => t("English names loaded").to_owned(),
-        GameStatus::Missing => t("game data not found").to_owned(),
-        GameStatus::Error(_) => t("game data unreadable").to_owned(),
+        GameStatus::NamesOnly { .. } => t("shell.english.names.loaded").to_owned(),
+        GameStatus::Missing => t("shell.game.data.not.found").to_owned(),
+        GameStatus::Error(_) => t("shell.game.data.unreadable").to_owned(),
     };
     let game_color = match game_status {
         GameStatus::Loaded { .. } | GameStatus::NamesOnly { .. } => theme::jade(),
@@ -158,9 +157,7 @@ pub(super) fn header(
                 crate::dialog::PickOutcome::Picked(folder) => folder,
                 crate::dialog::PickOutcome::Cancelled => {
                     ctx.run(|session| {
-                        session.inform(t(
-                            "No folder was chosen; the game data folder is unchanged.",
-                        ));
+                        session.inform(t("shell.no.folder.was.chosen.the.game"));
                     });
                     return;
                 }
@@ -186,23 +183,27 @@ pub(super) fn header(
     let mut badges: Vec<Element> = Vec::new();
     if dirty {
         badges.push(crate::widgets::badge(
-            t("unsaved changes"),
+            t("shell.unsaved_changes"),
             theme::warning(),
             theme::background(),
         ));
     }
     if !form_errors.is_empty() {
         badges.push(crate::widgets::badge(
-            crate::widgets::plural(form_errors.len(), "invalid field", "invalid fields"),
+            crate::widgets::plural(
+                form_errors.len(),
+                "count.invalidfield.one",
+                "count.invalidfield.other",
+            ),
             theme::surface_active(),
             theme::warning(),
         ));
     }
     if !dirty && form_errors.is_empty() {
         badges.push(if has_save {
-            crate::widgets::badge(t("all changes saved"), theme::surface(), theme::dim())
+            crate::widgets::badge(t("shell.all_changes_saved"), theme::surface(), theme::dim())
         } else {
-            crate::widgets::badge(t("no savegame open"), theme::surface(), theme::dim())
+            crate::widgets::badge(t("shell.no_savegame_open"), theme::surface(), theme::dim())
         });
     }
 
@@ -220,7 +221,7 @@ pub(super) fn header(
                     .color(theme::accent()),
             )
             .child(
-                crate::widgets::a11y_text(t("Jade Empire savegame editor"))
+                crate::widgets::a11y_text(t("about.tagline"))
                     .font_size(theme::font::caption())
                     .color(theme::dim()),
             )
@@ -247,29 +248,34 @@ pub(super) fn header(
             .content(Content::Flex)
             .cross_align(Alignment::Center)
             .child(
-                crate::widgets::a11y_text(t("save folder").to_uppercase())
+                crate::widgets::a11y_text(t("label.save.folder").to_uppercase())
                     .font_size(theme::font::micro())
                     .font_weight(FontWeight::BOLD)
                     .color(theme::dim()),
             )
             .child(
                 Input::new(directory)
-                    .placeholder(t("Path to the Jade Empire Save folder"))
+                    .placeholder(t("shell.save_folder_path"))
                     .width(Size::flex(1.0))
                     .on_submit({
                         let scan = scan.clone();
                         move |_: String| scan()
                     }),
             )
-            .child(Button::new().outline().child(t("Browse…")).on_press(browse))
+            .child(
+                Button::new()
+                    .outline()
+                    .child(t("shell.browse"))
+                    .on_press(browse),
+            )
             .child(
                 Button::new()
                     .outline()
                     .enabled(!scanning)
                     .child(if scanning {
-                        t("Scanning…")
+                        t("shell.scanning")
                     } else {
-                        t("Scan")
+                        t("shell.scan")
                     })
                     .on_press({
                         let scan = scan.clone();
@@ -281,7 +287,7 @@ pub(super) fn header(
                 el.child(
                     Button::new()
                         .flat()
-                        .child(t("Cancel scan"))
+                        .child(t("shell.cancel_scan"))
                         .on_press(move |_| cancel_scan()),
                 )
             })
@@ -297,23 +303,28 @@ pub(super) fn header(
                 .content(Content::Flex)
                 .cross_align(Alignment::Center)
                 .child(
-                    crate::widgets::a11y_text(t("Game data").to_uppercase())
+                    crate::widgets::a11y_text(t("overview.game_data").to_uppercase())
                         .font_size(theme::font::micro())
                         .font_weight(FontWeight::BOLD)
                         .color(theme::dim()),
                 )
                 .child(
                     Input::new(game_directory)
-                        .placeholder(t("Path to the Jade Empire installation (with dialog.tlk)"))
+                        .placeholder(t("shell.game_data_path"))
                         .width(Size::flex(1.0)),
                 )
                 .child(
                     Button::new()
                         .outline()
-                        .child(t("Browse…"))
+                        .child(t("shell.browse"))
                         .on_press(browse_game),
                 )
-                .child(Button::new().outline().child(t("Use")).on_press(use_game))
+                .child(
+                    Button::new()
+                        .outline()
+                        .child(t("shell.use"))
+                        .on_press(use_game),
+                )
                 .into_element(),
         );
     }
@@ -346,12 +357,12 @@ pub(super) fn header(
                     ),
             )
             .child(AccessibleButton::new(
-                t("Copy the status message"),
+                t("shell.copy_status"),
                 copy_message,
                 rect()
                     .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
                     .child(
-                        crate::widgets::a11y_text(t("Copy"))
+                        crate::widgets::a11y_text(t("shell.copy"))
                             .font_size(theme::font::micro())
                             .color(theme::muted()),
                     ),
@@ -381,8 +392,8 @@ fn about_button(
     mut show_review: State<bool>,
 ) -> Element {
     crate::widgets::outline_action(
-        t("About JadeForge, version, settings and backups"),
-        t("About"),
+        t("shell.about.details"),
+        t("shell.about"),
         Action::new(move || {
             show_about.set(true);
             show_backups.set(false);
@@ -399,8 +410,8 @@ fn backups_button(
     mut show_review: State<bool>,
 ) -> Element {
     crate::widgets::outline_action(
-        t("Browse the backups of the open savegame"),
-        capitalize(t("backups")),
+        t("shell.browse.backups"),
+        capitalize(t("count.backup.other")),
         Action::new(move || {
             show_backups.set(true);
             show_about.set(false);
@@ -417,9 +428,9 @@ fn backups_button(
 /// save list below it.
 pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Element {
     let message = if selected {
-        t("no screenshot")
+        t("shell.no.screenshot")
     } else {
-        t("select a save")
+        t("shell.select.a.save")
     };
     // Keep the root and its content box stable while the preview loads. Freya's
     // diff can panic if an element changes its root type in place, especially
@@ -523,10 +534,8 @@ pub(super) fn footer(
         move |_| {
             if dirty
                 && !crate::dialog::confirm(
-                    t("Discard changes?"),
-                    t(
-                        "Reload the savegame from disk and discard every change that is only in memory?",
-                    ),
+                    t("shell.discard.changes"),
+                    t("shell.reload.the.savegame.from.disk.and"),
                 )
             {
                 return;
@@ -541,31 +550,18 @@ pub(super) fn footer(
     let can_save = has_save && dirty;
     let can_revert = has_save && dirty;
     let (hint_text, hint_color) = if !has_save {
-        (t("Open a savegame to edit it."), theme::dim())
+        (t("shell.open.a.savegame.to.edit.it"), theme::dim())
     } else if !form_errors.is_empty() && dirty {
-        (
-            t(
-                "Some character fields are invalid and were not applied; your other edits can still be saved.",
-            ),
-            theme::warning(),
-        )
+        (t("shell.invalid_fields_savable"), theme::warning())
     } else if !form_errors.is_empty() {
-        (
-            t(
-                "Some character fields are invalid and were not applied; fix the highlighted fields to apply them.",
-            ),
-            theme::warning(),
-        )
+        (t("shell.invalid_fields_fix"), theme::warning())
     } else if dirty {
         (
-            t("Changes are only in memory until you save."),
+            t("shell.changes.are.only.in.memory.until"),
             theme::warning(),
         )
     } else {
-        (
-            t("All changes are saved. There is nothing to write."),
-            theme::dim(),
-        )
+        (t("shell.all.changes.are.saved.there.is"), theme::dim())
     };
 
     rect()
@@ -585,28 +581,28 @@ pub(super) fn footer(
             Button::new()
                 .flat()
                 .enabled(can_undo)
-                .child(t("Undo"))
+                .child(t("shell.undo"))
                 .on_press(undo),
         )
         .child(
             Button::new()
                 .flat()
                 .enabled(can_redo)
-                .child(t("Redo"))
+                .child(t("shell.redo"))
                 .on_press(redo),
         )
         .child(
             Button::new()
                 .filled()
                 .enabled(can_save)
-                .child(t("Save to disk"))
+                .child(t("shell.save"))
                 .on_press(save),
         )
         .child(
             Button::new()
                 .flat()
                 .enabled(can_revert)
-                .child(t("Revert"))
+                .child(t("shell.revert"))
                 .on_press(revert),
         )
         .child(rect().width(Size::flex(1.0)))
@@ -630,19 +626,16 @@ pub(super) fn loading_state() -> Element {
         .spacing(theme::space::xxl())
         .padding(Gaps::new_all(theme::space::page()))
         .child(
-            crate::widgets::a11y_text(t("Loading savegames…"))
+            crate::widgets::a11y_text(t("shell.loading_savegames"))
                 .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
                 .font_size(theme::font::heading())
                 .font_weight(FontWeight::BOLD)
                 .color(theme::text()),
         )
         .child(
-            crate::widgets::a11y_text(t(
-                "JadeForge is reading the save folder and the game data. \
-                 The save list appears as soon as the scan finishes.",
-            ))
-            .font_size(theme::font::label())
-            .color(theme::muted()),
+            crate::widgets::a11y_text(t("shell.loading.explanation"))
+                .font_size(theme::font::label())
+                .color(theme::muted()),
         )
         .child(skeleton_block(SKELETON_HERO_HEIGHT))
         .child(skeleton_block(SKELETON_CARD_HEIGHT))
@@ -674,9 +667,9 @@ pub(super) fn empty_state(
     start_scan: Rc<dyn Fn(PathBuf) -> bool>,
 ) -> Element {
     let text = if savegames == 0 {
-        t("Point JadeForge at the folder that contains your Jade Empire savegames and press Scan.")
+        t("shell.point.jadeforge.at.the.folder.that")
     } else {
-        t("Pick a savegame on the left to start editing.")
+        t("shell.pick.a.savegame.on.the.left")
     };
     let choose = {
         let ctx = ctx.clone();
@@ -690,7 +683,7 @@ pub(super) fn empty_state(
         .spacing(theme::space::md())
         .padding(Gaps::new_all(theme::space::page()))
         .child(
-            crate::widgets::a11y_text(t("No savegame selected"))
+            crate::widgets::a11y_text(t("shell.no_savegame_selected"))
                 .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
                 .font_size(theme::font::heading())
                 .font_weight(FontWeight::BOLD)
@@ -704,15 +697,13 @@ pub(super) fn empty_state(
         .child(
             Button::new()
                 .filled()
-                .child(t("Choose save folder"))
+                .child(t("shell.choose_save_folder"))
                 .on_press(choose),
         )
         .child(
-            crate::widgets::a11y_text(t(
-                "JadeForge never writes a savegame without verifying it and keeping a backup.",
-            ))
-            .font_size(theme::font::caption())
-            .color(theme::dim()),
+            crate::widgets::a11y_text(t("shell.savegame.safety"))
+                .font_size(theme::font::caption())
+                .color(theme::dim()),
         )
         .into_element()
 }
@@ -725,12 +716,9 @@ pub(super) fn empty_state(
 pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element {
     let dirty = ctx.session.borrow().is_dirty();
     let text = if dirty {
-        t(
-            "This savegame changed on disk since it was opened. Saving will be refused; reloading \
-         discards the unsaved edits on screen and shows the file that is on disk.",
-        )
+        t("shell.disk_changed_dirty")
     } else {
-        t("This savegame changed on disk since it was opened. Reload it to edit the current file.")
+        t("shell.disk_changed")
     };
     let reload = {
         let ctx = ctx.clone();
@@ -738,11 +726,8 @@ pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element 
         move |_| {
             if dirty
                 && !crate::dialog::confirm(
-                    &format!("{}?", t("Reload from disk")),
-                    t(
-                        "The savegame changed on disk outside JadeForge. Reloading discards every \
-                     unsaved edit on screen.",
-                    ),
+                    &format!("{}?", t("shell.reload")),
+                    t("shell.the.savegame.changed.on.disk.outside"),
                 )
             {
                 return;
@@ -781,7 +766,7 @@ pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element 
         .child(
             Button::new()
                 .outline()
-                .child(t("Reload from disk"))
+                .child(t("shell.reload"))
                 .on_press(reload),
         )
         .into_element()

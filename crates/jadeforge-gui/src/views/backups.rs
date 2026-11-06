@@ -23,28 +23,22 @@ pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> Element {
     let backups = ctx.session.borrow().backups();
     let dirty = ctx.session.borrow().is_dirty();
     let open = ctx.session.borrow().current_path().map_or_else(
-        || t("no savegame open").to_owned(),
+        || t("shell.no_savegame_open").to_owned(),
         |path| path.display().to_string(),
     );
 
     let mut children: Vec<Element> = vec![widgets::hint(fill(
-        "Backups of the open savegame, newest first. A restore verifies the chosen file, keeps a \
-         new backup of the file it replaces, and writes atomically. Open savegame: {open}",
+        "backups.explanation",
         &[("open", &open)],
     ))];
     if dirty {
-        children.push(widgets::hint(t(
-            "Save or revert the unsaved changes before restoring a backup: a restore would \
-             otherwise silently discard them.",
-        )));
+        children.push(widgets::hint(t("backups.dirty_hint")));
     }
     children.push(widgets::divider());
     if backups.is_empty() {
-        children.push(widgets::hint(t(
-            "No backups were found next to this savegame. The first successful save creates one.",
-        )));
+        children.push(widgets::hint(t("backups.empty_hint")));
     } else {
-        let heading = widgets::plural(backups.len(), "backup", "backups");
+        let heading = widgets::plural(backups.len(), "count.backup.one", "count.backup.other");
         children.push(widgets::section_label(heading.to_uppercase()));
         for backup in backups {
             children.push(backup_row(ctx, &backup, dirty, sync));
@@ -53,16 +47,16 @@ pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> Element {
     children.push(widgets::divider());
     children.push(
         widgets::outline_action(
-            t("Close the backup browser"),
-            t("Back to editing"),
+            t("backups.close"),
+            t("backups.back"),
             Action::new(move || close()),
         )
         .into_element(),
     );
 
     widgets::card(
-        capitalize(t("backups")),
-        Some(t("timestamps are UTC").to_owned()),
+        capitalize(t("count.backup.other")),
+        Some(t("backups.utc_hint").to_owned()),
         children,
     )
 }
@@ -80,13 +74,7 @@ fn backup_row(
         let path = path.clone();
         let sync = sync.clone();
         Action::new(move || {
-            if !crate::dialog::confirm(
-                t("Restore this backup?"),
-                t(
-                    "The current savegame is replaced by the chosen backup. JadeForge first writes a \
-                 new backup of the current file, so the restore can be undone.",
-                ),
-            ) {
+            if !crate::dialog::confirm(t("backups.restore.title"), t("backups.restore.confirm")) {
                 return;
             }
             let result = ctx.run(|session| session.restore_backup(&path));
@@ -97,7 +85,7 @@ fn backup_row(
     };
     let restore = AccessibleButton::new(
         fill(
-            "Restore the backup from {timestamp}",
+            "backups.restore.action",
             &[("timestamp", &backup.timestamp())],
         ),
         restore,
@@ -114,7 +102,7 @@ fn backup_row(
             )
             .corner_radius(theme::radius::control())
             .child(
-                widgets::a11y_text(t("Restore"))
+                widgets::a11y_text(t("backups.restore"))
                     .font_size(theme::font::micro())
                     .color(if dirty { theme::dim() } else { theme::text() }),
             ),
@@ -149,7 +137,7 @@ fn backup_row(
         )
         .child(
             widgets::a11y_text(fill(
-                "Original: {path}",
+                "backups.original",
                 &[("path", &backup.original.display().to_string())],
             ))
             .font_size(theme::font::micro())

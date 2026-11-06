@@ -6,8 +6,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::message;
-
 /// Colour theme selected by the user.
 ///
 /// [`ThemeChoice::System`] follows the operating system preference reported by
@@ -53,25 +51,25 @@ impl ThemeChoice {
             .unwrap_or_default()
     }
 
-    /// Human readable label for the settings UI.
+    /// Stable catalog id for the settings UI label.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
-            Self::System => message::tr("System"),
-            Self::Dark => message::tr("Dark"),
-            Self::Light => message::tr("Light"),
-            Self::HighContrast => message::tr("High contrast"),
+            Self::System => "theme.system",
+            Self::Dark => "theme.dark",
+            Self::Light => "theme.light",
+            Self::HighContrast => "theme.high_contrast",
         }
     }
 
-    /// One sentence that explains what the choice does.
+    /// Stable catalog id for the sentence that explains the choice.
     #[must_use]
     pub fn description(self) -> &'static str {
         match self {
-            Self::System => message::tr("Follow the operating system's light or dark preference"),
-            Self::Dark => message::tr("The original dark jade theme"),
-            Self::Light => message::tr("A light parchment theme for bright rooms"),
-            Self::HighContrast => message::tr("Black and white with a yellow focus ring"),
+            Self::System => "theme.system.description",
+            Self::Dark => "theme.dark.description",
+            Self::Light => "theme.light.description",
+            Self::HighContrast => "theme.high_contrast.description",
         }
     }
 

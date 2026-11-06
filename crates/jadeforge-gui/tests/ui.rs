@@ -217,12 +217,35 @@ fn click_label_exact(test: &mut TestingRunner, wanted: &str) -> bool {
     }
 }
 
+thread_local! {
+    /// Locale the next launched application should use.
+    static NEXT_LAUNCH_LOCALE: std::cell::Cell<jadeforge_gui::Locale> =
+        const { std::cell::Cell::new(jadeforge_gui::Locale::English) };
+}
+
+/// Selects the locale for the next application launch on this test thread.
+fn set_next_launch_locale(locale: jadeforge_gui::Locale) {
+    NEXT_LAUNCH_LOCALE.with(|next| next.set(locale));
+}
+
+/// Resets the isolated settings file before a test builds its own runner.
+fn reset_test_config() {
+    let _ = jadeforge_gui::config::ensure_test_path();
+    let mut config = jadeforge_gui::config::Config::load();
+    config.locale = jadeforge_gui::Locale::English;
+    config.store().expect("store test config");
+}
+
 /// Renders the application at a given size and waits for the background scan,
 /// without opening the savegame.
 fn launch_unopened_at(save_dir: PathBuf, width: f64, height: f64) -> TestingRunner {
     // Keep the developer's settings (and therefore their saved sort order) out
-    // of the UI tests.
+    // of the UI tests. Reset the locale so a previous test on this worker thread
+    // cannot leak its language into this one.
     let _ = jadeforge_gui::config::ensure_test_path();
+    let mut config = jadeforge_gui::config::Config::load();
+    config.locale = NEXT_LAUNCH_LOCALE.with(std::cell::Cell::get);
+    config.store().expect("store test locale");
     let (mut test, ()) = TestingRunner::new(
         move || app_with_directory(save_dir.clone()),
         (width as f32, height as f32).into(),
@@ -1850,6 +1873,7 @@ fn broken_savegames_are_reported() {
     std::fs::create_dir_all(&broken).expect("create broken save");
     std::fs::write(broken.join("save.sac"), b"SAV V3.2 not really").expect("write broken save");
 
+    reset_test_config();
     let save_dir = fixture.save_dir.clone();
     let (mut test, ()) = TestingRunner::new(
         move || app_with_directory(save_dir.clone()),
@@ -1874,6 +1898,7 @@ fn broken_savegames_are_reported() {
 fn empty_folder_shows_a_hint() {
     let root = std::env::temp_dir().join(format!("jadeforge-empty-{}", std::process::id()));
     std::fs::create_dir_all(&root).expect("create empty dir");
+    reset_test_config();
     let (mut test, ()) = TestingRunner::new(
         {
             let root = root.clone();
@@ -4425,9 +4450,7 @@ fn the_pseudolocale_marks_catalogued_ui_text() {
         return;
     };
     let _ = jadeforge_gui::config::ensure_test_path();
-    let mut config = jadeforge_gui::config::Config::load();
-    config.locale = jadeforge_gui::Locale::Pseudo;
-    config.store().expect("store locale");
+    set_next_launch_locale(jadeforge_gui::Locale::Pseudo);
     let test = launch_sized(fixture.save_dir.clone(), 1400.0);
     assert_eq!(
         jadeforge_gui::i18n::current(),
@@ -4446,9 +4469,7 @@ fn the_german_catalog_translations_render_in_the_shell() {
         return;
     };
     let _ = jadeforge_gui::config::ensure_test_path();
-    let mut config = jadeforge_gui::config::Config::load();
-    config.locale = jadeforge_gui::Locale::German;
-    config.store().expect("store locale");
+    set_next_launch_locale(jadeforge_gui::Locale::German);
     let test = launch_unopened_at(fixture.save_dir.clone(), 1280.0, 1400.0);
     assert_eq!(
         jadeforge_gui::i18n::current(),
@@ -4468,6 +4489,10 @@ fn the_german_catalog_translations_render_in_the_shell() {
             "the prefilled German tab {translated:?} is missing"
         );
     }
+    assert!(
+        find_label_text(&test, "⟦shell.scan⟧").is_some(),
+        "an empty German id did not render its marker"
+    );
 }
 
 #[test]
@@ -4495,12 +4520,20 @@ fn the_about_page_changes_the_language_and_persists_it() {
     assert_eq!(config.locale, jadeforge_gui::Locale::Pseudo);
 
     assert!(
-        click_text(&mut test, "Deutsch"),
-        "the German language chip is missing"
+        click_text(&mut test, "Deutsch (Vorschau)"),
+        "the German preview chip is missing"
     );
     assert_eq!(
         jadeforge_gui::i18n::current(),
         jadeforge_gui::Locale::German
+    );
+    assert!(
+        find_label_text(&test, "Über JadeForge").is_some(),
+        "the preview did not render the translated About title"
+    );
+    assert!(
+        find_label_text(&test, "⟦shell.scan⟧").is_some(),
+        "the preview did not render a marker for an empty German id"
     );
     let config = jadeforge_gui::config::Config::load();
     assert_eq!(config.locale, jadeforge_gui::Locale::German);

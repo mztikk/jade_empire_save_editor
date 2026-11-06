@@ -36,13 +36,13 @@ impl SaveEntry {
     #[must_use]
     pub fn summary(&self) -> String {
         if self.error.is_some() {
-            return message::tr("Cannot be read").to_owned();
+            return message::tr("session.cannot.be.read").to_owned();
         }
         let level = self
             .level
             .map_or_else(|| "?".to_owned(), |level| level.to_string());
         let mut parts = vec![message::fill(
-            "Level {level} · Time played {time}",
+            "session.row.level_time",
             &[
                 ("level", &level),
                 ("time", &format::duration(self.time_played)),
@@ -125,16 +125,16 @@ pub enum Section {
 }
 
 impl Section {
-    /// Human-readable name used in notices.
+    /// Stable catalog id used in notices.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
-            Self::Character => message::tr("Character"),
-            Self::Items => message::tr("inventory"),
-            Self::Styles => message::tr("styles"),
-            Self::Companions => message::tr("Companions"),
-            Self::Gems => message::tr("gems"),
-            Self::Amulet => message::tr("amulet"),
+            Self::Character => "nav.character",
+            Self::Items => "label.inventory",
+            Self::Styles => "count.style.other",
+            Self::Companions => "nav.companions",
+            Self::Gems => "count.gem.other",
+            Self::Amulet => "label.amulet",
         }
     }
 }

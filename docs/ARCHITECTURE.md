@@ -1,6 +1,6 @@
 # Architecture
 
-JadeForge is a Cargo workspace with six crates. The split keeps the savegame
+JadeForge is a Cargo workspace with seven crates. The split keeps the savegame
 knowledge in the lower crates so that both front ends stay thin and the
 interesting logic can be tested without a window or a terminal.
 
@@ -8,6 +8,7 @@ interesting logic can be tested without a window or a terminal.
 crates/
   jadeforge-gff/      GFF block reader/writer
   jadeforge-core/     savegame container, editing model, verification
+  jadeforge-i18n/     stable-id English/German catalogs and locale selection
   jadeforge-session/  UI independent session state and settings
   jadeforge-gamedata/ talk table and 2DA readers for names
   jadeforge-cli/      `jadeforge` command line tool
@@ -141,6 +142,24 @@ A thin wrapper over the core: `info`, `blocks`, `character`, `items`, `get`,
 `set`, `dump`, `verify`, `add-item`, plus the maintainer-only `export-names`
 command. It is intentionally useful on its own and serves as an end-to-end test
 target (see `crates/jadeforge-cli/tests`).
+
+## `jadeforge-i18n`
+
+The interface catalog is keyed by stable semantic ids, not English sentences.
+The crate owns the two peer catalogs, the locale enum and the strictness rules:
+
+| module | responsibility |
+| --- | --- |
+| `lib` | `Locale`, `t`/`fill`/`plural`, `install`/`current`, `is_complete`, `has_id`, `locale_label`, catalog loading, generated pseudo locale |
+| `locales/en.toml` | English source of truth, `complete = true` |
+| `locales/de.toml` | German peer catalog, `complete = false` while the preview is incomplete |
+| `tests/source_scan.rs` | checks that every literal `t`/`fill`/`plural`/`tr` id in the GUI and session exists in `en.toml` and matches the id grammar |
+
+A missing or empty value renders a cached `⟦id⟧` marker; there is no English
+fallback. A malformed catalog degrades to markers, never to English. Key parity,
+placeholder parity and English completeness are enforced by tests. German
+stays preview-only and is not selected from the environment until its catalog
+is marked complete.
 
 ## `jadeforge-session`
 

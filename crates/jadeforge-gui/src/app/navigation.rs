@@ -178,7 +178,7 @@ fn busy_slot(scanning: bool) -> Element {
         .cross_align(Alignment::End)
         .child(
             crate::widgets::a11y_text(if scanning {
-                t("Scanning…").to_uppercase()
+                t("shell.scanning").to_uppercase()
             } else {
                 String::new()
             })

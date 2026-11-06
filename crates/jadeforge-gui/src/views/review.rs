@@ -26,24 +26,19 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> 
     let invalid = ctx.session.borrow().form_errors(&form.read());
 
     let mut children: Vec<Element> = Vec::new();
-    children.push(widgets::hint(t(
-        "Nothing is written until the write button below is pressed. The file is verified by \
-         re-reading it, written atomically, and the previous file is kept as a backup. Invalid \
-         character fields are not applied; the other edits are.",
-    )));
+    children.push(widgets::hint(t("review.explanation")));
     if !invalid.is_empty() {
         children.push(widgets::hint(fill(
-            "{count} character field(s) are still invalid and will not be written. Go back to fix \
-             them if you need those values.",
+            "review.invalid_fields",
             &[("count", &invalid.len().to_string())],
         )));
     }
     children.push(widgets::divider());
     if groups.is_empty() {
         children.push(widgets::hint(if dirty {
-            t("There are unsaved changes, but no described field changed.")
+            t("review.unsaved_no_fields")
         } else {
-            t("There is nothing to write.")
+            t("review.nothing")
         }));
     } else {
         for (index, group) in groups.iter().enumerate() {
@@ -80,14 +75,14 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> 
             .child(
                 Button::new()
                     .outline()
-                    .child(t("Back to editing"))
+                    .child(t("backups.back"))
                     .on_press(cancel),
             )
             .maybe(dirty, |el| {
                 el.child(
                     Button::new()
                         .filled()
-                        .child(t("Write savegame"))
+                        .child(t("review.write"))
                         .on_press(write),
                 )
             })
@@ -95,12 +90,18 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> 
     );
 
     widgets::card(
-        t("Review changes"),
+        t("review.title"),
         Some(fill(
-            "{changes} in {groups}",
+            "review.summary",
             &[
-                ("changes", &widgets::plural(total, "change", "changes")),
-                ("groups", &widgets::plural(groups.len(), "group", "groups")),
+                (
+                    "changes",
+                    &widgets::plural(total, "count.change.one", "count.change.other"),
+                ),
+                (
+                    "groups",
+                    &widgets::plural(groups.len(), "count.group.one", "count.group.other"),
+                ),
             ],
         )),
         children,
@@ -126,7 +127,7 @@ fn group_block(index: usize, group: &PendingChangeGroup) -> Element {
                 )
                 .child(
                     widgets::a11y_text(fill(
-                        "was {before}, now {after}",
+                        "review.change",
                         &[("before", &change.before), ("after", &change.after)],
                     ))
                     .font_size(theme::font::micro())

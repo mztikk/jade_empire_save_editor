@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/jadeforge-core",
     "crates/jadeforge-gff",
+    "crates/jadeforge-i18n",
     "crates/jadeforge-session",
     "crates/jadeforge-cli",
     "crates/jadeforge-gui",
@@ -24,6 +25,7 @@ readme = "README.md"
 jadeforge-core = { path = "crates/jadeforge-core", version = "0.2.1" }
 jadeforge-gff = { path = "crates/jadeforge-gff", version = "0.2.1" }
 jadeforge-session = { path = "crates/jadeforge-session", version = "0.2.1" }
+jadeforge-i18n = { path = "crates/jadeforge-i18n", version = "0.2.1" }
 jadeforge-gamedata = { path = "crates/jadeforge-gamedata", version = "0.2.1" }
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive"] }

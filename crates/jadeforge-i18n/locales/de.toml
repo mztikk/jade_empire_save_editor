@@ -1,0 +1,701 @@
+# German preview catalog for JadeForge.
+#
+# Keys are stable semantic ids, not English sentences. Translate the value on
+# the right. `complete = false` keeps this catalog in preview: empty values
+# render as ⟦id⟧ markers and the language is not selected from the environment.
+# Set `complete = true` only when every id has a non-empty, placeholder-compatible
+# value.
+#
+# Placeholders such as {name} must match en.toml exactly. Product and technical
+# names stay unchanged; game terms should follow the German game release
+# (Kampfstil, Edelstein, Amulett, Gefährte, Fokus; Chi stays Chi).
+#
+# List remaining empty ids with:
+#   cargo test -p jadeforge-i18n --lib every_german_value_is_filled -- --ignored
+
+complete = false
+
+[messages]
+
+# Header, footer, status line and empty states
+"shell.about" = "Über JadeForge"
+"shell.about.details" = "Über JadeForge, Version, Einstellungen und Backups"
+"shell.browse.backups" = "Die Backups des geöffneten Spielstands durchsuchen"
+"shell.browse" = "Durchsuchen…"
+"shell.cancel_scan" = "Suche abbrechen"
+"shell.choose_save_folder" = "Spielstand-Ordner auswählen"
+"shell.copy" = "Kopieren"
+"shell.copy_status" = "Statusmeldung kopieren"
+"shell.loading.explanation" = "JadeForge liest den Spielstand-Ordner und die Spieldaten. Die Liste der Spielstände erscheint, sobald die Suche abgeschlossen ist."
+"shell.savegame.safety" = "JadeForge schreibt niemals einen Spielstand, ohne ihn zu überprüfen und ein Backup zu erstellen."
+"shell.loading_savegames" = "Spielstände werden geladen…"
+"shell.no_savegame_selected" = "Kein Spielstand ausgewählt"
+"shell.save_folder_path" = "Pfad zum Jade Empire Save Ordner"
+"shell.game_data_path" = "Pfad zur Jade Empire Installation (mit dialog.tlk)"
+"shell.redo" = "Wiederherstellen"
+"shell.reload" = "Von Festplatte neu laden"
+"shell.revert" = "Zurücksetzen"
+"shell.save" = "Speichern"
+"shell.undo" = "Rückgängig"
+"shell.use" = "Benutzen"
+"shell.all_changes_saved" = "Alle Änderungen gespeichert"
+"shell.no_savegame_open" = "Kein Spielstand geöffnet"
+"shell.unsaved_changes" = "Ungespeicherte Änderungen"
+"shell.this.savegame.has.unsaved.changes.save" = ""
+"shell.no.folder.was.chosen.the.save" = ""
+"shell.copied.the.status.message.to.the" = ""
+"shell.could.not.copy.the.status.message" = ""
+"shell.loading.game.data" = ""
+"shell.english.names.loaded" = ""
+"shell.game.data.not.found" = ""
+"shell.game.data.unreadable" = ""
+"shell.no.folder.was.chosen.the.game" = ""
+"shell.scanning" = ""
+"shell.scan" = ""
+"shell.no.screenshot" = ""
+"shell.select.a.save" = ""
+"shell.discard.changes" = ""
+"shell.reload.the.savegame.from.disk.and" = ""
+"shell.open.a.savegame.to.edit.it" = ""
+"shell.invalid_fields_savable" = ""
+"shell.invalid_fields_fix" = ""
+"shell.changes.are.only.in.memory.until" = ""
+"shell.all.changes.are.saved.there.is" = ""
+"shell.point.jadeforge.at.the.folder.that" = ""
+"shell.pick.a.savegame.on.the.left" = ""
+"shell.disk_changed_dirty" = ""
+"shell.disk_changed" = ""
+"shell.the.savegame.changed.on.disk.outside" = ""
+# args: items
+"shell.loaded" = ""
+
+# Save browser
+"save_browser.clear_filter" = "Spielstand-Filter löschen"
+"save_browser.select.a.savegame" = ""
+"save_browser.no.savegames.in.this.folder" = ""
+"save_browser.no.savegame.matches.this.filter" = ""
+# args: shown, total
+"save_browser.of" = ""
+# args: level, time
+"session.row.level_time" = ""
+# args: name, direction
+"save_browser.sort_by.active" = ""
+# args: name
+"save_browser.sort_by" = ""
+
+# Tabs and window
+"nav.character" = "Charakter"
+"nav.companions" = "Gefährten"
+"nav.overview" = "Übersicht"
+
+# Overview tab
+"overview.backup.created" = "Ein Backup mit Zeitstempel wird bei jedem Speichern neben dem Spielstand erstellt und hier angezeigt."
+"overview.at_a_glance" = "Auf einen Blick"
+"field.chi" = "CHI"
+"overview.contents" = "Inhalt"
+"field.focus" = "FOCUS"
+"overview.file" = "Datei"
+"field.gold" = "Gold"
+"overview.game_data" = "Spieldaten"
+"field.health" = "Gesundheit"
+"overview.backup.verification" = "JadeForge überprüft jeden Spielstand, indem es ihn vor dem Schreiben erneut list, alle Schreibvorgänge atomar ausführt und ein Backup mit Zeitstempel neben der Datei speichert."
+"overview.backup.explanation" = "Die Datei, wie sie vor dem letzten Speichern war. Um sie wiederherzustellen, schließen Sie JadeForge und kopieren Sie das Backup über save.sac."
+"overview.game_data.loading" = ""
+"overview.game_data.missing" = ""
+"overview.game_data.bundled_suffix" = ""
+"field.attribute_points" = ""
+"overview.body_mind_spirit" = ""
+"overview.charm_intuition_intimidate" = ""
+"overview.unknown_size" = ""
+"overview.notice" = ""
+"overview.linked" = ""
+"overview.loading" = ""
+"overview.not_found" = ""
+# args: items, styles, root
+"overview.game_data.resolved" = ""
+# args: items, styles
+"overview.game_data.bundled" = ""
+# args: error, bundled
+"overview.game_data.unreadable" = ""
+# args: time, kills, experience
+"overview.time_played" = ""
+
+# Character tab
+"character.attribute_points_hint" = "Attributpunkte, die Sie noch ausgeben können; das Feld wird erstellt, wenn der Spielstand es nicht hat."
+"character.attributes" = "Attribute"
+"character.current_sheet" = "Aktuelles Datenblatt"
+"character.current_values_hint" = "Aktuelle Werte können unter dem Maximum bleiben; das Spiel füllt sie beim Ruhen auf."
+"character.gold_hint" = "Gold ist optional im Spielstand: Lassen Sie es leer, um das Feld zu entfernen, oder geben Sie einen Wert ein, um es zu erstellen, wenn Sie speichern."
+"character.identity" = "Identität"
+# context: Used for the character field caption, the overview badge and the save sort label.
+"character.level" = "Level"
+# context: Used for the character field caption and the save sort label.
+"character.name" = "Name"
+# context: Used for the character field caption, the overview and the save sort label.
+"character.time_played" = "Gespielte Zeit"
+"character.vitals" = "Vitalwerte"
+"character.not_set" = "nicht gesetzt"
+
+# Styles tab
+"styles.intro" = "Ein neuer Stil wird mit demselben Feldlayout wie ein bereits vorhandener Stil des Spielers gespeichert; das Spiel füllt die restlichen Daten aus seinen eigenen Tabellen."
+"styles.bundled_hint" = "Mitgelieferte englische Namen werden geladen, aber neue Stile und Upgrade-Details benötigen weiterhin die Spieldaten. Level, Waffen und verbrachte Zeit stammen aus dem Spielstand."
+"styles.clear_filter" = "Stil-Filter löschen"
+"styles.fighting_styles" = "Kampfstile"
+"styles.orb_hint" = "Gefüllte goldene Orbs sind gelernt; ein leerer Ring ist noch verfügbar. Klicken Sie auf Stufe N, um jede fehlende Stufe bis N zu kaufen; Klicken Sie auf eine vorhandene Stufe, um sie und alles darüber zu entfernen."
+"styles.learn_heading" = "EINEN STIL LERNEN"
+"styles.reading_hint" = "Die Spieldaten werden gelesen; gelernte Stile können bereits überprüft und entfernt werden."
+"styles.missing_hint" = "Die Spieldaten wurden nicht gefunden, daher sind Stilnamen und neue Stile nicht verfügbar. Level, Waffen und verbrachte Zeit stammen aus dem Spielstand."
+"styles.empty_hint" = "Der Spieler hat noch keine Kampfstile gelernt."
+"styles.upgrades" = "VERBESSERUNGEN"
+"styles.all_learned" = ""
+"styles.no_match" = ""
+"styles.learn" = ""
+"styles.learn_list" = ""
+"styles.remove.title" = ""
+"styles.read_only_hint" = ""
+"styles.upgrade_needs_data" = ""
+"styles.owned_action" = ""
+"styles.available_action" = ""
+"styles.no_effect" = ""
+"styles.no_cost" = ""
+# args: error
+"styles.section_error" = ""
+# args: name
+"styles.accessible" = ""
+# args: name
+"styles.learn_action" = ""
+# args: name
+"styles.remove.confirm" = ""
+# args: name
+"styles.remove.action" = ""
+# args: style, family, tier, name
+"styles.orb.owned" = ""
+# args: style, family, tier, name, effect
+"styles.orb.available" = ""
+# args: family, tier, name
+"styles.orb.title" = ""
+# args: effect, cost, action
+"styles.orb.detail" = ""
+# args: icon
+"styles.icon" = ""
+# args: time
+"styles.time_used" = ""
+# args: weapon
+"styles.weapon" = ""
+# args: fields
+"styles.saved_data" = ""
+
+# Inventory tab
+"inventory.add_heading" = "EINEN GEGENSTAND HINZUFÜGEN"
+"inventory.category" = "KATEGORIE"
+"inventory.clear_filter" = "Gegenstand-Filter löschen"
+"inventory.reading_hint" = "Die Spieldaten werden gelesen; bestehende Gegenstände können bereits bearbeitet und entfernt werden."
+"inventory.missing_hint" = "Die Spieldaten wurden nicht gefunden, daher können Gegenstände nur entfernt, aber nicht hinzugefügt werden. Die Kategorie stammt vom Gegenstandstyp, der im Spielstand gespeichert ist."
+"inventory.empty_hint" = "Das Inventar ist leer."
+"inventory.no_category" = ""
+"inventory.empty_database" = ""
+"inventory.no_match" = ""
+"inventory.search_results" = ""
+"inventory.add_list" = ""
+"inventory.all_chip" = ""
+"inventory.all_chip.description" = ""
+"inventory.remove.title" = ""
+# args: error
+"inventory.section_error" = ""
+# args: name
+"inventory.accessible" = ""
+# args: kind
+"inventory.type" = ""
+# args: label
+"inventory.category_filter" = ""
+# args: name
+"inventory.remove.confirm" = ""
+# args: name
+"inventory.stack_error" = ""
+# args: name
+"inventory.decrease" = ""
+# args: name
+"inventory.increase" = ""
+
+# Gems tab
+"gems.add_heading" = "Einen Edelstein hinzufügen"
+"gems.clear_filter" = "Edelstein-Filter löschen"
+"gems.move_hint" = "Das Verschieben eines Edelsteins behält seine Effekte bei; JadeForge ändert nur, welche Liste darauf verweist."
+"gems.empty_inventory" = "Keine Edelsteine im Inventar."
+"gems.empty_amulet" = "Keine Edelsteine im Amulett."
+"gems.amulet_locked" = "Das Amulett wird zu Beginn freigeschaltet; es hat keine Sockel vorher."
+"gems.no_amulet" = ""
+"gems.no_effects" = ""
+"gems.add" = ""
+"gems.missing_hint" = ""
+"gems.no_match" = ""
+"gems.add_list" = ""
+"gems.from_game_data" = ""
+"gems.all_sockets" = ""
+"gems.more_sockets" = ""
+"gems.move_to_inventory" = ""
+"gems.move_to_amulet" = ""
+"gems.amulet_full" = ""
+"gems.remove" = ""
+"gems.remove.title" = ""
+# args: error
+"gems.amulet_error" = ""
+# args: error
+"gems.section_error" = ""
+# args: name, effects
+"gems.accessible" = ""
+# args: name
+"gems.add_action" = ""
+# args: socketed, sockets, tier
+"gems.summary" = ""
+# args: action, name
+"gems.move_action" = ""
+# args: name
+"gems.remove.action" = ""
+# args: name
+"gems.remove.confirm" = ""
+# args: name
+"gems.row_accessible" = ""
+
+# Companions tab
+"companions.level_hint" = "Gefährten-Level folgen dem Spieler durch das Spiel; sie hier zu erhöhen, ändert nur, womit der Gefährte startet."
+"companions.empty_hint" = "Dieser Spielstand hat noch keine Gefährten. Sie erscheinen hier, sobald die Geschichte sie einführt."
+"companions.available" = "verfügbar"
+"companions.hidden" = "versteckt"
+"companions.hide" = ""
+"companions.make_available" = ""
+# args: error
+"companions.section_error" = ""
+# args: name
+"companions.level_error" = ""
+# args: name
+"companions.accessible" = ""
+# args: name
+"companions.decrease" = ""
+# args: name
+"companions.increase" = ""
+# args: name
+"companions.hide_action" = ""
+# args: name
+"companions.make_available_action" = ""
+
+# Backups page
+"backups.back" = "Zurück zum Bearbeiten"
+"backups.close" = "Backup-Browser schließen"
+"backups.empty_hint" = "Keine Backups wurden neben diesem Spielstand gefunden. Der erste erfolgreiche Speichervorgang erstellt eines."
+"backups.restore" = "Wiederherstellen"
+"backups.dirty_hint" = "Speichern oder rückgängig machen der ungespeicherten Änderungen vor dem Wiederherstellen eines Backups: eine Wiederherstellung würde die Änderungen sonst verwerfen."
+"backups.utc_hint" = ""
+"backups.restore.title" = ""
+"backups.restore.confirm" = ""
+# args: open
+"backups.explanation" = ""
+# args: timestamp
+"backups.restore.action" = ""
+# args: path
+"backups.original" = ""
+
+# Review-before-save page
+"review.explanation" = "Nichts wird geschrieben, bis die Schaltfläche unten zum Schreiben gedrückt wird. Die Datei wird durch erneutes Lesen überprüft, atomar geschrieben und die vorherige Datei als Backup aufbewahrt. Ungültige Charakterfelder werden nicht angewendet; die anderen Bearbeitungen werden übernommen."
+"review.title" = "Änderungen überprüfen"
+"review.write" = "Spielstand schreiben"
+"review.unsaved_no_fields" = ""
+"review.nothing" = ""
+# args: count
+"review.invalid_fields" = ""
+# args: changes, groups
+"review.summary" = ""
+# args: before, after
+"review.change" = ""
+
+# About, settings and diagnostics
+"field.appearance" = "ANSICHT"
+"about.title" = "Über JadeForge"
+"about.close" = "Schließen"
+"about.close_page" = "Überblicksseite schließen"
+"about.copy_diagnostics" = "Diagnose kopieren"
+"about.copy_diagnostics_hint" = "Diagnose in die Zwischenablage kopieren"
+"about.diagnostics_heading" = "DIAGNOSE"
+"about.backup.explanation" = "Jeder Speichervorgang erstellt eine Kopie der vorherigen save.sac Datei, benannt als save.sac.jadeforge-backup-<Sekunden>.<Nanosekunden>.<Zähler>. Um einen Speichervorgang rückgängig zu machen, schließen Sie JadeForge und kopieren Sie das Backup über save.sac. Ein früheres Backup wird niemals überschrieben."
+"about.tagline" = "Jade Empire Spielstand-Editor"
+"about.read_write.summary" = "JadeForge liest und schreibt save.sac Dateien direkt. Jeder Schreibvorgang wird durch erneutes Lesen der erzeugten Datei überprüft und atomar geschrieben. Die Spielinstallation wird nur gelesen."
+"about.shortcuts_heading" = "Tastenkombinationen"
+"about.licenses_heading" = "LIZENZEN"
+"about.backup.none" = "Kein Backup wurde in dieser Sitzung geschrieben; das Speichern einer Änderung erstellt eines und zeigt seinen genauen Pfad auf der Übersichtsseite an."
+"about.config.none" = "Kein Konfigurationsverzeichnis ist in dieser Umgebung verfügbar. JADEFORGE_CONFIG_DIR kann auf eines für portable Installationen verweisen."
+"about.save_folder.none" = "Es wurde noch kein Spielstand-Ordner ausgewählt. Verwenden Sie Durchsuchen… oder Strg+O, um einen auszuwählen."
+"about.remember_size" = "Größe und Position merken"
+"about.remember_size_description" = "Fenstergröße und -position zwischen Starts merken"
+"about.remember_size_wayland" = "Fenstergröße zwischen Starts merken; der Compositor platziert das Fenster"
+"about.settings_heading" = "EINSTELLUNGEN"
+"about.sort_order" = "Sotierreihenfolge"
+"about.text_size_heading" = "TEXTGRÖSSE"
+"about.appearance.explanation" = "Das Theme und die Textgröße werden sofort angewendet und in der Einstellungsdatei gespeichert. System folgt der Betriebssystempräferenz; hoher Kontrast kann hier ausgewählt werden, da die Fensterschicht die erzwungene Farbgebungseinstellung der Plattform nicht meldet."
+"about.settings.explanation" = "Diese Einstellungen befinden sich in einer TOML-Datei. Sie werden zwischen den Starts gespeichert und können bearbeitet werden, während JadeForge geschlossen ist."
+"about.window_heading" = "FENSTER"
+"about.window.wayland_hint" = "Wayland-Compositoren platzieren Fenster selbst. Fügen Sie in Ihren Desktop-Einstellungen eine Fensterregel hinzu, um die Position zu fixieren."
+"about.game_data.loading" = ""
+"about.game_data.bundled" = ""
+"about.game_data.missing" = ""
+# context: Diagnostics row label, report label and footer label.
+"about.diagnostics.version" = ""
+"about.diagnostics.open_savegame" = ""
+"about.diagnostics.none" = ""
+"about.diagnostics.file_size" = ""
+"about.diagnostics.not_read" = ""
+"about.diagnostics.renderer" = ""
+"about.diagnostics.auto" = ""
+"about.diagnostics.remember_window" = ""
+"about.diagnostics.yes" = ""
+"about.diagnostics.no" = ""
+"about.diagnostics.backup_folder" = ""
+"about.diagnostics.title" = ""
+"about.diagnostics.unavailable" = ""
+"about.diagnostics.copied" = ""
+"about.diagnostics.copy_failed" = ""
+"sort.descending" = ""
+"sort.ascending" = ""
+"about.settings_file" = ""
+"about.latest_backup" = ""
+"about.license.summary" = ""
+"about.shortcut.save" = ""
+"about.shortcut.focus" = ""
+"about.shortcut.undo" = ""
+"about.shortcut.redo" = ""
+"about.shortcut.scan" = ""
+"about.shortcut.help" = ""
+"about.shortcut.escape" = ""
+# args: error
+"about.game_data.unreadable" = ""
+# args: percent
+"about.text_size.option" = ""
+# args: language
+"about.language.option" = ""
+# args: theme, scale
+"about.diagnostics.theme_value" = ""
+# args: name, direction
+"about." = ""
+# args: version
+"about.diagnostics.version_footer" = ""
+
+# Shared widgets
+"widget.clear" = "Löschen"
+"widget.expanded" = ""
+"widget.collapsed" = ""
+# args: name, subtitle, state
+"widget.details" = ""
+"theme.system.description" = ""
+"widget.gem.socketed.into.the.amulet" = ""
+
+# Count nouns: singular and plural
+"count.gem.one" = ""
+"count.gem.other" = "Edelsteine"
+"count.gem.carried.one" = ""
+"count.gem.carried.other" = ""
+"count.socket.one" = ""
+"count.socket.other" = ""
+"count.companion.known.one" = ""
+"count.companion.known.other" = ""
+"count.item.one" = ""
+"count.item.other" = ""
+"count.match.one" = ""
+"count.match.other" = ""
+"count.stack.one" = ""
+"count.stack.other" = ""
+"count.style.one" = ""
+"count.style.other" = "Stile"
+"count.style.tolearn.one" = ""
+"count.style.tolearn.other" = ""
+"count.style.learned.one" = ""
+"count.style.learned.other" = ""
+"count.style.point.one" = ""
+"count.style.point.other" = ""
+"count.change.one" = ""
+"count.change.other" = ""
+"count.group.one" = ""
+"count.group.other" = ""
+"count.backup.one" = "Backup"
+"count.backup.other" = "Backups"
+"count.invalidfield.one" = ""
+"count.invalidfield.other" = ""
+"count.experiencepoint.one" = ""
+"count.experiencepoint.other" = ""
+"count.block.one" = ""
+"count.block.other" = ""
+"count.effect.one" = ""
+"count.effect.other" = ""
+"count.kill.one" = ""
+"count.kill.other" = ""
+"count.weapon.one" = ""
+"count.weapon.other" = ""
+# context: Card caption, row summary and scan count.
+"count.savegame.one" = "Spielstand"
+# context: Save browser heading and scan count.
+"count.savegame.other" = ""
+"count.upgrade.one" = ""
+"count.upgrade.other" = ""
+
+# Dialogs
+"dialog.choose_save_folder" = ""
+"dialog.unsaved_changes.explanation" = ""
+# context: Close dialog button; distinct from the footer save action.
+"dialog.save" = ""
+"dialog.discard" = ""
+"dialog.cancel" = ""
+
+# Filter placeholders
+"filter.savegame" = ""
+"filter.items" = ""
+"filter.styles" = ""
+"filter.gems" = ""
+
+# Character tab and fields
+"character.alignment.fallback" = ""
+"character.changes_hint" = ""
+"character.quick_add.one" = ""
+"character.quick_add.five" = ""
+# args: alignment, default
+"character.alignment.template" = ""
+"field.experience" = ""
+"field.body" = ""
+"field.mind" = ""
+"field.spirit" = ""
+"field.charm" = ""
+"field.intuition" = ""
+"field.intimidate" = ""
+"field.alignment" = ""
+"field.name.range" = ""
+"field.level.range" = ""
+"field.gold.range" = ""
+"field.appearance.range" = ""
+"field.alignment.range" = ""
+"field.chapter.range" = ""
+
+# Path actions
+"path.settings" = ""
+"path.copy" = ""
+"path.open" = ""
+# context: Args: what. The path noun comes from label.savegame, label.backup or label.settings.
+# args: what
+"path.copied" = ""
+# args: what
+"path.copy_failed" = ""
+# args: what
+"path.opened" = ""
+# args: what, folder, error
+"path.open_failed" = ""
+# args: what
+"path.copy_action" = ""
+# args: what
+"path.open_action" = ""
+
+# Theme choices
+"theme.system" = ""
+"theme.dark" = ""
+"theme.light" = ""
+"theme.high_contrast" = ""
+"theme.dark.description" = ""
+"theme.light.description" = ""
+"theme.high_contrast.description" = ""
+
+# Session rows
+"session.cannot.be.read" = ""
+
+# Session status messages
+"alignment.open_palm" = ""
+"alignment.closed_fist" = ""
+"alignment.balanced" = ""
+"category.powerups" = ""
+"category.plot_items" = ""
+"category.magic_weapons" = ""
+"category.improvements" = ""
+"style.kind.martial" = ""
+"style.kind.magic" = ""
+"style.kind.support" = ""
+"style.kind.transformation" = ""
+"style.kind.improvised" = ""
+"style.kind.unique" = ""
+"status.choose.the.folder.that.contains.your" = ""
+"status.scanning" = ""
+"status.unsaved_scan" = ""
+"status.scan.cancelled.the.savegames.on.screen" = ""
+"status.unsaved_open" = ""
+"status.that.savegame.no.longer.exists.scan" = ""
+"status.there.is.nothing.to.undo" = ""
+"status.there.is.nothing.to.redo" = ""
+"status.savegame.structure" = ""
+"status.block.layout" = ""
+"status.as.opened" = ""
+"status.structs.were.added.or.orphaned" = ""
+"status.no.savegame.is.open" = ""
+"status.reloading.from.disk.would.discard.the" = ""
+"status.reloaded.the.savegame.from.disk" = ""
+"status.save.or.revert.the.current.edits" = ""
+"status.that.file.is.not.a.backup" = ""
+"status.nothing.changed.so.there.was.nothing" = ""
+"status.nothing.changed.so.there.is.nothing" = ""
+"status.a.stack.needs.at.least.one" = ""
+"status.item.stack" = ""
+"status.item.added" = ""
+"status.not.present" = ""
+"status.item.removed" = ""
+# context: Pending-change label; the sentence appends a period.
+"status.removed_label" = ""
+"status.the.item.was.already.gone" = ""
+"status.style.upgrade" = ""
+"status.that.upgrade.is.already.in.the" = ""
+"status.empty.socket" = ""
+"status.that.gem.is.not.in.the" = ""
+"status.gem.added" = ""
+# context: Tab caption, overview glance label and gem location value.
+"label.inventory" = "Inventar"
+# context: Card caption and gem location value.
+"label.amulet" = "Amulett"
+"status.gem.moved" = ""
+"status.gem.removed" = ""
+"status.that.style.is.not.in.the" = ""
+"status.learn.a.style.first.so.jadeforge" = ""
+"status.style.added" = ""
+"status.keep.at.least.one.style.jadeforge" = ""
+"status.style.removed" = ""
+"status.the.style.was.already.gone" = ""
+"status.companion.levels.go.from.1.to" = ""
+"status.companion.level" = ""
+"status.companion.availability" = ""
+# args: directory
+"status.scanning_directory" = ""
+# args: directory
+"status.no.savegames.found.in" = ""
+# args: savegames, directory
+"status.found.in" = ""
+# args: savegames, directory
+"status.found.in.but.none.of.them" = ""
+# args: savegames, directory, broken
+"status.found.in.of.them.cannot.be" = ""
+# args: directory
+"status.could.not.scan.the.savegame.reader" = ""
+# args: root
+"status.using.the.game.data.in" = ""
+# args: root, error
+"status.is.not.a.readable.jade.empire" = ""
+# args: label, error
+"status.cannot.open.the.scan.found.it" = ""
+# context: Args: label. Also used for the sibling template with a problems suffix.
+# args: label
+"status.opened" = ""
+# args: label, problems
+"status.opened.but.some.sections.could.not" = ""
+# args: path, error
+"status.cannot.open" = ""
+# args: item_id
+"status.item" = ""
+# args: style_id
+"status.style" = ""
+# args: error
+"status.cannot.undo.that.step" = ""
+# args: label
+"status.undid" = ""
+# args: label
+"status.redid" = ""
+# args: backup, safety
+"status.restored.the.file.it.replaced.is" = ""
+# args: error
+"status.cannot.restore.the.backup" = ""
+# args: changes
+"status.applied.in.memory" = ""
+# args: path, backup
+"status.saved.the.previous.file.is.kept" = ""
+# args: path
+"status.saved" = ""
+# args: error
+"status.the.savegame.changed.on.disk.since" = ""
+# args: error
+"status.cannot.save" = ""
+# args: path, error
+"status.saved.the.invalid.character.field.was" = ""
+# args: message, error
+"status.the.character.form.also.has.an" = ""
+# args: name
+"status.a.stack.cannot.hold.more.than" = ""
+# args: name, count
+"status.in.the.stack" = ""
+# args: error
+"status.cannot.change.item" = ""
+# args: item_id
+"status.item.has.no.savegame.category.type" = ""
+# args: name
+"status.added" = ""
+# args: error
+"status.cannot.add.item" = ""
+# args: error
+"status.cannot.remove.item" = ""
+# args: advance
+"status.upgrade" = ""
+# args: upgrades
+"status.bought" = ""
+# args: error
+"status.cannot.change.the.upgrade" = ""
+# args: item_id
+"status.gem" = ""
+# args: error
+"status.cannot.add.the.gem" = ""
+# args: error
+"status.cannot.move.the.gem" = ""
+# args: error
+"status.cannot.remove.the.gem" = ""
+# args: error
+"status.cannot.add.style" = ""
+# args: error
+"status.cannot.remove.style" = ""
+# args: level
+"status.companion.level.set.to" = ""
+# args: error
+"status.cannot.change.companion" = ""
+# args: name, state
+"status.is.now" = ""
+# args: kind
+"status.effect" = ""
+# args: value, kind
+"status.unsaved_effect" = ""
+# args: directory
+"status.the.save.folder.does.not.exist" = ""
+# args: directory
+"status.folder_permission" = ""
+# args: directory, error
+"status.folder_unreadable" = ""
+# args: directory
+"status.is.a.file.not.a.save" = ""
+# args: directory, error
+"status.the.save.folder.cannot.be.listed" = ""
+"status.gem.moved.to.the.inventory" = ""
+"status.unknown" = ""
+
+# Merged labels
+# context: Diagnostics caption and settings section heading; the section displays it uppercased.
+"label.theme" = "THEME"
+# context: Diagnostics caption and settings section heading; the section displays it uppercased.
+"label.language" = "SPRACHE"
+"label.save.folder" = "SAVE ORDNER"
+# context: Used for the character field caption and the overview badge.
+"character.chapter" = ""
+
+# Composed field text
+# args: stat
+"field.max" = ""
+# args: min, max, unit
+"field.range" = ""
+"field.unit.xp" = ""
+"field.unit.points" = ""
+"field.unit.healthpoints" = ""
+"field.unit.chipoints" = ""
+"field.unit.focuspoints" = ""
+
+# Diagnostics report
+# args: label, value
+"about.diagnostics.line" = ""
+"about.diagnostics.config" = ""
+
+# Session messages
+# context: Generic success sentence for item, style and upgrade removals; the arg is the removed thing.
+# args: what
+"status.removed_sentence" = ""

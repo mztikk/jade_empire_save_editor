@@ -1981,15 +1981,23 @@ dependencies = [
  "image",
  "jadeforge-core",
  "jadeforge-gamedata",
+ "jadeforge-i18n",
  "jadeforge-session",
  "mundy",
  "open",
  "rfd",
  "serde_json",
- "toml",
  "wayland-client",
  "wayland-protocols-plasma",
  "winresource",
+]
+
+[[package]]
+name = "jadeforge-i18n"
+version = "0.2.1"
+dependencies = [
+ "serde",
+ "toml",
 ]
 
 [[package]]
@@ -1998,6 +2006,7 @@ version = "0.2.1"
 dependencies = [
  "jadeforge-core",
  "jadeforge-gamedata",
+ "jadeforge-i18n",
  "serde",
  "toml",
 ]

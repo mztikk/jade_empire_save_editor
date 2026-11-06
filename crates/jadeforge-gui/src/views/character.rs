@@ -23,14 +23,13 @@ fn alignment_hint_height() -> f32 {
 pub fn alignment_hint(value: &str) -> String {
     match value.trim().parse::<i32>() {
         Ok(value) => fill(
-            "{alignment} (the game starts at {default}, below is Closed Fist, above is Open Palm).",
+            "character.alignment.template",
             &[
-                ("alignment", format::alignment(value)),
+                ("alignment", t(format::alignment(value))),
                 ("default", &jadeforge_core::DEFAULT_ALIGNMENT.to_string()),
             ],
         ),
-        Err(_) => t("Alignment is a number; below 128 is the Closed Fist, above is the Open Palm.")
-            .to_owned(),
+        Err(_) => t("character.alignment.fallback").to_owned(),
     }
 }
 
@@ -39,8 +38,9 @@ pub fn alignment_hint(value: &str) -> String {
 pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldError]) -> Element {
     let form = ctx.form;
 
-    let identity = widgets::card(t("Identity"),
-        Some(t("Every valid change is applied in memory immediately").to_owned()),
+    let identity = widgets::card(
+        t("character.identity"),
+        Some(t("character.changes_hint").to_owned()),
         vec![
             // Three fields per row at every supported width: six narrow fields
             // of fixed width used to overflow the card and leave KILLS alone on
@@ -53,16 +53,13 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
             widgets::field_grid(vec![
                 widgets::field_checked(
                     CharacterField::Gold,
-                    input(&form, CharacterField::Gold).placeholder(t("not set")),
+                    input(&form, CharacterField::Gold).placeholder(t("character.not_set")),
                     widgets::field_error(errors, CharacterField::Gold),
                 ),
                 checked(&form, CharacterField::Chapter, errors),
                 checked(&form, CharacterField::Kills, errors),
             ]),
-            widgets::hint(
-                t("Gold is optional in the savegame: leave it empty to keep the field absent, or \
-                 enter a value to create it when you save."),
-            ),
+            widgets::hint(t("character.gold_hint")),
             widgets::divider(),
             widgets::field_grid(vec![
                 checked(&form, CharacterField::Alignment, errors),
@@ -73,16 +70,15 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
             rect()
                 .horizontal()
                 .spacing(theme::space::md())
-                .child(quick_add(ctx, t("+1 point"), 1))
-                .child(quick_add(ctx, t("+5 points"), 5))
-                .child(widgets::hint(t("Attribute points you can still spend; the field is created when the savegame does not have it."),
-                ))
+                .child(quick_add(ctx, t("character.quick_add.one"), 1))
+                .child(quick_add(ctx, t("character.quick_add.five"), 5))
+                .child(widgets::hint(t("character.attribute_points_hint")))
                 .into_element(),
         ],
     );
 
     let vitals = widgets::card(
-        t("Vitals"),
+        t("character.vitals"),
         None,
         vec![
             widgets::field_grid(vec![
@@ -96,14 +92,12 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
                 checked(&form, CharacterField::Focus, errors),
                 checked(&form, CharacterField::FocusMax, errors),
             ]),
-            widgets::hint(t(
-                "Current values may stay below the maximum; the game fills them on rest.",
-            )),
+            widgets::hint(t("character.current_values_hint")),
         ],
     );
 
     let attributes = widgets::card(
-        t("Attributes"),
+        t("character.attributes"),
         None,
         vec![
             widgets::field_grid(vec![
@@ -121,25 +115,25 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
     );
 
     let summary = widgets::card(
-        t("Current sheet"),
+        t("character.current_sheet"),
         None,
         vec![
             widgets::label_row(
-                t("Name"),
+                t("character.name"),
                 widgets::a11y_text(character.name.clone())
                     .font_size(theme::font::body())
                     .color(theme::text()),
             ),
             widgets::divider(),
             widgets::label_row(
-                t("Level"),
+                t("character.level"),
                 widgets::a11y_text(character.level.to_string())
                     .font_size(theme::font::body())
                     .color(theme::text()),
             ),
             widgets::divider(),
             widgets::label_row(
-                t("Time played"),
+                t("character.time_played"),
                 widgets::a11y_text(crate::session::format::duration(character.time_played))
                     .font_size(theme::font::body())
                     .color(theme::text()),

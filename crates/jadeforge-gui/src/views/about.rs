@@ -10,7 +10,7 @@ use freya::prelude::*;
 
 use crate::Locale;
 use crate::app::Ctx;
-use crate::i18n::{fill, t};
+use crate::i18n::{fill, locale_label, t};
 use crate::message::capitalize;
 use crate::preferences::{TEXT_SCALES, ThemeChoice};
 use crate::session::{GameStatus, SaveSort};
@@ -35,11 +35,13 @@ pub fn view(
     let (sort, descending) = *sort.read();
     let save_folder = ctx.session.borrow().directory().to_path_buf();
     let game_text = match ctx.session.borrow().game_status() {
-        GameStatus::Loading => t("Reading the game installation…").to_owned(),
+        GameStatus::Loading => t("about.game_data.loading").to_owned(),
         GameStatus::Loaded { root, .. } => root.display().to_string(),
-        GameStatus::NamesOnly { .. } => t("Bundled English names (no installation)").to_owned(),
-        GameStatus::Missing => t("No installation configured").to_owned(),
-        GameStatus::Error(error) => fill("Unreadable: {error}", &[("error", error.as_str())]),
+        GameStatus::NamesOnly { .. } => t("about.game_data.bundled").to_owned(),
+        GameStatus::Missing => t("about.game_data.missing").to_owned(),
+        GameStatus::Error(error) => {
+            fill("about.game_data.unreadable", &[("error", error.as_str())])
+        }
     };
     let backup = ctx
         .session
@@ -49,24 +51,20 @@ pub fn view(
     let config_path = crate::config::Config::path();
 
     let close = Action::new(move || show_about.set(false));
-    let close_button = widgets::outline_action(t("Close the About page"), t("Close"), close);
+    let close_button = widgets::outline_action(t("about.close_page"), t("about.close"), close);
 
     let selected_theme = *theme_choice.read();
     let selected_scale = *text_scale.read();
     let mut appearance: Vec<Element> = Vec::new();
-    appearance.push(widgets::hint(t(
-        "The theme and text size apply immediately and are remembered in the settings file. \
-         System follows the operating system preference; high contrast can be selected here \
-         because the windowing layer does not report the platform's forced-colours setting.",
-    )));
+    appearance.push(widgets::hint(t("about.appearance.explanation")));
     let mut theme_chips: Vec<Element> = Vec::new();
     for choice in ThemeChoice::ALL {
         let mut theme_choice = theme_choice;
         let scale = selected_scale;
         let selected = selected_theme == choice;
         theme_chips.push(appearance_chip(
-            choice.label(),
-            choice.description(),
+            t(choice.label()),
+            t(choice.description()),
             selected,
             Action::new(move || {
                 theme_choice.set(choice);
@@ -80,7 +78,7 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::sm())
             .content(Content::wrap_spacing(theme::space::sm()))
-            .child(widgets::section_label(t("theme").to_uppercase()))
+            .child(widgets::section_label(t("label.theme").to_uppercase()))
             .children(theme_chips)
             .into_element(),
     );
@@ -92,7 +90,7 @@ pub fn view(
         scale_chips.push(appearance_chip(
             format!("{percent} %"),
             fill(
-                "Use {percent} percent text size",
+                "about.text_size.option",
                 &[("percent", &percent.to_string())],
             ),
             selected,
@@ -108,7 +106,7 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::sm())
             .content(Content::wrap_spacing(theme::space::sm()))
-            .child(widgets::section_label(t("TEXT SIZE")))
+            .child(widgets::section_label(t("about.text_size_heading")))
             .children(scale_chips)
             .into_element(),
     );
@@ -118,10 +116,10 @@ pub fn view(
         let mut locale = locale;
         let selected = selected_locale == candidate;
         locale_chips.push(appearance_chip(
-            candidate.label(),
+            locale_label(candidate),
             fill(
-                "Use {language} for the interface",
-                &[("language", candidate.label())],
+                "about.language.option",
+                &[("language", locale_label(candidate))],
             ),
             selected,
             Action::new(move || {
@@ -136,7 +134,7 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::sm())
             .content(Content::wrap_spacing(theme::space::sm()))
-            .child(widgets::section_label(t("language").to_uppercase()))
+            .child(widgets::section_label(t("label.language").to_uppercase()))
             .children(locale_chips)
             .into_element(),
     );
@@ -145,9 +143,9 @@ pub fn view(
     // promise the size there. X11 and the desktop platforms restore both.
     let compositor_places_windows = crate::geometry::position_is_compositor_owned();
     let remember_description = if compositor_places_windows {
-        t("Remember the window size between runs; the compositor places the window")
+        t("about.remember_size_wayland")
     } else {
-        t("Remember the window size and position between runs")
+        t("about.remember_size_description")
     };
     appearance.push(
         rect()
@@ -155,9 +153,9 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::sm())
             .content(Content::wrap_spacing(theme::space::sm()))
-            .child(widgets::section_label(t("WINDOW")))
+            .child(widgets::section_label(t("about.window_heading")))
             .child(appearance_chip(
-                t("Remember size and position"),
+                t("about.remember_size"),
                 remember_description,
                 remember,
                 Action::new(move || {
@@ -170,35 +168,36 @@ pub fn view(
             .into_element(),
     );
     if compositor_places_windows && remember {
-        appearance.push(widgets::hint(t(
-            "Wayland compositors place windows themselves. Add a window rule in your desktop settings to pin the position.",
-        )));
+        appearance.push(widgets::hint(t("about.window.wayland_hint")));
     }
 
     let mut diagnostics: Vec<(String, String)> = vec![
-        (t("Version").to_owned(), crate::APP_VERSION.to_owned()),
         (
-            t("Open savegame").to_owned(),
-            ctx.session
-                .borrow()
-                .current_path()
-                .map_or_else(|| t("none").to_owned(), |path| path.display().to_string()),
+            t("about.diagnostics.version").to_owned(),
+            crate::APP_VERSION.to_owned(),
         ),
         (
-            capitalize(t("blocks")),
+            t("about.diagnostics.open_savegame").to_owned(),
+            ctx.session.borrow().current_path().map_or_else(
+                || t("about.diagnostics.none").to_owned(),
+                |path| path.display().to_string(),
+            ),
+        ),
+        (
+            capitalize(t("count.block.other")),
             ctx.session.borrow().block_count().to_string(),
         ),
         (
-            t("File size").to_owned(),
-            ctx.session
-                .borrow()
-                .file_size()
-                .map_or_else(|| t("not read").to_owned(), crate::session::format::bytes),
+            t("about.diagnostics.file_size").to_owned(),
+            ctx.session.borrow().file_size().map_or_else(
+                || t("about.diagnostics.not_read").to_owned(),
+                crate::session::format::bytes,
+            ),
         ),
         (
-            capitalize(t("theme")),
+            capitalize(t("label.theme")),
             fill(
-                "{theme} at {scale} %",
+                "about.diagnostics.theme_value",
                 &[
                     ("theme", theme::current().palette.kind.key()),
                     (
@@ -209,24 +208,25 @@ pub fn view(
             ),
         ),
         (
-            capitalize(t("language")),
-            crate::i18n::current().label().to_owned(),
+            capitalize(t("label.language")),
+            locale_label(crate::i18n::current()).to_owned(),
         ),
         (
-            t("Renderer override").to_owned(),
-            std::env::var("JADEFORGE_RENDERER").unwrap_or_else(|_| t("auto").to_owned()),
+            t("about.diagnostics.renderer").to_owned(),
+            std::env::var("JADEFORGE_RENDERER")
+                .unwrap_or_else(|_| t("about.diagnostics.auto").to_owned()),
         ),
         (
-            t("Remember window").to_owned(),
+            t("about.diagnostics.remember_window").to_owned(),
             if *remember_window.read() {
-                t("yes").to_owned()
+                t("about.diagnostics.yes").to_owned()
             } else {
-                t("no").to_owned()
+                t("about.diagnostics.no").to_owned()
             },
         ),
     ];
     diagnostics.push((
-        t("Backup folder").to_owned(),
+        t("about.diagnostics.backup_folder").to_owned(),
         backup
             .as_ref()
             .and_then(|backup| backup.parent())
@@ -245,30 +245,34 @@ pub fn view(
         ));
     }
     let diagnostics_text = {
-        let mut text = format!("{}\n", t("JadeForge diagnostics"));
-        report_line(&mut text, t("Version"), crate::APP_VERSION);
+        let mut text = format!("{}\n", t("about.diagnostics.title"));
         report_line(
             &mut text,
-            &capitalize(t("save folder")),
+            t("about.diagnostics.version"),
+            crate::APP_VERSION,
+        );
+        report_line(
+            &mut text,
+            &capitalize(t("label.save.folder")),
             &save_folder.display().to_string(),
         );
         if let Some(path) = ctx.session.borrow().current_path() {
             report_line(
                 &mut text,
-                &capitalize(t("savegame")),
+                &capitalize(t("count.savegame.one")),
                 &path.display().to_string(),
             );
         }
         let config = config_path.as_ref().map_or_else(
-            || t("unavailable").to_owned(),
+            || t("about.diagnostics.unavailable").to_owned(),
             |path| path.display().to_string(),
         );
-        report_line(&mut text, t("Config"), &config);
+        report_line(&mut text, t("about.diagnostics.config"), &config);
         report_line(
             &mut text,
-            &capitalize(t("theme")),
+            &capitalize(t("label.theme")),
             &fill(
-                "{theme} at {scale} %",
+                "about.diagnostics.theme_value",
                 &[
                     ("theme", theme::current().palette.kind.key()),
                     (
@@ -280,8 +284,8 @@ pub fn view(
         );
         report_line(
             &mut text,
-            &capitalize(t("language")),
-            crate::i18n::current().label(),
+            &capitalize(t("label.language")),
+            locale_label(crate::i18n::current()),
         );
         text
     };
@@ -291,9 +295,9 @@ pub fn view(
             let copied = crate::clipboard::copy(diagnostics_text.clone());
             ctx.run(|session| {
                 session.notify(if copied {
-                    t("Copied the diagnostics to the clipboard.")
+                    t("about.diagnostics.copied")
                 } else {
-                    t("Could not copy the diagnostics: the system clipboard is not available.")
+                    t("about.diagnostics.copy_failed")
                 });
             });
         })
@@ -301,31 +305,29 @@ pub fn view(
 
     let mut settings = Vec::new();
     if save_folder.as_os_str().is_empty() {
-        settings.push(widgets::hint(t(
-            "No save folder has been chosen yet. Use Browse… or Ctrl+O to pick one.",
-        )));
+        settings.push(widgets::hint(t("about.save_folder.none")));
     } else {
         settings.push(path_section(
             ctx,
-            capitalize(t("save folder")),
+            capitalize(t("label.save.folder")),
             &save_folder.display().to_string(),
             save_folder.clone(),
-            "savegame",
+            "count.savegame.one",
         ));
     }
     settings.extend([
         widgets::label_row(
-            t("Sort order"),
+            t("about.sort_order"),
             widgets::a11y_text(fill(
-                "{name}, {direction}",
+                "about.",
                 &[
-                    ("name", sort.label()),
+                    ("name", t(sort.label())),
                     (
                         "direction",
                         if descending {
-                            t("descending")
+                            t("sort.descending")
                         } else {
-                            t("ascending")
+                            t("sort.ascending")
                         },
                     ),
                 ],
@@ -334,7 +336,7 @@ pub fn view(
             .color(theme::text()),
         ),
         widgets::label_row(
-            t("Game data"),
+            t("overview.game_data"),
             widgets::a11y_text(game_text)
                 .font_size(theme::font::label())
                 .color(theme::text()),
@@ -347,23 +349,16 @@ pub fn view(
                 .map_or_else(|| save_folder.clone(), std::path::Path::to_path_buf);
             settings.push(path_section(
                 ctx,
-                t("Settings file"),
+                t("about.settings_file"),
                 &path.display().to_string(),
                 folder,
-                "settings",
+                "path.settings",
             ));
         }
-        None => settings.push(widgets::hint(t(
-            "No config directory is available in this environment. JADEFORGE_CONFIG_DIR can point \
-             at one for portable installs.",
-        ))),
+        None => settings.push(widgets::hint(t("about.config.none"))),
     }
 
-    let mut backups = vec![widgets::hint(t(
-        "Every save writes a copy of the previous save.sac next to it, named \
-             save.sac.jadeforge-backup-<seconds>.<nanos>.<counter>. To undo a save, close \
-             JadeForge and copy the backup over save.sac. An earlier backup is never overwritten.",
-    ))];
+    let mut backups = vec![widgets::hint(t("about.backup.explanation"))];
     match &backup {
         Some(backup) => {
             let folder = backup
@@ -371,16 +366,13 @@ pub fn view(
                 .map_or_else(|| save_folder.clone(), std::path::Path::to_path_buf);
             backups.push(path_section(
                 ctx,
-                t("Latest backup"),
+                t("about.latest_backup"),
                 &backup.display().to_string(),
                 folder,
-                "backup",
+                "count.backup.one",
             ));
         }
-        None => backups.push(widgets::hint(t(
-            "No backup has been written in this session; saving a change creates one and shows \
-             its exact path on the Overview tab.",
-        ))),
+        None => backups.push(widgets::hint(t("about.backup.none"))),
     }
 
     let mut children = vec![
@@ -390,60 +382,52 @@ pub fn view(
             .content(Content::Flex)
             .cross_align(Alignment::Center)
             .child(
-                widgets::a11y_text(t("Jade Empire savegame editor"))
+                widgets::a11y_text(t("about.tagline"))
                     .font_size(theme::font::body())
                     .color(theme::muted()),
             )
             .child(rect().width(Size::flex(1.0)))
             .child(close_button)
             .into_element(),
-        widgets::hint(t(
-            "JadeForge reads and writes save.sac files directly. Every write is verified by \
-             re-reading the produced file and is written atomically, and the game installation \
-             is only ever read.",
-        )),
+        widgets::hint(t("about.read_write.summary")),
         widgets::divider(),
-        widgets::section_label(t("SETTINGS")),
-        widgets::hint(t(
-            "These preferences live in one TOML file. They are remembered between runs and can \
-             be edited while JadeForge is closed.",
-        )),
+        widgets::section_label(t("about.settings_heading")),
+        widgets::hint(t("about.settings.explanation")),
     ];
     children.extend(settings);
     children.push(widgets::divider());
-    children.push(widgets::section_label(t("APPEARANCE")));
+    children.push(widgets::section_label(t("field.appearance")));
     children.extend(appearance);
     children.push(widgets::divider());
-    children.push(widgets::section_label(t("DIAGNOSTICS")));
+    children.push(widgets::section_label(t("about.diagnostics_heading")));
     children.extend(diagnostics_rows);
     children.push(
         widgets::outline_action(
-            t("Copy the diagnostics to the clipboard"),
-            t("Copy diagnostics"),
+            t("about.copy_diagnostics_hint"),
+            t("about.copy_diagnostics"),
             copy_diagnostics,
         )
         .into_element(),
     );
     children.push(widgets::divider());
-    children.push(widgets::section_label(t("LICENSES")));
-    children.push(widgets::hint(t(
-        "JadeForge is MIT licensed. The bundled English item and style names are game content \
-         and are not covered by that license; see NOTICE and docs/NAMES.md.",
-    )));
+    children.push(widgets::section_label(t("about.licenses_heading")));
+    children.push(widgets::hint(t("about.license.summary")));
     children.push(widgets::divider());
-    children.push(widgets::section_label(t("backups").to_uppercase()));
+    children.push(widgets::section_label(
+        t("count.backup.other").to_uppercase(),
+    ));
     children.extend(backups);
     children.push(widgets::divider());
-    children.push(widgets::section_label(t("KEYBOARD SHORTCUTS")));
+    children.push(widgets::section_label(t("about.shortcuts_heading")));
     for (action, keys) in [
-        (t("Save (opens the review)"), "Ctrl+S"),
-        (t("Choose save folder"), "Ctrl+O"),
-        (t("Focus the active filter"), "Ctrl+F"),
-        (t("Undo the last edit"), "Ctrl+Z"),
-        (t("Redo an undone edit"), "Ctrl+Y or Ctrl+Shift+Z"),
-        (t("Scan the save folder"), "F5"),
-        (t("Open this help page"), "Ctrl+/"),
-        (t("Clear the active filter or close this page"), "Escape"),
+        (t("about.shortcut.save"), "Ctrl+S"),
+        (t("shell.choose_save_folder"), "Ctrl+O"),
+        (t("about.shortcut.focus"), "Ctrl+F"),
+        (t("about.shortcut.undo"), "Ctrl+Z"),
+        (t("about.shortcut.redo"), "Ctrl+Y or Ctrl+Shift+Z"),
+        (t("about.shortcut.scan"), "F5"),
+        (t("about.shortcut.help"), "Ctrl+/"),
+        (t("about.shortcut.escape"), "Escape"),
     ] {
         children.push(widgets::label_row(
             action,
@@ -452,9 +436,9 @@ pub fn view(
     }
 
     widgets::card(
-        t("About JadeForge"),
+        t("about.title"),
         Some(fill(
-            "Version {version}",
+            "about.diagnostics.version_footer",
             &[("version", crate::APP_VERSION)],
         )),
         children,
@@ -466,7 +450,10 @@ fn report_line(text: &mut String, label: &str, value: &str) {
     let _ = writeln!(
         text,
         "{}",
-        fill("{label}: {value}", &[("label", label), ("value", value)]),
+        fill(
+            "about.diagnostics.line",
+            &[("label", label), ("value", value)]
+        ),
     );
 }
 
