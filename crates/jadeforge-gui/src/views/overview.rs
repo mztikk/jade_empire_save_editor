@@ -37,13 +37,30 @@ pub fn view(
                 ),
                 true,
             ),
+            GameStatus::NamesOnly { items, styles } => (
+                format!(
+                    "No game installation found: using bundled English names for {items} items \
+                     and {styles} styles. Descriptions and upgrades still need the game data."
+                ),
+                false,
+            ),
             GameStatus::Missing => (
                 "No game installation found next to the savegames: names fall back to ids, \
                  while categories, levels and timings still come from the savegame."
                     .to_owned(),
                 false,
             ),
-            GameStatus::Error(error) => (format!("Cannot read the game data: {error}"), false),
+            GameStatus::Error(error) => {
+                let bundled = if session.has_bundled_names() {
+                    ". Bundled English names are still available."
+                } else {
+                    "."
+                };
+                (
+                    format!("Cannot read the game data: {error}{bundled}"),
+                    false,
+                )
+            }
         }
     };
 

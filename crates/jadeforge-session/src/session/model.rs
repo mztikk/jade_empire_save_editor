@@ -98,7 +98,15 @@ pub enum GameStatus {
         /// Directory the data was read from.
         root: PathBuf,
     },
-    /// No game installation was found next to the savegames.
+    /// No game installation was found; the bundled English index supplies
+    /// names, but descriptions and upgrade tables are unavailable.
+    NamesOnly {
+        /// Number of named items.
+        items: usize,
+        /// Number of named styles.
+        styles: usize,
+    },
+    /// No game installation and no bundled names were found.
     Missing,
     /// A game installation was found but could not be read.
     Error(String),

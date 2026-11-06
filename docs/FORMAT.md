@@ -321,10 +321,15 @@ style and replaces its identity (`StyleId`, `NameRef`, `DescRef`, `IconRef`,
 
 Savegames only store numeric ids and talk table references. JadeForge reads the
 installation (found from the save folder, `JADEFORGE_GAME_DIR` wins) for names
-and tables. Every file is optional: without the installation the UI falls back
-to numeric ids, but keeps the item category from `ItemList[].Type` and the style
-level, weapon count, icon/weapon resource names and time spent from the style
-struct.
+and tables. Every file is optional: without the installation the UI uses the
+bundled English name index for item and style names and keeps the item category
+from `ItemList[].Type` and the style level, weapon count, icon/weapon resource
+names and time spent from the style struct. Descriptions, upgrade tables and
+effect names still require the installation.
+
+The bundled index is generated, not hand-written; see
+[docs/NAMES.md](NAMES.md) for its scope, precedence and regeneration. It is the
+only game-derived file in the repository.
 
 | file | format | purpose |
 | --- | --- | --- |

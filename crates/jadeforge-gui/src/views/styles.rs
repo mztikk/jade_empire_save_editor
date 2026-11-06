@@ -12,13 +12,17 @@ use crate::theme;
 use crate::widgets;
 
 /// Renders the styles tab.
-#[allow(clippy::too_many_arguments)] // one argument per reactive tab input; grouping would only rename them
+#[allow(
+    clippy::too_many_arguments, // one argument per reactive tab input; grouping would only rename them
+    clippy::too_many_lines // one declarative tab tree keeps the visual order auditable
+)]
 pub fn view(
     ctx: &Ctx,
     styles: &[StyleRow],
     query: State<String>,
     matches: &[StyleSuggestion],
     game_ready: bool,
+    names_ready: bool,
     learnable: Option<usize>,
     matching: usize,
     expanded: State<Option<u16>>,
@@ -112,6 +116,11 @@ pub fn view(
                     .into_element(),
             );
         }
+    } else if names_ready {
+        children.push(widgets::hint(
+            "Bundled English names are loaded, but new styles and upgrade details still need \
+             the game data. Levels, weapons and time spent come from the savegame.",
+        ));
     } else {
         children.push(widgets::hint(
             "The game data was not found, so style names and new styles are unavailable. \

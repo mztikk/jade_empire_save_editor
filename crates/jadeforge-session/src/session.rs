@@ -11,7 +11,7 @@ use jadeforge_core::{
     AmuletInfo, Character, GemLocation, Henchman, Item, SaveGame, SaveImage, SaveOptions, Style,
     StyleIdentity,
 };
-use jadeforge_gamedata::GameData;
+use jadeforge_gamedata::{BundledItem, GameData, NameIndex};
 
 mod error;
 mod form;
@@ -294,6 +294,8 @@ pub struct Session {
     pub(crate) amulet: Option<AmuletInfo>,
     /// Game data used for names.
     pub(crate) game: Option<Rc<GameData>>,
+    /// Bundled English names, used when no installation is available.
+    pub(crate) name_index: Option<&'static NameIndex>,
     /// Human readable state of the game data.
     pub(crate) game_status: GameStatus,
     /// Screenshot of the opened savegame.
@@ -348,6 +350,7 @@ impl Session {
             gems: Rc::new(Vec::new()),
             amulet: None,
             game: None,
+            name_index: NameIndex::bundled_english(),
             game_status: GameStatus::Missing,
             preview: None,
             message: Message::info("Scanning for savegames…"),
@@ -503,7 +506,15 @@ impl Session {
             }
             Ok(None) => {
                 self.game = None;
-                self.game_status = GameStatus::Missing;
+                self.game_status = match self.name_index {
+                    Some(names) if names.item_count() > 0 || names.style_count() > 0 => {
+                        GameStatus::NamesOnly {
+                            items: names.item_count(),
+                            styles: names.style_count(),
+                        }
+                    }
+                    _ => GameStatus::Missing,
+                };
                 Vec::new()
             }
             Err(error) => {
@@ -650,16 +661,23 @@ impl Session {
 
     fn describe_item(&self, item: &Item) -> ItemRow {
         let info = self.game.as_ref().and_then(|game| game.item(item.item_id));
+        let bundled = self.bundled_item(item.item_id);
         let fallback = format!("Item {}", item.item_id);
+        let name = info
+            .map(|info| info.name.clone())
+            .or_else(|| bundled.map(|item| item.name.clone()))
+            .unwrap_or(fallback);
+        let category = info
+            .and_then(|info| info.category.clone())
+            .or_else(|| jadeforge_gamedata::category_for_save_type(item.kind).map(str::to_owned))
+            .or_else(|| bundled.and_then(|item| item.category.clone()));
         ItemRow {
             struct_index: item.struct_index,
             item_id: item.item_id,
             count: item.count,
             kind: item.kind,
-            name: info.map_or(fallback, |info| info.name.clone()),
-            category: info.and_then(|info| info.category.clone()).or_else(|| {
-                jadeforge_gamedata::category_for_save_type(item.kind).map(str::to_owned)
-            }),
+            name,
+            category,
             description: info.and_then(|info| info.description.clone()),
         }
     }
@@ -670,6 +688,10 @@ impl Session {
             .as_ref()
             .and_then(|game| game.style(style.style_id));
         let fallback = format!("Style {}", style.style_id);
+        let name = info
+            .map(|info| info.name.clone())
+            .or_else(|| self.bundled_style(style.style_id).map(ToOwned::to_owned))
+            .unwrap_or(fallback);
         // Without a label, `WeaponCount` is the one kind signal the savegame
         // itself carries. It is already the documented fallback when a label
         // prefix is not recognised.
@@ -682,7 +704,7 @@ impl Session {
             struct_index: style.struct_index,
             style_id: style.style_id,
             level: style.level,
-            name: info.map_or(fallback, |info| info.name.clone()),
+            name,
             label: info.map_or_else(String::new, |info| info.label.clone()),
             description: info.and_then(|info| info.description.clone()),
             icon: style.icon.clone(),
@@ -777,6 +799,44 @@ impl Session {
     #[must_use]
     pub fn game_status(&self) -> &GameStatus {
         &self.game_status
+    }
+
+    /// True when names come from the bundled English index.
+    #[must_use]
+    pub fn has_bundled_names(&self) -> bool {
+        self.game.is_none()
+            && self
+                .name_index
+                .is_some_and(|names| names.item_count() > 0 || names.style_count() > 0)
+    }
+
+    /// Number of items that can be added through the picker.
+    #[must_use]
+    pub fn item_database_count(&self) -> usize {
+        match &self.game {
+            Some(game) => game.playable_item_count(),
+            None => self.name_index.map_or(0, NameIndex::addable_item_count),
+        }
+    }
+
+    /// True when the item picker has a database to browse.
+    #[must_use]
+    pub fn items_ready(&self) -> bool {
+        self.item_database_count() > 0
+    }
+
+    fn bundled_item(&self, id: u16) -> Option<&BundledItem> {
+        if self.game.is_some() {
+            return None;
+        }
+        self.name_index.and_then(|names| names.item(id))
+    }
+
+    fn bundled_style(&self, id: u16) -> Option<&str> {
+        if self.game.is_some() {
+            return None;
+        }
+        self.name_index.and_then(|names| names.style(id))
     }
 
     /// Shared screenshot of the opened savegame.
@@ -949,6 +1009,7 @@ impl Session {
 
     /// Adds an item stack by its `items.2da` row.
     pub fn add_item(&mut self, item_id: u16) -> Result<(), SessionError> {
+        let bundled = self.bundled_item(item_id);
         let (name, save_type) =
             if let Some(info) = self.game.as_ref().and_then(|game| game.item(item_id)) {
                 let Some(save_type) = info.save_type else {
@@ -957,6 +1018,13 @@ impl Session {
                     return Err(SessionError::Item(error));
                 };
                 (info.name.clone(), save_type)
+            } else if let Some(item) = bundled {
+                let Some(save_type) = item.save_type() else {
+                    let error = format!("item {item_id} has no savegame category type");
+                    self.message = Message::error(error.clone());
+                    return Err(SessionError::Item(error));
+                };
+                (item.name.clone(), save_type)
             } else {
                 // The CLI and older fixtures can add an id that is not in the
                 // current item table; the legacy generic type keeps that working.
@@ -1007,38 +1075,55 @@ impl Session {
     /// browsable list.
     #[must_use]
     pub fn search_items(&self, query: &str, limit: usize) -> (Vec<ItemSuggestion>, usize) {
-        let Some(game) = self.game.as_ref() else {
+        if let Some(game) = self.game.as_ref() {
+            let matches: Vec<&jadeforge_gamedata::ItemInfo> = if query.trim().is_empty() {
+                let mut all: Vec<(&jadeforge_gamedata::ItemInfo, String)> = game
+                    .playable_items()
+                    .filter(|item| item.save_type.is_some())
+                    .map(|item| (item, item.name.to_lowercase()))
+                    .collect();
+                all.sort_by(|(left, left_name), (right, right_name)| {
+                    left_name
+                        .cmp(right_name)
+                        .then_with(|| left.id.cmp(&right.id))
+                });
+                all.into_iter().map(|(item, _)| item).collect()
+            } else {
+                game.search_items(query, usize::MAX)
+                    .into_iter()
+                    .filter(|item| item.save_type.is_some())
+                    .collect()
+            };
+            let total = matches.len();
+            let rows: Vec<ItemSuggestion> = matches
+                .into_iter()
+                .take(limit)
+                .filter_map(|item| {
+                    Some(ItemSuggestion {
+                        item_id: item.id,
+                        name: item.name.clone(),
+                        category: item.category.clone().unwrap_or_else(|| "item".to_owned()),
+                        save_type: item.save_type?,
+                        description: item.description.clone(),
+                    })
+                })
+                .collect();
+            return (rows, total);
+        }
+
+        let Some(names) = self.name_index else {
             return (Vec::new(), 0);
         };
-        let matches: Vec<&jadeforge_gamedata::ItemInfo> = if query.trim().is_empty() {
-            let mut all: Vec<(&jadeforge_gamedata::ItemInfo, String)> = game
-                .playable_items()
-                .filter(|item| item.save_type.is_some())
-                .map(|item| (item, item.name.to_lowercase()))
-                .collect();
-            all.sort_by(|(left, left_name), (right, right_name)| {
-                left_name
-                    .cmp(right_name)
-                    .then_with(|| left.id.cmp(&right.id))
-            });
-            all.into_iter().map(|(item, _)| item).collect()
-        } else {
-            game.search_items(query, usize::MAX)
-                .into_iter()
-                .filter(|item| item.save_type.is_some())
-                .collect()
-        };
-        let total = matches.len();
-        let rows: Vec<ItemSuggestion> = matches
+        let (matches, total) = names.search_items(query, limit);
+        let rows = matches
             .into_iter()
-            .take(limit)
             .filter_map(|item| {
                 Some(ItemSuggestion {
                     item_id: item.id,
                     name: item.name.clone(),
                     category: item.category.clone().unwrap_or_else(|| "item".to_owned()),
-                    save_type: item.save_type?,
-                    description: item.description.clone(),
+                    save_type: item.save_type()?,
+                    description: None,
                 })
             })
             .collect();
@@ -1163,7 +1248,8 @@ impl Session {
             })
             .map(|gem| {
                 let info = self.game.as_ref().and_then(|game| game.item(gem.item_id));
-                let empty = info.is_none() && gem.effects.is_empty();
+                let bundled = self.bundled_item(gem.item_id);
+                let empty = info.is_none() && bundled.is_none() && gem.effects.is_empty();
                 let effects: Vec<String> = gem
                     .effects
                     .iter()
@@ -1180,18 +1266,19 @@ impl Session {
                         }
                     })
                     .collect();
+                let name = info
+                    .map(|item| item.name.clone())
+                    .or_else(|| bundled.map(|item| item.name.clone()))
+                    .unwrap_or_else(|| {
+                        if empty {
+                            "Empty socket".to_owned()
+                        } else {
+                            format!("Gem {}", gem.item_id)
+                        }
+                    });
                 GemRow {
                     struct_index: gem.struct_index,
-                    name: info.map_or_else(
-                        || {
-                            if empty {
-                                "Empty socket".to_owned()
-                            } else {
-                                format!("Gem {}", gem.item_id)
-                            }
-                        },
-                        |item| item.name.clone(),
-                    ),
+                    name,
                     effects,
                     empty,
                     location: gem.location,
@@ -1830,6 +1917,22 @@ mod tests {
     }
 
     #[test]
+    fn a_missing_installation_reports_bundled_names() {
+        let session = Session::empty("/definitely/not/a/save/directory");
+        if session.game.is_some() {
+            // A developer has a game installation configured; the bundled
+            // branch needs no game, so there is nothing to assert here.
+            return;
+        }
+        assert!(session.has_bundled_names());
+        assert!(matches!(
+            session.game_status(),
+            GameStatus::NamesOnly { .. }
+        ));
+        assert!(session.items_ready());
+    }
+
+    #[test]
     fn natural_order_compares_numbers() {
         use std::cmp::Ordering;
         assert_eq!(natural_order("Auto 2", "Auto 10"), Ordering::Less);
@@ -1932,6 +2035,7 @@ mod tests {
     fn missing_game_data_still_describes_savegame_fields() {
         let mut session = Session::empty("/definitely/not/a/save");
         session.game = None;
+        session.name_index = None;
 
         let item = Item {
             struct_index: 0,
@@ -1963,6 +2067,58 @@ mod tests {
         assert_eq!(row.weapon_count, 2);
         assert_eq!(row.time_spent, 3439);
         assert!(row.label.is_empty());
+    }
+
+    #[test]
+    fn bundled_english_names_fill_rows_and_the_item_picker() {
+        let (_directory, mut session) = fixture();
+        session.game = None;
+        session.name_index = NameIndex::bundled_english();
+        session.rebuild_rows();
+        assert!(session.has_bundled_names());
+
+        let item = session
+            .items
+            .iter()
+            .find(|item| item.item_id == 42)
+            .expect("fixture item");
+        assert_eq!(item.name, "The Bronze Tongue");
+        // The savegame type is authoritative for an owned item, even when the
+        // bundled table would classify the same id differently.
+        assert_eq!(item.category.as_deref(), Some("plot_items"));
+
+        let weapon = session.describe_item(&Item {
+            struct_index: 2,
+            item_id: 369,
+            count: 1,
+            kind: 5,
+        });
+        assert_eq!(weapon.name, "Flawless");
+        assert_eq!(weapon.category.as_deref(), Some("weapons"));
+
+        let style = session
+            .styles
+            .iter()
+            .find(|style| style.style_id == 21)
+            .expect("fixture style");
+        assert_eq!(style.name, "Thousand Cuts");
+        assert!(style.label.is_empty());
+
+        assert!(session.items_ready());
+        assert!(session.item_database_count() > 100);
+        let (matches, total) = session.search_items("bronze", 10);
+        assert!(total >= 1);
+        assert!(matches.iter().any(|item| item.item_id == 42));
+        assert_eq!(matches[0].save_type, 1);
+
+        session.add_item(369).expect("add a bundled item");
+        let added = session
+            .items
+            .iter()
+            .find(|item| item.item_id == 369)
+            .expect("added item");
+        assert_eq!(added.name, "Flawless");
+        assert_eq!(added.kind, 5);
     }
 
     #[test]

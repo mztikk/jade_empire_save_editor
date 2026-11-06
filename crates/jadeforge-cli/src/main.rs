@@ -18,7 +18,7 @@ fn write_stdout(arguments: std::fmt::Arguments<'_>) -> Result<(), Error> {
 use clap::{Parser, Subcommand};
 use jadeforge_core::gff::Value;
 use jadeforge_core::{Error, Gff, SaveGame, SaveOptions, locate_player};
-use jadeforge_gamedata::{GameData, category_for_save_type};
+use jadeforge_gamedata::{GameData, NameIndex, category_for_save_type, export_english};
 
 /// `JadeForge` - a save editor for Jade Empire.
 #[derive(Debug, Parser)]
@@ -103,6 +103,18 @@ enum Command {
         #[arg(long)]
         no_backup: bool,
     },
+    /// Write the bundled English name index from an installation.
+    ///
+    /// This is a maintainer command: it extracts item and style names, not a
+    /// general data dump, and must point at an English installation.
+    ExportNames {
+        /// Game installation root (the folder that contains `dialog.tlk`).
+        #[arg(long, value_name = "DIR")]
+        game: PathBuf,
+        /// Output TOML file.
+        #[arg(long, value_name = "FILE")]
+        output: PathBuf,
+    },
 }
 
 fn main() -> ExitCode {
@@ -122,35 +134,47 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> Result<(), Error> {
-    let path = resolve_save_path(cli.save.as_deref())?;
     match cli.command {
-        Command::Info => info(&path),
-        Command::Blocks => blocks(&path),
-        Command::Character => character(&path),
-        Command::Items => items(&path),
-        Command::Styles => styles(&path),
-        Command::Companions => companions(&path),
-        Command::Get { block, path: field } => get(&path, &block, &field),
+        Command::ExportNames { game, output } => export_names(&game, &output),
+        command => {
+            let path = resolve_save_path(cli.save.as_deref())?;
+            run_save(command, &path)
+        }
+    }
+}
+
+fn run_save(command: Command, path: &Path) -> Result<(), Error> {
+    match command {
+        Command::Info => info(path),
+        Command::Blocks => blocks(path),
+        Command::Character => character(path),
+        Command::Items => items(path),
+        Command::Styles => styles(path),
+        Command::Companions => companions(path),
+        Command::Get { block, path: field } => get(path, &block, &field),
         Command::Set {
             block,
             path: field,
             value,
             dry_run,
             no_backup,
-        } => set(&path, &block, &field, &value, dry_run, no_backup),
+        } => set(path, &block, &field, &value, dry_run, no_backup),
         Command::Dump {
             block,
             path: field,
             json: _,
-        } => dump(&path, &block, field.as_deref()),
-        Command::Verify => verify(&path),
+        } => dump(path, &block, field.as_deref()),
+        Command::Verify => verify(path),
         Command::AddItem {
             item_id,
             kind,
             count,
             dry_run,
             no_backup,
-        } => add_item(&path, item_id, kind, count, dry_run, no_backup),
+        } => add_item(path, item_id, kind, count, dry_run, no_backup),
+        Command::ExportNames { .. } => Err(Error::Corrupt(
+            "export-names does not use a savegame".to_owned(),
+        )),
     }
 }
 
@@ -244,6 +268,7 @@ fn character(path: &Path) -> Result<(), Error> {
 fn items(path: &Path) -> Result<(), Error> {
     let save = SaveGame::open(path)?;
     let game = GameData::discover(path);
+    let names = NameIndex::bundled_english();
     let items = save.items()?;
     out!(
         "{:<32} {:>6} {:<12} {:>5}",
@@ -254,12 +279,18 @@ fn items(path: &Path) -> Result<(), Error> {
     );
     for item in items {
         let info = game.as_ref().and_then(|game| game.item(item.item_id));
-        let name = info.map_or_else(
-            || format!("<item {}>", item.item_id),
-            |info| info.name.clone(),
-        );
+        let bundled = if game.is_none() {
+            names.and_then(|names| names.item(item.item_id))
+        } else {
+            None
+        };
+        let name = info
+            .map(|info| info.name.clone())
+            .or_else(|| bundled.map(|item| item.name.clone()))
+            .unwrap_or_else(|| format!("<item {}>", item.item_id));
         let category = info
             .and_then(|info| info.category.clone())
+            .or_else(|| bundled.and_then(|item| item.category.clone()))
             .or_else(|| category_for_save_type(item.kind).map(str::to_owned))
             .unwrap_or_else(|| format!("type {}", item.kind));
         out!(
@@ -276,16 +307,21 @@ fn items(path: &Path) -> Result<(), Error> {
 fn styles(path: &Path) -> Result<(), Error> {
     let save = SaveGame::open(path)?;
     let game = GameData::discover(path);
+    let names = NameIndex::bundled_english();
     let styles = save.styles()?;
     out!("{:<32} {:>6} {:>5}", "name", "level", "id");
     for style in styles {
+        let bundled = if game.is_none() {
+            names.and_then(|names| names.style(style.style_id))
+        } else {
+            None
+        };
         let name = game
             .as_ref()
             .and_then(|game| game.style(style.style_id))
-            .map_or_else(
-                || format!("<style {}>", style.style_id),
-                |info| info.name.clone(),
-            );
+            .map(|info| info.name.clone())
+            .or_else(|| bundled.map(ToOwned::to_owned))
+            .unwrap_or_else(|| format!("<style {}>", style.style_id));
         out!("{:<32} {:>6} {:>5}", name, style.level, style.style_id);
     }
     Ok(())
@@ -379,6 +415,21 @@ fn verify(path: &Path) -> Result<(), Error> {
         "ok: {} blocks, {} bytes",
         save.blocks().len(),
         save.to_bytes()?.len()
+    );
+    Ok(())
+}
+
+fn export_names(game_root: &Path, output: &Path) -> Result<(), Error> {
+    let game = GameData::open(game_root)
+        .map_err(|error| Error::Corrupt(format!("cannot read game data: {error}")))?;
+    let text = export_english(&game)
+        .map_err(|error| Error::Corrupt(format!("cannot build the name index: {error}")))?;
+    std::fs::write(output, text).map_err(|source| Error::io(output, source))?;
+    out!(
+        "wrote {} items and {} styles to {}",
+        game.playable_item_count(),
+        game.style_count(),
+        output.display()
     );
     Ok(())
 }

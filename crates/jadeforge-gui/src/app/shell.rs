@@ -40,6 +40,7 @@ pub(super) fn header(
             crate::widgets::plural(*items, "item", "items") + " loaded",
             theme::JADE,
         ),
+        GameStatus::NamesOnly { .. } => ("English names loaded".to_owned(), theme::JADE),
         GameStatus::Missing => ("game data not found".to_owned(), theme::DIM),
         GameStatus::Error(_) => ("game data unreadable".to_owned(), theme::DANGER),
     };

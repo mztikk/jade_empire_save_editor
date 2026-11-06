@@ -218,9 +218,12 @@ does, so **mods that add styles or change tables are picked up**: extend
 ones. Override files are read case-insensitively and tolerate non-UTF-8 text.
 
 Set `JADEFORGE_GAME_DIR` to point at an installation somewhere else. When the
-files are missing the editor still works: names fall back to numeric ids, but
-item categories and a style's level, weapons, icon reference and time spent
-still come from the savegame. Nothing in the game folder is ever written.
+files are missing the editor still works: a bundled English index supplies item
+and style names and item categories, while a style's level, weapons, icon
+reference and time spent still come from the savegame. Descriptions, upgrade
+tables and effect names still need the installation. Nothing in the game folder
+is ever written. The index, its scope and its regeneration command are documented
+in [docs/NAMES.md](docs/NAMES.md).
 
 ## Using the command line tool
 
@@ -239,10 +242,13 @@ Commands:
   dump   [BLOCK] [--path] [--json]   Dump a block as JSON
   verify                    Verify that a savegame can be parsed and written
   add-item <ITEM_ID> [--kind 6] [--count 1] [--dry-run]
+  export-names --game <DIR> --output <FILE>
+                            Regenerate the bundled English name index
 ```
 
 `SAVE` may be the savegame file itself or the folder that contains it.
-`dump` always emits JSON; `--json` is accepted for scripts that spell it out.
+`export-names` is a maintainer command and does not read a savegame. `dump`
+always emits JSON; `--json` is accepted for scripts that spell it out.
 `set` is the raw debugging escape hatch: unlike the desktop editor it does not
 range check known character fields.
 
@@ -383,4 +389,6 @@ Not implemented yet:
 
 ## License
 
-MIT
+The JadeForge source code is MIT licensed. The bundled English item and style
+names are game content and are not covered by that license; see
+[NOTICE](NOTICE) and [docs/NAMES.md](docs/NAMES.md).

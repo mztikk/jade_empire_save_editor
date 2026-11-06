@@ -125,17 +125,21 @@ bounded, and every cell lookup is confined to the declared string pool. Styles
 without a level-up table are read-only in the editor.
 `tests/modded.rs` builds a small modded installation and asserts the resolution.
 `search_items` powers the item picker, ranking prefix matches first. Every table
-is optional: without the game files the UI falls back to numeric names but keeps
-the savegame's own data (item category, style level, weapon count, icon and
-weapon resources, time spent). A file that exists but cannot be parsed is
-collected in `GameData::warnings` and shown when the savegame is opened instead
-of being reported as "missing".
+is optional: without the game files the compiled-in English name index fills item
+and style names and the item categories, while the savegame supplies the rest
+(item category, style level, weapon count, icon and weapon resources, time
+spent). An installed game always wins over the bundled names. A file that exists
+but cannot be parsed is collected in `GameData::warnings` and shown when the
+savegame is opened instead of being reported as "missing". The names index,
+its generation command and its precedence are documented in
+[docs/NAMES.md](NAMES.md); it is the only game-derived file in the repository.
 
 ## `jadeforge-cli`
 
 A thin wrapper over the core: `info`, `blocks`, `character`, `items`, `get`,
-`set`, `dump`, `verify`, `add-item`. It is intentionally useful on its own and
-serves as an end-to-end test target (see `crates/jadeforge-cli/tests`).
+`set`, `dump`, `verify`, `add-item`, plus the maintainer-only `export-names`
+command. It is intentionally useful on its own and serves as an end-to-end test
+target (see `crates/jadeforge-cli/tests`).
 
 ## `jadeforge-session`
 
