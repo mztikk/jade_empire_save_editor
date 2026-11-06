@@ -122,7 +122,7 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/ui.png all
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/inv.png Inventory --height 1900 --query "Drachen"
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/small.png Overview --width 900 --height 600
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/wide.png all --width 1600 --height 900
-just live                              # ask first; see the Windowed tests rule
+just live                              # ask first for a window-path change; see the Windowed tests rule
 ```
 
 Check narrow windows too: rows with `spacing` overflow silently at 900 px unless
@@ -141,6 +141,13 @@ creation, compositor input, focus, presentation, HiDPI or window-manager
 interaction), or when the bug is in the actual windowed GUI or a mismatch
 between the headless and real window. Otherwise use the headless suite and
 snapshots.
+
+This is a risk-based escalation, not a routine step. Ask for a major Freya or
+winit upgrade, a window configuration/close/focus/input/presentation change, a
+live-probe change, or a bug that only reproduces in a real window. Do not ask
+for view, layout, text, theme, form or session changes that the headless suite
+and snapshots cover. If the change is borderline, ask. Before `just finish`,
+state whether the suite was run; compiling it is not running it.
 
 Once permission is given: `just live` launches the real application through
 `freya-winit` and drives a real Wayland window. On KDE it injects pointer and
