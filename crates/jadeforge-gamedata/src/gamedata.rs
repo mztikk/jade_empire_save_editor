@@ -282,7 +282,9 @@ thread_local! {
 /// Installs a game root for the current thread (tests only).
 ///
 /// This lets the UI tests use the real installation without mutating the
-/// process environment (which is unsafe and racy with parallel tests).
+/// process environment (which is unsafe and racy with parallel tests). The
+/// installed root is authoritative, so a broken fixture is reported instead of
+/// falling back to `JADEFORGE_GAME_DIR` or the save folder.
 #[doc(hidden)]
 pub fn set_test_game_root(root: Option<PathBuf>) {
     TEST_ROOT.with(|cell| *cell.borrow_mut() = root);
@@ -304,10 +306,7 @@ impl GameData {
     pub fn discover_result(save_path: &Path) -> Result<Option<Self>> {
         let mut last_error = None;
         if let Some(root) = TEST_ROOT.with(|cell| cell.borrow().clone()) {
-            match Self::open(root) {
-                Ok(game) => return Ok(Some(game)),
-                Err(error) => last_error = Some(error),
-            }
+            return Self::open(root).map(Some);
         }
         if let Some(directory) = std::env::var_os("JADEFORGE_GAME_DIR") {
             match Self::open(PathBuf::from(directory)) {
@@ -1034,5 +1033,34 @@ mod tests {
         set_test_game_root(None);
         let _ = std::fs::remove_dir_all(root);
         assert!(result.is_err(), "a found but broken root must be an error");
+    }
+
+    #[test]
+    fn a_broken_test_root_is_not_hidden_by_the_save_folder() {
+        let broken = std::env::temp_dir().join(format!(
+            "jadeforge-broken-root-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_nanos())
+        ));
+        let game = std::env::temp_dir().join(format!(
+            "jadeforge-save-folder-game-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_nanos())
+        ));
+        std::fs::create_dir_all(&broken).expect("create broken root");
+        std::fs::create_dir_all(game.join("override")).expect("create game layout");
+        set_test_game_root(Some(broken.clone()));
+        let result = GameData::discover_result(&game.join("Save").join("Auto 1").join("save.sac"));
+        set_test_game_root(None);
+        let _ = std::fs::remove_dir_all(broken);
+        let _ = std::fs::remove_dir_all(game);
+        assert!(
+            result.is_err(),
+            "a broken test root must not be hidden by the save folder"
+        );
     }
 }
