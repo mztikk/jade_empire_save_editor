@@ -10,22 +10,15 @@
 //! ```
 //!
 //! When the tab argument is `all`, one image per tab is written next to
-//! `<OUT.png>`. `--query` types a search term into the active tab's search box.
+//! `<OUT.png>`. `--query` types a search term into the active tab's own picker
+//! filter; the savegame filter in the sidebar is deliberately never used for a
+//! tab that has its own filter.
 
 use std::path::PathBuf;
 
 use freya::prelude::*;
 use freya_testing::TestingRunner;
-use jadeforge_gui::app_with_directory;
-
-const TABS: [&str; 6] = [
-    "Overview",
-    "Character",
-    "Styles",
-    "Inventory",
-    "Gems",
-    "Companions",
-];
+use jadeforge_gui::app::{Tab, app_with_directory};
 
 #[allow(clippy::too_many_lines)] // CLI argument handling and one render path
 fn main() {
@@ -91,22 +84,16 @@ fn main() {
 
     match wanted.as_deref() {
         Some("all") => {
-            for tab in TABS {
-                if let Some(node) = find_label(&test, tab) {
+            for tab in Tab::ALL {
+                if let Some(node) = find_label(&test, tab.label()) {
                     click(&mut test, &node);
                 }
-                if let Some(query) = &query
-                    && let Some(node) = find_paragraph(&test, "Filter ")
-                        .or_else(|| find_paragraph(&test, "Search "))
-                {
-                    click(&mut test, &node);
-                    test.write_text(query.clone());
-                    test.sync_and_update();
-                }
+                type_query(&mut test, tab, query.as_deref());
                 let stem = output
                     .file_stem()
                     .map_or_else(|| "ui".to_owned(), |stem| stem.to_string_lossy().into());
-                let path = output.with_file_name(format!("{stem}-{}.png", tab.to_lowercase()));
+                let path =
+                    output.with_file_name(format!("{stem}-{}.png", tab.label().to_lowercase()));
                 test.render_to_file(&path);
                 println!("wrote {}", path.display());
             }
@@ -124,13 +111,12 @@ fn main() {
             {
                 click(&mut test, &node);
             }
-            if let Some(query) = &query
-                && let Some(node) =
-                    find_paragraph(&test, "Filter ").or_else(|| find_paragraph(&test, "Search "))
-            {
-                click(&mut test, &node);
-                test.write_text(query.clone());
-                test.sync_and_update();
+            match tab_from_label(tab) {
+                Some(tab) => type_query(&mut test, tab, query.as_deref()),
+                None if query.is_some() => {
+                    eprintln!("warning: {tab:?} is not a tab; --query was not applied");
+                }
+                None => {}
             }
             test.render_to_file(&output);
             println!("wrote {}", output.display());
@@ -158,10 +144,41 @@ fn open_first_save(test: &mut TestingRunner) {
     eprintln!("warning: no savegame was found; the snapshot shows the empty state");
 }
 
-fn find_paragraph(test: &TestingRunner, wanted: &str) -> Option<freya_testing::TestingNode> {
+/// Types `query` into the filter that belongs to `tab`.
+///
+/// The lookup is the exact placeholder of that tab's picker, so Styles can no
+/// longer capture the sidebar's savegame filter just because it also starts
+/// with "Filter ". Tabs without a picker are left alone.
+fn type_query(test: &mut TestingRunner, tab: Tab, query: Option<&str>) {
+    let Some(query) = query else {
+        return;
+    };
+    let Some(placeholder) = tab.filter_placeholder() else {
+        eprintln!(
+            "warning: {} has no tab filter; --query was not applied",
+            tab.label()
+        );
+        return;
+    };
+    if let Some(node) = find_paragraph_exact(test, placeholder) {
+        click(test, &node);
+        test.write_text(query.to_owned());
+        test.sync_and_update();
+    }
+}
+
+/// Resolves a tab label to its [`Tab`].
+fn tab_from_label(label: &str) -> Option<Tab> {
+    Tab::ALL
+        .into_iter()
+        .find(|tab| tab.label().eq_ignore_ascii_case(label))
+}
+
+/// Finds an input paragraph by its exact text (a placeholder or value).
+fn find_paragraph_exact(test: &TestingRunner, wanted: &str) -> Option<freya_testing::TestingNode> {
     test.find(|node, element| {
         let paragraph = Paragraph::try_downcast(element)?;
-        paragraph.to_string().contains(wanted).then_some(node)
+        (paragraph.to_string() == wanted).then_some(node)
     })
 }
 

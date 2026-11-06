@@ -1,8 +1,13 @@
 # Desktop UI review: status and remaining work
 
-**Reviewed:** 2026-11-05, P1 follow-up 2026-11-06 · **Base:** `main` at `6e1d4b8`
+**Reviewed:** 2026-11-05, P1 follow-up 2026-11-06, P2 polish 2026-11-06 · **Base:** `main` at `491163c`
 **Scope:** the Freya 0.5 desktop UI in `crates/jadeforge-gui`, the session state it renders, and the real 89-savegame corpus.
-**Status:** P0 release blockers are addressed and the P1 follow-ups are implemented and verified on `fix/ui-p1-followups` (the remaining scroll caveat is listed under P1). P2/P3 work is tracked in GitHub issues; the remaining upstream blocker is the missing `Input` label association.
+**Status:** P0 release blockers and the P1 follow-ups are addressed. The P2
+polish is implemented on `fix/ui-p2-polish` and verified with the headless
+suite and snapshots; its native close dialog and folder-picker backend are not
+window-verified because permission was not granted. P3 work remains tracked in
+[#9](https://github.com/mztikk/jade_empire_save_editor/issues/9). The remaining
+upstream blocker is the missing `Input` label association.
 
 ![JadeForge overview](screenshot.png)
 
@@ -61,13 +66,15 @@ Remaining verification caveat for #7:
 
 ### P2: [#8](https://github.com/mztikk/jade_empire_save_editor/issues/8)
 
-Polish after P1:
+Addressed on `fix/ui-p2-polish`:
 
-- Copy and vocabulary: the empty carried-gems hint can read “1 gem”, `ALL STYLES` lists only unlearned styles, `Level`/`Lv`, `Played`, raw categories and `predefined gems` need a pass.
-- Backup discovery/restore, a three-way close dialog, disabled/no-op Save and Revert states.
-- Visual polish: duplicate Overview screenshot, sidebar alignment, preview radius, full-width Overview values, open-folder action, loading states.
-- Guidance/settings: About/version/help, config location, field ranges/units, item category filtering, save-filter placeholder.
-- Tooling/docs: snapshot `--query` targets the first filter (the save filter) instead of the active tab’s filter; document evidence/screenshot maintenance.
+| Area | Result |
+| --- | --- |
+| Copy, counts, vocabulary | Counts use `plural()` with their noun (`30 of 34 styles`, `1 socket`, `0 carried gems`); the amulet hint names the socket count and tier; `ALL STYLES` became `STYLES TO LEARN`; `Lv`, `Played`, `Unlock` and `predefined gems` were replaced by the same wording as the rest of the app; raw `plot_items`/`improve` categories and lower-case style kinds map to friendly labels. |
+| Backups, dialogs, no-op states | The successful save message and Overview card show the exact backup path with copy/open actions and restore instructions; the close guard offers explicit Save / Discard / Cancel; Save and Revert are disabled with an explanation when there is nothing to write or discard, while the success status stays visible; folder-dialog cancellation and unreadable picked paths are reported distinctly. |
+| Visual polish | The duplicate Overview screenshot was removed and the sidebar preview aligns with the identity block at the shared card radius; the glance values are full-width rows at every supported width; the save path has copy/open-folder actions; the first scan has sidebar and editor skeletons and manual scans have a reserved busy indicator in the tab bar. |
+| Guidance and settings | The About page shows the version, config path, remembered save folder and sort order, backup rules and keyboard shortcuts; each character field shows its range and unit and the optional Gold field explains when it is created; the item picker has a category filter; the save filter placeholder names the character name it also matches. |
+| Tooling and documentation | Snapshot `--query` resolves the active tab's own filter instead of the first `Filter ` field; this document has a screenshot/evidence maintenance note; README and CONTRIBUTING link the P1/P2/P3 issues. |
 
 ### P3: [#9](https://github.com/mztikk/jade_empire_save_editor/issues/9)
 
@@ -93,9 +100,38 @@ tracked as an open issue:
 | --- | --- |
 | [#3](https://github.com/mztikk/jade_empire_save_editor/issues/3) | `Input` has no label/labelled-by API; fields are still named by their current value or placeholder, even though captions are exposed as groups. |
 
+## Screenshots and evidence maintenance
+
+The durable evidence in this repository is deliberately small:
+
+- `docs/screenshot.png` is the README hero (Overview at 1280×800).
+- `docs/screenshot-overview.png`, `-character`, `-styles`, `-inventory`,
+  `-gems` and `-companions` are the per-tab evidence at the default size.
+- The review prose, the P1/P2/P3 issue links and the verification records are
+  the rest of the evidence. Working images, recordings and long reports stay in
+  the ignored `scratch/` or outside the repository; they are never committed.
+
+Regenerate the tracked images after a visible layout change from a real save
+folder (the examples use the synthetic fixture when `JADEFORGE_SAVE_DIR` is
+unset):
+
+```sh
+cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" docs/screenshot.png all
+cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" docs/screenshot.png Overview
+cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" scratch/narrow.png Overview --width 900 --height 700
+cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" scratch/wide.png all --width 1600 --height 900
+```
+
+`--query <text>` types into the active tab's own picker filter (Inventory,
+Styles or Gems) and refuses to fall back to the sidebar save filter. The
+headless suite asserts the same placeholders, the row geometry, the responsive
+breakpoints and the a11y tree, so a screenshot alone is never the test.
+
 ## Verification
 
-- `just check`: 396 workspace tests passed (1 skipped: the opt-in live suite), clippy and formatting clean after the P1 work (see `docs/COVERAGE.md` for coverage).
+- `just check`: 434 workspace tests passed (1 skipped: the opt-in live suite), clippy, formatting and rustdoc clean after the P2 work (see `docs/COVERAGE.md` for coverage).
+- P2 headless coverage: the empty carried-gems count, amulet summary, `STYLES TO LEARN`, friendly item categories and the category filter, `Level`/`Time played`/available wording, the optional-Gold explanation, field units, the save-filter character match, the About page and its settings, backup surfacing/copy/open actions, no-op Save/Revert, folder-picker cancellation and unreadable paths, loading skeletons and the manual-scan busy slot, full-width overview rows at 900/1280/1600, and the sidebar preview alignment. The snapshot example's filter targeting is covered by the tab-filter unit test and a headless Styles-filter test.
+- Windowed verification for P2: not run, because the user did not grant permission under AGENTS.md rule 13. The native close dialog's Save / Discard / Cancel labels, the actual folder-dialog cancellation backend and the Windows ComCtl32 v6 manifest therefore remain unverified in a real window; the choice mapping and the save-before-close decision table are unit tested, and the manifest is embedded by the existing Windows resource build.
 - Headless coverage of the P1 work: geometry at 1180x760, 900x700 and 1600x900; DPI geometry for 1366x768 at 125 %; scan-keeps-save; dirty content comparison; invalid-form save independence; first-invalid-field focus; focus restoration after removal; target sizes; keyboard scrolling focus; the 89-save render test.
 - `just live`: all six windowed scenarios passed on Wayland with the KWin input backend. The window opened at the configured size, save opening and tab switching, item filtering, keyboard save-list navigation and real frame presentation all worked; the captured frame was written to the ignored `target/live-ui/presented.png`. The two-pass `window_geometry_restarts` scenario opened at the seeded 1000x720, the plugin stored the real rectangle on close, and the relaunch restored 1000x720. Each scenario uses its own settings directory; the two geometry passes deliberately share one.
 - Live screen-reader check: Orca 51.1 (Speech Dispatcher 0.12.1, espeak-ng 1.52) announced the polite scan statuses and the assertive folder error in a manual run. The AT-SPI event log showed the full text with politeness level 1 for the scan messages and level 2 for "The save folder … does not exist …". This closes the P1 status live-region check.

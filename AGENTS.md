@@ -39,8 +39,9 @@ JADEFORGE_CONFIG_DIR="$(mktemp -d)" cargo nextest run --workspace
 
 # Render the UI into a PNG without a window (screenshots, layout debugging)
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.png [TAB|all]
-# Add `--height 1800 --query viper` for tall layouts and search results,
-# `--width 900` to check narrow windows.
+# Add `--height 1800 --query viper` for tall layouts and filter results;
+# `--query` targets the active tab's own picker filter (Items, Styles or Gems),
+# never the sidebar save filter. `--width 900` checks narrow windows.
 ```
 
 The same commands are available through `just` (see the `justfile`): `just

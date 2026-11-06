@@ -55,6 +55,21 @@ user, and only when the headless UI suite cannot cover the change or the bug is
 in the real window. See [AGENTS.md](AGENTS.md) rule 13 and
 [docs/LIVE-UI.md](docs/LIVE-UI.md).
 
+## UI review work
+
+The desktop UI review lives in [docs/UI-REVIEW.md](docs/UI-REVIEW.md); read it
+before changing the shell, sidebar or a tab, and keep its status table and
+screenshots current. The follow-up checklists are tracked as
+[P1](https://github.com/mztikk/jade_empire_save_editor/issues/7),
+[P2](https://github.com/mztikk/jade_empire_save_editor/issues/8) and
+[P3](https://github.com/mztikk/jade_empire_save_editor/issues/9) issues. The P0
+work was merged in
+[#5](https://github.com/mztikk/jade_empire_save_editor/pull/5).
+
+UI changes are verified with the headless suite and the snapshot example at
+900, 1280 and 1600 px; the windowed suite is never part of the routine
+workflow (see [AGENTS.md](AGENTS.md) rule 13).
+
 ## Pull requests
 
 - Open the pull request from the task branch; `main` receives only merges.

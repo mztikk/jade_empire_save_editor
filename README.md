@@ -31,7 +31,7 @@ the game does, verifies the result and keeps a backup of the original.
 - **Inventory** – every stack with its real name and category resolved from
   `items.2da` and `dialog.tlk`. Stack sizes can be changed, items removed, and
   new items can be added from the game's item database, which is browsable in
-  full and searchable by name or template. Rows always show the same
+  full, filterable by category and searchable by name or template. Rows always show the same
   `category · #id` (items) and `template · #id` (styles) subtitle. Click a row
   to expand the game's own description.
 - **Companions** – all party members with their level and availability, editable.
@@ -40,26 +40,29 @@ the game does, verifies the result and keeps a backup of the original.
   or removed without touching its effects. The amulet's tier and socket count
   are shown (`Amulet.Type`: 3, 5 or 7 sockets; before the amulet is unlocked the
   tab says so), locked sockets are hidden, empty unlocked sockets are shown as
-  such, and the predefined gems from `gems.2da`
-  can be added to the inventory through a searchable list.
+  such, and gems from the game data in `gems.2da` can be added to the inventory
+  through a searchable list.
 - **Savegame browser** – scans the save folder and shows the game's own
-  screenshot, character name, level and play time for every savegame. The list
-  can be filtered by name and sorted by name, level or play time, with natural
-  ordering (`Auto 2` before `Auto 10`).
+  screenshot, character name, level and time played for every savegame. The
+  list can be filtered by folder or character name and sorted by name, level or
+  time played, with natural ordering (`Auto 2` before `Auto 10`).
 - **Native folder dialog** – **Browse…** opens the operating system's own folder
   dialog (GTK/XDG portal on Linux, Win32 on Windows, `NSOpenPanel` on macOS), so
-  the save folder never has to be typed. The choice is remembered between runs
+  the save folder never has to be typed. Cancelling the dialog and picking an
+  unreadable path are reported distinctly. The choice is remembered between runs
   and no installation path is baked into the program.
-- **Responsive layout** – the sidebar, tab bar and stat rows adapt down to small
-  windows instead of clipping.
+- **Responsive layout** – the sidebar, tab bar and overview values adapt down to
+  small windows instead of clipping, and long scans show a loading state while
+  the save list and editor fill in.
 - **Native icon** – the hammer-and-jade mark is embedded in the window and in
   the Windows executable, staged as a macOS `.app` bundle, and installed with
   the launcher entry and hicolor icons on Linux.
 - **Safe by design** – every write is verified by re-parsing the produced file,
   written atomically through an exclusive temporary file, and guarded by a
-  unique backup. The original permissions are kept, a savegame that changed on
-  disk is reported instead of overwritten, and saving through a symlink keeps
-  the link.
+  unique backup. After a save the Overview shows the exact backup path with
+  copy/open actions, and the About page explains how to restore it. The original
+  permissions are kept, a savegame that changed on disk is reported instead of
+  overwritten, and saving through a symlink keeps the link.
 - **Byte exact when untouched** – opening and saving without changes produces
   the identical file, because only edited blocks are re-serialized.
 - **Command line tool** for scripting, bulk inspection and debugging.
@@ -182,8 +185,11 @@ coverage` writes a line/function summary plus HTML and lcov reports to
    overrides the folder for one run and `JADEFORGE_CONFIG_DIR` moves the
    settings file (useful for portable installs).
 3. Pick a savegame on the left; the game's own screenshot and character summary
-   appear above the list. The list can be sorted by name, level or play time,
-   and that choice (like the save folder) is remembered for the next start.
+   appear above the list. The list can be filtered by folder or character name
+   and sorted by name, level or time played, and that choice (like the save
+   folder) is remembered for the next start. The **About** button shows the
+   version, the settings file, the remembered folder/sort order and the backup
+   rules.
 4. Edit the values on the tabs. Every change (text fields, items, styles,
    gems and companions) is applied to the in-memory savegame immediately; the
    header shows "unsaved changes" and switching away is blocked until you save
@@ -191,8 +197,11 @@ coverage` writes a line/function summary plus HTML and lcov reports to
    fixed.
 5. Press **Save to disk**. A backup called
    `save.sac.jadeforge-backup-<seconds>.<nanos>.<counter>` is created next to
-   the savegame; copy it back over `save.sac` to undo a change. Repeated saves
-   never overwrite an earlier backup.
+   the savegame; the Overview then shows its exact path and a button that opens
+   the folder. Copy it back over `save.sac` to undo a change. Repeated saves
+   never overwrite an earlier backup. The Save and Revert buttons are disabled
+   while there is nothing to write or discard, and the last success stays in the
+   status area.
 
 ## Memory use
 
@@ -399,7 +408,14 @@ JADEFORGE_SAVE_DIR="/path/to/Jade Empire/Save" cargo nextest run --workspace
 
 The headless UI tests render the real component tree with `freya-testing` and
 build a synthetic savegame plus installation when no game data is present, so
-they work on CI machines without a display or the retail game.
+they work on CI machines without a display or the retail game. Render a tab
+without a window with the snapshot example:
+
+```sh
+cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.png all
+# --width 900 / --height 1800 for narrow or tall layouts
+# --query viper types into the active tab's own filter (Items, Styles or Gems)
+```
 
 The windowed suite is the second feedback loop: it launches the real application
 through `freya-winit`, opens a real Wayland window and drives it with real
@@ -419,6 +435,18 @@ See [AGENTS.md](AGENTS.md) for the development guidelines,
 [SECURITY.md](SECURITY.md) for vulnerability reporting and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the crate layout. User-visible
 changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
+## UI review and roadmap
+
+The desktop UI review and its evidence live in
+[docs/UI-REVIEW.md](docs/UI-REVIEW.md). The follow-up work is tracked in the
+issue tracker:
+
+- P0 release blockers: [#5](https://github.com/mztikk/jade_empire_save_editor/pull/5) (merged)
+- P1 follow-ups: [#7](https://github.com/mztikk/jade_empire_save_editor/issues/7)
+- P2 polish, including the copy, backup, About/settings and item-category work:
+  [#8](https://github.com/mztikk/jade_empire_save_editor/issues/8)
+- P3 strategic work: [#9](https://github.com/mztikk/jade_empire_save_editor/issues/9)
 
 ## Status
 
