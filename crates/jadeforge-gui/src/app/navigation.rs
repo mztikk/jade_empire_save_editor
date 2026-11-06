@@ -16,7 +16,6 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab, enabled: bool) -> Element {
         let action = Action::new(move || *tab.write() = candidate);
         let content = rect()
             .vertical()
-            .spacing(theme::space::XS)
             .padding(Gaps::new_symmetric(theme::space::SM, theme::space::XL))
             .corner_radius(theme::radius::MEDIUM)
             .background(if is_active && enabled {
@@ -24,6 +23,26 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab, enabled: bool) -> Element {
             } else {
                 Color::TRANSPARENT
             })
+            // The underline is the non-colour cue. It is a bottom border whose
+            // width is reserved on every tab, so selecting a tab does not move
+            // the bar, and it does not give the tab a fill-width child (which
+            // used to make every tab claim the whole row and wrap the bar into
+            // a column).
+            .border(
+                Border::new()
+                    .width(BorderWidth {
+                        top: 0.0,
+                        right: 0.0,
+                        bottom: theme::stroke::EMPHASIS,
+                        left: 0.0,
+                    })
+                    .alignment(BorderAlignment::Inner)
+                    .fill(if is_active && enabled {
+                        theme::ACCENT
+                    } else {
+                        Color::TRANSPARENT
+                    }),
+            )
             .child(
                 crate::widgets::a11y_text(candidate.label())
                     .font_size(theme::font::LABEL)
@@ -37,20 +56,6 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab, enabled: bool) -> Element {
                         theme::ACCENT
                     } else {
                         theme::MUTED
-                    }),
-            )
-            // The underline is the non-colour cue: it is part of every tab so
-            // selecting one does not move the bar, but only the active tab
-            // shows it.
-            .child(
-                rect()
-                    .width(Size::fill())
-                    .height(Size::px(theme::stroke::EMPHASIS))
-                    .corner_radius(theme::radius::PILL)
-                    .background(if is_active && enabled {
-                        theme::ACCENT
-                    } else {
-                        Color::TRANSPARENT
                     }),
             )
             .into_element();

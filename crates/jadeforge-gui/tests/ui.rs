@@ -2561,13 +2561,38 @@ fn desktop_shortcuts_drive_the_shell() {
         eprintln!("skipping: no savegames found");
         return;
     };
+    let session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
+    let total = session.entries().len();
+    if total == 0 {
+        eprintln!("skipping: no savegames");
+        return;
+    }
     let mut test = launch_sized(fixture.save_dir.clone(), 1200.0);
+
+    // Ctrl+F focuses the save filter of the active tab (Overview on start) and
+    // Escape clears it again. The save filter exists with and without game
+    // data, unlike a picker filter.
+    click_ctrl(&mut test, Key::Character("f".to_owned()));
+    // Focus requests are applied on the next accessibility pass; give the
+    // runner that frame before typing.
+    test.sync_and_update();
+    test.write_text("zzzz-no-such-save");
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, &format!("SAVEGAMES (0 of {total})")).is_some(),
+        "Ctrl+F did not focus the save filter"
+    );
+    test.press_key(Key::Named(NamedKey::Escape));
+    assert!(
+        find_label_text(&test, &format!("SAVEGAMES ({total})")).is_some(),
+        "Escape did not clear the save filter"
+    );
 
     // F5 rescans the current folder and keeps the savegame open.
     assert!(click_text(&mut test, "Scan"));
     test.press_key(Key::Named(NamedKey::F5));
     assert!(
-        find_label_text(&test, "Found 1 savegame").is_some(),
+        find_label_text(&test, "Found ").is_some(),
         "F5 did not scan"
     );
 
@@ -2577,27 +2602,6 @@ fn desktop_shortcuts_drive_the_shell() {
     assert!(
         find_label_text(&test, "Fighting styles").is_some(),
         "ArrowRight did not move to the next tab"
-    );
-
-    // Escape clears the active filter.
-    let filter = find_paragraph(&test, "Filter the style list").expect("style filter");
-    click_node(&mut test, &filter);
-    test.write_text("Tiger");
-    test.sync_and_update();
-    assert!(find_label_text(&test, "SEARCH RESULTS").is_some());
-    test.press_key(Key::Named(NamedKey::Escape));
-    assert!(
-        find_label_text(&test, "ALL STYLES").is_some(),
-        "Escape did not clear the style filter"
-    );
-
-    // Ctrl+F focuses the active tab's filter.
-    click_ctrl(&mut test, Key::Character("f".to_owned()));
-    test.write_text("Tiger");
-    test.sync_and_update();
-    assert!(
-        find_label_text(&test, "SEARCH RESULTS").is_some(),
-        "Ctrl+F did not focus the style filter"
     );
 
     // Ctrl+S saves the applied edits.

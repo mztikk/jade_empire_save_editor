@@ -119,18 +119,21 @@ pub(super) fn sidebar(
                             .spacing(theme::space::XXS)
                             .padding(Gaps::new_symmetric(theme::space::MD, theme::space::LG))
                             .child(crate::widgets::with_tooltip(
-                                format!("{title}, {summary}"),
+                                format!("{}, {summary}", entry.label),
                                 crate::widgets::a11y_text(title)
                                     .font_size(theme::font::LABEL)
                                     .max_lines(1)
                                     .text_overflow(TextOverflow::Ellipsis)
                                     .color(if broken { theme::DANGER } else { theme::TEXT }),
                             ))
-                            .child(
+                            .child(crate::widgets::with_tooltip(
+                                format!("{}, {summary}", entry.label),
                                 crate::widgets::a11y_text(summary)
                                     .font_size(theme::font::MICRO)
+                                    .max_lines(1)
+                                    .text_overflow(TextOverflow::Ellipsis)
                                     .color(theme::DIM),
-                            ),
+                            )),
                     )
                     .into_element(),
             )
