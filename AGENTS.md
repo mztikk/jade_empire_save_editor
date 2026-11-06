@@ -112,8 +112,14 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
 5. **Preserve untouched blocks byte for byte.** Only blocks that were edited may
    be re-serialized. This property is tested and must stay.
 6. **Range check every edit** in `jadeforge-core`, not in the UI.
-7. **No game data in the repository.** Test savegames are never committed;
-   tests that need them look for `JADEFORGE_SAVE_DIR` and skip otherwise.
+7. **No game data files or savegames in the repository.** Never commit
+   `dialog.tlk`, 2DA/RIM files, game assets or test savegames; tests that need
+   them look for `JADEFORGE_SAVE_DIR` and skip otherwise. The single exception
+   is the generated English name index at
+   `crates/jadeforge-gamedata/data/names-en.toml`: item and style ids, their
+   English names and the item category only. It must be produced by
+   `jadeforge-cli export-names`, never copied wholesale, and must not grow
+   descriptions, table dumps, upgrade data or other extracted text.
 8. **Never hardcode a machine path.** No default game or save directory may be
    baked into the source: users are asked once (the native folder dialog), the choice is
    stored in the config file, and `JADEFORGE_SAVE_DIR`/`JADEFORGE_GAME_DIR`
@@ -231,9 +237,16 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
   `<game>/Save` layout), parses `dialog.tlk` (TLK V4.0) and the text 2DA tables
   in `override/`.
 - Every lookup degrades gracefully: when the files are missing the UI falls back
-  to numeric ids, it never fails to open a savegame because of missing game data.
-- Names come from the talk table via the 2DA `STRREF_NAME`/`NameRef` columns. Do
-  not hardcode names that the tables already provide.
+  to the bundled English name index and then to numeric ids; it never fails to
+  open a savegame because of missing game data. An installed game always wins
+  over the bundled names.
+- Names come from the talk table via the 2DA `STRREF_NAME`/`NameRef` columns. The
+  generated `data/names-en.toml` is the only fallback copy; do not add another
+  hand-written name list.
+- `data/names-en.toml` contains only item ids/names/categories and style
+  ids/names. Do not extend it with descriptions, upgrade rows, table dumps or
+  any other extracted text; regenerate it with
+  `jadeforge-cli export-names` instead.
 - The item category mapping (`gems` → 1, `powerups` → 4, `weapons` → 5,
   `plot_items` → 6, `mgweapons` → 7, `improve` → 8) was derived from real
   savegames and lives in `save_type_for_category`. New categories need evidence
@@ -389,6 +402,7 @@ documentation, not ground truth: verify against the game files where possible).
 | `crates/jadeforge-gui` | Freya application: `app/` (shell, sidebar, navigation), `views` (tabs), `theme`, `widgets` |
 | `docs/FORMAT.md` | savegame format reference |
 | `docs/ARCHITECTURE.md` | crate layout, data flow, safety model |
+| `docs/NAMES.md` | bundled English names: scope, generation and precedence |
 | `docs/LIVE-UI.md` | windowed UI suite: backends, process model, desktop/VM requirements and how to add scenarios |
 | `.dsh/skills` | task-specific skills for working on this repository |
 | `.githooks` | tracked git hooks; `just setup` enables them (`pre-commit` refuses direct commits on `main`) |

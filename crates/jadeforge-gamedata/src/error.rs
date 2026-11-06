@@ -33,4 +33,8 @@ pub enum Error {
     /// The directory does not look like a Jade Empire installation.
     #[error("{} is not a Jade Empire installation", .0.display())]
     NotAGameInstallation(PathBuf),
+
+    /// The bundled name index is malformed or cannot be generated.
+    #[error("cannot read the bundled name index: {0}")]
+    Names(String),
 }

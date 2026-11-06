@@ -51,6 +51,10 @@ pub struct Style {
     pub desc_ref: Option<u32>,
     /// Icon resource name.
     pub icon: Option<String>,
+    /// Weapon resource name, when the style carries a weapon.
+    pub weapon: Option<String>,
+    /// Number of weapons the style carries (`WeaponCount`).
+    pub weapon_count: u8,
     /// Seconds the player spent in this style.
     pub time_spent: f32,
 }
@@ -128,7 +132,16 @@ impl SaveGame {
                     .and_then(|value| u32::try_from(value).ok()),
                 icon: field("IconRef")
                     .and_then(Value::as_str)
+                    .filter(|icon| !icon.is_empty())
                     .map(ToOwned::to_owned),
+                weapon: field("WeaponRef")
+                    .and_then(Value::as_str)
+                    .filter(|weapon| !weapon.is_empty())
+                    .map(ToOwned::to_owned),
+                weapon_count: field("WeaponCount")
+                    .and_then(Value::as_u64)
+                    .and_then(|count| u8::try_from(count).ok())
+                    .unwrap_or(0),
                 time_spent: field("TimeSpentInStyle")
                     .and_then(Value::as_f32)
                     .unwrap_or(0.0),

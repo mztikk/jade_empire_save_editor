@@ -310,11 +310,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         .is_some_and(|character| form.differs_from(character));
     let preview_handle = cached_preview(&preview_cache, preview.as_deref());
     let game_ready = matches!(game_status, GameStatus::Loaded { .. });
+    let names_ready = session.borrow().has_bundled_names();
+    let items_ready = session.borrow().items_ready();
     let total_items = if active_tab == Tab::Inventory {
-        session
-            .borrow()
-            .game()
-            .map_or(0, |game| game.playable_item_count())
+        session.borrow().item_database_count()
     } else {
         0
     };
@@ -374,6 +373,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 style_query,
                 &style_matches,
                 game_ready,
+                names_ready,
                 game_ready.then_some(total_missing),
                 style_matches_total,
                 expanded_style,
@@ -388,7 +388,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 &items,
                 item_query,
                 &item_results,
-                game_ready,
+                items_ready,
                 item_matches,
                 total_items,
                 expanded_item,

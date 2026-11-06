@@ -98,7 +98,15 @@ pub enum GameStatus {
         /// Directory the data was read from.
         root: PathBuf,
     },
-    /// No game installation was found next to the savegames.
+    /// No game installation was found; the bundled English index supplies
+    /// names, but descriptions and upgrade tables are unavailable.
+    NamesOnly {
+        /// Number of named items.
+        items: usize,
+        /// Number of named styles.
+        styles: usize,
+    },
+    /// No game installation and no bundled names were found.
     Missing,
     /// A game installation was found but could not be read.
     Error(String),
@@ -161,6 +169,14 @@ pub struct StyleRow {
     pub kind: &'static str,
     /// Description from the game data.
     pub description: Option<String>,
+    /// Icon resource name stored in the savegame.
+    pub icon: Option<String>,
+    /// Weapon resource name stored in the savegame.
+    pub weapon: Option<String>,
+    /// Number of weapons the style carries (`WeaponCount`).
+    pub weapon_count: u8,
+    /// Whole seconds the player spent in this style (`TimeSpentInStyle`).
+    pub time_spent: u32,
     /// Raw `StyleLevelInfo` upgrade mask.
     pub mask: u64,
     /// Upgrade choices that can be toggled for this style.

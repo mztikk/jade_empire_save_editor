@@ -10,7 +10,8 @@ use common::{TempDir, binary_2da, rim, write, write_text, write_tlk};
 use jadeforge_gamedata::gamedata::family_and_tier;
 use jadeforge_gamedata::rim::TYPE_2DA;
 use jadeforge_gamedata::{
-    GameData, RimArchive, StyleKind, TalkTable, is_game_root, pretty_effect_name,
+    GameData, NameIndex, RimArchive, StyleKind, TalkTable, export_english, is_game_root,
+    pretty_effect_name,
 };
 use std::fmt::Write as _;
 
@@ -574,4 +575,25 @@ fn a_found_but_broken_table_is_reported() {
         "{:?}",
         game.warnings()
     );
+}
+
+#[test]
+fn export_names_keeps_only_names_and_categories() {
+    let dir = installation();
+    let game = GameData::open(dir.path()).expect("load installation");
+    let text = export_english(&game).expect("export names");
+    let index = NameIndex::parse(&text).expect("parse exported index");
+
+    let sword = index.item(0).expect("Iron Sword");
+    assert_eq!(sword.name, "Iron Sword");
+    assert_eq!(sword.category.as_deref(), Some("weapons"));
+    assert_eq!(sword.save_type(), Some(5));
+    assert_eq!(index.style(0), Some("Martial Strike"));
+    let custom = index.item(9).expect("custom category item");
+    assert_eq!(custom.category.as_deref(), Some("mystery"));
+    assert_eq!(custom.save_type(), None);
+    assert!(index.item(3).is_none(), "temporary items are filtered");
+    assert!(!text.contains("A sturdy blade"), "descriptions stay out");
+    assert!(!text.contains("STRREF"), "table columns stay out");
+    assert!(!text.contains("EFFECT_"), "effect labels stay out");
 }

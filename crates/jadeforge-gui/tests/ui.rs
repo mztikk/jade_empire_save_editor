@@ -133,6 +133,19 @@ fn find_label_text(test: &TestingRunner, needle: &str) -> Option<String> {
     })
 }
 
+/// Finds the `n of m` page counter, ignoring item names that contain " of ".
+fn find_counter(test: &TestingRunner) -> Option<String> {
+    test.find(|_, element| {
+        let label = Label::try_downcast(element)?;
+        let label_text = label.text.as_ref();
+        let (count, total) = label_text.split_once(" of ")?;
+        let digits = |value: &str| {
+            !value.is_empty() && value.chars().all(|character| character.is_ascii_digit())
+        };
+        (digits(count) && digits(total)).then(|| label_text.to_owned())
+    })
+}
+
 fn find_node_with_text(test: &TestingRunner, needle: &str) -> Option<freya_testing::TestingNode> {
     test.find(|node, element| {
         let label = Label::try_downcast(element)?;
@@ -1168,9 +1181,9 @@ fn show_more_pages_through_the_item_database() {
     }
     let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
     assert!(click_text(&mut test, "Inventory"));
-    let before = find_label_text(&test, " of ").expect("browse counter");
+    let before = find_counter(&test).expect("browse counter");
     assert!(click_text(&mut test, "Show more"), "no show more button");
-    let after = find_label_text(&test, " of ").expect("browse counter after paging");
+    let after = find_counter(&test).expect("browse counter after paging");
     assert_ne!(before, after, "paging did not change the counter");
     assert!(after.contains("of"), "{after}");
 }

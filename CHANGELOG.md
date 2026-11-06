@@ -6,8 +6,23 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A generated English name index for items and styles, plus item categories,
+  used when no game installation is available. It keeps downloaded and console
+  saves readable on machines without the game and enables the item picker;
+  installed data always wins.
+- `jadeforge-cli export-names` regenerates the bundled index from an English
+  installation. The index is documented in `docs/NAMES.md`.
+- Without the game installation, item rows keep their category from the
+  savegame's item `Type`, and style rows show the level, weapon count, icon and
+  weapon resource names and the time spent from the style struct instead of
+  only numeric ids.
+
 ### Changed
 
+- The no-game-data rule now names the generated English name index as its only
+  exception and forbids growing it beyond item/style names and item categories.
 - `just install` now installs `jadeforge-cli` alongside the `jadeforge` GUI
   binary, so a source install provides both tools.
 

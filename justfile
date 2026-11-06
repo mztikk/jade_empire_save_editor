@@ -159,7 +159,7 @@ publish-target target:
         cp "target/baseline/{{ target }}/dist/jadeforge{{ exe }}" "$out/jadeforge-generic-cpu{{ exe }}"; \
         cp "target/baseline/{{ target }}/dist/jadeforge-cli{{ exe }}" "$out/jadeforge-cli-generic-cpu{{ exe }}"; \
     fi; \
-    cp LICENSE README.md "$out/"; \
+    cp LICENSE NOTICE README.md "$out/"; \
     case "{{ target }}" in \
         *-linux-*) ci/stage-linux-desktop.sh "$out" ;; \
         *-apple-darwin) ci/macos-bundle.sh "$out/JadeForge.app" "$out/jadeforge" "{{ version }}" ;; \
@@ -215,7 +215,7 @@ publish-linux:
     cp "target/podman/dist/jadeforge-cli" "$out/"; \
     cp "target/podman-baseline/dist/jadeforge" "$out/jadeforge-generic-cpu"; \
     cp "target/podman-baseline/dist/jadeforge-cli" "$out/jadeforge-cli-generic-cpu"; \
-    cp LICENSE README.md "$out/"; \
+    cp LICENSE NOTICE README.md "$out/"; \
     ci/stage-linux-desktop.sh "$out"; \
     ci/notices.sh "$out" >/dev/null; \
     ci/check-glibc.sh "$out/jadeforge" 2.35; \

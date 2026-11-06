@@ -653,14 +653,67 @@ fn a_directory_without_save_sac_fails() {
 }
 
 #[test]
-fn item_and_style_names_fall_back_without_game_data() {
+fn item_and_style_names_use_the_bundled_index_without_game_data() {
     let fixture = Fixture::new();
 
     let output = fixture.run_clean_env(&["items"]);
     assert!(output.status.success(), "{}", stderr(&output));
-    assert!(stdout(&output).contains("<item 42>"), "{}", stdout(&output));
+    assert!(
+        stdout(&output).contains("The Bronze Tongue"),
+        "{}",
+        stdout(&output)
+    );
+    assert!(
+        stdout(&output).contains("gems"),
+        "the bundled category is used: {}",
+        stdout(&output)
+    );
 
     let output = fixture.run_clean_env(&["styles"]);
     assert!(output.status.success(), "{}", stderr(&output));
-    assert!(stdout(&output).contains("<style 1>"), "{}", stdout(&output));
+    assert!(
+        stdout(&output).contains("Paralyzing Palm"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn unknown_item_ids_still_fall_back_without_game_data() {
+    let fixture = Fixture::new();
+    let output = fixture.run_clean_env(&["add-item", "65000", "--kind", "8"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let output = fixture.run_clean_env(&["items"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("<item 65000>"),
+        "{}",
+        stdout(&output)
+    );
+    assert!(stdout(&output).contains("improve"), "{}", stdout(&output));
+}
+
+#[test]
+fn export_names_rejects_a_broken_game_installation() {
+    let fixture = Fixture::new();
+    let output_path = fixture.dir.join("names.toml");
+    let output_arg = output_path.to_string_lossy();
+    let output = fixture.run_clean_env(&[
+        "export-names",
+        "--game",
+        "/definitely/not/a/game",
+        "--output",
+        &output_arg,
+    ]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("cannot read game data"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(
+        !output_path.exists(),
+        "a failed export must not write a file"
+    );
 }
