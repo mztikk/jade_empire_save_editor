@@ -9,6 +9,9 @@
 # the game uses where they exist: Kampfstil (style), Edelstein (gem), Amulett
 # (amulet), Gefährte (companion), Fokus (focus); Chi stays Chi.
 #
+# Keep placeholders such as {name} exactly as they appear in the key; only the
+# surrounding words change.
+#
 # Check coverage with:
 #   cargo test -p jadeforge-gui --lib every_german_value_is_filled -- --ignored
 
