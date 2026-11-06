@@ -48,6 +48,18 @@ pub struct Gem {
     pub effects: Vec<GemEffect>,
 }
 
+impl Gem {
+    /// True when the entry is an empty amulet socket placeholder.
+    ///
+    /// Empty sockets carry no `ItemID` (or id 0) and no effects. Item id 0 can
+    /// still resolve to a generic row in a modded `items.2da`, so name lookup
+    /// alone must not decide whether a socket is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.item_id == 0 && self.effects.is_empty()
+    }
+}
+
 /// The amulet and its unlocked sockets.
 ///
 /// A savegame before the amulet is unlocked has no `Amulet.Type` (and no
@@ -447,7 +459,7 @@ fn float(gff: &Gff, structure: &Struct, label: &str) -> Option<f32> {
 
 #[cfg(test)]
 mod tests {
-    use super::sockets_for_tier;
+    use super::{Gem, GemLocation, sockets_for_tier};
 
     #[test]
     fn sockets_follow_the_amulet_tier() {
@@ -456,5 +468,28 @@ mod tests {
         assert_eq!(sockets_for_tier(3), 7);
         assert_eq!(sockets_for_tier(4), 7);
         assert_eq!(sockets_for_tier(0), 3);
+    }
+
+    #[test]
+    fn an_empty_socket_is_not_a_resolved_item_zero() {
+        let empty = Gem {
+            struct_index: 1,
+            item_id: 0,
+            location: GemLocation::Amulet,
+            effects: Vec::new(),
+        };
+        assert!(empty.is_empty());
+        let gem = Gem {
+            struct_index: 2,
+            item_id: 0,
+            location: GemLocation::Inventory,
+            effects: vec![super::GemEffect {
+                kind: 62,
+                value: 2,
+                current: 2,
+                duration: 0.0,
+            }],
+        };
+        assert!(!gem.is_empty());
     }
 }

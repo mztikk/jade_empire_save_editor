@@ -991,18 +991,27 @@ fn the_item_picker_can_filter_by_category() {
         click_a11y_label(&mut test, "Show only Gems"),
         "the Gems category chip is missing"
     );
-    test.sync_and_update();
+    settle(&mut test);
+    let heading = find_label_exact(&test, "GEMS").expect("the Gems result heading is missing");
+    let heading_y = heading.layout().area.origin.y;
+    let weapons = test.find_many(|node, element| {
+        let label = Label::try_downcast(element)?;
+        label.text.contains("Weapons · #").then_some(node)
+    });
     assert!(
-        find_label_text(&test, "GEMS").is_some(),
-        "the item picker did not switch to the Gems category"
-    );
-    assert!(
-        find_label_text(&test, "Gems · #").is_some(),
-        "a non-gem item survived the category filter"
-    );
-    assert!(
-        find_label_text(&test, "Weapons · #").is_none(),
+        weapons
+            .iter()
+            .all(|node| node.layout().area.origin.y < heading_y),
         "a weapon survived the Gems category filter"
+    );
+    let gems = test.find_many(|node, element| {
+        let label = Label::try_downcast(element)?;
+        label.text.contains("Gems · #").then_some(node)
+    });
+    assert!(
+        gems.iter()
+            .any(|node| node.layout().area.origin.y > heading_y),
+        "the Gems category filter produced no gem rows"
     );
     assert!(
         click_a11y_label(&mut test, "Show items from every category"),
@@ -1394,8 +1403,12 @@ fn an_empty_carried_gems_list_does_not_report_a_gem() {
         "the empty carried-gems list has no empty hint"
     );
     assert!(
-        find_label_text(&test, "1 gem").is_none(),
+        find_label_exact(&test, "1 gem").is_none(),
         "the empty carried-gems hint claims there is a gem"
+    );
+    assert!(
+        find_label_exact(&test, "1 carried gem").is_none(),
+        "the empty carried-gems hint claims there is a carried gem"
     );
     if has_amulet {
         // The amulet summary names both numbers and the tier.
@@ -3983,6 +3996,7 @@ fn scanning_another_folder_resets_the_filter_after_the_scan() {
     assert!(click_text(&mut test, "Browse"), "no browse button");
     // The new folder scan is applied and the document reset clears the filter.
     wait_for_text(&mut test, "Found 1 savegame");
+    settle(&mut test);
     assert!(
         find_label_text(&test, "0 OF").is_none(),
         "the filter survived a folder scan"

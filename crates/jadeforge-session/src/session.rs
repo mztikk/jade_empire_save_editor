@@ -1993,7 +1993,7 @@ impl Session {
             .map(|gem| {
                 let info = self.game.as_ref().and_then(|game| game.item(gem.item_id));
                 let bundled = self.bundled_item(gem.item_id);
-                let empty = info.is_none() && bundled.is_none() && gem.effects.is_empty();
+                let empty = gem.is_empty();
                 let effects: Vec<String> = gem
                     .effects
                     .iter()
@@ -2004,16 +2004,13 @@ impl Session {
                         )
                     })
                     .collect();
-                let name = info
-                    .map(|item| item.name.clone())
-                    .or_else(|| bundled.map(|item| item.name.clone()))
-                    .unwrap_or_else(|| {
-                        if empty {
-                            "Empty socket".to_owned()
-                        } else {
-                            format!("Gem {}", gem.item_id)
-                        }
-                    });
+                let name = if empty {
+                    "Empty socket".to_owned()
+                } else {
+                    info.map(|item| item.name.clone())
+                        .or_else(|| bundled.map(|item| item.name.clone()))
+                        .unwrap_or_else(|| format!("Gem {}", gem.item_id))
+                };
                 GemRow {
                     struct_index: gem.struct_index,
                     name,

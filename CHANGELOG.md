@@ -160,6 +160,8 @@ All notable changes are documented here. The format follows
 
 - Gem moves now preserve the fixed seven-entry amulet socket list, keep gems
   visible after a move and reject full or missing amulets.
+- Empty amulet sockets no longer resolve item id 0 to a generic item in modded
+  item tables, which gave empty slots a name and a Remove action.
 - Save writes use exclusive temporary files, unique backups, preserved
   permissions, parent-directory fsync and external-change detection; saving
   through a symlink keeps the link.
