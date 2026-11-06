@@ -25,7 +25,7 @@ and 1600 px. The windowed suite is never run without explicit permission
 | 10 | item and style icons | [icons.md](icons.md) | blocked: icon references exist but the images are engine BIF/KEY textures, not RIM images |
 | 11 | About/help with diagnostics | [about-diagnostics.md](about-diagnostics.md) | implemented |
 | 12 | command palette or shortcut sheet | [command-palette.md](command-palette.md) | implemented as a complete shortcut sheet |
-| 13 | configurable geometry, DPI and multi-monitor policy | [geometry-dpi.md](geometry-dpi.md) | implemented; live window scenario not run |
+| 13 | configurable geometry, DPI and multi-monitor policy | [geometry-dpi.md](geometry-dpi.md) | implemented; size everywhere, position on X11 (Wayland compositors place windows); live window scenario not run |
 
 ## Order and dependencies
 

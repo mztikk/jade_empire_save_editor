@@ -285,6 +285,14 @@ const CATALOG: &[(&str, &str)] = &[
         "Remember the window size and position between runs",
         "⟦Rémémbér thé wíndów sízé ánd pósítíón bétwéén rúns⟧",
     ),
+    (
+        "Remember the window size between runs; the compositor places the window",
+        "⟦Rémémbér thé wíndów sízé bétwéén rúns; thé çómpósítór pláçés thé wíndów⟧",
+    ),
+    (
+        "Wayland compositors place windows themselves. Add a window rule in your desktop settings to pin the position.",
+        "⟦Wáylánd çómpósítórs pláçé wíndóws thémšélvés. Ádd á wíndów rúlé íñ yóúr désktóp séttíñgs tó píñ thé pósítíón.⟧",
+    ),
     ("DIAGNOSTICS", "⟦DÍÁGNÓSTÍÇS⟧"),
     ("LICENSES", "⟦LÍÇÉNSÉS⟧"),
     ("Copy diagnostics", "⟦Çópy díágnóstíçs⟧"),

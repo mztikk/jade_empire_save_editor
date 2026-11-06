@@ -122,6 +122,10 @@ All notable changes are documented here. The format follows
   P1/P2/P3 issues.
 - `just install` now installs `jadeforge-cli` alongside the `jadeforge` GUI
   binary, so a source install provides both tools.
+- The window-geometry setting is now explicit about Wayland: the size is
+  remembered everywhere, while the position is restored only on X11 because
+  Wayland compositors place windows themselves. The About page shows the
+  compositor hint and points at window rules for a fixed position.
 
 ### Fixed
 

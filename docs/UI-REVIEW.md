@@ -43,7 +43,7 @@ Addressed on the `fix/ui-p1-followups` branch:
 | Area | Result |
 | --- | --- |
 | Responsive composition | Fluid 3+3 identity grid at 1180×760 and 900×700, overview glance cells 1-up → 2+2+1, hero stats 2×2, 1100 px editor cap and a 720 px text measure; descriptions expand in full. |
-| Window geometry | `geometry::fit_window` clamps the default and remembered size to the monitor, lowers the minimum on short screens and keeps a stored position on screen; a plugin remembers the rectangle. Tested for 1366×768 at 125 %. |
+| Window geometry | `geometry::fit_window` clamps the default and remembered size to the monitor, lowers the minimum on short screens and keeps a stored position on screen; a plugin remembers the size everywhere and the position on X11, because Wayland compositors own placement. Tested for 1366×768 at 125 %. |
 | Clipped names | Ellipsis plus a tooltip on save, item, companion and sidebar names; the overview path wraps and has a Copy path action. |
 | State safety | Scan keeps the open savegame for the same folder and re-locates it by path; Browse checks dirty state before the dialog; filters, paging, expanded rows and scroll positions reset on a document change; every filter has a Clear button. |
 | Save vs. form | Each field validates on its own and shows its range; valid fields apply even when another is invalid; Save writes applied edits, reports the invalid form separately and focuses the first invalid field. |

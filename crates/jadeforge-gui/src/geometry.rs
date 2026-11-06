@@ -97,6 +97,22 @@ pub fn fit_window(
     }
 }
 
+/// Whether the desktop compositor owns window placement.
+///
+/// Wayland has no client-side absolute placement. winit returns
+/// `NotSupportedError` from `outer_position` and ignores the requested
+/// position, so `JadeForge` can restore the size but not the coordinates there.
+/// X11 and the two desktop platforms keep the remembered position.
+#[must_use]
+pub fn position_is_compositor_owned() -> bool {
+    cfg!(target_os = "linux")
+        && wayland_display_is_set(std::env::var_os("WAYLAND_DISPLAY").as_deref())
+}
+
+fn wayland_display_is_set(value: Option<&std::ffi::OsStr>) -> bool {
+    value.is_some_and(|value| !value.is_empty())
+}
+
 /// Reads the monitor the window will open on as a logical work area.
 ///
 /// winit exposes the monitor bounds, not the desktop's work area, so the whole
@@ -124,7 +140,8 @@ pub fn monitor_work_area(
 /// The close hook of a `WindowConfig` only sees the renderer context, whose
 /// window is private to `freya-winit`, so the plugin event is the supported way
 /// to read the final size and position. Wayland does not report a window
-/// position; the stored one is kept in that case.
+/// position, so a close there stores the size and leaves the coordinates unset;
+/// the compositor owns placement.
 pub struct WindowGeometryPlugin;
 
 impl FreyaPlugin for WindowGeometryPlugin {
@@ -324,6 +341,15 @@ mod tests {
         assert!(fitted.width <= work.width - 16.0);
         assert!(fitted.height <= work.height - 16.0);
         assert_eq!(fitted.min_width, 900.0);
+    }
+
+    #[test]
+    fn a_wayland_session_owns_the_window_position() {
+        assert!(!wayland_display_is_set(None));
+        assert!(!wayland_display_is_set(Some(std::ffi::OsStr::new(""))));
+        assert!(wayland_display_is_set(Some(std::ffi::OsStr::new(
+            "wayland-1"
+        ))));
     }
 
     #[test]

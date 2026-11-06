@@ -134,6 +134,14 @@ pub fn view(
             .into_element(),
     );
     let remember = *remember_window.read();
+    // Wayland compositors place windows themselves, so the toggle may only
+    // promise the size there. X11 and the desktop platforms restore both.
+    let compositor_places_windows = crate::geometry::position_is_compositor_owned();
+    let remember_description = if compositor_places_windows {
+        t("Remember the window size between runs; the compositor places the window")
+    } else {
+        t("Remember the window size and position between runs")
+    };
     appearance.push(
         rect()
             .horizontal()
@@ -143,7 +151,7 @@ pub fn view(
             .child(widgets::section_label(t("WINDOW")))
             .child(appearance_chip(
                 t("Remember size and position"),
-                t("Remember the window size and position between runs"),
+                remember_description,
                 remember,
                 Action::new(move || {
                     let mut state = remember_window;
@@ -154,6 +162,11 @@ pub fn view(
             ))
             .into_element(),
     );
+    if compositor_places_windows && remember {
+        appearance.push(widgets::hint(t(
+            "Wayland compositors place windows themselves. Add a window rule in your desktop settings to pin the position.",
+        )));
+    }
 
     let mut diagnostics: Vec<(String, String)> = vec![
         ("Version".to_owned(), crate::APP_VERSION.to_owned()),
