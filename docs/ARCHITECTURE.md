@@ -125,9 +125,11 @@ bounded, and every cell lookup is confined to the declared string pool. Styles
 without a level-up table are read-only in the editor.
 `tests/modded.rs` builds a small modded installation and asserts the resolution.
 `search_items` powers the item picker, ranking prefix matches first. Every table
-is optional: without the game files the UI falls back to numeric ids. A file
-that exists but cannot be parsed is collected in `GameData::warnings` and shown
-when the savegame is opened instead of being reported as "missing".
+is optional: without the game files the UI falls back to numeric names but keeps
+the savegame's own data (item category, style level, weapon count, icon and
+weapon resources, time spent). A file that exists but cannot be parsed is
+collected in `GameData::warnings` and shown when the savegame is opened instead
+of being reported as "missing".
 
 ## `jadeforge-cli`
 

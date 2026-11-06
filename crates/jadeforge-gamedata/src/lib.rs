@@ -17,8 +17,9 @@ pub mod twoda;
 
 pub use error::{Error, Result};
 pub use gamedata::{
-    Advance, GameData, GemInfo, ItemInfo, StyleChoice, StyleInfo, StyleKind, is_game_root,
-    is_playable_item, pretty_effect_name, save_type_for_category, set_test_game_root, style_kind,
+    Advance, GameData, GemInfo, ItemInfo, StyleChoice, StyleInfo, StyleKind,
+    category_for_save_type, is_game_root, is_playable_item, pretty_effect_name,
+    save_type_for_category, set_test_game_root, style_kind,
 };
 pub use rim::RimArchive;
 pub use talktable::TalkTable;

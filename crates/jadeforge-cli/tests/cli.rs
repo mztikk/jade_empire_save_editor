@@ -659,6 +659,11 @@ fn item_and_style_names_fall_back_without_game_data() {
     let output = fixture.run_clean_env(&["items"]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stdout(&output).contains("<item 42>"), "{}", stdout(&output));
+    assert!(
+        stdout(&output).contains("plot_items"),
+        "the savegame type still names the category: {}",
+        stdout(&output)
+    );
 
     let output = fixture.run_clean_env(&["styles"]);
     assert!(output.status.success(), "{}", stderr(&output));

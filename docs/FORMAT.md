@@ -205,7 +205,10 @@ exposes:
 The inventory holds structs with `Count` (byte), `ItemId` (word) and `Type`
 (byte). Fields are sparse: the game only writes what differs from its defaults,
 so for example `Stats.Alignment`, `Stats.UnassignedPts` and the style level
-fields are absent until the player first changes them.
+fields are absent until the player first changes them. `Type` is the only
+category information in the savegame, so the editor uses its reverse mapping
+when `items.2da` is missing and still labels the row with its category instead
+of just `type 6`.
 
 `Campaign.TimePlayed / 1_000_000` is the play time in seconds, which matches the
 folder timestamps of the test savegames.
@@ -267,6 +270,13 @@ Both fields are absent for a freshly learned style: level 1 means no bits set.
 game derives the unspent style points from the levels of all owned styles; the
 editor never exposes a direct level control.
 
+The struct also carries the style identity (`NameRef`, `DescRef`, `IconRef`,
+`WeaponRef`, `WeaponCount`) and `TimeSpentInStyle` (float seconds). Those fields
+are part of the savegame, not the game tables, so the editor can still show the
+level, weapon count, icon and weapon resource names and the time spent when
+`stylesuperlist.2da` is missing. Only the localized name, description and the
+upgrade slot table need the installation.
+
 The mask indexes the **slots of the style's own level-up table**, not rows of
 `StyleAdvance.2da`: bit `i` is the `i + 1`-th purchasable entry of the
 `<Style>LV.2da` table, flattened row by row. Each slot points at a
@@ -312,7 +322,9 @@ style and replaces its identity (`StyleId`, `NameRef`, `DescRef`, `IconRef`,
 Savegames only store numeric ids and talk table references. JadeForge reads the
 installation (found from the save folder, `JADEFORGE_GAME_DIR` wins) for names
 and tables. Every file is optional: without the installation the UI falls back
-to numeric ids.
+to numeric ids, but keeps the item category from `ItemList[].Type` and the style
+level, weapon count, icon/weapon resource names and time spent from the style
+struct.
 
 | file | format | purpose |
 | --- | --- | --- |

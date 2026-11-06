@@ -110,7 +110,8 @@ pub fn view(
         }
     } else {
         children.push(widgets::hint(
-            "The game data was not found, so items can only be removed, not added.",
+            "The game data was not found, so items can only be removed, not added. \
+             The category comes from the item type stored in the savegame.",
         ));
     }
 
@@ -287,4 +288,15 @@ fn suggestion_row(
             None
         })
         .into_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn item_subtitle_keeps_the_category_and_id_together() {
+        assert_eq!(item_subtitle(42, Some("plot_items"), 6), "plot_items · #42");
+        assert_eq!(item_subtitle(42, None, 9), "type 9");
+    }
 }

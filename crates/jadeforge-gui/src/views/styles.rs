@@ -114,7 +114,8 @@ pub fn view(
         }
     } else {
         children.push(widgets::hint(
-            "The game data was not found, so style names and new styles are unavailable.",
+            "The game data was not found, so style names and new styles are unavailable. \
+             Levels, weapons and time spent come from the savegame.",
         ));
     }
 
@@ -154,8 +155,8 @@ fn style_row(
         }
     };
 
-    let subtitle = style_subtitle(style.style_id, &style.label)
-        .unwrap_or_else(|| format!("#{}", style.style_id));
+    let subtitle =
+        style_subtitle(style.style_id, &style.label).unwrap_or_else(|| saved_style_subtitle(style));
     let is_expanded = *expanded.read() == Some(style.style_id);
 
     rect()
@@ -228,11 +229,16 @@ fn upgrade_panel(
     if let Some(details) = widgets::details(style.description.as_deref()) {
         rows.push(details);
     }
+    if let Some(fields) = saved_style_fields(style) {
+        rows.push(widgets::hint(fields));
+    }
     if style.upgrades.is_empty() {
         if style.description.is_none() {
-            rows.push(widgets::hint(
-                "No upgrade data available: install the game data next to the savegames.",
-            ));
+            rows.push(widgets::hint(if style.label.is_empty() {
+                "No upgrade data available: install the game data next to the savegames."
+            } else {
+                "This style has no level-up table, so its upgrades are read-only."
+            }));
         }
         return rect()
             .vertical()
@@ -450,11 +456,61 @@ pub fn family_title(family: &str) -> String {
 
 /// Secondary line shown for a style, owned or not.
 ///
-/// `None` when the game data is missing: the name is then just `Style <id>`
-/// and repeating the id in a subtitle would be noise.
+/// `None` when the game data is missing; [`saved_style_subtitle`] then uses the
+/// fields the savegame itself stores.
 #[must_use]
 pub fn style_subtitle(style_id: u16, label: &str) -> Option<String> {
     (!label.is_empty()).then(|| format!("{label} · #{style_id}"))
+}
+
+/// Secondary line built only from fields stored in the savegame.
+///
+/// The id replaces the missing name; the weapon count and time spent tell the
+/// player which style it is without guessing a label.
+fn saved_style_subtitle(style: &StyleRow) -> String {
+    let mut parts = vec![format!("#{}", style.style_id)];
+    if style.weapon_count > 0 {
+        parts.push(widgets::plural(
+            usize::from(style.weapon_count),
+            "weapon",
+            "weapons",
+        ));
+    }
+    if style.time_spent >= 60 {
+        parts.push(format!("{} used", style_time(style.time_spent)));
+    }
+    parts.join(" · ")
+}
+
+/// Resource names and timings from the savegame, shown when no style label is
+/// available. `None` once the game data can name the style.
+fn saved_style_fields(style: &StyleRow) -> Option<String> {
+    if !style.label.is_empty() {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if let Some(icon) = &style.icon {
+        parts.push(format!("icon {icon}"));
+    }
+    if let Some(weapon) = &style.weapon {
+        parts.push(format!("weapon {weapon}"));
+    }
+    if style.weapon_count > 0 {
+        parts.push(widgets::plural(
+            usize::from(style.weapon_count),
+            "weapon",
+            "weapons",
+        ));
+    }
+    if style.time_spent >= 1 {
+        parts.push(format!("{} used", style_time(style.time_spent)));
+    }
+    (!parts.is_empty()).then(|| format!("Saved style data: {}.", parts.join(" · ")))
+}
+
+/// Formats a duration from the savegame's `TimeSpentInStyle` seconds.
+fn style_time(seconds: u32) -> String {
+    crate::session::format::elapsed(seconds)
 }
 
 /// Badge colour for a style kind.
@@ -534,4 +590,48 @@ fn learn_row(
             None
         })
         .into_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(label: &str, weapon_count: u8, time_spent: u32) -> StyleRow {
+        StyleRow {
+            struct_index: 0,
+            style_id: 21,
+            level: 13,
+            name: "Style 21".to_owned(),
+            label: label.to_owned(),
+            kind: "style",
+            description: None,
+            icon: Some("I_TCUTS".to_owned()),
+            weapon: Some("J00_COLLISION_01".to_owned()),
+            weapon_count,
+            time_spent,
+            mask: 0,
+            upgrades: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn missing_game_data_subtitle_uses_savegame_fields() {
+        assert_eq!(
+            saved_style_subtitle(&row("", 2, 3439)),
+            "#21 · 2 weapons · 57m used"
+        );
+        assert_eq!(saved_style_subtitle(&row("", 0, 12)), "#21");
+    }
+
+    #[test]
+    fn saved_style_fields_are_only_shown_without_a_label() {
+        let fields = saved_style_fields(&row("", 2, 3439)).expect("saved fields");
+        assert_eq!(
+            fields,
+            "Saved style data: icon I_TCUTS · weapon J00_COLLISION_01 · 2 weapons · 57m used."
+        );
+        let short = saved_style_fields(&row("", 0, 12)).expect("short saved fields");
+        assert!(short.contains("12s used"), "{short}");
+        assert!(saved_style_fields(&row("Martial_Test", 2, 3439)).is_none());
+    }
 }

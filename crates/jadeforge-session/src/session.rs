@@ -53,6 +53,18 @@ pub mod format {
         }
     }
 
+    /// Formats a duration given in whole seconds.
+    ///
+    /// Short values keep their seconds instead of rounding down to `0m`.
+    #[must_use]
+    pub fn elapsed(seconds: u32) -> String {
+        if seconds < 60 {
+            format!("{seconds}s")
+        } else {
+            duration(u64::from(seconds) * 1_000_000)
+        }
+    }
+
     /// Formats a float without trailing zeros.
     #[must_use]
     pub fn number(value: f32) -> String {
@@ -645,7 +657,9 @@ impl Session {
             count: item.count,
             kind: item.kind,
             name: info.map_or(fallback, |info| info.name.clone()),
-            category: info.and_then(|info| info.category.clone()),
+            category: info.and_then(|info| info.category.clone()).or_else(|| {
+                jadeforge_gamedata::category_for_save_type(item.kind).map(str::to_owned)
+            }),
             description: info.and_then(|info| info.description.clone()),
         }
     }
@@ -656,6 +670,14 @@ impl Session {
             .as_ref()
             .and_then(|game| game.style(style.style_id));
         let fallback = format!("Style {}", style.style_id);
+        // Without a label, `WeaponCount` is the one kind signal the savegame
+        // itself carries. It is already the documented fallback when a label
+        // prefix is not recognised.
+        let fallback_kind = if style.weapon_count > 0 {
+            "weapon"
+        } else {
+            "style"
+        };
         StyleRow {
             struct_index: style.struct_index,
             style_id: style.style_id,
@@ -663,9 +685,13 @@ impl Session {
             name: info.map_or(fallback, |info| info.name.clone()),
             label: info.map_or_else(String::new, |info| info.label.clone()),
             description: info.and_then(|info| info.description.clone()),
+            icon: style.icon.clone(),
+            weapon: style.weapon.clone(),
+            weapon_count: style.weapon_count,
+            time_spent: style.time_spent.max(0.0).round() as u32,
             mask: style.mask,
             upgrades: self.upgrade_choices(style.style_id, style.mask),
-            kind: info.map_or("style", |info| {
+            kind: info.map_or(fallback_kind, |info| {
                 if info.kind == jadeforge_gamedata::StyleKind::Other && info.weapon_count > 0 {
                     "weapon"
                 } else {
@@ -1882,6 +1908,9 @@ mod tests {
         assert_eq!(format::duration(90_000_000), "1m");
         assert_eq!(format::duration(3_600_000_000), "1h 00m");
         assert_eq!(format::duration(58_920_000_000), "16h 22m");
+        assert_eq!(format::elapsed(12), "12s");
+        assert_eq!(format::elapsed(60), "1m");
+        assert_eq!(format::elapsed(3439), "57m");
     }
     #[test]
     fn background_scan_results_can_be_applied() {
@@ -1897,6 +1926,43 @@ mod tests {
         session.report_scan_failure();
         assert!(session.message.text.contains("Could not scan"));
         let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn missing_game_data_still_describes_savegame_fields() {
+        let mut session = Session::empty("/definitely/not/a/save");
+        session.game = None;
+
+        let item = Item {
+            struct_index: 0,
+            item_id: 42,
+            count: 2,
+            kind: 6,
+        };
+        let row = session.describe_item(&item);
+        assert_eq!(row.name, "Item 42");
+        assert_eq!(row.category.as_deref(), Some("plot_items"));
+
+        let style = Style {
+            struct_index: 1,
+            style_id: 21,
+            level: 13,
+            mask: 0,
+            name_ref: None,
+            desc_ref: None,
+            icon: Some("I_TCUTS".to_owned()),
+            weapon: Some("J00_COLLISION_01".to_owned()),
+            weapon_count: 2,
+            time_spent: 3439.2458,
+        };
+        let row = session.describe_style(&style);
+        assert_eq!(row.name, "Style 21");
+        assert_eq!(row.kind, "weapon");
+        assert_eq!(row.icon.as_deref(), Some("I_TCUTS"));
+        assert_eq!(row.weapon.as_deref(), Some("J00_COLLISION_01"));
+        assert_eq!(row.weapon_count, 2);
+        assert_eq!(row.time_spent, 3439);
+        assert!(row.label.is_empty());
     }
 
     #[test]

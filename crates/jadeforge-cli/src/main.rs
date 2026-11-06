@@ -18,7 +18,7 @@ fn write_stdout(arguments: std::fmt::Arguments<'_>) -> Result<(), Error> {
 use clap::{Parser, Subcommand};
 use jadeforge_core::gff::Value;
 use jadeforge_core::{Error, Gff, SaveGame, SaveOptions, locate_player};
-use jadeforge_gamedata::GameData;
+use jadeforge_gamedata::{GameData, category_for_save_type};
 
 /// `JadeForge` - a save editor for Jade Empire.
 #[derive(Debug, Parser)]
@@ -260,6 +260,7 @@ fn items(path: &Path) -> Result<(), Error> {
         );
         let category = info
             .and_then(|info| info.category.clone())
+            .or_else(|| category_for_save_type(item.kind).map(str::to_owned))
             .unwrap_or_else(|| format!("type {}", item.kind));
         out!(
             "{:<32} {:>6} {:<12} {:>5}",

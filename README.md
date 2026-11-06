@@ -218,8 +218,9 @@ does, so **mods that add styles or change tables are picked up**: extend
 ones. Override files are read case-insensitively and tolerate non-UTF-8 text.
 
 Set `JADEFORGE_GAME_DIR` to point at an installation somewhere else. When the
-files are missing the editor still works, it just shows numeric ids instead of
-names. Nothing in the game folder is ever written.
+files are missing the editor still works: names fall back to numeric ids, but
+item categories and a style's level, weapons, icon reference and time spent
+still come from the savegame. Nothing in the game folder is ever written.
 
 ## Using the command line tool
 

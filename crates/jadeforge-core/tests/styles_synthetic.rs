@@ -88,6 +88,31 @@ fn style_level_defaults_from_the_mask_and_is_clamped() {
     assert_eq!(styles[1].level, 4);
     assert_eq!(styles[1].mask, 0b111);
     assert_eq!(styles[2].level, 1);
+    assert_eq!(styles[0].weapon_count, 0);
+    assert!(styles[0].weapon.is_none());
+    assert!(styles[0].icon.is_none());
+}
+
+#[test]
+fn style_identity_fields_are_read_from_the_savegame() {
+    let mut gff = common::character_gff();
+    let style = push_style(&mut gff, 7, Some(4), Some(0b11));
+    gff.add_field(style, "IconRef", Value::ResRef("I_FIRE".to_owned()))
+        .expect("icon");
+    gff.add_field(style, "WeaponRef", Value::String("J00_STAFF".to_owned()))
+        .expect("weapon");
+    gff.add_field(style, "WeaponCount", Value::Word(2))
+        .expect("weapon count");
+    gff.add_field(style, "TimeSpentInStyle", Value::Float(125.5))
+        .expect("time spent");
+    add_styles(&mut gff, vec![style]);
+
+    let save = common::save(&gff);
+    let styles = save.styles().expect("styles");
+    assert_eq!(styles[0].icon.as_deref(), Some("I_FIRE"));
+    assert_eq!(styles[0].weapon.as_deref(), Some("J00_STAFF"));
+    assert_eq!(styles[0].weapon_count, 2);
+    assert!((styles[0].time_spent - 125.5).abs() < f32::EPSILON);
 }
 
 #[test]

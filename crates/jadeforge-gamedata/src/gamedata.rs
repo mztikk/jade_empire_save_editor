@@ -790,6 +790,24 @@ pub fn save_type_for_category(category: &str) -> Option<u8> {
     }
 }
 
+/// Category label for the item `Type` value stored in a savegame.
+///
+/// This is the inverse of [`save_type_for_category`] for the values the engine
+/// writes. It lets the editor name an item's category from the savegame alone
+/// when the item table is missing; the numeric id stays the item's name.
+#[must_use]
+pub fn category_for_save_type(kind: u8) -> Option<&'static str> {
+    match kind {
+        1 => Some("gems"),
+        4 => Some("powerups"),
+        5 => Some("weapons"),
+        6 => Some("plot_items"),
+        7 => Some("mgweapons"),
+        8 => Some("improve"),
+        _ => None,
+    }
+}
+
 /// True when the directory looks like a Jade Empire installation.
 #[must_use]
 pub fn is_game_root(directory: &Path) -> bool {
@@ -979,6 +997,17 @@ mod tests {
         assert_eq!(save_type_for_category("mgweapons"), Some(7));
         assert_eq!(save_type_for_category("improve"), Some(8));
         assert_eq!(save_type_for_category("nonsense"), None);
+    }
+
+    #[test]
+    fn category_for_save_type_is_the_inverse_mapping() {
+        for kind in [1, 4, 5, 6, 7, 8] {
+            let category = category_for_save_type(kind).expect("known savegame type");
+            assert_eq!(save_type_for_category(category), Some(kind));
+        }
+        assert_eq!(category_for_save_type(0), None);
+        assert_eq!(category_for_save_type(3), None);
+        assert_eq!(category_for_save_type(9), None);
     }
 
     #[test]

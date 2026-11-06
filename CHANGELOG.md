@@ -6,6 +6,13 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Without the game installation, item rows keep their category from the
+  savegame's item `Type`, and style rows show the level, weapon count, icon and
+  weapon resource names and the time spent from the style struct instead of
+  only numeric ids.
+
 ### Changed
 
 - `just install` now installs `jadeforge-cli` alongside the `jadeforge` GUI

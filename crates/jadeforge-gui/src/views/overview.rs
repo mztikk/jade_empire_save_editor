@@ -38,7 +38,8 @@ pub fn view(
                 true,
             ),
             GameStatus::Missing => (
-                "No game installation found next to the savegames: names fall back to ids."
+                "No game installation found next to the savegames: names fall back to ids, \
+                 while categories, levels and timings still come from the savegame."
                     .to_owned(),
                 false,
             ),
