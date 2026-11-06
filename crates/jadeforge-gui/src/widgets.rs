@@ -8,25 +8,12 @@ use freya::prelude::*;
 
 use crate::theme;
 
-/// A text label that is also exposed to assistive technology.
-///
-/// Freya 0.4 gives a label the `Label` role but does not fill its AccessKit
-/// `value`, and AccessKit does not use `label` as the name for that role. Every
-/// visible string therefore goes through this helper: the same text is both the
-/// rendered content and the screen-reader value.
+/// A text label. Freya 0.5 fills a label's AccessKit value from its text when
+/// the accessibility tree is built, and the AT-SPI adapter reads a `Label`
+/// node's name from that value, so no extra accessibility builder is needed.
+/// The helper keeps every visible string on the same element.
 pub fn a11y_text(content: impl Into<String>) -> Label {
-    let content = content.into();
-    let value = content.clone();
-    let name = content.clone();
-    // Keying by the rendered text makes a changed label a new accessibility
-    // node. Freya's AT-SPI adapter does not refresh the name of an existing
-    // label when only its value changes, so this keeps counts, status messages
-    // and values current for screen readers.
-    let key = content.clone();
-    label().text(content).key(key).a11y_builder(move |node| {
-        node.set_value(value);
-        node.set_label(name);
-    })
+    label().text(content.into())
 }
 
 /// A card with a title, an optional hint and a vertical body.
