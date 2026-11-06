@@ -248,12 +248,12 @@ where
     use freya::winit::dpi::{LogicalPosition, LogicalSize};
 
     let preferred = (
-        f64::from(theme::layout::WINDOW_WIDTH),
-        f64::from(theme::layout::WINDOW_HEIGHT),
+        f64::from(theme::layout::window_width()),
+        f64::from(theme::layout::window_height()),
     );
     let minimum = (
-        f64::from(theme::layout::MIN_WINDOW_WIDTH),
-        f64::from(theme::layout::MIN_WINDOW_HEIGHT),
+        f64::from(theme::layout::min_window_width()),
+        f64::from(theme::layout::min_window_height()),
     );
     let stored = crate::config::Config::load().window;
     // Without a monitor (a headless start or a failed query) the preferred
@@ -290,7 +290,21 @@ where
 /// Root component that starts with a specific save folder.
 #[allow(clippy::too_many_lines, clippy::redundant_closure_for_method_calls)] // the root wires every view in dependency order
 pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
-    use_init_theme(theme::theme);
+    // The user's theme and text scale are installed before any child renders.
+    // The system preference is a reactive state, so flipping the OS theme while
+    // the window is open repaints a System choice without a restart.
+    let saved_preferences = use_hook(|| crate::config::Config::load().ui_preferences());
+    let theme_choice = use_state(|| saved_preferences.0);
+    let text_scale = use_state(|| saved_preferences.1);
+    let preferred = *Platform::get().current_window().preferred_theme.read();
+    let resolved = theme::resolved_choice(*theme_choice.read(), preferred);
+    theme::install(theme::UiStyle::new(resolved, *text_scale.read()));
+    let mut freya_theme = use_init_theme(theme::theme);
+    freya_theme.set_if_modified(theme::theme());
+    // Both states are read here so the session-wide re-render below always
+    // repaints after a change made on the About page.
+    let _ = *theme_choice.read();
+    let _ = *text_scale.read();
 
     let session: Rc<RefCell<Session>> =
         use_hook(move || Rc::new(RefCell::new(Session::pending(directory))));
@@ -726,7 +740,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     };
     let show_about_now = *show_about.read();
     let content = if show_about_now {
-        views::about::view(&ctx, save_sort, show_about)
+        views::about::view(&ctx, save_sort, show_about, theme_choice, text_scale)
     } else {
         tab_content
     };
@@ -871,8 +885,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         .vertical()
         .width(Size::fill())
         .height(Size::fill())
-        .background(theme::BACKGROUND)
-        .color(theme::TEXT)
+        .background(theme::background())
+        .color(theme::text())
         .content(Content::Flex)
         .child(header)
         .child(
@@ -899,11 +913,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                                 .border(
                                     Border::new()
                                         .fill(if editor_scroll_focus() == Focus::Keyboard {
-                                            theme::TEXT
+                                            theme::text()
                                         } else {
                                             Color::TRANSPARENT
                                         })
-                                        .width(theme::stroke::FOCUS),
+                                        .width(theme::stroke::focus()),
                                 )
                                 .on_key_down({
                                     let mut scroll = scrolls[active_tab.index()];
@@ -934,10 +948,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                                                 .width(Size::fill())
                                                 .cross_align(Alignment::Center)
                                                 .padding(Gaps::new(
-                                                    theme::space::XXL,
-                                                    theme::space::CARD,
-                                                    theme::space::XXL,
-                                                    theme::space::CARD,
+                                                    theme::space::xxl(),
+                                                    theme::space::card(),
+                                                    theme::space::xxl(),
+                                                    theme::space::card(),
                                                 ))
                                                 // Wide windows stop stretching the
                                                 // cards: past this width a paragraph
@@ -947,7 +961,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                                                         .vertical()
                                                         .width(Size::fill())
                                                         .max_width(Size::px(
-                                                            theme::layout::EDITOR_MAX_WIDTH,
+                                                            theme::layout::editor_max_width(),
                                                         ))
                                                         // The content already renders the loading
                                                         // skeleton, the About page and the empty

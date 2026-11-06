@@ -83,9 +83,9 @@ pub(super) fn header(
     cancel_scan: Rc<dyn Fn()>,
 ) -> Element {
     let status_color = match message.kind {
-        MessageKind::Info => theme::MUTED,
-        MessageKind::Success => theme::SUCCESS,
-        MessageKind::Error => theme::DANGER,
+        MessageKind::Info => theme::muted(),
+        MessageKind::Success => theme::success(),
+        MessageKind::Error => theme::danger(),
     };
     let status_live = match message.kind {
         MessageKind::Error => accesskit::Live::Assertive,
@@ -101,9 +101,9 @@ pub(super) fn header(
         GameStatus::Error(_) => "game data unreadable".to_owned(),
     };
     let game_color = match game_status {
-        GameStatus::Loaded { .. } | GameStatus::NamesOnly { .. } => theme::JADE,
-        GameStatus::Loading | GameStatus::Missing => theme::DIM,
-        GameStatus::Error(_) => theme::DANGER,
+        GameStatus::Loaded { .. } | GameStatus::NamesOnly { .. } => theme::jade(),
+        GameStatus::Loading | GameStatus::Missing => theme::dim(),
+        GameStatus::Error(_) => theme::danger(),
     };
     let game_loaded = matches!(game_status, GameStatus::Loaded { .. });
 
@@ -178,22 +178,22 @@ pub(super) fn header(
     if dirty {
         badges.push(crate::widgets::badge(
             "unsaved changes",
-            theme::WARNING,
-            theme::BACKGROUND,
+            theme::warning(),
+            theme::background(),
         ));
     }
     if !form_errors.is_empty() {
         badges.push(crate::widgets::badge(
             crate::widgets::plural(form_errors.len(), "invalid field", "invalid fields"),
-            theme::SURFACE_ACTIVE,
-            theme::WARNING,
+            theme::surface_active(),
+            theme::warning(),
         ));
     }
     if !dirty && form_errors.is_empty() {
         badges.push(if has_save {
-            crate::widgets::badge("all changes saved", theme::SURFACE, theme::DIM)
+            crate::widgets::badge("all changes saved", theme::surface(), theme::dim())
         } else {
-            crate::widgets::badge("no savegame open", theme::SURFACE, theme::DIM)
+            crate::widgets::badge("no savegame open", theme::surface(), theme::dim())
         });
     }
 
@@ -201,42 +201,46 @@ pub(super) fn header(
         rect()
             .horizontal()
             .width(Size::fill())
-            .spacing(theme::space::MD)
-            .content(Content::wrap_spacing(theme::space::MD))
+            .spacing(theme::space::md())
+            .content(Content::wrap_spacing(theme::space::md()))
             .cross_align(Alignment::Center)
             .child(
                 crate::widgets::a11y_text(super::WINDOW_TITLE)
-                    .font_size(theme::font::TITLE)
+                    .font_size(theme::font::title())
                     .font_weight(FontWeight::BOLD)
-                    .color(theme::ACCENT),
+                    .color(theme::accent()),
             )
             .child(
                 crate::widgets::a11y_text("Jade Empire save editor")
-                    .font_size(theme::font::CAPTION)
-                    .color(theme::DIM),
+                    .font_size(theme::font::caption())
+                    .color(theme::dim()),
             )
             .child(rect().width(Size::flex(1.0)))
             .children(badges)
-            .child(crate::widgets::badge(game_text, theme::SURFACE, game_color))
+            .child(crate::widgets::badge(
+                game_text,
+                theme::surface(),
+                game_color,
+            ))
             .child(
                 rect()
-                    .width(Size::px(theme::layout::DIVIDER))
-                    .height(Size::px(theme::font::LINE_HEIGHT))
-                    .background(theme::BORDER),
+                    .width(Size::px(theme::layout::divider()))
+                    .height(Size::px(theme::font::line_height()))
+                    .background(theme::border()),
             )
             .child(about_button(show_about))
             .into_element(),
         rect()
             .horizontal()
             .width(Size::fill())
-            .spacing(theme::space::LG)
+            .spacing(theme::space::lg())
             .content(Content::Flex)
             .cross_align(Alignment::Center)
             .child(
                 crate::widgets::a11y_text("SAVE FOLDER")
-                    .font_size(theme::font::MICRO)
+                    .font_size(theme::font::micro())
                     .font_weight(FontWeight::BOLD)
-                    .color(theme::DIM),
+                    .color(theme::dim()),
             )
             .child(
                 Input::new(directory)
@@ -275,14 +279,14 @@ pub(super) fn header(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::LG)
+                .spacing(theme::space::lg())
                 .content(Content::Flex)
                 .cross_align(Alignment::Center)
                 .child(
                     crate::widgets::a11y_text("GAME DATA")
-                        .font_size(theme::font::MICRO)
+                        .font_size(theme::font::micro())
                         .font_weight(FontWeight::BOLD)
-                        .color(theme::DIM),
+                        .color(theme::dim()),
                 )
                 .child(
                     Input::new(game_directory)
@@ -304,7 +308,7 @@ pub(super) fn header(
         rect()
             .horizontal()
             .width(Size::fill())
-            .spacing(theme::space::MD)
+            .spacing(theme::space::md())
             .content(Content::Flex)
             .cross_align(Alignment::Center)
             .child(
@@ -313,7 +317,7 @@ pub(super) fn header(
                     .width(Size::flex(1.0))
                     // A fixed three-line slot: the status text can be long, but
                     // growing it must never move the tab bar below the header.
-                    .height(Size::px(theme::font::LINE_HEIGHT * 3.0))
+                    .height(Size::px(theme::font::line_height() * 3.0))
                     .main_align(Alignment::Center)
                     .child(
                         crate::widgets::a11y_text(status_text.clone())
@@ -321,7 +325,7 @@ pub(super) fn header(
                                 node.set_role(AccessibilityRole::Status);
                                 node.set_live(status_live);
                             })
-                            .font_size(theme::font::CAPTION)
+                            .font_size(theme::font::caption())
                             .max_lines(3)
                             .text_overflow(TextOverflow::Ellipsis)
                             .color(status_color),
@@ -331,11 +335,11 @@ pub(super) fn header(
                 "Copy the status message",
                 copy_message,
                 rect()
-                    .padding(Gaps::new_symmetric(theme::space::XS, theme::space::MD))
+                    .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
                     .child(
                         crate::widgets::a11y_text("Copy")
-                            .font_size(theme::font::MICRO)
-                            .color(theme::MUTED),
+                            .font_size(theme::font::micro())
+                            .color(theme::muted()),
                     ),
             ))
             .into_element(),
@@ -345,13 +349,13 @@ pub(super) fn header(
         .vertical()
         .width(Size::fill())
         .padding(Gaps::new(
-            theme::space::FIELD,
-            theme::space::CARD,
-            theme::space::XL,
-            theme::space::CARD,
+            theme::space::field(),
+            theme::space::card(),
+            theme::space::xl(),
+            theme::space::card(),
         ))
-        .spacing(theme::space::XL)
-        .background(theme::PANEL)
+        .spacing(theme::space::xl())
+        .background(theme::panel())
         .children(rows)
         .into_element()
 }
@@ -382,13 +386,13 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
     // during rapid tab/window changes.
     let frame = rect()
         .width(Size::fill())
-        .height(Size::px(theme::layout::PREVIEW))
+        .height(Size::px(theme::layout::preview()))
         .main_align(Alignment::Start)
         .cross_align(Alignment::Start)
         .key("save-preview-frame");
     let content = rect()
-        .width(Size::px(theme::layout::PREVIEW))
-        .height(Size::px(theme::layout::PREVIEW))
+        .width(Size::px(theme::layout::preview()))
+        .height(Size::px(theme::layout::preview()))
         .center()
         .key("save-preview-content");
     match preview {
@@ -396,9 +400,9 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
             .child(
                 content.child(
                     image(handle)
-                        .width(Size::px(theme::layout::PREVIEW))
-                        .height(Size::px(theme::layout::PREVIEW))
-                        .corner_radius(theme::radius::CARD)
+                        .width(Size::px(theme::layout::preview()))
+                        .height(Size::px(theme::layout::preview()))
+                        .corner_radius(theme::radius::card())
                         .sampling_mode(SamplingMode::Bilinear)
                         .aspect_ratio(AspectRatio::Min)
                         .key("save-preview-image"),
@@ -408,12 +412,12 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
         None => frame
             .child(
                 content
-                    .background(theme::SURFACE)
-                    .corner_radius(theme::radius::CARD)
+                    .background(theme::surface())
+                    .corner_radius(theme::radius::card())
                     .child(
                         crate::widgets::a11y_text(message)
-                            .font_size(theme::font::MICRO)
-                            .color(theme::DIM)
+                            .font_size(theme::font::micro())
+                            .color(theme::dim())
                             .key("save-preview-placeholder"),
                     ),
             )
@@ -471,39 +475,42 @@ pub(super) fn footer(
     let can_save = has_save && dirty;
     let can_revert = has_save && dirty;
     let (hint_text, hint_color) = if !has_save {
-        ("Open a savegame to edit it.", theme::DIM)
+        ("Open a savegame to edit it.", theme::dim())
     } else if !form_errors.is_empty() && dirty {
         (
             "Some character fields are invalid and were not applied; your other edits can still be saved.",
-            theme::WARNING,
+            theme::warning(),
         )
     } else if !form_errors.is_empty() {
         (
             "Some character fields are invalid and were not applied; fix the highlighted fields to apply them.",
-            theme::WARNING,
+            theme::warning(),
         )
     } else if dirty {
-        ("Changes are only in memory until you save.", theme::WARNING)
+        (
+            "Changes are only in memory until you save.",
+            theme::warning(),
+        )
     } else {
         (
             "All changes are saved. There is nothing to write.",
-            theme::DIM,
+            theme::dim(),
         )
     };
 
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(theme::space::LG)
+        .spacing(theme::space::lg())
         .content(Content::Flex)
         .cross_align(Alignment::Center)
         .padding(Gaps::new(
-            theme::space::LG,
-            theme::space::CARD,
-            theme::space::XL,
-            theme::space::CARD,
+            theme::space::lg(),
+            theme::space::card(),
+            theme::space::xl(),
+            theme::space::card(),
         ))
-        .background(theme::PANEL)
+        .background(theme::panel())
         .child(
             Button::new()
                 .filled()
@@ -521,7 +528,7 @@ pub(super) fn footer(
         .child(rect().width(Size::flex(1.0)))
         .child(
             crate::widgets::a11y_text(hint_text)
-                .font_size(theme::font::MICRO)
+                .font_size(theme::font::micro())
                 .color(hint_color),
         )
         .into_element()
@@ -536,22 +543,22 @@ pub(super) fn loading_state() -> Element {
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::XXL)
-        .padding(Gaps::new_all(theme::space::PAGE))
+        .spacing(theme::space::xxl())
+        .padding(Gaps::new_all(theme::space::page()))
         .child(
             crate::widgets::a11y_text("Loading savegames…")
                 .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-                .font_size(theme::font::HEADING)
+                .font_size(theme::font::heading())
                 .font_weight(FontWeight::BOLD)
-                .color(theme::TEXT),
+                .color(theme::text()),
         )
         .child(
             crate::widgets::a11y_text(
                 "JadeForge is reading the save folder and the game data. \
                  The save list appears as soon as the scan finishes.",
             )
-            .font_size(theme::font::LABEL)
-            .color(theme::MUTED),
+            .font_size(theme::font::label())
+            .color(theme::muted()),
         )
         .child(skeleton_block(SKELETON_HERO_HEIGHT))
         .child(skeleton_block(SKELETON_CARD_HEIGHT))
@@ -569,8 +576,8 @@ fn skeleton_block(height: f32) -> Element {
     rect()
         .width(Size::fill())
         .height(Size::px(height))
-        .background(theme::PANEL)
-        .corner_radius(theme::radius::PANEL)
+        .background(theme::panel())
+        .corner_radius(theme::radius::panel())
         .into_element()
 }
 
@@ -596,19 +603,19 @@ pub(super) fn empty_state(
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::MD)
-        .padding(Gaps::new_all(theme::space::PAGE))
+        .spacing(theme::space::md())
+        .padding(Gaps::new_all(theme::space::page()))
         .child(
             crate::widgets::a11y_text("No savegame selected")
                 .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-                .font_size(theme::font::HEADING)
+                .font_size(theme::font::heading())
                 .font_weight(FontWeight::BOLD)
-                .color(theme::TEXT),
+                .color(theme::text()),
         )
         .child(
             crate::widgets::a11y_text(text)
-                .font_size(theme::font::LABEL)
-                .color(theme::MUTED),
+                .font_size(theme::font::label())
+                .color(theme::muted()),
         )
         .child(
             Button::new()
@@ -620,8 +627,8 @@ pub(super) fn empty_state(
             crate::widgets::a11y_text(
                 "JadeForge never writes a savegame without verifying it and keeping a backup.",
             )
-            .font_size(theme::font::CAPTION)
-            .color(theme::DIM),
+            .font_size(theme::font::caption())
+            .color(theme::dim()),
         )
         .into_element()
 }

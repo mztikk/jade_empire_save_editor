@@ -7,12 +7,15 @@
 //!
 //! ```text
 //! cargo run -p jadeforge-gui --example snapshot -- <SAVE_DIR> <OUT.png> [TAB|all] [--height N] [--query TEXT]
+//! cargo run -p jadeforge-gui --example snapshot -- <SAVE_DIR> <OUT.png> all --theme light --scale 150
 //! ```
 //!
 //! When the tab argument is `all`, one image per tab is written next to
 //! `<OUT.png>`. `--query` types a search term into the active tab's own picker
 //! filter; the savegame filter in the sidebar is deliberately never used for a
-//! tab that has its own filter.
+//! tab that has its own filter. `--theme` and `--scale` write the same isolated
+//! test settings the app reads, so the documented theme and zoom variants are
+//! reproducible.
 
 use std::path::PathBuf;
 
@@ -42,6 +45,8 @@ fn main() {
     let mut width = 1280.0_f32;
     let mut height = 800.0_f32;
     let mut query = None;
+    let mut theme = None;
+    let mut scale = None;
     while let Some(argument) = arguments.next() {
         match argument.as_str() {
             "--width" => {
@@ -57,6 +62,8 @@ fn main() {
                     .unwrap_or(800.0);
             }
             "--query" => query = arguments.next(),
+            "--theme" => theme = arguments.next(),
+            "--scale" => scale = arguments.next().and_then(|value| value.parse::<u16>().ok()),
             "--click" => click_text = arguments.next(),
             "--cursor" => {
                 cursor = arguments.next().and_then(|value| {
@@ -68,6 +75,17 @@ fn main() {
             }
             other => wanted = Some(other.to_owned()),
         }
+    }
+
+    if theme.is_some() || scale.is_some() {
+        let mut config = jadeforge_gui::config::Config::load();
+        if let Some(theme) = &theme {
+            config.theme = jadeforge_gui::ThemeChoice::from_key(theme);
+        }
+        if let Some(scale) = scale {
+            config.text_scale = jadeforge_gui::normalize_text_scale(scale);
+        }
+        config.store().expect("store snapshot preferences");
     }
 
     let start = directory.clone();

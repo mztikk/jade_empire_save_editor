@@ -14,7 +14,9 @@ use freya::elements::image::Image;
 use freya::prelude::*;
 use freya_core::events::platform::{KeyboardEventName, PlatformEvent};
 use freya_testing::TestingRunner;
+use jadeforge_gui::ThemeChoice;
 use jadeforge_gui::app_with_directory;
+use jadeforge_gui::theme::{self, PaletteKind};
 
 mod support;
 
@@ -3558,7 +3560,7 @@ fn sweeping_across_upgrade_orbs_keeps_the_style_hovered() {
     test.sync_and_update();
     assert_eq!(
         row_background(&test),
-        Some(jadeforge_gui::theme::SURFACE_HOVER),
+        Some(jadeforge_gui::theme::surface_hover()),
         "hovering an orb dropped the style row highlight"
     );
     assert!(
@@ -3578,7 +3580,7 @@ fn sweeping_across_upgrade_orbs_keeps_the_style_hovered() {
         test.sync_and_update();
         assert_eq!(
             row_background(&test),
-            Some(jadeforge_gui::theme::SURFACE_HOVER),
+            Some(jadeforge_gui::theme::surface_hover()),
             "the style row lost its highlight in the gap between orbs"
         );
         assert!(
@@ -3591,7 +3593,7 @@ fn sweeping_across_upgrade_orbs_keeps_the_style_hovered() {
     test.sync_and_update();
     assert_eq!(
         row_background(&test),
-        Some(jadeforge_gui::theme::SURFACE_HOVER),
+        Some(jadeforge_gui::theme::surface_hover()),
         "the second orb did not keep the style row highlighted"
     );
     assert!(
@@ -4063,4 +4065,125 @@ fn upgrade_detail_keeps_the_full_width() {
             action_area.origin.x
         );
     }
+}
+
+/// Writes UI preferences into the isolated test settings before a launch.
+fn write_ui_preferences(theme: ThemeChoice, text_scale: u16) {
+    let _ = jadeforge_gui::config::ensure_test_path();
+    let mut config = jadeforge_gui::config::Config::load();
+    config.theme = theme;
+    config.text_scale = text_scale;
+    config.store().expect("store UI preferences");
+}
+
+#[test]
+fn the_light_theme_renders_with_the_light_palette() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    write_ui_preferences(ThemeChoice::Light, 100);
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    assert_eq!(theme::current().palette.kind, theme::PaletteKind::Light);
+    assert!(
+        theme::background().r() > 200,
+        "the light background is not light"
+    );
+    // The shell and the editor still render with the same structure.
+    assert!(find_label_text(&test, "SAVEGAME").is_some());
+    assert!(click_text(&mut test, "Styles"), "Styles did not render");
+    assert!(find_label_text(&test, "Fighting styles").is_some());
+}
+
+#[test]
+fn the_high_contrast_theme_renders_black_on_white() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    write_ui_preferences(ThemeChoice::HighContrast, 100);
+    let test = launch_sized(fixture.save_dir.clone(), 900.0);
+    assert_eq!(
+        theme::current().palette.kind,
+        theme::PaletteKind::HighContrast
+    );
+    assert_eq!(theme::background(), Color::from_rgb(0, 0, 0));
+    assert_eq!(theme::text(), Color::WHITE);
+    assert!(find_label_text(&test, "SAVEGAME").is_some());
+}
+
+#[test]
+fn the_system_theme_follows_the_platform_preference() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    // The headless runner reports a light platform preference.
+    write_ui_preferences(ThemeChoice::System, 100);
+    let test = launch_sized(fixture.save_dir.clone(), 900.0);
+    assert_eq!(theme::current().palette.kind, theme::PaletteKind::Light);
+    drop(test);
+}
+
+#[test]
+fn the_about_page_changes_theme_and_text_scale_and_persists_them() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert_eq!(theme::current().palette.kind, theme::PaletteKind::Dark);
+    assert!(click_text(&mut test, "About"), "About is missing");
+
+    assert!(click_text(&mut test, "Light"), "Light chip is missing");
+    assert_eq!(theme::current().palette.kind, theme::PaletteKind::Light);
+    let config = jadeforge_gui::config::Config::load();
+    assert_eq!(config.theme, ThemeChoice::Light);
+
+    assert!(
+        click_text(&mut test, "High contrast"),
+        "the HC chip is missing"
+    );
+    assert_eq!(
+        theme::current().palette.kind,
+        theme::PaletteKind::HighContrast
+    );
+
+    assert!(click_text(&mut test, "200 %"), "the 200 % chip is missing");
+    assert!((theme::current().text_scale - 2.0).abs() < f32::EPSILON);
+    let config = jadeforge_gui::config::Config::load();
+    assert_eq!(config.theme, ThemeChoice::HighContrast);
+    assert_eq!(config.normalized_text_scale(), 200);
+}
+
+#[test]
+fn every_tab_renders_at_200_percent_text_without_a_layout_panic() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    write_ui_preferences(ThemeChoice::Dark, 200);
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    assert!((theme::current().text_scale - 2.0).abs() < f32::EPSILON);
+    // The scaled save row still shows its level line as one row.
+    let level = find_node_with_text(&test, "Level ").expect("the save row is missing");
+    assert!(
+        level.layout().area.size.height >= 20.0,
+        "the scaled save row text is only {} px tall",
+        level.layout().area.size.height
+    );
+    for tab in [
+        "Overview",
+        "Character",
+        "Styles",
+        "Inventory",
+        "Gems",
+        "Companions",
+    ] {
+        assert!(click_text(&mut test, tab), "{tab} did not render at 200 %");
+        settle(&mut test);
+    }
+    // The status slot and the footer are still inside the window.
+    let footer = find_label_exact(&test, "Save to disk").expect("the footer is missing");
+    assert!(footer.layout().area.origin.y > 0.0);
 }

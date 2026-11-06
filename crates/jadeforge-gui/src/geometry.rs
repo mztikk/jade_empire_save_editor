@@ -55,7 +55,7 @@ pub fn fit_window(
     work: Option<WorkArea>,
     minimum: (f64, f64),
 ) -> FittedWindow {
-    let margin = f64::from(theme::layout::WINDOW_MARGIN);
+    let margin = f64::from(theme::layout::window_margin());
     let wanted = stored
         .filter(WindowGeometry::is_valid)
         .map_or(preferred, |geometry| {
@@ -167,15 +167,15 @@ mod tests {
 
     fn preferred() -> (f64, f64) {
         (
-            f64::from(theme::layout::WINDOW_WIDTH),
-            f64::from(theme::layout::WINDOW_HEIGHT),
+            f64::from(theme::layout::window_width()),
+            f64::from(theme::layout::window_height()),
         )
     }
 
     fn minimum() -> (f64, f64) {
         (
-            f64::from(theme::layout::MIN_WINDOW_WIDTH),
-            f64::from(theme::layout::MIN_WINDOW_HEIGHT),
+            f64::from(theme::layout::min_window_width()),
+            f64::from(theme::layout::min_window_height()),
         )
     }
 
@@ -195,7 +195,7 @@ mod tests {
         // keeps a title bar and panel, so the whole monitor is the bound.
         let work = screen(1366.0 / 1.25, 768.0 / 1.25);
         let fitted = fit_window(preferred(), None, Some(work), minimum());
-        let margin = f64::from(theme::layout::WINDOW_MARGIN);
+        let margin = f64::from(theme::layout::window_margin());
         assert!(
             fitted.width <= work.width - margin,
             "the default width {} does not fit {work:?}",

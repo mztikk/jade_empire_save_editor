@@ -40,7 +40,7 @@ pub fn view(
             rect()
                 .vertical()
                 .width(Size::fill())
-                .spacing(theme::space::XS)
+                .spacing(theme::space::xs())
                 .children(rows)
                 .into_element(),
             widgets::divider(),
@@ -109,15 +109,15 @@ fn henchman_row(
         .key(index)
         .a11y_role(AccessibilityRole::Group)
         .a11y_alt(format!("{} companion", henchman.name))
-        .spacing(theme::space::LG)
+        .spacing(theme::space::lg())
         .content(Content::Flex)
-        .padding(Gaps::new_symmetric(theme::space::SM, theme::space::LG))
+        .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::lg()))
         .background(if is_hovered {
-            theme::SURFACE_HOVER
+            theme::surface_hover()
         } else {
-            theme::SURFACE
+            theme::surface()
         })
-        .corner_radius(theme::radius::MEDIUM)
+        .corner_radius(theme::radius::medium())
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -127,28 +127,28 @@ fn henchman_row(
         .child(
             rect()
                 .vertical()
-                .spacing(theme::space::XXS)
+                .spacing(theme::space::xxs())
                 .width(Size::flex(1.0))
                 .child(widgets::with_tooltip(
                     henchman.name.clone(),
                     widgets::a11y_text(henchman.name.clone())
-                        .font_size(theme::font::BODY)
+                        .font_size(theme::font::body())
                         .max_lines(1)
                         .text_overflow(TextOverflow::Ellipsis)
-                        .color(theme::TEXT),
+                        .color(theme::text()),
                 ))
                 .child(
                     widgets::a11y_text(henchman.resref.clone())
-                        .font_size(theme::font::MICRO)
-                        .color(theme::DIM),
+                        .font_size(theme::font::micro())
+                        .color(theme::dim()),
                 ),
         )
         .child(if available {
-            widgets::badge("available", theme::SURFACE_ACTIVE, theme::JADE)
+            widgets::badge("available", theme::surface_active(), theme::jade())
         } else {
             // Hidden is a resting state, not a failure: a calmer colour than
             // the danger red that made an unavailable companion look broken.
-            widgets::badge("hidden", theme::SURFACE, theme::MUTED)
+            widgets::badge("hidden", theme::surface(), theme::muted())
         })
         .child(widgets::row_action(
             format!("Decrease {name} level"),
@@ -158,7 +158,7 @@ fn henchman_row(
         .child(
             // Direct numeric editing: level 60 from level 1 is one edit.
             Input::new(WritableSetter::new(level.to_string(), |_: String| {}))
-                .width(Size::px(theme::layout::STEPPER_WIDTH))
+                .width(Size::px(theme::layout::stepper_width()))
                 .text_align(TextAlign::Center)
                 .compact()
                 .on_submit(set_level),

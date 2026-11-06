@@ -26,10 +26,10 @@ pub(super) fn tab_bar(
         });
         let content = rect()
             .vertical()
-            .padding(Gaps::new_symmetric(theme::space::SM, theme::space::XL))
-            .corner_radius(theme::radius::MEDIUM)
+            .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::xl()))
+            .corner_radius(theme::radius::medium())
             .background(if is_active && enabled {
-                theme::SURFACE_ACTIVE
+                theme::surface_active()
             } else {
                 Color::TRANSPARENT
             })
@@ -43,29 +43,29 @@ pub(super) fn tab_bar(
                     .width(BorderWidth {
                         top: 0.0,
                         right: 0.0,
-                        bottom: theme::stroke::EMPHASIS,
+                        bottom: theme::stroke::emphasis(),
                         left: 0.0,
                     })
                     .alignment(BorderAlignment::Inner)
                     .fill(if is_active && enabled {
-                        theme::ACCENT
+                        theme::accent()
                     } else {
                         Color::TRANSPARENT
                     }),
             )
             .child(
                 crate::widgets::a11y_text(candidate.label())
-                    .font_size(theme::font::LABEL)
+                    .font_size(theme::font::label())
                     .max_lines(1)
                     // Keep the weight constant: bold text is wider,
                     // so toggling it moved the active tab.
                     .font_weight(FontWeight::BOLD)
                     .color(if !enabled {
-                        theme::DIM
+                        theme::dim()
                     } else if is_active {
-                        theme::ACCENT
+                        theme::accent()
                     } else {
-                        theme::MUTED
+                        theme::muted()
                     }),
             )
             .into_element();
@@ -74,7 +74,7 @@ pub(super) fn tab_bar(
                 AccessibleButton::new(candidate.label(), action, content)
                     .role(AccessibilityRole::Tab)
                     .selected(is_active)
-                    .hover_background(theme::SURFACE_HOVER)
+                    .hover_background(theme::surface_hover())
                     // Arrow keys move between tabs while one of them has
                     // keyboard focus; Home and End jump to the ends.
                     .on_key({
@@ -119,26 +119,26 @@ pub(super) fn tab_bar(
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::NONE)
+        .spacing(theme::space::none())
         .child(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::MD)
+                .spacing(theme::space::md())
                 .content(Content::Flex)
                 .cross_align(Alignment::Center)
                 .padding(Gaps::new(
-                    theme::space::LG,
-                    theme::space::CARD,
-                    theme::space::MD,
-                    theme::space::CARD,
+                    theme::space::lg(),
+                    theme::space::card(),
+                    theme::space::md(),
+                    theme::space::card(),
                 ))
                 .child(
                     rect()
                         .horizontal()
                         .width(Size::flex(1.0))
-                        .spacing(theme::space::XS)
-                        .content(Content::wrap_spacing(theme::space::XS))
+                        .spacing(theme::space::xs())
+                        .content(Content::wrap_spacing(theme::space::xs()))
                         .a11y_role(AccessibilityRole::TabList)
                         .children(buttons),
                 )
@@ -148,8 +148,8 @@ pub(super) fn tab_bar(
         .child(
             rect()
                 .width(Size::fill())
-                .height(Size::px(theme::layout::DIVIDER))
-                .background(theme::BORDER)
+                .height(Size::px(theme::layout::divider()))
+                .background(theme::border())
                 .into_element(),
         )
         .into_element()
@@ -162,8 +162,8 @@ pub(super) fn tab_bar(
 /// this is the persistent "work is happening" cue next to the content.
 fn busy_slot(scanning: bool) -> Element {
     rect()
-        .width(Size::px(theme::layout::BUSY_SLOT))
-        .height(Size::px(theme::font::LINE_HEIGHT))
+        .width(Size::px(theme::layout::busy_slot()))
+        .height(Size::px(theme::font::line_height()))
         .main_align(Alignment::Center)
         .cross_align(Alignment::End)
         .child(
@@ -174,10 +174,10 @@ fn busy_slot(scanning: bool) -> Element {
                         node.set_live(accesskit::Live::Polite);
                     }
                 })
-                .font_size(theme::font::MICRO)
+                .font_size(theme::font::micro())
                 .font_weight(FontWeight::BOLD)
                 .max_lines(1)
-                .color(theme::WARNING),
+                .color(theme::warning()),
         )
         .into_element()
 }

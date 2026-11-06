@@ -50,8 +50,8 @@ pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: &'stati
     };
     rect()
         .horizontal()
-        .spacing(theme::space::MD)
-        .content(Content::wrap_spacing(theme::space::MD))
+        .spacing(theme::space::md())
+        .content(Content::wrap_spacing(theme::space::md()))
         .child(path_button(
             format!("Copy the {what} path"),
             "Copy path",
@@ -71,13 +71,13 @@ fn path_button(accessible: String, text: &'static str, action: Action) -> Elemen
         accessible,
         action,
         rect()
-            .padding(Gaps::new_symmetric(theme::space::XS, theme::space::MD))
+            .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
             .child(
                 widgets::a11y_text(text)
-                    .font_size(theme::font::MICRO)
-                    .color(theme::MUTED),
+                    .font_size(theme::font::micro())
+                    .color(theme::muted()),
             ),
     )
-    .hover_background(theme::SURFACE_HOVER)
+    .hover_background(theme::surface_hover())
     .into_element()
 }

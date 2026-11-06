@@ -47,7 +47,7 @@ pub fn view(
         rect()
             .vertical()
             .width(Size::fill())
-            .spacing(theme::space::XS)
+            .spacing(theme::space::xs())
             .children(rows)
             .into_element(),
         widgets::divider(),
@@ -99,14 +99,14 @@ pub fn view(
             let heading = rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::LG)
+                .spacing(theme::space::lg())
                 .content(Content::Flex)
                 .child(widgets::section_label(&heading_text))
                 .child(rect().width(Size::flex(1.0)))
                 .child(
                     widgets::a11y_text(count_text)
-                        .font_size(theme::font::MICRO)
-                        .color(theme::DIM),
+                        .font_size(theme::font::micro())
+                        .color(theme::dim()),
                 )
                 .maybe(shown < total, |el| {
                     el.child(
@@ -131,7 +131,7 @@ pub fn view(
                 rect()
                     .vertical()
                     .width(Size::fill())
-                    .spacing(theme::space::XXS)
+                    .spacing(theme::space::xxs())
                     .children(result_rows)
                     .into_element(),
             );
@@ -200,8 +200,8 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(theme::space::SM)
-        .content(Content::wrap_spacing(theme::space::SM))
+        .spacing(theme::space::sm())
+        .content(Content::wrap_spacing(theme::space::sm()))
         .child(widgets::section_label("CATEGORY"))
         .children(chips)
         .into_element()
@@ -213,27 +213,27 @@ fn category_chip(label: String, accessible: String, selected: bool, action: Acti
         accessible,
         action,
         rect()
-            .padding(Gaps::new_symmetric(theme::space::XXS, theme::space::MD))
+            .padding(Gaps::new_symmetric(theme::space::xxs(), theme::space::md()))
             .background(if selected {
-                theme::SURFACE_ACTIVE
+                theme::surface_active()
             } else {
-                theme::SURFACE
+                theme::surface()
             })
-            .corner_radius(theme::radius::PILL)
+            .corner_radius(theme::radius::pill())
             .child(
                 widgets::a11y_text(label)
-                    .font_size(theme::font::MICRO)
+                    .font_size(theme::font::micro())
                     .max_lines(1)
                     .color(if selected {
-                        theme::ACCENT
+                        theme::accent()
                     } else {
-                        theme::MUTED
+                        theme::muted()
                     }),
             ),
     )
     .role(AccessibilityRole::RadioButton)
     .selected(selected)
-    .hover_background(theme::SURFACE_HOVER)
+    .hover_background(theme::surface_hover())
     .into_element()
 }
 
@@ -299,11 +299,11 @@ fn item_row(
         .a11y_role(AccessibilityRole::Group)
         .a11y_alt(format!("{} item", item.name))
         .background(if is_hovered {
-            theme::SURFACE_HOVER
+            theme::surface_hover()
         } else {
-            theme::SURFACE
+            theme::surface()
         })
-        .corner_radius(theme::radius::MEDIUM)
+        .corner_radius(theme::radius::medium())
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -314,16 +314,16 @@ fn item_row(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::SM)
+                .spacing(theme::space::sm())
                 .content(Content::Flex)
                 .cross_align(Alignment::Center)
-                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::SM))
+                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::sm()))
                 .child(widgets::expanding_name(
                     item.struct_index,
                     item.name.clone(),
                     item_subtitle(item.item_id, item.category.as_deref(), item.kind),
                     expanded,
-                    theme::font::BODY,
+                    theme::font::body(),
                 ))
                 .child(widgets::row_action(
                     format!("Decrease {} stack", item.name),
@@ -334,7 +334,7 @@ fn item_row(
                     // Direct numeric editing: a 254-item stack is one edit,
                     // not 254 stepper clicks. Enter applies the value.
                     Input::new(WritableSetter::new(item.count.to_string(), |_: String| {}))
-                        .width(Size::px(theme::layout::ITEM_COUNT_WIDTH))
+                        .width(Size::px(theme::layout::item_count_width()))
                         .text_align(TextAlign::Center)
                         .compact()
                         .on_submit(set_count),
@@ -383,11 +383,11 @@ fn suggestion_row(
         .a11y_role(AccessibilityRole::Group)
         .a11y_alt(format!("{} item", suggestion.name))
         .background(if is_hovered {
-            theme::SURFACE
+            theme::surface()
         } else {
-            theme::PANEL
+            theme::panel()
         })
-        .corner_radius(theme::radius::CONTROL)
+        .corner_radius(theme::radius::control())
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -398,9 +398,9 @@ fn suggestion_row(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::LG)
+                .spacing(theme::space::lg())
                 .content(Content::Flex)
-                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::XS))
+                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::xs()))
                 .child(widgets::expanding_name(
                     suggestion.item_id,
                     suggestion.name.clone(),
@@ -410,7 +410,7 @@ fn suggestion_row(
                         suggestion.save_type,
                     ),
                     expanded,
-                    theme::font::LABEL,
+                    theme::font::label(),
                 ))
                 .child(widgets::row_action(
                     format!("Add {}", suggestion.name),

@@ -111,31 +111,31 @@ pub fn view(
                 .key(item_id)
                 .a11y_role(AccessibilityRole::Group)
                 .a11y_alt(format!("{} gem, {effects}", gem.name))
-                .spacing(theme::space::LG)
+                .spacing(theme::space::lg())
                 .content(Content::Flex)
-                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::MD))
+                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
                 .child(
                     rect()
                         .vertical()
                         .width(Size::flex(1.0))
-                        .spacing(theme::space::XXS)
+                        .spacing(theme::space::xxs())
                         .child(widgets::with_tooltip(
                             gem.name.clone(),
                             widgets::a11y_text(gem.name.clone())
-                                .font_size(theme::font::LABEL)
+                                .font_size(theme::font::label())
                                 .max_lines(1)
                                 .text_overflow(TextOverflow::Ellipsis)
-                                .color(theme::TEXT),
+                                .color(theme::text()),
                         ))
                         // The effect lines are the reason to add a gem; they
                         // belong in the picker, not only on the owned rows.
                         .child(widgets::with_tooltip(
                             effects.clone(),
                             widgets::a11y_text(effects.clone())
-                                .font_size(theme::font::MICRO)
+                                .font_size(theme::font::micro())
                                 .max_lines(1)
                                 .text_overflow(TextOverflow::Ellipsis)
-                                .color(theme::DIM),
+                                .color(theme::dim()),
                         )),
                 )
                 .child(widgets::row_action(
@@ -165,7 +165,7 @@ pub fn view(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::MD)
+                .spacing(theme::space::md())
                 .content(Content::Flex)
                 .child(
                     widgets::a11y_text(if matching.is_empty() {
@@ -176,8 +176,8 @@ pub fn view(
                             widgets::plural(matching.len(), "gem", "gems")
                         )
                     })
-                    .font_size(theme::font::MICRO)
-                    .color(theme::DIM),
+                    .font_size(theme::font::micro())
+                    .color(theme::dim()),
                 )
                 .child(rect().width(Size::flex(1.0)))
                 .maybe(matching.len() > shown, |el| {
@@ -196,7 +196,7 @@ pub fn view(
         rect()
             .vertical()
             .width(Size::fill())
-            .spacing(theme::space::XXS)
+            .spacing(theme::space::xxs())
             .children(add_rows)
             .into_element(),
     );
@@ -209,7 +209,7 @@ pub fn view(
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::XXL)
+        .spacing(theme::space::xxl())
         .child(widgets::card(
             "Amulet",
             Some(amulet_title),
@@ -217,7 +217,7 @@ pub fn view(
                 let mut children = vec![rect()
                     .vertical()
                     .width(Size::fill())
-                    .spacing(theme::space::XS)
+                    .spacing(theme::space::xs())
                     .children(amulet_rows)
                     .into_element()];
                 if let Some(amulet) = amulet {
@@ -240,7 +240,7 @@ pub fn view(
                 rect()
                     .vertical()
                     .width(Size::fill())
-                    .spacing(theme::space::XS)
+                    .spacing(theme::space::xs())
                     .children(inventory_rows)
                     .into_element(),
                 widgets::hint(
@@ -307,8 +307,8 @@ fn gem_row(
                 } else {
                     "No amulet yet"
                 })
-                .font_size(theme::font::MICRO)
-                .color(theme::DIM)
+                .font_size(theme::font::micro())
+                .color(theme::dim())
                 .into_element(),
             );
         }
@@ -337,15 +337,15 @@ fn gem_row(
         .key(index)
         .a11y_role(AccessibilityRole::Group)
         .a11y_alt(format!("{} gem", gem.name))
-        .spacing(theme::space::LG)
+        .spacing(theme::space::lg())
         .content(Content::Flex)
-        .padding(Gaps::new_symmetric(theme::space::SM, theme::space::LG))
+        .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::lg()))
         .background(if is_hovered {
-            theme::SURFACE_HOVER
+            theme::surface_hover()
         } else {
-            theme::SURFACE
+            theme::surface()
         })
-        .corner_radius(theme::radius::MEDIUM)
+        .corner_radius(theme::radius::medium())
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -355,15 +355,19 @@ fn gem_row(
         .child(
             rect()
                 .vertical()
-                .spacing(theme::space::XXS)
+                .spacing(theme::space::xxs())
                 .width(Size::flex(1.0))
                 .child(widgets::with_tooltip(
                     gem.name.clone(),
                     widgets::a11y_text(gem.name.clone())
-                        .font_size(theme::font::BODY)
+                        .font_size(theme::font::body())
                         .max_lines(1)
                         .text_overflow(TextOverflow::Ellipsis)
-                        .color(if gem.empty { theme::DIM } else { theme::TEXT }),
+                        .color(if gem.empty {
+                            theme::dim()
+                        } else {
+                            theme::text()
+                        }),
                 ))
                 .child(
                     widgets::a11y_text(if gem.effects.is_empty() {
@@ -371,9 +375,9 @@ fn gem_row(
                     } else {
                         gem.effects.join(" · ")
                     })
-                    .font_size(theme::font::MICRO)
+                    .font_size(theme::font::micro())
                     .max_lines(2)
-                    .color(theme::DIM),
+                    .color(theme::dim()),
                 ),
         )
         .children(actions)

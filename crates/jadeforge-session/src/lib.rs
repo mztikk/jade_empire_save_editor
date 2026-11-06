@@ -8,8 +8,12 @@
 //! on a windowing toolkit, so the behaviour can be tested without a display.
 
 pub mod config;
+pub mod preferences;
 pub mod session;
 
+pub use preferences::{
+    MAX_TEXT_SCALE, MIN_TEXT_SCALE, TEXT_SCALES, ThemeChoice, normalize_text_scale,
+};
 pub use session::{
     CharacterForm, GameStatus, Message, MessageKind, SaveEntry, Session, SessionError,
     default_save_dir,

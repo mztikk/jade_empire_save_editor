@@ -86,34 +86,34 @@ pub fn view(
     let hero = rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::MD)
-        .padding(Gaps::new_all(theme::space::CARD))
-        .background(theme::PANEL)
-        .corner_radius(theme::radius::PANEL)
+        .spacing(theme::space::md())
+        .padding(Gaps::new_all(theme::space::card()))
+        .background(theme::panel())
+        .corner_radius(theme::radius::panel())
         .child(
             widgets::a11y_text(character.name.clone())
                 .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-                .font_size(theme::font::DISPLAY)
+                .font_size(theme::font::display())
                 .font_weight(FontWeight::BOLD)
                 .max_lines(1)
-                .color(theme::TEXT),
+                .color(theme::text()),
         )
         .child(
             rect()
                 .horizontal()
-                .spacing(theme::space::MD)
-                .content(Content::wrap_spacing(theme::space::MD))
+                .spacing(theme::space::md())
+                .content(Content::wrap_spacing(theme::space::md()))
                 .child(widgets::badge(
                     format!("Level {}", character.level),
-                    theme::ACCENT,
-                    theme::ON_ACCENT,
+                    theme::accent(),
+                    theme::on_accent(),
                 ))
                 .child(widgets::badge(
                     format!("Chapter {}", character.chapter),
-                    theme::SURFACE_ACTIVE,
-                    theme::TEXT,
+                    theme::surface_active(),
+                    theme::text(),
                 ))
-                .child(widgets::badge(alignment, theme::SURFACE, theme::JADE))
+                .child(widgets::badge(alignment, theme::surface(), theme::jade()))
                 .into_element(),
         )
         .child(
@@ -131,8 +131,8 @@ pub fn view(
                     "experience points"
                 )
             ))
-            .font_size(theme::font::LABEL)
-            .color(theme::MUTED),
+            .font_size(theme::font::label())
+            .color(theme::muted()),
         )
         .child(widgets::stat_grid(vec![
             widgets::stat(
@@ -171,8 +171,8 @@ pub fn view(
             (
                 "Inventory".to_owned(),
                 widgets::a11y_text(widgets::plural(item_count, "stack", "stacks"))
-                    .font_size(theme::font::BODY)
-                    .color(theme::TEXT)
+                    .font_size(theme::font::body())
+                    .color(theme::text())
                     .into_element(),
             ),
             (
@@ -182,18 +182,18 @@ pub fn view(
                     "style learned",
                     "styles learned",
                 ))
-                .font_size(theme::font::BODY)
-                .color(theme::TEXT)
+                .font_size(theme::font::body())
+                .color(theme::text())
                 .into_element(),
             ),
             (
                 "Unspent attribute points".to_owned(),
                 widgets::a11y_text(character.attribute_points.to_string())
-                    .font_size(theme::font::BODY)
+                    .font_size(theme::font::body())
                     .color(if character.attribute_points > 0 {
-                        theme::ACCENT
+                        theme::accent()
                     } else {
-                        theme::MUTED
+                        theme::muted()
                     })
                     .into_element(),
             ),
@@ -203,8 +203,8 @@ pub fn view(
                     "{} / {} / {}",
                     character.body, character.mind, character.spirit
                 ))
-                .font_size(theme::font::BODY)
-                .color(theme::TEXT)
+                .font_size(theme::font::body())
+                .color(theme::text())
                 .into_element(),
             ),
             (
@@ -213,8 +213,8 @@ pub fn view(
                     "{} / {} / {}",
                     character.charm, character.intuition, character.intimidate
                 ))
-                .font_size(theme::font::BODY)
-                .color(theme::TEXT)
+                .font_size(theme::font::body())
+                .color(theme::text())
                 .into_element(),
             ),
         ])],
@@ -223,7 +223,7 @@ pub fn view(
     let path_row = rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::XS)
+        .spacing(theme::space::xs())
         .child(widgets::label_row(
             "File",
             save_folder.clone().map_or_else(
@@ -236,9 +236,9 @@ pub fn view(
             // stay copyable through the actions above.
             paragraph()
                 .width(Size::fill())
-                .max_width(Size::px(theme::layout::TEXT_MEASURE))
-                .font_size(theme::font::LABEL)
-                .color(theme::MUTED)
+                .max_width(Size::px(theme::layout::text_measure()))
+                .font_size(theme::font::label())
+                .color(theme::muted())
                 .a11y_builder({
                     let path = path.clone();
                     move |node| node.set_value(path)
@@ -251,7 +251,7 @@ pub fn view(
         (Some(backup), Some(folder)) => rect()
             .vertical()
             .width(Size::fill())
-            .spacing(theme::space::XS)
+            .spacing(theme::space::xs())
             .child(widgets::label_row(
                 "Backup",
                 path_actions(ctx, &backup.display().to_string(), folder.clone(), "backup"),
@@ -259,9 +259,9 @@ pub fn view(
             .child(
                 paragraph()
                     .width(Size::fill())
-                    .max_width(Size::px(theme::layout::TEXT_MEASURE))
-                    .font_size(theme::font::LABEL)
-                    .color(theme::MUTED)
+                    .max_width(Size::px(theme::layout::text_measure()))
+                    .font_size(theme::font::label())
+                    .color(theme::muted())
                     .a11y_builder({
                         let backup = backup.display().to_string();
                         move |node| node.set_value(backup)
@@ -293,17 +293,17 @@ pub fn view(
                     format::plural(block_count, "block", "blocks"),
                     file_size.map_or_else(|| "unknown size".to_owned(), format::bytes)
                 ))
-                .font_size(theme::font::LABEL)
-                .color(theme::MUTED),
+                .font_size(theme::font::label())
+                .color(theme::muted()),
             ),
             widgets::divider(),
             rect()
                 .horizontal()
-                .spacing(theme::space::MD)
+                .spacing(theme::space::md())
                 .child(
                     widgets::a11y_text(if game_ok { "Game data" } else { "Notice" })
-                        .font_size(theme::font::LABEL)
-                        .color(theme::MUTED),
+                        .font_size(theme::font::label())
+                        .color(theme::muted()),
                 )
                 .child(widgets::badge(
                     if game_ok {
@@ -314,16 +314,16 @@ pub fn view(
                         "not found"
                     },
                     if game_ok {
-                        theme::SURFACE
+                        theme::surface()
                     } else {
-                        theme::SURFACE_ACTIVE
+                        theme::surface_active()
                     },
                     if game_ok {
-                        theme::JADE
+                        theme::jade()
                     } else if game_loading {
-                        theme::DIM
+                        theme::dim()
                     } else {
-                        theme::WARNING
+                        theme::warning()
                     },
                 ))
                 .into_element(),
@@ -339,7 +339,7 @@ pub fn view(
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::XXL)
+        .spacing(theme::space::xxl())
         .child(hero)
         .child(quick)
         .child(details)

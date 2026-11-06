@@ -22,30 +22,30 @@ pub fn card(title: &'static str, hint: Option<String>, children: Vec<Element>) -
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::XXL)
-        .padding(Gaps::new_all(theme::space::CARD))
-        .background(theme::PANEL)
-        .corner_radius(theme::radius::PANEL)
+        .spacing(theme::space::xxl())
+        .padding(Gaps::new_all(theme::space::card()))
+        .background(theme::panel())
+        .corner_radius(theme::radius::panel())
         .child(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::LG)
+                .spacing(theme::space::lg())
                 .content(Content::Flex)
                 .child(
                     a11y_text(title)
                         .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-                        .font_size(theme::font::CARD_TITLE)
+                        .font_size(theme::font::card_title())
                         .font_weight(FontWeight::BOLD)
-                        .color(theme::TEXT),
+                        .color(theme::text()),
                 )
                 .child(rect().width(Size::flex(1.0)))
                 .child(hint.map_or_else(
-                    || a11y_text("").font_size(theme::font::CAPTION),
+                    || a11y_text("").font_size(theme::font::caption()),
                     |hint| {
                         a11y_text(hint)
-                            .font_size(theme::font::CAPTION)
-                            .color(theme::DIM)
+                            .font_size(theme::font::caption())
+                            .color(theme::dim())
                     },
                 )),
         )
@@ -56,7 +56,7 @@ pub fn card(title: &'static str, hint: Option<String>, children: Vec<Element>) -
 /// One row of form fields that share the width evenly.
 ///
 /// Fields grow to fill the row and never shrink below
-/// [`theme::layout::FIELD_MIN_WIDTH`]. Callers group the fields they want on a
+/// [`theme::layout::field_min_width()`]. Callers group the fields they want on a
 /// row, so a wide window shows a deliberate 3+3 identity grid instead of
 /// whichever fields happen to fit; a row that no longer fits keeps its fields
 /// inside the horizontal scroll area rather than moving one field to its own
@@ -65,7 +65,7 @@ pub fn field_grid(children: Vec<Element>) -> Element {
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(theme::space::FIELD)
+        .spacing(theme::space::field())
         .content(Content::Flex)
         .children(children)
         .into_element()
@@ -89,16 +89,20 @@ pub fn field_checked(
     // own value; the true label association is an upstream follow-up.
     rect()
         .vertical()
-        .spacing(theme::space::XS)
+        .spacing(theme::space::xs())
         .width(Size::flex(1.0))
-        .min_width(Size::px(theme::layout::FIELD_MIN_WIDTH))
+        .min_width(Size::px(theme::layout::field_min_width()))
         .a11y_role(AccessibilityRole::Group)
         .a11y_alt(field.label())
         .child(
             a11y_text(field.label())
-                .font_size(theme::font::MICRO)
+                .font_size(theme::font::micro())
                 .font_weight(FontWeight::BOLD)
-                .color(if invalid { theme::DANGER } else { theme::DIM }),
+                .color(if invalid {
+                    theme::danger()
+                } else {
+                    theme::dim()
+                }),
         )
         .child(
             rect()
@@ -106,25 +110,29 @@ pub fn field_checked(
                 .border(
                     Border::new()
                         .fill(if invalid {
-                            theme::DANGER
+                            theme::danger()
                         } else {
                             Color::TRANSPARENT
                         })
-                        .width(theme::stroke::FOCUS),
+                        .width(theme::stroke::focus()),
                 )
                 .child(input),
         )
         .child(
             rect()
                 .width(Size::fill())
-                .height(Size::px(theme::font::LINE_HEIGHT))
+                .height(Size::px(theme::font::line_height()))
                 .child(with_tooltip(
                     message.clone(),
                     a11y_text(message)
-                        .font_size(theme::font::MICRO)
+                        .font_size(theme::font::micro())
                         .max_lines(1)
                         .text_overflow(TextOverflow::Ellipsis)
-                        .color(if invalid { theme::DANGER } else { theme::DIM }),
+                        .color(if invalid {
+                            theme::danger()
+                        } else {
+                            theme::dim()
+                        }),
                 )),
         )
         .into_element()
@@ -140,19 +148,19 @@ pub fn field_error(errors: &[FieldError], field: CharacterField) -> Option<&Fiel
 pub fn stat(label_text: &'static str, value: String) -> Element {
     rect()
         .vertical()
-        .spacing(theme::space::XXS)
+        .spacing(theme::space::xxs())
         .width(Size::flex(1.0))
-        .min_width(Size::px(theme::layout::STAT_MIN_WIDTH))
+        .min_width(Size::px(theme::layout::stat_min_width()))
         .child(
             a11y_text(label_text)
-                .font_size(theme::font::MICRO)
-                .color(theme::DIM),
+                .font_size(theme::font::micro())
+                .color(theme::dim()),
         )
         .child(
             a11y_text(value)
-                .font_size(theme::font::SUBHEADING)
+                .font_size(theme::font::subheading())
                 .font_weight(FontWeight::BOLD)
-                .color(theme::TEXT),
+                .color(theme::text()),
         )
         .into_element()
 }
@@ -170,7 +178,7 @@ pub fn stat_grid(children: Vec<Element>) -> Element {
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::GRID)
+                .spacing(theme::space::grid())
                 .content(Content::Flex)
                 .children(pair)
                 .into_element(),
@@ -179,7 +187,7 @@ pub fn stat_grid(children: Vec<Element>) -> Element {
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::MD)
+        .spacing(theme::space::md())
         .children(rows)
         .into_element()
 }
@@ -187,12 +195,12 @@ pub fn stat_grid(children: Vec<Element>) -> Element {
 /// A coloured pill, used for categories and states.
 pub fn badge(text: impl Into<String>, fill: Color, text_color: Color) -> Element {
     rect()
-        .padding(Gaps::new_symmetric(theme::space::XXS, theme::space::MD))
+        .padding(Gaps::new_symmetric(theme::space::xxs(), theme::space::md()))
         .background(fill)
-        .corner_radius(theme::radius::PILL)
+        .corner_radius(theme::radius::pill())
         .child(
             a11y_text(text.into())
-                .font_size(theme::font::MICRO)
+                .font_size(theme::font::micro())
                 .color(text_color),
         )
         .into_element()
@@ -202,16 +210,16 @@ pub fn badge(text: impl Into<String>, fill: Color, text_color: Color) -> Element
 pub fn divider() -> Element {
     rect()
         .width(Size::fill())
-        .height(Size::px(theme::layout::DIVIDER))
-        .background(theme::BORDER)
+        .height(Size::px(theme::layout::divider()))
+        .background(theme::border())
         .into_element()
 }
 
 /// Small muted explanatory text.
 pub fn hint(text: impl Into<String>) -> Element {
     a11y_text(text.into())
-        .font_size(theme::font::CAPTION)
-        .color(theme::DIM)
+        .font_size(theme::font::caption())
+        .color(theme::dim())
         .into_element()
 }
 
@@ -219,9 +227,9 @@ pub fn hint(text: impl Into<String>) -> Element {
 pub fn section_label(text: impl Into<String>) -> Element {
     a11y_text(text.into())
         .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-        .font_size(theme::font::MICRO)
+        .font_size(theme::font::micro())
         .font_weight(FontWeight::BOLD)
-        .color(theme::DIM)
+        .color(theme::dim())
         .into_element()
 }
 
@@ -230,12 +238,12 @@ pub fn label_row(label_text: impl Into<String>, trailing: impl IntoElement) -> E
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(theme::space::LG)
+        .spacing(theme::space::lg())
         .content(Content::Flex)
         .child(
             a11y_text(label_text.into())
-                .font_size(theme::font::LABEL)
-                .color(theme::MUTED),
+                .font_size(theme::font::label())
+                .color(theme::muted()),
         )
         .child(rect().width(Size::flex(1.0)))
         .child(trailing)
@@ -256,17 +264,17 @@ pub fn details(description: Option<&str>) -> Option<Element> {
             rect()
                 .width(Size::fill())
                 .padding(Gaps::new(
-                    theme::space::XXS,
-                    theme::space::LG,
-                    theme::space::SM,
-                    theme::space::LG,
+                    theme::space::xxs(),
+                    theme::space::lg(),
+                    theme::space::sm(),
+                    theme::space::lg(),
                 ))
                 .child(
                     paragraph()
                         .width(Size::fill())
-                        .max_width(Size::px(theme::layout::TEXT_MEASURE))
-                        .font_size(theme::font::CAPTION)
-                        .color(theme::MUTED)
+                        .max_width(Size::px(theme::layout::text_measure()))
+                        .font_size(theme::font::caption())
+                        .color(theme::muted())
                         .a11y_builder(move |node| node.set_value(value))
                         .span(text.to_owned()),
                 )
@@ -351,18 +359,18 @@ where
         );
         rect()
             .vertical()
-            .spacing(theme::space::XXS)
+            .spacing(theme::space::xxs())
             .width(Size::flex(1.0))
-            .padding(Gaps::new_symmetric(theme::space::SM, theme::space::SM))
-            .corner_radius(theme::radius::SMALL)
+            .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::sm()))
+            .corner_radius(theme::radius::small())
             .border(if focused {
                 Border::new()
-                    .fill(theme::ACCENT)
-                    .width(theme::stroke::FOCUS)
+                    .fill(theme::accent())
+                    .width(theme::stroke::focus())
             } else {
                 Border::new()
                     .fill(Color::TRANSPARENT)
-                    .width(theme::stroke::FOCUS)
+                    .width(theme::stroke::focus())
             })
             .a11y_id(a11y_id)
             .a11y_focusable(true)
@@ -379,7 +387,7 @@ where
                 rect()
                     .horizontal()
                     .width(Size::fill())
-                    .spacing(theme::space::SM)
+                    .spacing(theme::space::sm())
                     .content(Content::Flex)
                     .cross_align(Alignment::Center)
                     .child(
@@ -390,26 +398,26 @@ where
                                     .font_size(self.font_size)
                                     .max_lines(1)
                                     .text_overflow(TextOverflow::Ellipsis)
-                                    .color(theme::TEXT)
+                                    .color(theme::text())
                             })),
                     )
                     // The chevron is the visible disclosure affordance; its
                     // slot is reserved on every row so the name never jumps.
                     .child(
                         rect()
-                            .width(Size::px(theme::layout::CHEVRON_WIDTH))
+                            .width(Size::px(theme::layout::chevron_width()))
                             .center()
                             .child(
                                 a11y_text(if is_expanded { "▾" } else { "▸" })
-                                    .font_size(theme::font::CAPTION)
-                                    .color(theme::ACCENT),
+                                    .font_size(theme::font::caption())
+                                    .color(theme::accent()),
                             ),
                     ),
             )
             .child(
                 a11y_text(self.subtitle.clone())
-                    .font_size(theme::font::MICRO)
-                    .color(theme::DIM),
+                    .font_size(theme::font::micro())
+                    .color(theme::dim()),
             )
     }
 }
@@ -431,7 +439,7 @@ pub fn definition_list(rows: Vec<(String, Element)>) -> Element {
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::MD)
+        .spacing(theme::space::md())
         .children(children)
         .into_element()
 }
@@ -454,7 +462,7 @@ pub fn filter_input(
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(theme::space::MD)
+        .spacing(theme::space::md())
         .content(Content::Flex)
         .cross_align(Alignment::Center)
         .child(
@@ -468,11 +476,11 @@ pub fn filter_input(
                 clear_name,
                 clear,
                 rect()
-                    .padding(Gaps::new_symmetric(theme::space::XS, theme::space::MD))
+                    .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
                     .child(
                         a11y_text("Clear")
-                            .font_size(theme::font::MICRO)
-                            .color(if empty { theme::DIM } else { theme::MUTED }),
+                            .font_size(theme::font::micro())
+                            .color(if empty { theme::dim() } else { theme::muted() }),
                     ),
             )
             .focusable(!empty),
@@ -618,16 +626,16 @@ impl Component for AccessibleButton {
             .border(
                 Border::new()
                     .fill(if focused {
-                        theme::TEXT
+                        theme::text()
                     } else {
                         Color::TRANSPARENT
                     })
-                    .width(theme::stroke::FOCUS),
+                    .width(theme::stroke::focus()),
             )
             .child(self.content.clone())
             .maybe(self.fill_width, |el| el.width(Size::fill()))
             .maybe(hover_background.is_some(), |el| {
-                el.corner_radius(theme::radius::SMALL).background(
+                el.corner_radius(theme::radius::small()).background(
                     hover_background
                         .filter(|_| *hovered.read())
                         .unwrap_or(Color::TRANSPARENT),
@@ -666,16 +674,16 @@ pub fn row_action(
             // target at least 24 px tall; the explicit minimum keeps a single
             // glyph wide enough to hit.
             .center()
-            .min_width(Size::px(theme::layout::TARGET_MIN))
-            .min_height(Size::px(theme::layout::TARGET_MIN))
-            .padding(Gaps::new_symmetric(theme::space::SM, theme::space::SM))
+            .min_width(Size::px(theme::layout::target_min()))
+            .min_height(Size::px(theme::layout::target_min()))
+            .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::sm()))
             .child(
                 a11y_text(text)
-                    .font_size(theme::font::MICRO)
-                    .color(theme::MUTED),
+                    .font_size(theme::font::micro())
+                    .color(theme::muted()),
             ),
     )
-    .hover_background(theme::SURFACE_HOVER)
+    .hover_background(theme::surface_hover())
 }
 
 /// A compact outlined action for a toolbar or page header.
@@ -693,21 +701,21 @@ pub fn outline_action(
         accessible,
         action,
         rect()
-            .padding(Gaps::new_symmetric(theme::space::MD, theme::space::XL))
+            .padding(Gaps::new_symmetric(theme::space::md(), theme::space::xl()))
             .border(
                 Border::new()
-                    .fill(theme::CONTROL_BORDER)
-                    .width(theme::stroke::HAIRLINE),
+                    .fill(theme::control_border())
+                    .width(theme::stroke::hairline()),
             )
-            .corner_radius(theme::radius::CONTROL)
+            .corner_radius(theme::radius::control())
             .child(
                 a11y_text(text)
-                    .font_size(theme::font::CAPTION)
+                    .font_size(theme::font::caption())
                     .font_weight(FontWeight::BOLD)
-                    .color(theme::TEXT),
+                    .color(theme::text()),
             ),
     )
-    .hover_background(theme::SURFACE_HOVER)
+    .hover_background(theme::surface_hover())
 }
 
 #[cfg(test)]

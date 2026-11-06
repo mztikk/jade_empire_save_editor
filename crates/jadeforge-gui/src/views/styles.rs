@@ -51,7 +51,7 @@ pub fn view(
         rect()
             .vertical()
             .width(Size::fill())
-            .spacing(theme::space::XS)
+            .spacing(theme::space::xs())
             .children(rows)
             .into_element(),
         widgets::divider(),
@@ -81,7 +81,7 @@ pub fn view(
             let heading = rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::LG)
+                .spacing(theme::space::lg())
                 .content(Content::Flex)
                 .child(widgets::section_label(if browsing {
                     "STYLES TO LEARN"
@@ -101,8 +101,8 @@ pub fn view(
                             crate::widgets::plural(matching, "match", "matches")
                         ),
                     })
-                    .font_size(theme::font::MICRO)
-                    .color(theme::DIM),
+                    .font_size(theme::font::micro())
+                    .color(theme::dim()),
                 )
                 .maybe(shown < matching, |el| {
                     el.child(
@@ -122,7 +122,7 @@ pub fn view(
                 rect()
                     .vertical()
                     .width(Size::fill())
-                    .spacing(theme::space::XXS)
+                    .spacing(theme::space::xxs())
                     .children(result_rows)
                     .into_element(),
             );
@@ -197,11 +197,11 @@ fn style_row(
         .a11y_role(AccessibilityRole::Group)
         .a11y_alt(format!("{} style", style.name))
         .background(if is_hovered {
-            theme::SURFACE_HOVER
+            theme::surface_hover()
         } else {
-            theme::SURFACE
+            theme::surface()
         })
-        .corner_radius(theme::radius::MEDIUM)
+        .corner_radius(theme::radius::medium())
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -212,27 +212,27 @@ fn style_row(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::LG)
+                .spacing(theme::space::lg())
                 .content(Content::Flex)
-                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::SM))
+                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::sm()))
                 .child(widgets::expanding_name(
                     style.style_id,
                     style.name.clone(),
                     subtitle,
                     expanded,
-                    theme::font::BODY,
+                    theme::font::body(),
                 ))
                 .child(widgets::badge(
                     crate::session::style_kind_label(style.kind),
-                    theme::SURFACE_ACTIVE,
+                    theme::surface_active(),
                     style_badge_color(style.kind),
                 ))
                 .child(
                     widgets::a11y_text(format!("Level {level}"))
-                        .font_size(theme::font::LABEL)
-                        .width(Size::px(theme::layout::LEVEL_WIDTH))
+                        .font_size(theme::font::label())
+                        .width(Size::px(theme::layout::level_width()))
                         .text_align(TextAlign::Center)
-                        .color(theme::ACCENT),
+                        .color(theme::accent()),
                 )
                 .child(widgets::row_action(
                     format!("Remove {} style", style.name),
@@ -269,12 +269,12 @@ fn upgrade_panel(
         return rect()
             .vertical()
             .width(Size::fill())
-            .spacing(theme::space::XS)
+            .spacing(theme::space::xs())
             .padding(Gaps::new(
-                theme::space::NONE,
-                theme::space::LG,
-                theme::space::SM,
-                theme::space::LG,
+                theme::space::none(),
+                theme::space::lg(),
+                theme::space::sm(),
+                theme::space::lg(),
             ))
             .children(rows)
             .into_element();
@@ -318,12 +318,12 @@ fn upgrade_panel(
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::SM)
+        .spacing(theme::space::sm())
         .padding(Gaps::new(
-            theme::space::NONE,
-            theme::space::LG,
-            theme::space::MD,
-            theme::space::LG,
+            theme::space::none(),
+            theme::space::lg(),
+            theme::space::md(),
+            theme::space::lg(),
         ))
         .children(rows)
         .into_element()
@@ -335,13 +335,13 @@ fn upgrade_row(family: &str, chips: Vec<Element>) -> Element {
         .horizontal()
         .width(Size::fill())
         .key(family.to_owned())
-        .spacing(theme::space::NONE)
+        .spacing(theme::space::none())
         .content(Content::Flex)
         .child(
             widgets::a11y_text(family_title(family))
-                .font_size(theme::font::CAPTION)
-                .width(Size::px(theme::layout::UPGRADE_LABEL_WIDTH))
-                .color(theme::MUTED),
+                .font_size(theme::font::caption())
+                .width(Size::px(theme::layout::upgrade_label_width()))
+                .color(theme::muted()),
         )
         .children(chips)
         .into_element()
@@ -389,26 +389,26 @@ impl Component for UpgradeOrb {
         let taken = self.upgrade.taken;
         let background = if taken {
             if is_hovered || focused {
-                theme::ORB_HOVER
+                theme::orb_hover()
             } else {
-                theme::ORB
+                theme::orb()
             }
         } else if is_hovered || focused {
-            theme::SURFACE_ACTIVE
+            theme::surface_active()
         } else {
-            theme::BACKGROUND
+            theme::background()
         };
         let border = if focused {
-            theme::TEXT
+            theme::text()
         } else if taken || is_hovered {
-            theme::ORB_HOVER
+            theme::orb_hover()
         } else {
-            theme::ORB
+            theme::orb()
         };
         let border_width = if focused {
-            theme::stroke::EMPHASIS
+            theme::stroke::emphasis()
         } else {
-            theme::stroke::FOCUS
+            theme::stroke::focus()
         };
         let mut hovered = self.hovered;
         let session = self.session.clone();
@@ -420,7 +420,10 @@ impl Component for UpgradeOrb {
             // The hit target reaches halfway into the gap to each neighbour
             // (the row itself has no spacing), so sweeping from one orb to the
             // next never lands on the row background in between.
-            .padding(Gaps::new_symmetric(theme::space::NONE, theme::space::XS))
+            .padding(Gaps::new_symmetric(
+                theme::space::none(),
+                theme::space::xs(),
+            ))
             .a11y_id(a11y_id)
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::Button)
@@ -449,9 +452,9 @@ impl Component for UpgradeOrb {
             .child(
                 rect()
                     .center()
-                    .width(Size::px(theme::layout::ORB))
-                    .height(Size::px(theme::layout::ORB))
-                    .corner_radius(theme::radius::PILL)
+                    .width(Size::px(theme::layout::orb()))
+                    .height(Size::px(theme::layout::orb()))
+                    .corner_radius(theme::radius::pill())
                     .background(background)
                     .border(Border::new().fill(border).width(border_width)),
             )
@@ -538,8 +541,11 @@ fn orb_detail(style: &StyleRow, upgrade: &StyleUpgrade) -> Element {
         .vertical()
         .width(Size::fill())
         .key((style.struct_index, upgrade.slot))
-        .spacing(theme::space::XXS)
-        .padding(Gaps::new_symmetric(theme::space::XS, theme::space::NONE))
+        .spacing(theme::space::xxs())
+        .padding(Gaps::new_symmetric(
+            theme::space::xs(),
+            theme::space::none(),
+        ))
         .child(orb_detail_line(
             format!(
                 "{} tier {}: {}",
@@ -547,13 +553,13 @@ fn orb_detail(style: &StyleRow, upgrade: &StyleUpgrade) -> Element {
                 upgrade.tier,
                 upgrade.name
             ),
-            theme::font::CAPTION,
-            theme::TEXT,
+            theme::font::caption(),
+            theme::text(),
         ))
         .child(orb_detail_line(
             format!("{effect} · {cost} · {action}"),
-            theme::font::MICRO,
-            theme::MUTED,
+            theme::font::micro(),
+            theme::muted(),
         ))
         .into_element()
 }
@@ -567,7 +573,7 @@ fn orb_detail_line(text: String, font_size: f32, color: Color) -> Element {
     let value = text.clone();
     paragraph()
         .width(Size::fill())
-        .max_width(Size::px(theme::layout::TEXT_MEASURE))
+        .max_width(Size::px(theme::layout::text_measure()))
         .font_size(font_size)
         .color(color)
         .a11y_builder(move |node| node.set_value(value))
@@ -650,9 +656,9 @@ fn style_time(seconds: u32) -> String {
 /// Badge colour for a style kind.
 fn style_badge_color(kind: &str) -> Color {
     match kind {
-        "magic" | "support" => theme::JADE,
-        "transformation" | "unique" => theme::ACCENT,
-        _ => theme::MUTED,
+        "magic" | "support" => theme::jade(),
+        "transformation" | "unique" => theme::accent(),
+        _ => theme::muted(),
     }
 }
 
@@ -680,11 +686,11 @@ fn learn_row(
         .a11y_role(AccessibilityRole::Group)
         .a11y_alt(format!("{} style", suggestion.name))
         .background(if is_hovered {
-            theme::SURFACE
+            theme::surface()
         } else {
-            theme::PANEL
+            theme::panel()
         })
-        .corner_radius(theme::radius::CONTROL)
+        .corner_radius(theme::radius::control())
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -695,19 +701,19 @@ fn learn_row(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::LG)
+                .spacing(theme::space::lg())
                 .content(Content::Flex)
-                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::XS))
+                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::xs()))
                 .child(widgets::expanding_name(
                     suggestion.style_id,
                     suggestion.name.clone(),
                     subtitle,
                     expanded,
-                    theme::font::LABEL,
+                    theme::font::label(),
                 ))
                 .child(widgets::badge(
                     crate::session::style_kind_label(suggestion.kind),
-                    theme::SURFACE_ACTIVE,
+                    theme::surface_active(),
                     style_badge_color(suggestion.kind),
                 ))
                 .child(widgets::row_action(

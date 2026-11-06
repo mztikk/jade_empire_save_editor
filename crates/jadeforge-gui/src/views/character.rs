@@ -8,11 +8,14 @@ use crate::session::{CharacterField, FieldError, format};
 use crate::theme;
 use crate::widgets;
 
-/// Two lines of hint text at [`theme::font::CAPTION`].
+/// Two lines of hint text at [`theme::font::caption()`].
 ///
 /// The hint changes between one and two lines while the alignment is typed;
-/// reserving both lines keeps the cards below it from jumping.
-const ALIGNMENT_HINT_HEIGHT: f32 = theme::font::LINE_HEIGHT * 2.0;
+/// reserving both lines keeps the cards below it from jumping. A function so
+/// the reserved height follows the user's text scale.
+fn alignment_hint_height() -> f32 {
+    theme::font::line_height() * 2.0
+}
 
 /// Explains the numeric alignment the way the game names it.
 #[must_use]
@@ -67,7 +70,7 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
             alignment_note(alignment_hint(&form.alignment.read())),
             rect()
                 .horizontal()
-                .spacing(theme::space::MD)
+                .spacing(theme::space::md())
                 .child(quick_add(ctx, "+1 point", 1))
                 .child(quick_add(ctx, "+5 points", 5))
                 .child(widgets::hint(
@@ -123,22 +126,22 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
             widgets::label_row(
                 "Name",
                 widgets::a11y_text(character.name.clone())
-                    .font_size(theme::font::BODY)
-                    .color(theme::TEXT),
+                    .font_size(theme::font::body())
+                    .color(theme::text()),
             ),
             widgets::divider(),
             widgets::label_row(
                 "Level",
                 widgets::a11y_text(character.level.to_string())
-                    .font_size(theme::font::BODY)
-                    .color(theme::TEXT),
+                    .font_size(theme::font::body())
+                    .color(theme::text()),
             ),
             widgets::divider(),
             widgets::label_row(
                 "Time played",
                 widgets::a11y_text(crate::session::format::duration(character.time_played))
-                    .font_size(theme::font::BODY)
-                    .color(theme::TEXT),
+                    .font_size(theme::font::body())
+                    .color(theme::text()),
             ),
         ],
     );
@@ -146,7 +149,7 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::XXL)
+        .spacing(theme::space::xxl())
         .child(identity)
         .child(vitals)
         .child(attributes)
@@ -176,13 +179,13 @@ fn alignment_note(text: String) -> Element {
     rect()
         .vertical()
         .width(Size::fill())
-        .height(Size::px(ALIGNMENT_HINT_HEIGHT))
+        .height(Size::px(alignment_hint_height()))
         .main_align(Alignment::Center)
         .child(
             widgets::a11y_text(text)
-                .font_size(theme::font::CAPTION)
+                .font_size(theme::font::caption())
                 .max_lines(2)
-                .color(theme::DIM),
+                .color(theme::dim()),
         )
         .into_element()
 }
