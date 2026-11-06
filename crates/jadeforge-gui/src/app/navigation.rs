@@ -2,7 +2,7 @@
 
 use freya::prelude::*;
 
-use crate::i18n::t;
+use crate::i18n::{keys, t};
 use crate::message::capitalize;
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
@@ -178,7 +178,7 @@ fn busy_slot(scanning: bool) -> Element {
         .cross_align(Alignment::End)
         .child(
             crate::widgets::a11y_text(if scanning {
-                t("shell.scanning").to_uppercase()
+                t(keys::SHELL_SCANNING).to_uppercase()
             } else {
                 String::new()
             })

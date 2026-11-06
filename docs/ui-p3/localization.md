@@ -23,16 +23,17 @@ unchanged.
 ```
 crates/jadeforge-i18n/
   Cargo.toml
+  build.rs          generates the typed keys module from en.toml
   locales/en.toml   complete = true
   locales/de.toml   complete = false
-  src/lib.rs        Locale, catalogs, t/fill/plural, markers, pseudo
-  tests/source_scan.rs
+  src/lib.rs        Key, Locale, catalogs, t/fill/plural, markers, pseudo
 ```
 
-It depends only on `serde` and `toml`, no Freya and no session types.
-`jadeforge-session` re-exports `Locale` and the catalog API for the settings
-file and session messages; `jadeforge-gui::i18n` re-exports the same API so the
-views keep using `crate::i18n::*`.
+It depends only on `serde` and `toml` at runtime, plus `toml` as a build
+dependency, with no Freya and no session types. `jadeforge-session` re-exports
+`Locale`, `Key` and the catalog API for the settings file and session
+messages; `jadeforge-gui::i18n` re-exports the same API so the views keep using
+`crate::i18n::*`.
 
 ## Format
 
@@ -92,14 +93,21 @@ A new id that repeats an English sentence is a bug, not a naming choice.
 
 - `install(locale)` stores the active locale in a thread-local; `current()`
   reads it. Every render pass installs the configured locale.
-- `t("id")` looks up the active catalog only. A missing or empty value returns
-  a cached `⟦id⟧` marker. English missing ids are markers too.
-- `fill("id", arguments)` translates a template and substitutes named
-  placeholders. Values are inserted verbatim, so paths, names and error details
-  are never translated.
-- `plural(count, "count.item.one", "count.item.other")` translates the noun and
-  formats `<count> <noun>`.
-- `has_id(id)` checks the English catalog.
+- `t(keys::SHELL_ABOUT)` looks up the active catalog only. A missing or empty
+  value returns a cached `⟦id⟧` marker. English missing ids are markers too.
+- `fill(keys::STATUS_OPENED, arguments)` translates a template and substitutes
+  named placeholders. Values are inserted verbatim, so paths, names and error
+  details are never translated.
+- `plural(count, keys::COUNT_ITEM_ONE, keys::COUNT_ITEM_OTHER)` translates the
+  noun and formats `<count> <noun>`.
+- `has_id(id)` checks the English catalog by its plain `&str` id; every other
+  lookup takes the typed `Key`.
+- `Key` is a newtype over a `'static` catalog id. The `keys` module is generated
+  from `en.toml` at build time, so `keys::ALL` and every constant are
+  available during `cargo check`, clippy and rustdoc.
+- A malformed `en.toml`, a duplicate id or two ids that map to the same Rust
+  constant makes `build.rs` write a `compile_error!` into the generated module
+  instead of panicking or emitting invalid Rust.
 - `is_complete(locale)` reads the catalog flag. `locale_label(locale)` returns
   `Deutsch (Vorschau)` while German is incomplete and `Deutsch` once it is
   complete.
@@ -107,22 +115,23 @@ A new id that repeats an English sentence is a bug, not a naming choice.
   plus brackets); there is no hand-written pseudo catalog.
 
 No GUI or session code passes an English source string to `t`, `fill`,
-`plural`, `tr` or `message::fill`. A source scan fails on any literal that is
-not an id in `en.toml` or does not match the id grammar.
+`plural`, `tr` or `message::fill`. Those functions only accept `Key`, so a raw
+string is a compile error; `compile_fail` doctests on each entry point keep
+that guarantee visible.
 
 ## Session
 
 `jadeforge-session/src/message.rs` is a thin wrapper over the shared crate:
 
-- `message::tr(id)` calls `jadeforge_i18n::t(id)`.
-- `message::fill(id, arguments)` calls `jadeforge_i18n::fill`.
+- `message::tr(key)` calls `jadeforge_i18n::t(key)`.
+- `message::fill(key, arguments)` calls `jadeforge_i18n::fill`.
 - There is no translator installation hook and no UI callback.
 
 Session tests get the English catalog by default. The GUI installs the locale
-each render, exactly as before. Session-owned labels return ids:
+each render, exactly as before. Session-owned labels return `Key`:
 `CharacterField::label` and `range`, `SaveSort::label`, `ThemeChoice::label`
 and `description`, `format::alignment`, `Section::label`, and the known
-`item_category_id`/`style_kind_id` values. Views call `t` on those ids.
+`item_category_id`/`style_kind_id` values. Views call `t` on those keys.
 
 ## Preview behavior
 
@@ -134,7 +143,8 @@ and `description`, `format::alignment`, `Section::label`, and the known
 - Filled German ids render German. Empty ids render `⟦id⟧`. The About page
   itself shows **Deutsch (Vorschau)**.
 - The debug/headless tests select German through the isolated test config and
-  assert both a translated string and a marker for a known empty id.
+  assert a translated string; while a checked German id is still empty they
+  also assert its marker.
 
 ## Adding a language
 
@@ -143,8 +153,8 @@ and `description`, `format::alignment`, `Section::label`, and the known
 2. Add `crates/jadeforge-i18n/locales/<code>.toml` with `complete = false` and
    the same ids as `en.toml`.
 3. Add the catalog loader and the `is_complete`/`locale_label` branches.
-4. Extend the locale tests and the About selector; update the source scan only
-   if the new language needs a different call shape.
+4. Extend the locale tests and the About selector. `build.rs` regenerates the
+   typed keys from `en.toml`, so a new language does not change the call shape.
 5. Set `complete = true` only after every value is non-empty and its
    placeholders match the English template.
 
@@ -158,7 +168,7 @@ The ids and the two peer catalogs map directly onto Fluent message ids. A future
 migration can add Fluent as the template engine behind the same `t`/`fill`
 facade, import `en.toml` and `de.toml` as message files, and move plural and
 gender rules into Fluent selectors. The GUI and session call sites do not need
-to change, and the id scan still guarantees that no source-string keys are
+to change, and the typed `Key` still guarantees that no source-string keys are
 introduced.
 
 ## Deliberately untranslated
@@ -179,8 +189,10 @@ introduced.
   `complete = true`.
 - Preview markers for empty and unknown ids, no English fallback, pseudo
   generation, tag parsing and environment selection.
-- Source scans for `t`, `fill`, `plural` in `crates/jadeforge-gui/src` and
-  `tr`/`fill` in `crates/jadeforge-session/src`.
+- Generated keys: `keys::ALL` has exactly the ids in `en.toml`, no duplicates,
+  and every `Key::id()` is catalogued.
+- Compile-fail doctests prove that `t`, `fill`, `plural` and the session `tr`
+  reject a raw string.
 - Session label and range functions: every returned id exists.
 - GUI headless tests: English UI unchanged, About shows **Deutsch (Vorschau)**,
   selecting it renders German and a marker, config persists `de`.

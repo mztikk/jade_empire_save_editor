@@ -4,7 +4,7 @@ use freya::prelude::*;
 
 use crate::app::Ctx;
 use crate::form::Form;
-use crate::i18n::{fill, t};
+use crate::i18n::{fill, keys, t};
 use crate::session::{CharacterField, FieldError, format};
 use crate::theme;
 use crate::widgets;
@@ -23,13 +23,13 @@ fn alignment_hint_height() -> f32 {
 pub fn alignment_hint(value: &str) -> String {
     match value.trim().parse::<i32>() {
         Ok(value) => fill(
-            "character.alignment.template",
+            keys::CHARACTER_ALIGNMENT_TEMPLATE,
             &[
                 ("alignment", t(format::alignment(value))),
                 ("default", &jadeforge_core::DEFAULT_ALIGNMENT.to_string()),
             ],
         ),
-        Err(_) => t("character.alignment.fallback").to_owned(),
+        Err(_) => t(keys::CHARACTER_ALIGNMENT_FALLBACK).to_owned(),
     }
 }
 
@@ -39,8 +39,8 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
     let form = ctx.form;
 
     let identity = widgets::card(
-        t("character.identity"),
-        Some(t("character.changes_hint").to_owned()),
+        t(keys::CHARACTER_IDENTITY),
+        Some(t(keys::CHARACTER_CHANGES_HINT).to_owned()),
         vec![
             // Three fields per row at every supported width: six narrow fields
             // of fixed width used to overflow the card and leave KILLS alone on
@@ -53,13 +53,13 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
             widgets::field_grid(vec![
                 widgets::field_checked(
                     CharacterField::Gold,
-                    input(&form, CharacterField::Gold).placeholder(t("character.not_set")),
+                    input(&form, CharacterField::Gold).placeholder(t(keys::CHARACTER_NOT_SET)),
                     widgets::field_error(errors, CharacterField::Gold),
                 ),
                 checked(&form, CharacterField::Chapter, errors),
                 checked(&form, CharacterField::Kills, errors),
             ]),
-            widgets::hint(t("character.gold_hint")),
+            widgets::hint(t(keys::CHARACTER_GOLD_HINT)),
             widgets::divider(),
             widgets::field_grid(vec![
                 checked(&form, CharacterField::Alignment, errors),
@@ -70,15 +70,15 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
             rect()
                 .horizontal()
                 .spacing(theme::space::md())
-                .child(quick_add(ctx, t("character.quick_add.one"), 1))
-                .child(quick_add(ctx, t("character.quick_add.five"), 5))
-                .child(widgets::hint(t("character.attribute_points_hint")))
+                .child(quick_add(ctx, t(keys::CHARACTER_QUICK_ADD_ONE), 1))
+                .child(quick_add(ctx, t(keys::CHARACTER_QUICK_ADD_FIVE), 5))
+                .child(widgets::hint(t(keys::CHARACTER_ATTRIBUTE_POINTS_HINT)))
                 .into_element(),
         ],
     );
 
     let vitals = widgets::card(
-        t("character.vitals"),
+        t(keys::CHARACTER_VITALS),
         None,
         vec![
             widgets::field_grid(vec![
@@ -92,12 +92,12 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
                 checked(&form, CharacterField::Focus, errors),
                 checked(&form, CharacterField::FocusMax, errors),
             ]),
-            widgets::hint(t("character.current_values_hint")),
+            widgets::hint(t(keys::CHARACTER_CURRENT_VALUES_HINT)),
         ],
     );
 
     let attributes = widgets::card(
-        t("character.attributes"),
+        t(keys::CHARACTER_ATTRIBUTES),
         None,
         vec![
             widgets::field_grid(vec![
@@ -115,25 +115,25 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
     );
 
     let summary = widgets::card(
-        t("character.current_sheet"),
+        t(keys::CHARACTER_CURRENT_SHEET),
         None,
         vec![
             widgets::label_row(
-                t("character.name"),
+                t(keys::CHARACTER_NAME),
                 widgets::a11y_text(character.name.clone())
                     .font_size(theme::font::body())
                     .color(theme::text()),
             ),
             widgets::divider(),
             widgets::label_row(
-                t("character.level"),
+                t(keys::CHARACTER_LEVEL),
                 widgets::a11y_text(character.level.to_string())
                     .font_size(theme::font::body())
                     .color(theme::text()),
             ),
             widgets::divider(),
             widgets::label_row(
-                t("character.time_played"),
+                t(keys::CHARACTER_TIME_PLAYED),
                 widgets::a11y_text(crate::session::format::duration(character.time_played))
                     .font_size(theme::font::body())
                     .color(theme::text()),

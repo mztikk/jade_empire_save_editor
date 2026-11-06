@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use jadeforge_core::GemLocation;
+use jadeforge_i18n::{Key, keys};
 
 use crate::message;
 use crate::session::format;
@@ -36,13 +37,13 @@ impl SaveEntry {
     #[must_use]
     pub fn summary(&self) -> String {
         if self.error.is_some() {
-            return message::tr("session.cannot.be.read").to_owned();
+            return message::tr(keys::SESSION_CANNOT_BE_READ).to_owned();
         }
         let level = self
             .level
             .map_or_else(|| "?".to_owned(), |level| level.to_string());
         let mut parts = vec![message::fill(
-            "session.row.level_time",
+            keys::SESSION_ROW_LEVEL_TIME,
             &[
                 ("level", &level),
                 ("time", &format::duration(self.time_played)),
@@ -125,16 +126,16 @@ pub enum Section {
 }
 
 impl Section {
-    /// Stable catalog id used in notices.
+    /// Stable catalog key used in notices.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> Key {
         match self {
-            Self::Character => "nav.character",
-            Self::Items => "label.inventory",
-            Self::Styles => "count.style.other",
-            Self::Companions => "nav.companions",
-            Self::Gems => "count.gem.other",
-            Self::Amulet => "label.amulet",
+            Self::Character => keys::NAV_CHARACTER,
+            Self::Items => keys::LABEL_INVENTORY,
+            Self::Styles => keys::COUNT_STYLE_OTHER,
+            Self::Companions => keys::NAV_COMPANIONS,
+            Self::Gems => keys::COUNT_GEM_OTHER,
+            Self::Amulet => keys::LABEL_AMULET,
         }
     }
 }

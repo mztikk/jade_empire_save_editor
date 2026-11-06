@@ -11,7 +11,7 @@
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
-use crate::i18n::t;
+use crate::i18n::{keys, t};
 use crate::message::capitalize;
 
 /// What the test seam should answer instead of opening a dialog.
@@ -80,7 +80,7 @@ pub fn pick_folder(start: Option<&Path>) -> PickOutcome {
             Answer::Picked(path) => PickOutcome::Picked(path),
         };
     }
-    let mut dialog = rfd::FileDialog::new().set_title(t("dialog.choose_save_folder"));
+    let mut dialog = rfd::FileDialog::new().set_title(t(keys::DIALOG_CHOOSE_SAVE_FOLDER));
     if let Some(start) = start.filter(|path| path.is_dir()) {
         dialog = dialog.set_directory(start);
     }
@@ -140,12 +140,12 @@ pub fn ask_close_choice() -> CloseChoice {
         return choice;
     }
     let result = rfd::MessageDialog::new()
-        .set_title(capitalize(t("shell.unsaved_changes")))
-        .set_description(t("dialog.unsaved_changes.explanation"))
+        .set_title(capitalize(t(keys::SHELL_UNSAVED_CHANGES)))
+        .set_description(t(keys::DIALOG_UNSAVED_CHANGES_EXPLANATION))
         .set_buttons(rfd::MessageButtons::YesNoCancelCustom(
-            t("dialog.save").to_owned(),
-            t("dialog.discard").to_owned(),
-            t("dialog.cancel").to_owned(),
+            t(keys::DIALOG_SAVE).to_owned(),
+            t(keys::DIALOG_DISCARD).to_owned(),
+            t(keys::DIALOG_CANCEL).to_owned(),
         ))
         .set_level(rfd::MessageLevel::Warning)
         .show();
@@ -162,8 +162,10 @@ fn close_choice(result: &rfd::MessageDialogResult) -> CloseChoice {
     match result {
         rfd::MessageDialogResult::Yes => CloseChoice::Save,
         rfd::MessageDialogResult::No => CloseChoice::Discard,
-        rfd::MessageDialogResult::Custom(label) if label == t("dialog.save") => CloseChoice::Save,
-        rfd::MessageDialogResult::Custom(label) if label == t("dialog.discard") => {
+        rfd::MessageDialogResult::Custom(label) if label == t(keys::DIALOG_SAVE) => {
+            CloseChoice::Save
+        }
+        rfd::MessageDialogResult::Custom(label) if label == t(keys::DIALOG_DISCARD) => {
             CloseChoice::Discard
         }
         rfd::MessageDialogResult::Ok

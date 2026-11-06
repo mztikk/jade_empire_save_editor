@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use freya::prelude::*;
 
-use crate::i18n::{fill, t};
+use crate::i18n::{Key, fill, keys, t};
 use crate::session::{CharacterField, FieldError};
 use crate::theme;
 
@@ -297,7 +297,7 @@ pub fn with_tooltip(text: String, content: impl IntoElement) -> Element {
 /// Delegates to the shared session helper so the shell and the session
 /// messages can never disagree about "1 gem" versus "1 gems".
 #[must_use]
-pub fn plural(count: usize, singular: &'static str, plural: &'static str) -> String {
+pub fn plural(count: usize, singular: Key, plural: Key) -> String {
     crate::i18n::plural(count, singular, plural)
 }
 
@@ -355,16 +355,16 @@ where
         let id = self.id;
         let is_expanded = *expanded.read() == Some(id);
         let accessible = fill(
-            "widget.details",
+            keys::WIDGET_DETAILS,
             &[
                 ("name", &self.name),
                 ("subtitle", &self.subtitle),
                 (
                     "state",
                     if is_expanded {
-                        t("widget.expanded")
+                        t(keys::WIDGET_EXPANDED)
                     } else {
-                        t("widget.collapsed")
+                        t(keys::WIDGET_COLLAPSED)
                     },
                 ),
             ],
@@ -462,8 +462,8 @@ pub fn definition_list(rows: Vec<(String, Element)>) -> Element {
 /// selecting the text and deleting it.
 pub fn filter_input(
     query: State<String>,
-    placeholder: &'static str,
-    clear_name: &'static str,
+    placeholder: Key,
+    clear_name: Key,
     a11y_id: AccessibilityId,
 ) -> Element {
     let mut clear_query = query;
@@ -490,7 +490,7 @@ pub fn filter_input(
                 rect()
                     .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
                     .child(
-                        a11y_text(t("widget.clear"))
+                        a11y_text(t(keys::WIDGET_CLEAR))
                             .font_size(theme::font::micro())
                             .color(if empty { theme::dim() } else { theme::muted() }),
                     ),
@@ -756,19 +756,20 @@ pub fn outline_action(
 #[cfg(test)]
 mod tests {
     use super::plural;
+    use crate::i18n::keys;
 
     #[test]
     fn plural_counts_use_the_singular_only_for_one() {
         assert_eq!(
-            plural(0, "count.effect.one", "count.effect.other"),
+            plural(0, keys::COUNT_EFFECT_ONE, keys::COUNT_EFFECT_OTHER),
             "0 effects"
         );
         assert_eq!(
-            plural(1, "count.effect.one", "count.effect.other"),
+            plural(1, keys::COUNT_EFFECT_ONE, keys::COUNT_EFFECT_OTHER),
             "1 effect"
         );
         assert_eq!(
-            plural(2, "count.stack.one", "count.stack.other"),
+            plural(2, keys::COUNT_STACK_ONE, keys::COUNT_STACK_OTHER),
             "2 stacks"
         );
     }

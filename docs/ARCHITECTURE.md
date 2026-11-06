@@ -153,16 +153,18 @@ catalogs, the locale enum and the strictness rules:
 
 | module | responsibility |
 | --- | --- |
-| `lib` | `Locale`, `t`/`fill`/`plural`, `install`/`current`, `is_complete`, `has_id`, `locale_label`, catalog loading, generated pseudo locale |
+| `lib` | `Key`, generated `keys`, `Locale`, `t`/`fill`/`plural`, `install`/`current`, `is_complete`, `has_id`, `locale_label`, catalog loading, generated pseudo locale |
+| `build.rs` | generates the typed `keys` module from `en.toml` and fails the build through a generated `compile_error!` on a malformed or colliding catalog |
 | `locales/en.toml` | English source of truth, `complete = true` |
 | `locales/de.toml` | German peer catalog, `complete = false` while the preview is incomplete |
-| `tests/source_scan.rs` | checks that every literal `t`/`fill`/`plural`/`tr` id in the GUI and session exists in `en.toml` and matches the id grammar |
 
 A missing or empty value renders a cached `⟦id⟧` marker; there is no English
-fallback. A malformed catalog degrades to markers, never to English. Key parity,
-placeholder parity and English completeness are enforced by tests. German
-stays preview-only and is not selected from the environment until its catalog
-is marked complete.
+fallback. A malformed catalog degrades to markers, never to English. The typed
+`Key` newtype and the build-generated `keys` constants make a raw catalog-id
+string a compile error, and a test keeps `keys::ALL` in lockstep with
+`en.toml`. Placeholder parity and English completeness are enforced by tests.
+German stays preview-only and is not selected from the environment until its
+catalog is marked complete.
 
 ## `jadeforge-session`
 
@@ -209,7 +211,7 @@ Freya 0.5 application with a small, explicit structure:
 | `app/` | root component (`mod.rs`), header/preview/footer (`shell.rs`), save list and sort controls (`sidebar.rs`), tab bar (`navigation.rs`) |
 | `dialog` | the native folder dialog (`rfd`) with a test seam for the headless suite |
 | `theme` | three semantic palettes, the active thread-local `UiStyle`, scaled type/spacing/radius/layout tokens and the Freya component theme |
-| `i18n` | active locale, English/pseudolocale catalog and the `t(...)` lookup |
+| `i18n` | active locale, typed `Key`/`keys` re-exports, English/pseudolocale catalog and the `t(...)` lookup |
 | `views/review` | pending-changes page before a save |
 | `views/backups` | backup browser with timestamps, original path and verified restore |
 | `renderer` | `JADEFORGE_RENDERER` parsing and the Skia GPU resource cache limit |

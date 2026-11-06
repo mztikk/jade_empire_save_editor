@@ -15,7 +15,7 @@ use crate::theme;
 use crate::widgets;
 
 use crate::app::Ctx;
-use crate::i18n::{fill, t};
+use crate::i18n::{fill, keys, t};
 
 /// Renders the review page.
 #[must_use]
@@ -26,19 +26,19 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> 
     let invalid = ctx.session.borrow().form_errors(&form.read());
 
     let mut children: Vec<Element> = Vec::new();
-    children.push(widgets::hint(t("review.explanation")));
+    children.push(widgets::hint(t(keys::REVIEW_EXPLANATION)));
     if !invalid.is_empty() {
         children.push(widgets::hint(fill(
-            "review.invalid_fields",
+            keys::REVIEW_INVALID_FIELDS,
             &[("count", &invalid.len().to_string())],
         )));
     }
     children.push(widgets::divider());
     if groups.is_empty() {
         children.push(widgets::hint(if dirty {
-            t("review.unsaved_no_fields")
+            t(keys::REVIEW_UNSAVED_NO_FIELDS)
         } else {
-            t("review.nothing")
+            t(keys::REVIEW_NOTHING)
         }));
     } else {
         for (index, group) in groups.iter().enumerate() {
@@ -75,14 +75,14 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> 
             .child(
                 Button::new()
                     .outline()
-                    .child(t("backups.back"))
+                    .child(t(keys::BACKUPS_BACK))
                     .on_press(cancel),
             )
             .maybe(dirty, |el| {
                 el.child(
                     Button::new()
                         .filled()
-                        .child(t("review.write"))
+                        .child(t(keys::REVIEW_WRITE))
                         .on_press(write),
                 )
             })
@@ -90,17 +90,17 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> 
     );
 
     widgets::card(
-        t("review.title"),
+        t(keys::REVIEW_TITLE),
         Some(fill(
-            "review.summary",
+            keys::REVIEW_SUMMARY,
             &[
                 (
                     "changes",
-                    &widgets::plural(total, "count.change.one", "count.change.other"),
+                    &widgets::plural(total, keys::COUNT_CHANGE_ONE, keys::COUNT_CHANGE_OTHER),
                 ),
                 (
                     "groups",
-                    &widgets::plural(groups.len(), "count.group.one", "count.group.other"),
+                    &widgets::plural(groups.len(), keys::COUNT_GROUP_ONE, keys::COUNT_GROUP_OTHER),
                 ),
             ],
         )),
@@ -127,7 +127,7 @@ fn group_block(index: usize, group: &PendingChangeGroup) -> Element {
                 )
                 .child(
                     widgets::a11y_text(fill(
-                        "review.change",
+                        keys::REVIEW_CHANGE,
                         &[("before", &change.before), ("after", &change.after)],
                     ))
                     .font_size(theme::font::micro())

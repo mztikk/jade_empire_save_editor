@@ -13,6 +13,7 @@ use jadeforge_core::{
     Style, StyleIdentity, list_backups, restore_backup,
 };
 use jadeforge_gamedata::{BundledItem, GameData, NameIndex};
+use jadeforge_i18n::{Key, keys};
 
 use crate::message;
 
@@ -44,6 +45,8 @@ pub fn default_save_dir() -> PathBuf {
 
 /// Formatting helpers shared by the views and the list entries.
 pub mod format {
+    use jadeforge_i18n::{Key, keys};
+
     /// Formats a duration given in microseconds.
     #[must_use]
     pub fn duration(microseconds: u64) -> String {
@@ -88,17 +91,17 @@ pub mod format {
         value.to_string()
     }
 
-    /// Stable catalog id naming the alignment the way the game does.
+    /// Stable catalog key naming the alignment the way the game does.
     ///
     /// The engine starts a character at [`jadeforge_core::DEFAULT_ALIGNMENT`]
     /// and only writes the field once the value moves away from it.
     #[must_use]
-    pub fn alignment(value: i32) -> &'static str {
+    pub fn alignment(value: i32) -> Key {
         let reference = jadeforge_core::DEFAULT_ALIGNMENT as i32;
         match value.cmp(&reference) {
-            std::cmp::Ordering::Greater => "alignment.open_palm",
-            std::cmp::Ordering::Less => "alignment.closed_fist",
-            std::cmp::Ordering::Equal => "alignment.balanced",
+            std::cmp::Ordering::Greater => keys::ALIGNMENT_OPEN_PALM,
+            std::cmp::Ordering::Less => keys::ALIGNMENT_CLOSED_FIST,
+            std::cmp::Ordering::Equal => keys::ALIGNMENT_BALANCED,
         }
     }
 
@@ -122,7 +125,7 @@ pub mod format {
     #[must_use]
     pub fn timestamp(time: std::time::SystemTime) -> String {
         let Ok(duration) = time.duration_since(std::time::UNIX_EPOCH) else {
-            return crate::message::tr("status.unknown").to_owned();
+            return crate::message::tr(keys::STATUS_UNKNOWN).to_owned();
         };
         let seconds = duration.as_secs();
         let days = (seconds / 86_400) as i64;
@@ -171,16 +174,16 @@ pub enum SaveSort {
 }
 
 impl SaveSort {
-    /// Stable catalog id for the sort buttons.
+    /// Stable catalog key for the sort buttons.
     ///
-    /// The same id is used for the matching character field so the wording
+    /// The same key is used for the matching character field so the wording
     /// cannot drift; the settings key stays `played` for compatibility.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> Key {
         match self {
-            Self::Name => "character.name",
-            Self::Level => "character.level",
-            Self::Played => "character.time_played",
+            Self::Name => keys::CHARACTER_NAME,
+            Self::Level => keys::CHARACTER_LEVEL,
+            Self::Played => keys::CHARACTER_TIME_PLAYED,
         }
     }
 
@@ -206,16 +209,16 @@ impl SaveSort {
     }
 }
 
-/// Stable catalog id for a known `items.2da` category.
+/// Stable catalog key for a known `items.2da` category.
 #[must_use]
-pub fn item_category_id(category: &str) -> Option<&'static str> {
+pub fn item_category_id(category: &str) -> Option<Key> {
     match category.to_lowercase().as_str() {
-        "gems" => Some("count.gem.other"),
-        "powerups" => Some("category.powerups"),
-        "weapons" => Some("count.weapon.other"),
-        "plot_items" => Some("category.plot_items"),
-        "mgweapons" => Some("category.magic_weapons"),
-        "improve" => Some("category.improvements"),
+        "gems" => Some(keys::COUNT_GEM_OTHER),
+        "powerups" => Some(keys::CATEGORY_POWERUPS),
+        "weapons" => Some(keys::COUNT_WEAPON_OTHER),
+        "plot_items" => Some(keys::CATEGORY_PLOT_ITEMS),
+        "mgweapons" => Some(keys::CATEGORY_MAGIC_WEAPONS),
+        "improve" => Some(keys::CATEGORY_IMPROVEMENTS),
         _ => None,
     }
 }
@@ -228,21 +231,21 @@ pub fn item_category_id(category: &str) -> Option<&'static str> {
 pub fn item_category_label(category: &str) -> String {
     item_category_id(category).map_or_else(
         || title_case(category),
-        |id| message::capitalize(message::tr(id)),
+        |key| message::capitalize(message::tr(key)),
     )
 }
 
-/// Stable catalog id for a known style kind.
+/// Stable catalog key for a known style kind.
 #[must_use]
-pub fn style_kind_id(kind: &str) -> Option<&'static str> {
+pub fn style_kind_id(kind: &str) -> Option<Key> {
     match kind.to_lowercase().as_str() {
-        "martial" => Some("style.kind.martial"),
-        "weapon" => Some("count.weapon.one"),
-        "magic" => Some("style.kind.magic"),
-        "support" => Some("style.kind.support"),
-        "transformation" => Some("style.kind.transformation"),
-        "improvised" => Some("style.kind.improvised"),
-        "unique" => Some("style.kind.unique"),
+        "martial" => Some(keys::STYLE_KIND_MARTIAL),
+        "weapon" => Some(keys::COUNT_WEAPON_ONE),
+        "magic" => Some(keys::STYLE_KIND_MAGIC),
+        "support" => Some(keys::STYLE_KIND_SUPPORT),
+        "transformation" => Some(keys::STYLE_KIND_TRANSFORMATION),
+        "improvised" => Some(keys::STYLE_KIND_IMPROVISED),
+        "unique" => Some(keys::STYLE_KIND_UNIQUE),
         _ => None,
     }
 }
@@ -250,12 +253,12 @@ pub fn style_kind_id(kind: &str) -> Option<&'static str> {
 /// Friendly label for a style kind.
 ///
 /// [`jadeforge_gamedata::StyleKind::label`] deliberately returns lower-case
-/// ids; unknown kinds fall back to a title-cased copy of the id.
+/// keys; unknown kinds fall back to a title-cased copy of the id.
 #[must_use]
 pub fn style_kind_label(kind: &str) -> String {
     style_kind_id(kind).map_or_else(
         || title_case(kind),
-        |id| message::capitalize(message::tr(id)),
+        |key| message::capitalize(message::tr(key)),
     )
 }
 
@@ -741,12 +744,12 @@ impl Session {
         let mut session = Self::unloaded(directory);
         if session.directory.as_os_str().is_empty() {
             session.game_status = GameStatus::Missing;
-            session.message = Message::info(message::tr("status.choose_save_folder"));
+            session.message = Message::info(message::tr(keys::STATUS_CHOOSE_SAVE_FOLDER));
         } else {
             session.game_status = GameStatus::Loading;
             let directory = session.directory.display().to_string();
             session.message = Message::info(message::fill(
-                "status.scanning_directory",
+                keys::STATUS_SCANNING_DIRECTORY,
                 &[("directory", &directory)],
             ));
         }
@@ -772,7 +775,7 @@ impl Session {
             section_errors: Vec::new(),
             character_error: None,
             preview: None,
-            message: Message::info(message::tr("status.scanning")),
+            message: Message::info(message::tr(keys::STATUS_SCANNING)),
             last_backup: None,
             baseline: None,
             dirty: false,
@@ -848,28 +851,28 @@ impl Session {
         let directory = self.directory.display().to_string();
         let savegames = format::plural(
             total,
-            message::tr("count.savegame.one"),
-            message::tr("count.savegame.other"),
+            message::tr(keys::COUNT_SAVEGAME_ONE),
+            message::tr(keys::COUNT_SAVEGAME_OTHER),
         );
         self.message = if total == 0 {
             Message::info(message::fill(
-                "status.no.savegames.found.in",
+                keys::STATUS_NO_SAVEGAMES_FOUND_IN,
                 &[("directory", &directory)],
             ))
         } else if broken == 0 {
             Message::success(message::fill(
-                "status.found.in",
+                keys::STATUS_FOUND_IN,
                 &[("savegames", &savegames), ("directory", &directory)],
             ))
         } else if broken == total {
             Message::error(message::fill(
-                "status.scan_none_readable",
+                keys::STATUS_SCAN_NONE_READABLE,
                 &[("savegames", &savegames), ("directory", &directory)],
             ))
         } else {
             let broken = broken.to_string();
             Message::error(message::fill(
-                "status.scan_partial",
+                keys::STATUS_SCAN_PARTIAL,
                 &[
                     ("savegames", &savegames),
                     ("directory", &directory),
@@ -937,12 +940,12 @@ impl Session {
     pub fn begin_scan(&mut self, directory: impl Into<PathBuf>) -> Option<ScanRequest> {
         let directory = directory.into();
         if self.is_dirty() {
-            self.message = Message::info(message::tr("status.unsaved_first"));
+            self.message = Message::info(message::tr(keys::STATUS_UNSAVED_FIRST));
             self.settle_loading_game_data();
             return None;
         }
         if directory.as_os_str().is_empty() {
-            self.message = Message::info(message::tr("status.choose_save_folder"));
+            self.message = Message::info(message::tr(keys::STATUS_CHOOSE_SAVE_FOLDER));
             self.settle_loading_game_data();
             return None;
         }
@@ -956,7 +959,7 @@ impl Session {
         self.scanning = Some((directory.clone(), token));
         let directory_label = directory.display().to_string();
         self.message = Message::info(message::fill(
-            "status.scanning_directory",
+            keys::STATUS_SCANNING_DIRECTORY,
             &[("directory", &directory_label)],
         ));
         Some(ScanRequest {
@@ -1008,7 +1011,7 @@ impl Session {
         }
         let directory = request.directory.display().to_string();
         self.message = Message::error(message::fill(
-            "status.scan_failed",
+            keys::STATUS_SCAN_FAILED,
             &[("directory", &directory)],
         ));
         self.settle_loading_game_data();
@@ -1026,7 +1029,7 @@ impl Session {
         }
         self.scan_token = self.scan_token.wrapping_add(1);
         self.settle_loading_game_data();
-        self.message = Message::info(message::tr("status.scan_cancelled"));
+        self.message = Message::info(message::tr(keys::STATUS_SCAN_CANCELLED));
         true
     }
 
@@ -1092,9 +1095,9 @@ impl Session {
                 self.game = None;
                 self.game_status = GameStatus::Error(reason.clone());
                 vec![message::fill(
-                    "about.diagnostics.line",
+                    keys::ABOUT_DIAGNOSTICS_LINE,
                     &[
-                        ("label", message::tr("overview.game_data")),
+                        ("label", message::tr(keys::OVERVIEW_GAME_DATA)),
                         ("value", &reason),
                     ],
                 )]
@@ -1134,14 +1137,16 @@ impl Session {
                 // now, so every derived row has to be rebuilt.
                 self.rebuild_rows();
                 let root = root.display().to_string();
-                self.message =
-                    Message::success(message::fill("status.using_game_data", &[("root", &root)]));
+                self.message = Message::success(message::fill(
+                    keys::STATUS_USING_GAME_DATA,
+                    &[("root", &root)],
+                ));
                 true
             }
             Err(error) => {
                 let root = root.display().to_string();
                 self.message = Message::error(message::fill(
-                    "status.game_data_unreadable",
+                    keys::STATUS_GAME_DATA_UNREADABLE,
                     &[("root", &root), ("error", &error.to_string())],
                 ));
                 false
@@ -1167,16 +1172,16 @@ impl Session {
             return true;
         }
         if self.is_dirty() {
-            self.message = Message::info(message::tr("status.unsaved_first"));
+            self.message = Message::info(message::tr(keys::STATUS_UNSAVED_FIRST));
             return false;
         }
         let Some(entry) = self.entries.get(index) else {
-            self.message = Message::error(message::tr("status.savegame_gone"));
+            self.message = Message::error(message::tr(keys::STATUS_SAVEGAME_GONE));
             return false;
         };
         if let Some(error) = &entry.error {
             self.message = Message::error(message::fill(
-                "status.cannot_open_scan",
+                keys::STATUS_CANNOT_OPEN_SCAN,
                 &[("label", &entry.label), ("error", error)],
             ));
             return false;
@@ -1222,7 +1227,7 @@ impl Session {
                     warnings.extend(self.load_game_data());
                 }
                 self.message = if warnings.is_empty() && self.section_errors.is_empty() {
-                    Message::success(message::fill("status.opened", &[("label", &label)]))
+                    Message::success(message::fill(keys::STATUS_OPENED, &[("label", &label)]))
                 } else {
                     let mut problems: Vec<String> = self
                         .section_errors
@@ -1238,7 +1243,7 @@ impl Session {
                     problems.extend(warnings);
                     let problems = problems.join("; ");
                     Message::error(message::fill(
-                        "status.opened_with_problems",
+                        keys::STATUS_OPENED_WITH_PROBLEMS,
                         &[("label", &label), ("problems", &problems)],
                     ))
                 };
@@ -1247,7 +1252,7 @@ impl Session {
             Err(error) => {
                 let path = path.display().to_string();
                 self.message = Message::error(message::fill(
-                    "status.cannot.open",
+                    keys::STATUS_CANNOT_OPEN,
                     &[("path", &path), ("error", &error.to_string())],
                 ));
                 false
@@ -1338,7 +1343,7 @@ impl Session {
     fn describe_item(&self, item: &Item) -> ItemRow {
         let info = self.game.as_ref().and_then(|game| game.item(item.item_id));
         let bundled = self.bundled_item(item.item_id);
-        let fallback = message::fill("status.item", &[("item_id", &item.item_id.to_string())]);
+        let fallback = message::fill(keys::STATUS_ITEM, &[("item_id", &item.item_id.to_string())]);
         let name = info
             .map(|info| info.name.clone())
             .or_else(|| bundled.map(|item| item.name.clone()))
@@ -1363,7 +1368,10 @@ impl Session {
             .game
             .as_ref()
             .and_then(|game| game.style(style.style_id));
-        let fallback = message::fill("status.style", &[("style_id", &style.style_id.to_string())]);
+        let fallback = message::fill(
+            keys::STATUS_STYLE,
+            &[("style_id", &style.style_id.to_string())],
+        );
         let name = info
             .map(|info| info.name.clone())
             .or_else(|| self.bundled_style(style.style_id).map(ToOwned::to_owned))
@@ -1603,7 +1611,7 @@ impl Session {
         }
         if let Some(error) = failure {
             self.message = Message::error(message::fill(
-                "status.cannot.undo.that.step",
+                keys::STATUS_CANNOT_UNDO_THAT_STEP,
                 &[("error", &error.to_string())],
             ));
             return false;
@@ -1623,7 +1631,7 @@ impl Session {
     /// Undoes the last applied action and restores the typed views.
     pub fn undo(&mut self) -> bool {
         if self.history_cursor == 0 {
-            self.message = Message::info(message::tr("status.nothing_to_undo"));
+            self.message = Message::info(message::tr(keys::STATUS_NOTHING_TO_UNDO));
             return false;
         }
         let entry = self.history[self.history_cursor - 1].clone();
@@ -1632,14 +1640,17 @@ impl Session {
         }
         self.history_cursor -= 1;
         self.refresh_after_history_restore();
-        self.message = Message::info(message::fill("status.undid", &[("label", &entry.label)]));
+        self.message = Message::info(message::fill(
+            keys::STATUS_UNDID,
+            &[("label", &entry.label)],
+        ));
         true
     }
 
     /// Reapplies the most recently undone action.
     pub fn redo(&mut self) -> bool {
         if self.history_cursor >= self.history.len() {
-            self.message = Message::info(message::tr("status.nothing_to_redo"));
+            self.message = Message::info(message::tr(keys::STATUS_NOTHING_TO_REDO));
             return false;
         }
         let entry = self.history[self.history_cursor].clone();
@@ -1648,7 +1659,10 @@ impl Session {
         }
         self.history_cursor += 1;
         self.refresh_after_history_restore();
-        self.message = Message::info(message::fill("status.redid", &[("label", &entry.label)]));
+        self.message = Message::info(message::fill(
+            keys::STATUS_REDID,
+            &[("label", &entry.label)],
+        ));
         true
     }
 
@@ -1676,11 +1690,11 @@ impl Session {
         }
         if groups.is_empty() && self.dirty {
             groups.push(PendingChangeGroup {
-                label: message::tr("status.savegame.structure").to_owned(),
+                label: message::tr(keys::STATUS_SAVEGAME_STRUCTURE).to_owned(),
                 changes: vec![PendingChange::new(
-                    message::tr("status.block.layout"),
-                    message::tr("status.as.opened"),
-                    message::tr("status.structs_added_or_orphaned"),
+                    message::tr(keys::STATUS_BLOCK_LAYOUT),
+                    message::tr(keys::STATUS_AS_OPENED),
+                    message::tr(keys::STATUS_STRUCTS_ADDED_OR_ORPHANED),
                 )],
             });
         }
@@ -1723,17 +1737,17 @@ impl Session {
     /// and the external-change banner do.
     pub fn reload_from_disk(&mut self) -> Result<(), SessionError> {
         let Some(index) = self.selected else {
-            self.message = Message::error(message::tr("status.no.savegame.is.open"));
+            self.message = Message::error(message::tr(keys::STATUS_NO_SAVEGAME_IS_OPEN));
             return Err(SessionError::NoSavegame);
         };
         if self.dirty {
-            self.message = Message::error(message::tr("status.reload_would_discard"));
+            self.message = Message::error(message::tr(keys::STATUS_RELOAD_WOULD_DISCARD));
             return Err(SessionError::CannotReload);
         }
         if !self.load(index) {
             return Err(SessionError::CannotReload);
         }
-        self.message = Message::info(message::tr("status.reloaded"));
+        self.message = Message::info(message::tr(keys::STATUS_RELOADED));
         Ok(())
     }
 
@@ -1762,11 +1776,11 @@ impl Session {
     /// backup of the current file first; the returned path is that safety copy.
     pub fn restore_backup(&mut self, backup: &Path) -> Result<PathBuf, SessionError> {
         let Some(path) = self.current_path() else {
-            self.message = Message::error(message::tr("status.no.savegame.is.open"));
+            self.message = Message::error(message::tr(keys::STATUS_NO_SAVEGAME_IS_OPEN));
             return Err(SessionError::NoSavegame);
         };
         if self.dirty {
-            self.message = Message::error(message::tr("status.save_or_revert_before_restore"));
+            self.message = Message::error(message::tr(keys::STATUS_SAVE_OR_REVERT_BEFORE_RESTORE));
             return Err(SessionError::CannotReload);
         }
         let known = self
@@ -1774,7 +1788,7 @@ impl Session {
             .into_iter()
             .any(|candidate| candidate.path == backup);
         if !known {
-            self.message = Message::error(message::tr("status.not_a_backup"));
+            self.message = Message::error(message::tr(keys::STATUS_NOT_A_BACKUP));
             return Err(SessionError::CannotReload);
         }
         match restore_backup(backup, &path) {
@@ -1787,14 +1801,14 @@ impl Session {
                 let backup_path = backup.display().to_string();
                 let safety_path = safety.display().to_string();
                 self.message = Message::success(message::fill(
-                    "status.restored_backup",
+                    keys::STATUS_RESTORED_BACKUP,
                     &[("backup", &backup_path), ("safety", &safety_path)],
                 ));
                 Ok(safety)
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot.restore.the.backup",
+                    keys::STATUS_CANNOT_RESTORE_THE_BACKUP,
                     &[("error", &error.to_string())],
                 ));
                 Err(SessionError::CannotReload)
@@ -1965,7 +1979,7 @@ impl Session {
             }
         };
         let Some(save) = self.save.as_mut() else {
-            self.message = Message::error(message::tr("status.no.savegame.is.open"));
+            self.message = Message::error(message::tr(keys::STATUS_NO_SAVEGAME_IS_OPEN));
             return Err(SessionError::NoSavegame);
         };
         match save.apply_character(&character) {
@@ -1975,20 +1989,20 @@ impl Session {
                 self.refresh_entry();
                 self.refresh_dirty();
                 if changes.is_empty() {
-                    self.message = Message::info(message::tr("status.nothing_to_apply"));
+                    self.message = Message::info(message::tr(keys::STATUS_NOTHING_TO_APPLY));
                 } else {
                     self.remember_edit(
-                        message::tr("nav.character"),
+                        message::tr(keys::NAV_CHARACTER),
                         pending_from_core(&changes),
                         None,
                     );
                     let changes_label = format::plural(
                         changes.len(),
-                        message::tr("count.change.one"),
-                        message::tr("count.change.other"),
+                        message::tr(keys::COUNT_CHANGE_ONE),
+                        message::tr(keys::COUNT_CHANGE_OTHER),
                     );
                     self.message = Message::success(message::fill(
-                        "status.applied.in.memory",
+                        keys::STATUS_APPLIED_IN_MEMORY,
                         &[("changes", &changes_label)],
                     ));
                 }
@@ -2030,7 +2044,7 @@ impl Session {
                     .collect::<Vec<_>>()
                     .join("|");
                 self.remember_edit(
-                    message::tr("nav.character"),
+                    message::tr(keys::NAV_CHARACTER),
                     pending,
                     (!key.is_empty()).then_some(key),
                 );
@@ -2050,7 +2064,7 @@ impl Session {
             return Err(SessionError::NoSavegame);
         };
         if !self.dirty {
-            self.message = Message::info(message::tr("status.nothing_to_write"));
+            self.message = Message::info(message::tr(keys::STATUS_NOTHING_TO_WRITE));
             return Err(SessionError::NothingToSave);
         }
         match save.save(SaveOptions { backup: true }) {
@@ -2065,13 +2079,14 @@ impl Session {
                     Some(backup) => {
                         let backup = backup.display().to_string();
                         Message::success(message::fill(
-                            "status.saved_with_backup",
+                            keys::STATUS_SAVED_WITH_BACKUP,
                             &[("path", &path_label), ("backup", &backup)],
                         ))
                     }
-                    None => {
-                        Message::success(message::fill("status.saved", &[("path", &path_label)]))
-                    }
+                    None => Message::success(message::fill(
+                        keys::STATUS_SAVED,
+                        &[("path", &path_label)],
+                    )),
                 };
                 self.refresh_entry();
                 self.accept_as_clean();
@@ -2081,12 +2096,12 @@ impl Session {
                 if matches!(error, jadeforge_core::Error::Conflict { .. }) {
                     self.disk_changed = true;
                     self.message = Message::error(message::fill(
-                        "status.disk_changed",
+                        keys::STATUS_DISK_CHANGED,
                         &[("error", &error.to_string())],
                     ));
                 } else {
                     self.message = Message::error(message::fill(
-                        "status.cannot.save",
+                        keys::STATUS_CANNOT_SAVE,
                         &[("error", &error.to_string())],
                     ));
                 }
@@ -2117,7 +2132,7 @@ impl Session {
                 if let Some(first) = invalid.first() {
                     let path = path.display().to_string();
                     self.message = Message::info(message::fill(
-                        "status.saved_invalid_field",
+                        keys::STATUS_SAVED_INVALID_FIELD,
                         &[("path", &path), ("error", &first.message)],
                     ));
                 }
@@ -2126,7 +2141,7 @@ impl Session {
             Err(error) => {
                 if let Some(first) = invalid.first() {
                     self.message = Message::error(message::fill(
-                        "status.invalid_field_also",
+                        keys::STATUS_INVALID_FIELD_ALSO,
                         &[("message", &self.message.text), ("error", &first.message)],
                     ));
                 }
@@ -2141,7 +2156,7 @@ impl Session {
             return Err(SessionError::NoSavegame);
         };
         if self.load(index) {
-            self.message = Message::info(message::tr("status.reloaded"));
+            self.message = Message::info(message::tr(keys::STATUS_RELOADED));
             Ok(())
         } else {
             Err(SessionError::CannotReload)
@@ -2160,12 +2175,14 @@ impl Session {
         };
         let new_count = i32::from(current) + delta;
         if new_count > 255 {
-            self.message =
-                Message::info(message::fill("status.stack_too_large", &[("name", &name)]));
+            self.message = Message::info(message::fill(
+                keys::STATUS_STACK_TOO_LARGE,
+                &[("name", &name)],
+            ));
             return;
         }
         if new_count < 1 {
-            self.message = Message::info(message::tr("status.stack_minimum"));
+            self.message = Message::info(message::tr(keys::STATUS_STACK_MINIMUM));
             return;
         }
         let Some(save) = self.save.as_mut() else {
@@ -2180,7 +2197,7 @@ impl Session {
                     item.count = new_count as u8;
                 }
                 self.remember_edit(
-                    message::tr("status.item.stack"),
+                    message::tr(keys::STATUS_ITEM_STACK),
                     vec![PendingChange::new(
                         format!("ItemList[{struct_index}].Count ({name})"),
                         current.to_string(),
@@ -2190,17 +2207,17 @@ impl Session {
                 );
                 let count = format::plural(
                     usize::try_from(new_count).unwrap_or(usize::MAX),
-                    message::tr("count.item.one"),
-                    message::tr("count.item.other"),
+                    message::tr(keys::COUNT_ITEM_ONE),
+                    message::tr(keys::COUNT_ITEM_OTHER),
                 );
                 self.message = Message::success(message::fill(
-                    "status.in.the.stack",
+                    keys::STATUS_IN_THE_STACK,
                     &[("name", &name), ("count", &count)],
                 ));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot_change",
+                    keys::STATUS_CANNOT_CHANGE,
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2220,7 +2237,7 @@ impl Session {
             return;
         };
         if count == 0 {
-            self.message = Message::info(message::tr("status.stack_minimum"));
+            self.message = Message::info(message::tr(keys::STATUS_STACK_MINIMUM));
             return;
         }
         let Some(save) = self.save.as_mut() else {
@@ -2240,7 +2257,7 @@ impl Session {
                     item.count = count;
                 }
                 self.remember_edit(
-                    message::tr("status.item.stack"),
+                    message::tr(keys::STATUS_ITEM_STACK),
                     vec![PendingChange::new(
                         format!("ItemList[{struct_index}].Count ({name})"),
                         previous.to_string(),
@@ -2250,17 +2267,17 @@ impl Session {
                 );
                 let count_label = format::plural(
                     usize::from(count),
-                    message::tr("count.item.one"),
-                    message::tr("count.item.other"),
+                    message::tr(keys::COUNT_ITEM_ONE),
+                    message::tr(keys::COUNT_ITEM_OTHER),
                 );
                 self.message = Message::success(message::fill(
-                    "status.in.the.stack",
+                    keys::STATUS_IN_THE_STACK,
                     &[("name", &name), ("count", &count_label)],
                 ));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot_change",
+                    keys::STATUS_CANNOT_CHANGE,
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2275,7 +2292,7 @@ impl Session {
             if let Some(info) = self.game.as_ref().and_then(|game| game.item(item_id)) {
                 let Some(save_type) = info.save_type else {
                     let error = message::fill(
-                        "status.item_no_category",
+                        keys::STATUS_ITEM_NO_CATEGORY,
                         &[("item_id", &item_id.to_string())],
                     );
                     self.message = Message::error(error.clone());
@@ -2293,7 +2310,7 @@ impl Session {
                 // The CLI and older fixtures can add an id that is not in the
                 // current item table; the legacy generic type keeps that working.
                 (
-                    message::fill("status.item", &[("item_id", &item_id.to_string())]),
+                    message::fill(keys::STATUS_ITEM, &[("item_id", &item_id.to_string())]),
                     8,
                 )
             };
@@ -2304,24 +2321,25 @@ impl Session {
             Ok(index) => {
                 self.rebuild_rows();
                 let label = message::capitalize(&message::fill(
-                    "status.added_label",
-                    &[("kind", message::tr("count.item.one"))],
+                    keys::STATUS_ADDED_LABEL,
+                    &[("kind", message::tr(keys::COUNT_ITEM_ONE))],
                 ));
                 self.remember_edit(
                     &label,
                     vec![PendingChange::new(
                         format!("ItemList[{index}] ({name})"),
-                        message::tr("status.not.present"),
+                        message::tr(keys::STATUS_NOT_PRESENT),
                         format!("#{item_id} x1"),
                     )],
                     None,
                 );
-                self.message = Message::success(message::fill("status.added", &[("name", &name)]));
+                self.message =
+                    Message::success(message::fill(keys::STATUS_ADDED, &[("name", &name)]));
                 Ok(())
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot_add",
+                    keys::STATUS_CANNOT_ADD,
                     &[("error", &error.to_string())],
                 ));
                 Err(SessionError::Item(error.to_string()))
@@ -2346,30 +2364,32 @@ impl Session {
             Ok(true) => {
                 Rc::make_mut(&mut self.items).retain(|item| item.struct_index != struct_index);
                 let label = message::capitalize(&message::fill(
-                    "status.removed_label_template",
-                    &[("kind", message::tr("count.item.one"))],
+                    keys::STATUS_REMOVED_LABEL_TEMPLATE,
+                    &[("kind", message::tr(keys::COUNT_ITEM_ONE))],
                 ));
                 self.remember_edit(
                     &label,
                     vec![PendingChange::new(
                         format!("ItemList[{struct_index}] ({name})"),
                         format!("#{item_id} x{count}"),
-                        message::tr("status.removed_label"),
+                        message::tr(keys::STATUS_REMOVED_LABEL),
                     )],
                     None,
                 );
-                self.message =
-                    Message::success(message::fill("status.removed_sentence", &[("what", &name)]));
+                self.message = Message::success(message::fill(
+                    keys::STATUS_REMOVED_SENTENCE,
+                    &[("what", &name)],
+                ));
             }
             Ok(false) => {
                 self.message = Message::info(message::fill(
-                    "status.already_gone",
-                    &[("kind", message::tr("count.item.one"))],
+                    keys::STATUS_ALREADY_GONE,
+                    &[("kind", message::tr(keys::COUNT_ITEM_ONE))],
                 ));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot_remove",
+                    keys::STATUS_CANNOT_REMOVE,
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2512,7 +2532,7 @@ impl Session {
                     name: advance.map_or_else(
                         || {
                             message::fill(
-                                "status.upgrade",
+                                keys::STATUS_UPGRADE,
                                 &[("advance", &choice.advance.to_string())],
                             )
                         },
@@ -2568,7 +2588,7 @@ impl Session {
                         .find(|row| row.struct_index == struct_index)
                         .map_or((before_mask, before_level), |row| (row.mask, row.level));
                     self.remember_edit(
-                        message::tr("status.style.upgrade"),
+                        message::tr(keys::STATUS_STYLE_UPGRADE),
                         vec![
                             PendingChange::new(
                                 format!(
@@ -2588,18 +2608,21 @@ impl Session {
                     );
                 }
                 self.message = if changed == 0 {
-                    Message::info(message::tr("status.upgrade_unchanged"))
+                    Message::info(message::tr(keys::STATUS_UPGRADE_UNCHANGED))
                 } else {
                     let upgrades = format::plural(
                         usize::try_from(changed).unwrap_or(usize::MAX),
-                        message::tr("count.upgrade.one"),
-                        message::tr("count.upgrade.other"),
+                        message::tr(keys::COUNT_UPGRADE_ONE),
+                        message::tr(keys::COUNT_UPGRADE_OTHER),
                     );
                     if taken {
-                        Message::success(message::fill("status.bought", &[("upgrades", &upgrades)]))
+                        Message::success(message::fill(
+                            keys::STATUS_BOUGHT,
+                            &[("upgrades", &upgrades)],
+                        ))
                     } else {
                         Message::success(message::fill(
-                            "status.removed_sentence",
+                            keys::STATUS_REMOVED_SENTENCE,
                             &[("what", &upgrades)],
                         ))
                     }
@@ -2609,7 +2632,7 @@ impl Session {
             Err(error) => {
                 self.rebuild_rows();
                 self.message = Message::error(message::fill(
-                    "status.cannot_change",
+                    keys::STATUS_CANNOT_CHANGE,
                     &[("error", &error.to_string())],
                 ));
                 false
@@ -2674,12 +2697,15 @@ impl Session {
                     })
                     .collect();
                 let name = if empty {
-                    message::tr("status.empty.socket").to_owned()
+                    message::tr(keys::STATUS_EMPTY_SOCKET).to_owned()
                 } else {
                     info.map(|item| item.name.clone())
                         .or_else(|| bundled.map(|item| item.name.clone()))
                         .unwrap_or_else(|| {
-                            message::fill("status.gem", &[("item_id", &gem.item_id.to_string())])
+                            message::fill(
+                                keys::STATUS_GEM,
+                                &[("item_id", &gem.item_id.to_string())],
+                            )
                         })
                 };
                 GemRow {
@@ -2722,8 +2748,8 @@ impl Session {
             .cloned()
         else {
             self.message = Message::error(message::fill(
-                "status.not_in_game_data",
-                &[("kind", message::tr("count.gem.one"))],
+                keys::STATUS_NOT_IN_GAME_DATA,
+                &[("kind", message::tr(keys::COUNT_GEM_ONE))],
             ));
             return;
         };
@@ -2734,24 +2760,24 @@ impl Session {
             Ok(index) => {
                 self.gems = Rc::new(self.build_gem_rows().0);
                 let label = message::capitalize(&message::fill(
-                    "status.added_label",
-                    &[("kind", message::tr("count.gem.one"))],
+                    keys::STATUS_ADDED_LABEL,
+                    &[("kind", message::tr(keys::COUNT_GEM_ONE))],
                 ));
                 self.remember_edit(
                     &label,
                     vec![PendingChange::new(
                         format!("GemList[{index}] ({})", gem.name),
-                        message::tr("status.not.present"),
+                        message::tr(keys::STATUS_NOT_PRESENT),
                         format!("gem #{item_id}"),
                     )],
                     None,
                 );
                 self.message =
-                    Message::success(message::fill("status.added", &[("name", &gem.name)]));
+                    Message::success(message::fill(keys::STATUS_ADDED, &[("name", &gem.name)]));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot_add",
+                    keys::STATUS_CANNOT_ADD,
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2773,8 +2799,8 @@ impl Session {
             Ok(location) => {
                 self.gems = Rc::new(self.build_gem_rows().0);
                 if let Some((name, from)) = before {
-                    let inventory = message::tr("label.inventory");
-                    let amulet = message::tr("label.amulet");
+                    let inventory = message::tr(keys::LABEL_INVENTORY);
+                    let amulet = message::tr(keys::LABEL_AMULET);
                     let (from, to) = match (from, location) {
                         (GemLocation::Inventory, GemLocation::Amulet) => (inventory, amulet),
                         (GemLocation::Amulet, GemLocation::Inventory) => (amulet, inventory),
@@ -2782,7 +2808,7 @@ impl Session {
                         (GemLocation::Amulet, GemLocation::Amulet) => (amulet, amulet),
                     };
                     self.remember_edit(
-                        message::tr("status.gem.moved"),
+                        message::tr(keys::STATUS_GEM_MOVED),
                         vec![PendingChange::new(
                             format!("GemList[{struct_index}] ({name})"),
                             from,
@@ -2792,13 +2818,13 @@ impl Session {
                     );
                 }
                 self.message = Message::success(match location {
-                    GemLocation::Amulet => message::tr("status.gem_socketed"),
-                    GemLocation::Inventory => message::tr("status.gem_moved_to_inventory"),
+                    GemLocation::Amulet => message::tr(keys::STATUS_GEM_SOCKETED),
+                    GemLocation::Inventory => message::tr(keys::STATUS_GEM_MOVED_TO_INVENTORY),
                 });
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot.move.the.gem",
+                    keys::STATUS_CANNOT_MOVE_THE_GEM,
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2822,28 +2848,30 @@ impl Session {
                 let removed_name = before.as_ref().map(|(name, _)| name.clone());
                 if let Some((name, location)) = before {
                     let label = message::capitalize(&message::fill(
-                        "status.removed_label_template",
-                        &[("kind", message::tr("count.gem.one"))],
+                        keys::STATUS_REMOVED_LABEL_TEMPLATE,
+                        &[("kind", message::tr(keys::COUNT_GEM_ONE))],
                     ));
                     self.remember_edit(
                         &label,
                         vec![PendingChange::new(
                             format!("GemList[{struct_index}] ({name})"),
                             format!("{location:?}"),
-                            message::tr("status.removed_label"),
+                            message::tr(keys::STATUS_REMOVED_LABEL),
                         )],
                         None,
                     );
                 }
                 let what = removed_name
                     .as_deref()
-                    .unwrap_or_else(|| message::tr("count.gem.one"));
-                self.message =
-                    Message::success(message::fill("status.removed_sentence", &[("what", what)]));
+                    .unwrap_or_else(|| message::tr(keys::COUNT_GEM_ONE));
+                self.message = Message::success(message::fill(
+                    keys::STATUS_REMOVED_SENTENCE,
+                    &[("what", what)],
+                ));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot_remove",
+                    keys::STATUS_CANNOT_REMOVE,
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2897,13 +2925,13 @@ impl Session {
             .cloned()
         else {
             self.message = Message::error(message::fill(
-                "status.not_in_game_data",
-                &[("kind", message::tr("count.style.one"))],
+                keys::STATUS_NOT_IN_GAME_DATA,
+                &[("kind", message::tr(keys::COUNT_STYLE_ONE))],
             ));
             return;
         };
         let Some(template) = self.styles.first().map(|style| style.struct_index) else {
-            self.message = Message::error(message::tr("status.learn_style_first"));
+            self.message = Message::error(message::tr(keys::STATUS_LEARN_STYLE_FIRST));
             return;
         };
         let identity = StyleIdentity {
@@ -2921,24 +2949,24 @@ impl Session {
             Ok(index) => {
                 self.rebuild_rows();
                 let label = message::capitalize(&message::fill(
-                    "status.added_label",
-                    &[("kind", message::tr("count.style.one"))],
+                    keys::STATUS_ADDED_LABEL,
+                    &[("kind", message::tr(keys::COUNT_STYLE_ONE))],
                 ));
                 self.remember_edit(
                     &label,
                     vec![PendingChange::new(
                         format!("StyleList[{index}] ({})", info.name),
-                        message::tr("status.not.present"),
+                        message::tr(keys::STATUS_NOT_PRESENT),
                         format!("style #{}", info.id),
                     )],
                     None,
                 );
                 self.message =
-                    Message::success(message::fill("status.added", &[("name", &info.name)]));
+                    Message::success(message::fill(keys::STATUS_ADDED, &[("name", &info.name)]));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot_add",
+                    keys::STATUS_CANNOT_ADD,
                     &[("error", &error.to_string())],
                 ));
             }
@@ -2957,7 +2985,7 @@ impl Session {
             return;
         };
         if self.styles.len() <= 1 {
-            self.message = Message::error(message::tr("status.keep_one_style"));
+            self.message = Message::error(message::tr(keys::STATUS_KEEP_ONE_STYLE));
             return;
         }
         let Some(save) = self.save.as_mut() else {
@@ -2967,30 +2995,32 @@ impl Session {
             Ok(true) => {
                 Rc::make_mut(&mut self.styles).retain(|style| style.struct_index != struct_index);
                 let label = message::capitalize(&message::fill(
-                    "status.removed_label_template",
-                    &[("kind", message::tr("count.style.one"))],
+                    keys::STATUS_REMOVED_LABEL_TEMPLATE,
+                    &[("kind", message::tr(keys::COUNT_STYLE_ONE))],
                 ));
                 self.remember_edit(
                     &label,
                     vec![PendingChange::new(
                         format!("StyleList[{struct_index}] ({name})"),
                         format!("style #{style_id}"),
-                        message::tr("status.removed_label"),
+                        message::tr(keys::STATUS_REMOVED_LABEL),
                     )],
                     None,
                 );
-                self.message =
-                    Message::success(message::fill("status.removed_sentence", &[("what", &name)]));
+                self.message = Message::success(message::fill(
+                    keys::STATUS_REMOVED_SENTENCE,
+                    &[("what", &name)],
+                ));
             }
             Ok(false) => {
                 self.message = Message::info(message::fill(
-                    "status.already_gone",
-                    &[("kind", message::tr("count.style.one"))],
+                    keys::STATUS_ALREADY_GONE,
+                    &[("kind", message::tr(keys::COUNT_STYLE_ONE))],
                 ));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot_remove",
+                    keys::STATUS_CANNOT_REMOVE,
                     &[("error", &error.to_string())],
                 ));
             }
@@ -3001,7 +3031,7 @@ impl Session {
     /// Changes the level of a companion.
     pub fn set_henchman_level(&mut self, struct_index: usize, level: u8) {
         if !(1..=60).contains(&level) {
-            self.message = Message::info(message::tr("status.companion_level_range"));
+            self.message = Message::info(message::tr(keys::STATUS_COMPANION_LEVEL_RANGE));
             return;
         }
         let known = self
@@ -3022,7 +3052,7 @@ impl Session {
                 }
                 if let Some((name, previous)) = known {
                     self.remember_edit(
-                        message::tr("status.companion.level"),
+                        message::tr(keys::STATUS_COMPANION_LEVEL),
                         vec![PendingChange::new(
                             format!("HenchmanList[{struct_index}].Level ({name})"),
                             previous.to_string(),
@@ -3032,13 +3062,13 @@ impl Session {
                     );
                 }
                 self.message = Message::success(message::fill(
-                    "status.companion.level.set.to",
+                    keys::STATUS_COMPANION_LEVEL_SET_TO,
                     &[("level", &level.to_string())],
                 ));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot_change",
+                    keys::STATUS_CANNOT_CHANGE,
                     &[("error", &error.to_string())],
                 ));
             }
@@ -3068,12 +3098,12 @@ impl Session {
                     henchman.available = !available;
                 }
                 let state = if available {
-                    message::tr("about.diagnostics.unavailable")
+                    message::tr(keys::ABOUT_DIAGNOSTICS_UNAVAILABLE)
                 } else {
-                    message::tr("companions.available")
+                    message::tr(keys::COMPANIONS_AVAILABLE)
                 };
                 self.remember_edit(
-                    message::tr("status.companion.availability"),
+                    message::tr(keys::STATUS_COMPANION_AVAILABILITY),
                     vec![PendingChange::new(
                         format!("HenchmanList[{struct_index}].Available ({name})"),
                         (!available).to_string(),
@@ -3082,13 +3112,13 @@ impl Session {
                     None,
                 );
                 self.message = Message::success(message::fill(
-                    "status.is.now",
+                    keys::STATUS_IS_NOW,
                     &[("name", &name), ("state", state)],
                 ));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
-                    "status.cannot_change",
+                    keys::STATUS_CANNOT_CHANGE,
                     &[("error", &error.to_string())],
                 ));
             }
@@ -3150,7 +3180,7 @@ fn pending_from_core(changes: &[Change]) -> Vec<PendingChange> {
 /// Formats one predefined gem effect as `+2 Body` or `+1 Fire (5s)`.
 fn describe_gem_effect(game: &GameData, kind: u32, value: u32, duration: f32) -> String {
     let name = game.effect_name(kind).map_or_else(
-        || message::fill("status.effect", &[("kind", &kind.to_string())]),
+        || message::fill(keys::STATUS_EFFECT, &[("kind", &kind.to_string())]),
         ToOwned::to_owned,
     );
     let signed = i64::from(value);
@@ -3165,7 +3195,7 @@ fn describe_gem_effect(game: &GameData, kind: u32, value: u32, duration: f32) ->
 fn describe_unsaved_effect(effect: &jadeforge_core::GemEffect) -> String {
     let value = format!("{:+}", effect.value);
     message::fill(
-        "status.unsaved_effect",
+        keys::STATUS_UNSAVED_EFFECT,
         &[("value", &value), ("kind", &effect.kind.to_string())],
     )
 }
@@ -3175,7 +3205,7 @@ fn describe_effect(game: &GameData, effect: &jadeforge_core::GemEffect) -> Strin
     let name = game
         .effect_name(u32::try_from(effect.kind).unwrap_or(u32::MAX))
         .map_or_else(
-            || message::fill("status.effect", &[("kind", &effect.kind.to_string())]),
+            || message::fill(keys::STATUS_EFFECT, &[("kind", &effect.kind.to_string())]),
             ToOwned::to_owned,
         );
     if effect.duration > 0.0 {
@@ -3205,16 +3235,16 @@ fn directory_problem(directory: &Path) -> Option<String> {
         Err(error) => Some(match error.kind() {
             std::io::ErrorKind::NotFound => {
                 let directory = directory.display().to_string();
-                message::fill("status.folder_missing", &[("directory", &directory)])
+                message::fill(keys::STATUS_FOLDER_MISSING, &[("directory", &directory)])
             }
             std::io::ErrorKind::PermissionDenied => {
                 let directory = directory.display().to_string();
-                message::fill("status.folder_permission", &[("directory", &directory)])
+                message::fill(keys::STATUS_FOLDER_PERMISSION, &[("directory", &directory)])
             }
             _ => {
                 let directory = directory.display().to_string();
                 message::fill(
-                    "status.folder_unreadable",
+                    keys::STATUS_FOLDER_UNREADABLE,
                     &[("directory", &directory), ("error", &error.to_string())],
                 )
             }
@@ -3222,14 +3252,14 @@ fn directory_problem(directory: &Path) -> Option<String> {
         Ok(metadata) if !metadata.is_dir() => {
             let directory = directory.display().to_string();
             Some(message::fill(
-                "status.not_a_folder",
+                keys::STATUS_NOT_A_FOLDER,
                 &[("directory", &directory)],
             ))
         }
         Ok(_) => std::fs::read_dir(directory).err().map(|error| {
             let directory = directory.display().to_string();
             message::fill(
-                "status.folder_list_failed",
+                keys::STATUS_FOLDER_LIST_FAILED,
                 &[("directory", &directory), ("error", &error.to_string())],
             )
         }),
@@ -3678,21 +3708,33 @@ mod tests {
 
         for field in CharacterField::ALL {
             assert!(
-                has_id(field.label()),
+                has_id(field.label().id()),
                 "missing caption id {}",
-                field.label()
+                field.label().id()
             );
-            assert!(has_id(field.range()), "missing range id {}", field.range());
+            assert!(
+                has_id(field.range().id()),
+                "missing range id {}",
+                field.range().id()
+            );
         }
         for sort in [SaveSort::Name, SaveSort::Level, SaveSort::Played] {
-            assert!(has_id(sort.label()), "missing sort id {}", sort.label());
+            assert!(
+                has_id(sort.label().id()),
+                "missing sort id {}",
+                sort.label().id()
+            );
         }
         for theme in ThemeChoice::ALL {
-            assert!(has_id(theme.label()), "missing theme id {}", theme.label());
             assert!(
-                has_id(theme.description()),
+                has_id(theme.label().id()),
+                "missing theme id {}",
+                theme.label().id()
+            );
+            assert!(
+                has_id(theme.description().id()),
                 "missing theme description id {}",
-                theme.description()
+                theme.description().id()
             );
         }
         for category in [
@@ -3703,8 +3745,8 @@ mod tests {
             "mgweapons",
             "improve",
         ] {
-            let id = item_category_id(category).expect("a known category id");
-            assert!(has_id(id), "missing category id {id}");
+            let key = item_category_id(category).expect("a known category id");
+            assert!(has_id(key.id()), "missing category id {}", key.id());
         }
         for kind in [
             "martial",
@@ -3715,11 +3757,14 @@ mod tests {
             "improvised",
             "unique",
         ] {
-            let id = style_kind_id(kind).expect("a known style kind id");
-            assert!(has_id(id), "missing style kind id {id}");
+            let key = style_kind_id(kind).expect("a known style kind id");
+            assert!(has_id(key.id()), "missing style kind id {}", key.id());
         }
         for value in [0, 127, 128, 129, 220] {
-            assert!(has_id(format::alignment(value)), "missing alignment id");
+            assert!(
+                has_id(format::alignment(value).id()),
+                "missing alignment id"
+            );
         }
         for section in [
             Section::Character,
@@ -3730,20 +3775,20 @@ mod tests {
             Section::Amulet,
         ] {
             assert!(
-                has_id(section.label()),
+                has_id(section.label().id()),
                 "missing section id {}",
-                section.label()
+                section.label().id()
             );
         }
     }
 
     #[test]
     fn alignment_names_follow_the_engine_default() {
-        assert_eq!(format::alignment(220), "alignment.open_palm");
-        assert_eq!(format::alignment(129), "alignment.open_palm");
-        assert_eq!(format::alignment(128), "alignment.balanced");
-        assert_eq!(format::alignment(127), "alignment.closed_fist");
-        assert_eq!(format::alignment(0), "alignment.closed_fist");
+        assert_eq!(format::alignment(220), keys::ALIGNMENT_OPEN_PALM);
+        assert_eq!(format::alignment(129), keys::ALIGNMENT_OPEN_PALM);
+        assert_eq!(format::alignment(128), keys::ALIGNMENT_BALANCED);
+        assert_eq!(format::alignment(127), keys::ALIGNMENT_CLOSED_FIST);
+        assert_eq!(format::alignment(0), keys::ALIGNMENT_CLOSED_FIST);
     }
 
     #[test]
@@ -4109,7 +4154,7 @@ mod tests {
 
     #[test]
     fn the_sort_labels_use_the_same_time_wording_as_the_rows() {
-        assert_eq!(SaveSort::Played.label(), "character.time_played");
+        assert_eq!(SaveSort::Played.label(), keys::CHARACTER_TIME_PLAYED);
         assert_eq!(SaveSort::Played.key(), "played");
         assert_eq!(SaveSort::from_key("played"), Some(SaveSort::Played));
     }

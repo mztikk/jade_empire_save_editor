@@ -4,6 +4,7 @@
 //! without depending on Freya; the desktop crate maps them to its palette and
 //! layout scales.
 
+use jadeforge_i18n::{Key, keys};
 use serde::{Deserialize, Serialize};
 
 /// Colour theme selected by the user.
@@ -51,25 +52,25 @@ impl ThemeChoice {
             .unwrap_or_default()
     }
 
-    /// Stable catalog id for the settings UI label.
+    /// Stable catalog key for the settings UI label.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> Key {
         match self {
-            Self::System => "theme.system",
-            Self::Dark => "theme.dark",
-            Self::Light => "theme.light",
-            Self::HighContrast => "theme.high_contrast",
+            Self::System => keys::THEME_SYSTEM,
+            Self::Dark => keys::THEME_DARK,
+            Self::Light => keys::THEME_LIGHT,
+            Self::HighContrast => keys::THEME_HIGH_CONTRAST,
         }
     }
 
-    /// Stable catalog id for the sentence that explains the choice.
+    /// Stable catalog key for the sentence that explains the choice.
     #[must_use]
-    pub fn description(self) -> &'static str {
+    pub fn description(self) -> Key {
         match self {
-            Self::System => "theme.system.description",
-            Self::Dark => "theme.dark.description",
-            Self::Light => "theme.light.description",
-            Self::HighContrast => "theme.high_contrast.description",
+            Self::System => keys::THEME_SYSTEM_DESCRIPTION,
+            Self::Dark => keys::THEME_DARK_DESCRIPTION,
+            Self::Light => keys::THEME_LIGHT_DESCRIPTION,
+            Self::HighContrast => keys::THEME_HIGH_CONTRAST_DESCRIPTION,
         }
     }
 

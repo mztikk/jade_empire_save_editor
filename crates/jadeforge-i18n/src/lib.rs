@@ -16,6 +16,32 @@ use std::sync::{Mutex, OnceLock};
 
 use serde::Deserialize;
 
+/// A catalogued interface id.
+///
+/// The generated [`keys`] module is the only source of values, so a call site
+/// cannot pass an arbitrary string to [`t`], [`fill`] or [`plural`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Key(&'static str);
+
+impl Key {
+    /// Wraps a catalogued id. The generated [`keys`] module uses this.
+    pub(crate) const fn new(id: &'static str) -> Self {
+        Self(id)
+    }
+
+    /// The stable catalog id.
+    #[must_use]
+    pub fn id(self) -> &'static str {
+        self.0
+    }
+}
+
+pub mod keys {
+    //! Typed constants for every id in `locales/en.toml`.
+
+    include!(concat!(env!("OUT_DIR"), "/keys.rs"));
+}
+
 /// Language bundle the interface uses.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -140,12 +166,19 @@ pub fn has_id(id: &str) -> bool {
     english().messages.contains_key(id)
 }
 
-/// Translates a stable interface id.
+/// Translates a catalogued interface key.
+///
+/// The [`Key`] type makes an arbitrary string unrepresentable:
+///
+/// ```compile_fail,E0308
+/// let _ = jadeforge_i18n::t("shell.about");
+/// ```
 ///
 /// A missing or empty value returns a cached `⟦id⟧` marker. There is no
 /// English fallback: an incomplete translation must be visible.
 #[must_use]
-pub fn t(id: &'static str) -> &'static str {
+pub fn t(key: Key) -> &'static str {
+    let id = key.id();
     match current() {
         Locale::English => english()
             .messages
@@ -163,11 +196,17 @@ pub fn t(id: &'static str) -> &'static str {
 
 /// Fills `{name}` placeholders in a translated template.
 ///
-/// The id is catalogued; values are inserted verbatim, so a path, a character
-/// name or an error detail is never translated.
+/// The key is catalogued and typed, so a raw source string cannot be passed:
+///
+/// ```compile_fail,E0308
+/// let _ = jadeforge_i18n::fill("status.opened", &[]);
+/// ```
+///
+/// Values are inserted verbatim, so a path, a character name or an error
+/// detail is never translated.
 #[must_use]
-pub fn fill(id: &'static str, arguments: &[(&str, &str)]) -> String {
-    let mut text = t(id).to_owned();
+pub fn fill(key: Key, arguments: &[(&str, &str)]) -> String {
+    let mut text = t(key).to_owned();
     for (name, value) in arguments {
         text = text.replace(&format!("{{{name}}}"), value);
     }
@@ -175,8 +214,14 @@ pub fn fill(id: &'static str, arguments: &[(&str, &str)]) -> String {
 }
 
 /// A count followed by the singular or plural catalogued noun.
+///
+/// Both nouns are typed keys:
+///
+/// ```compile_fail,E0308
+/// let _ = jadeforge_i18n::plural(1, "count.item.one", "count.item.other");
+/// ```
 #[must_use]
-pub fn plural(count: usize, singular: &'static str, plural: &'static str) -> String {
+pub fn plural(count: usize, singular: Key, plural: Key) -> String {
     let noun = if count == 1 { t(singular) } else { t(plural) };
     format!("{count} {noun}")
 }
@@ -344,12 +389,15 @@ mod tests {
     #[test]
     fn preview_returns_markers_instead_of_english() {
         install(Locale::German);
-        assert_eq!(t("shell.about"), "Über JadeForge");
-        assert_eq!(t("unknown.id"), "⟦unknown.id⟧");
+        assert_eq!(t(keys::SHELL_ABOUT), "Über JadeForge");
+        assert_eq!(t(Key::new("unknown.id")), "⟦unknown.id⟧");
         if !is_complete(Locale::German) {
-            for empty_id in ["status.unsaved_first", "error.section_unreadable"] {
-                assert!(deutsch_is_empty(empty_id));
-                assert_eq!(t(empty_id), format!("⟦{empty_id}⟧").as_str());
+            let empty = keys::ALL
+                .iter()
+                .copied()
+                .find(|key| deutsch_is_empty(key.id()));
+            if let Some(key) = empty {
+                assert_eq!(t(key), format!("⟦{}⟧", key.id()).as_str());
             }
         }
         install(Locale::English);
@@ -358,7 +406,7 @@ mod tests {
     #[test]
     fn english_missing_ids_are_markers_too() {
         install(Locale::English);
-        assert_eq!(t("unknown.id"), "⟦unknown.id⟧");
+        assert_eq!(t(Key::new("unknown.id")), "⟦unknown.id⟧");
     }
 
     #[test]
@@ -389,7 +437,7 @@ mod tests {
     #[test]
     fn pseudo_is_generated_from_english() {
         install(Locale::Pseudo);
-        let value = t("shell.about");
+        let value = t(keys::SHELL_ABOUT);
         assert!(value.starts_with('⟦') && value.ends_with('⟧'));
         assert_ne!(value, "About");
         install(Locale::English);
@@ -421,6 +469,25 @@ mod tests {
             assert_eq!(locale_label(Locale::German), "Deutsch (Vorschau)");
         }
         assert_eq!(locale_label(Locale::Pseudo), "English (pseudolocale)");
+    }
+
+    #[test]
+    fn generated_keys_match_the_english_catalog() {
+        let catalog = load(include_str!("../locales/en.toml"));
+        let mut catalogued: Vec<&str> = catalog.messages.keys().map(String::as_str).collect();
+        catalogued.sort_unstable();
+        let mut generated: Vec<&str> = keys::ALL.iter().map(|key| key.id()).collect();
+        generated.sort_unstable();
+        assert_eq!(generated, catalogued, "keys.rs and en.toml differ");
+        let unique: std::collections::HashSet<&str> = generated.iter().copied().collect();
+        assert_eq!(unique.len(), generated.len(), "duplicate generated keys");
+        for key in keys::ALL {
+            assert!(
+                catalog.messages.contains_key(key.id()),
+                "uncatalogued key {}",
+                key.id()
+            );
+        }
     }
 
     #[test]

@@ -7,7 +7,7 @@ use freya::elements::image::ImageHandle;
 use freya::prelude::*;
 
 use crate::form::Form;
-use crate::i18n::{fill, t};
+use crate::i18n::{fill, keys, t};
 use crate::message::capitalize;
 use crate::session::{FieldError, GameStatus, MessageKind, Session};
 use crate::theme;
@@ -28,7 +28,7 @@ pub(super) fn choose_folder(
 ) -> bool {
     if ctx.session.borrow().is_dirty() {
         ctx.run(|session| {
-            session.set_error(t("status.unsaved_first"));
+            session.set_error(t(keys::STATUS_UNSAVED_FIRST));
         });
         return false;
     }
@@ -37,7 +37,7 @@ pub(super) fn choose_folder(
         crate::dialog::PickOutcome::Picked(folder) => folder,
         crate::dialog::PickOutcome::Cancelled => {
             ctx.run(|session| {
-                session.inform(t("shell.folder_unchanged_save"));
+                session.inform(t(keys::SHELL_FOLDER_UNCHANGED_SAVE));
             });
             return false;
         }
@@ -56,9 +56,9 @@ pub(super) fn choose_folder(
 /// Copies a status message to the system clipboard.
 pub(super) fn copy_status(ctx: &Ctx, text: String) {
     let message = if crate::clipboard::copy(text) {
-        t("shell.status_copied").to_owned()
+        t(keys::SHELL_STATUS_COPIED).to_owned()
     } else {
-        t("error.clipboard_unavailable").to_owned()
+        t(keys::ERROR_CLIPBOARD_UNAVAILABLE).to_owned()
     };
     ctx.run(|session| session.notify(&message));
 }
@@ -94,17 +94,17 @@ pub(super) fn header(
         MessageKind::Info | MessageKind::Success => accesskit::Live::Polite,
     };
     let game_text = match game_status {
-        GameStatus::Loading => t("shell.loading.game.data").to_owned(),
+        GameStatus::Loading => t(keys::SHELL_LOADING_GAME_DATA).to_owned(),
         GameStatus::Loaded { items, .. } => fill(
-            "shell.loaded",
+            keys::SHELL_LOADED,
             &[(
                 "items",
-                &crate::widgets::plural(*items, "count.item.one", "count.item.other"),
+                &crate::widgets::plural(*items, keys::COUNT_ITEM_ONE, keys::COUNT_ITEM_OTHER),
             )],
         ),
-        GameStatus::NamesOnly { .. } => t("shell.english.names.loaded").to_owned(),
-        GameStatus::Missing => t("shell.game.data.not.found").to_owned(),
-        GameStatus::Error(_) => t("shell.game.data.unreadable").to_owned(),
+        GameStatus::NamesOnly { .. } => t(keys::SHELL_ENGLISH_NAMES_LOADED).to_owned(),
+        GameStatus::Missing => t(keys::SHELL_GAME_DATA_NOT_FOUND).to_owned(),
+        GameStatus::Error(_) => t(keys::SHELL_GAME_DATA_UNREADABLE).to_owned(),
     };
     let game_color = match game_status {
         GameStatus::Loaded { .. } | GameStatus::NamesOnly { .. } => theme::jade(),
@@ -157,7 +157,7 @@ pub(super) fn header(
                 crate::dialog::PickOutcome::Picked(folder) => folder,
                 crate::dialog::PickOutcome::Cancelled => {
                     ctx.run(|session| {
-                        session.inform(t("shell.folder_unchanged_game"));
+                        session.inform(t(keys::SHELL_FOLDER_UNCHANGED_GAME));
                     });
                     return;
                 }
@@ -183,7 +183,7 @@ pub(super) fn header(
     let mut badges: Vec<Element> = Vec::new();
     if dirty {
         badges.push(crate::widgets::badge(
-            t("shell.unsaved_changes"),
+            t(keys::SHELL_UNSAVED_CHANGES),
             theme::warning(),
             theme::background(),
         ));
@@ -192,8 +192,8 @@ pub(super) fn header(
         badges.push(crate::widgets::badge(
             crate::widgets::plural(
                 form_errors.len(),
-                "count.invalidfield.one",
-                "count.invalidfield.other",
+                keys::COUNT_INVALIDFIELD_ONE,
+                keys::COUNT_INVALIDFIELD_OTHER,
             ),
             theme::surface_active(),
             theme::warning(),
@@ -201,9 +201,17 @@ pub(super) fn header(
     }
     if !dirty && form_errors.is_empty() {
         badges.push(if has_save {
-            crate::widgets::badge(t("shell.all_changes_saved"), theme::surface(), theme::dim())
+            crate::widgets::badge(
+                t(keys::SHELL_ALL_CHANGES_SAVED),
+                theme::surface(),
+                theme::dim(),
+            )
         } else {
-            crate::widgets::badge(t("shell.no_savegame_open"), theme::surface(), theme::dim())
+            crate::widgets::badge(
+                t(keys::SHELL_NO_SAVEGAME_OPEN),
+                theme::surface(),
+                theme::dim(),
+            )
         });
     }
 
@@ -221,7 +229,7 @@ pub(super) fn header(
                     .color(theme::accent()),
             )
             .child(
-                crate::widgets::a11y_text(t("about.tagline"))
+                crate::widgets::a11y_text(t(keys::ABOUT_TAGLINE))
                     .font_size(theme::font::caption())
                     .color(theme::dim()),
             )
@@ -248,14 +256,14 @@ pub(super) fn header(
             .content(Content::Flex)
             .cross_align(Alignment::Center)
             .child(
-                crate::widgets::a11y_text(t("label.save.folder").to_uppercase())
+                crate::widgets::a11y_text(t(keys::LABEL_SAVE_FOLDER).to_uppercase())
                     .font_size(theme::font::micro())
                     .font_weight(FontWeight::BOLD)
                     .color(theme::dim()),
             )
             .child(
                 Input::new(directory)
-                    .placeholder(t("shell.save_folder_path"))
+                    .placeholder(t(keys::SHELL_SAVE_FOLDER_PATH))
                     .width(Size::flex(1.0))
                     .on_submit({
                         let scan = scan.clone();
@@ -265,7 +273,7 @@ pub(super) fn header(
             .child(
                 Button::new()
                     .outline()
-                    .child(t("shell.browse"))
+                    .child(t(keys::SHELL_BROWSE))
                     .on_press(browse),
             )
             .child(
@@ -273,9 +281,9 @@ pub(super) fn header(
                     .outline()
                     .enabled(!scanning)
                     .child(if scanning {
-                        t("shell.scanning")
+                        t(keys::SHELL_SCANNING)
                     } else {
-                        t("shell.scan")
+                        t(keys::SHELL_SCAN)
                     })
                     .on_press({
                         let scan = scan.clone();
@@ -287,7 +295,7 @@ pub(super) fn header(
                 el.child(
                     Button::new()
                         .flat()
-                        .child(t("shell.cancel_scan"))
+                        .child(t(keys::SHELL_CANCEL_SCAN))
                         .on_press(move |_| cancel_scan()),
                 )
             })
@@ -303,26 +311,26 @@ pub(super) fn header(
                 .content(Content::Flex)
                 .cross_align(Alignment::Center)
                 .child(
-                    crate::widgets::a11y_text(t("overview.game_data").to_uppercase())
+                    crate::widgets::a11y_text(t(keys::OVERVIEW_GAME_DATA).to_uppercase())
                         .font_size(theme::font::micro())
                         .font_weight(FontWeight::BOLD)
                         .color(theme::dim()),
                 )
                 .child(
                     Input::new(game_directory)
-                        .placeholder(t("shell.game_data_path"))
+                        .placeholder(t(keys::SHELL_GAME_DATA_PATH))
                         .width(Size::flex(1.0)),
                 )
                 .child(
                     Button::new()
                         .outline()
-                        .child(t("shell.browse"))
+                        .child(t(keys::SHELL_BROWSE))
                         .on_press(browse_game),
                 )
                 .child(
                     Button::new()
                         .outline()
-                        .child(t("shell.use"))
+                        .child(t(keys::SHELL_USE))
                         .on_press(use_game),
                 )
                 .into_element(),
@@ -357,12 +365,12 @@ pub(super) fn header(
                     ),
             )
             .child(AccessibleButton::new(
-                t("shell.copy_status"),
+                t(keys::SHELL_COPY_STATUS),
                 copy_message,
                 rect()
                     .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
                     .child(
-                        crate::widgets::a11y_text(t("shell.copy"))
+                        crate::widgets::a11y_text(t(keys::SHELL_COPY))
                             .font_size(theme::font::micro())
                             .color(theme::muted()),
                     ),
@@ -392,8 +400,8 @@ fn about_button(
     mut show_review: State<bool>,
 ) -> Element {
     crate::widgets::outline_action(
-        t("shell.about.details"),
-        t("shell.about"),
+        t(keys::SHELL_ABOUT_DETAILS),
+        t(keys::SHELL_ABOUT),
         Action::new(move || {
             show_about.set(true);
             show_backups.set(false);
@@ -410,8 +418,8 @@ fn backups_button(
     mut show_review: State<bool>,
 ) -> Element {
     crate::widgets::outline_action(
-        t("shell.browse.backups"),
-        capitalize(t("count.backup.other")),
+        t(keys::SHELL_BROWSE_BACKUPS),
+        capitalize(t(keys::COUNT_BACKUP_OTHER)),
         Action::new(move || {
             show_backups.set(true);
             show_about.set(false);
@@ -428,9 +436,9 @@ fn backups_button(
 /// save list below it.
 pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Element {
     let message = if selected {
-        t("shell.no.screenshot")
+        t(keys::SHELL_NO_SCREENSHOT)
     } else {
-        t("shell.select.a.save")
+        t(keys::SHELL_SELECT_A_SAVE)
     };
     // Keep the root and its content box stable while the preview loads. Freya's
     // diff can panic if an element changes its root type in place, especially
@@ -534,8 +542,8 @@ pub(super) fn footer(
         move |_| {
             if dirty
                 && !crate::dialog::confirm(
-                    t("shell.discard.changes"),
-                    t("shell.reload_discard_confirm"),
+                    t(keys::SHELL_DISCARD_CHANGES),
+                    t(keys::SHELL_RELOAD_DISCARD_CONFIRM),
                 )
             {
                 return;
@@ -550,15 +558,15 @@ pub(super) fn footer(
     let can_save = has_save && dirty;
     let can_revert = has_save && dirty;
     let (hint_text, hint_color) = if !has_save {
-        (t("shell.empty.open_save"), theme::dim())
+        (t(keys::SHELL_EMPTY_OPEN_SAVE), theme::dim())
     } else if !form_errors.is_empty() && dirty {
-        (t("shell.invalid_fields_savable"), theme::warning())
+        (t(keys::SHELL_INVALID_FIELDS_SAVABLE), theme::warning())
     } else if !form_errors.is_empty() {
-        (t("shell.invalid_fields_fix"), theme::warning())
+        (t(keys::SHELL_INVALID_FIELDS_FIX), theme::warning())
     } else if dirty {
-        (t("shell.memory_only"), theme::warning())
+        (t(keys::SHELL_MEMORY_ONLY), theme::warning())
     } else {
-        (t("shell.nothing_to_write"), theme::dim())
+        (t(keys::SHELL_NOTHING_TO_WRITE), theme::dim())
     };
 
     rect()
@@ -578,28 +586,28 @@ pub(super) fn footer(
             Button::new()
                 .flat()
                 .enabled(can_undo)
-                .child(t("shell.undo"))
+                .child(t(keys::SHELL_UNDO))
                 .on_press(undo),
         )
         .child(
             Button::new()
                 .flat()
                 .enabled(can_redo)
-                .child(t("shell.redo"))
+                .child(t(keys::SHELL_REDO))
                 .on_press(redo),
         )
         .child(
             Button::new()
                 .filled()
                 .enabled(can_save)
-                .child(t("shell.save"))
+                .child(t(keys::SHELL_SAVE))
                 .on_press(save),
         )
         .child(
             Button::new()
                 .flat()
                 .enabled(can_revert)
-                .child(t("shell.revert"))
+                .child(t(keys::SHELL_REVERT))
                 .on_press(revert),
         )
         .child(rect().width(Size::flex(1.0)))
@@ -623,14 +631,14 @@ pub(super) fn loading_state() -> Element {
         .spacing(theme::space::xxl())
         .padding(Gaps::new_all(theme::space::page()))
         .child(
-            crate::widgets::a11y_text(t("shell.loading_savegames"))
+            crate::widgets::a11y_text(t(keys::SHELL_LOADING_SAVEGAMES))
                 .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
                 .font_size(theme::font::heading())
                 .font_weight(FontWeight::BOLD)
                 .color(theme::text()),
         )
         .child(
-            crate::widgets::a11y_text(t("shell.loading.explanation"))
+            crate::widgets::a11y_text(t(keys::SHELL_LOADING_EXPLANATION))
                 .font_size(theme::font::label())
                 .color(theme::muted()),
         )
@@ -664,9 +672,9 @@ pub(super) fn empty_state(
     start_scan: Rc<dyn Fn(PathBuf) -> bool>,
 ) -> Element {
     let text = if savegames == 0 {
-        t("shell.empty.point_to_folder")
+        t(keys::SHELL_EMPTY_POINT_TO_FOLDER)
     } else {
-        t("shell.empty.pick_save")
+        t(keys::SHELL_EMPTY_PICK_SAVE)
     };
     let choose = {
         let ctx = ctx.clone();
@@ -680,7 +688,7 @@ pub(super) fn empty_state(
         .spacing(theme::space::md())
         .padding(Gaps::new_all(theme::space::page()))
         .child(
-            crate::widgets::a11y_text(t("shell.no_savegame_selected"))
+            crate::widgets::a11y_text(t(keys::SHELL_NO_SAVEGAME_SELECTED))
                 .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
                 .font_size(theme::font::heading())
                 .font_weight(FontWeight::BOLD)
@@ -694,11 +702,11 @@ pub(super) fn empty_state(
         .child(
             Button::new()
                 .filled()
-                .child(t("shell.choose_save_folder"))
+                .child(t(keys::SHELL_CHOOSE_SAVE_FOLDER))
                 .on_press(choose),
         )
         .child(
-            crate::widgets::a11y_text(t("shell.savegame.safety"))
+            crate::widgets::a11y_text(t(keys::SHELL_SAVEGAME_SAFETY))
                 .font_size(theme::font::caption())
                 .color(theme::dim()),
         )
@@ -713,9 +721,9 @@ pub(super) fn empty_state(
 pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element {
     let dirty = ctx.session.borrow().is_dirty();
     let text = if dirty {
-        t("shell.disk_changed_dirty")
+        t(keys::SHELL_DISK_CHANGED_DIRTY)
     } else {
-        t("shell.disk_changed")
+        t(keys::SHELL_DISK_CHANGED)
     };
     let reload = {
         let ctx = ctx.clone();
@@ -723,8 +731,8 @@ pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element 
         move |_| {
             if dirty
                 && !crate::dialog::confirm(
-                    &format!("{}?", t("shell.reload")),
-                    t("shell.disk_changed_external"),
+                    &format!("{}?", t(keys::SHELL_RELOAD)),
+                    t(keys::SHELL_DISK_CHANGED_EXTERNAL),
                 )
             {
                 return;
@@ -763,7 +771,7 @@ pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element 
         .child(
             Button::new()
                 .outline()
-                .child(t("shell.reload"))
+                .child(t(keys::SHELL_RELOAD))
                 .on_press(reload),
         )
         .into_element()

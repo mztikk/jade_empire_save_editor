@@ -12,7 +12,7 @@ use std::rc::Rc;
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::i18n::{fill, t};
+use crate::i18n::{fill, keys, t};
 use crate::message::capitalize;
 use crate::theme;
 use crate::widgets::{self, AccessibleButton, Action};
@@ -23,22 +23,26 @@ pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> Element {
     let backups = ctx.session.borrow().backups();
     let dirty = ctx.session.borrow().is_dirty();
     let open = ctx.session.borrow().current_path().map_or_else(
-        || t("shell.no_savegame_open").to_owned(),
+        || t(keys::SHELL_NO_SAVEGAME_OPEN).to_owned(),
         |path| path.display().to_string(),
     );
 
     let mut children: Vec<Element> = vec![widgets::hint(fill(
-        "backups.explanation",
+        keys::BACKUPS_EXPLANATION,
         &[("open", &open)],
     ))];
     if dirty {
-        children.push(widgets::hint(t("backups.dirty_hint")));
+        children.push(widgets::hint(t(keys::BACKUPS_DIRTY_HINT)));
     }
     children.push(widgets::divider());
     if backups.is_empty() {
-        children.push(widgets::hint(t("backups.empty_hint")));
+        children.push(widgets::hint(t(keys::BACKUPS_EMPTY_HINT)));
     } else {
-        let heading = widgets::plural(backups.len(), "count.backup.one", "count.backup.other");
+        let heading = widgets::plural(
+            backups.len(),
+            keys::COUNT_BACKUP_ONE,
+            keys::COUNT_BACKUP_OTHER,
+        );
         children.push(widgets::section_label(heading.to_uppercase()));
         for backup in backups {
             children.push(backup_row(ctx, &backup, dirty, sync));
@@ -47,16 +51,16 @@ pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> Element {
     children.push(widgets::divider());
     children.push(
         widgets::outline_action(
-            t("backups.close"),
-            t("backups.back"),
+            t(keys::BACKUPS_CLOSE),
+            t(keys::BACKUPS_BACK),
             Action::new(move || close()),
         )
         .into_element(),
     );
 
     widgets::card(
-        capitalize(t("count.backup.other")),
-        Some(t("backups.utc_hint").to_owned()),
+        capitalize(t(keys::COUNT_BACKUP_OTHER)),
+        Some(t(keys::BACKUPS_UTC_HINT).to_owned()),
         children,
     )
 }
@@ -74,7 +78,10 @@ fn backup_row(
         let path = path.clone();
         let sync = sync.clone();
         Action::new(move || {
-            if !crate::dialog::confirm(t("backups.restore.title"), t("backups.restore.confirm")) {
+            if !crate::dialog::confirm(
+                t(keys::BACKUPS_RESTORE_TITLE),
+                t(keys::BACKUPS_RESTORE_CONFIRM),
+            ) {
                 return;
             }
             let result = ctx.run(|session| session.restore_backup(&path));
@@ -85,7 +92,7 @@ fn backup_row(
     };
     let restore = AccessibleButton::new(
         fill(
-            "backups.restore.action",
+            keys::BACKUPS_RESTORE_ACTION,
             &[("timestamp", &backup.timestamp())],
         ),
         restore,
@@ -102,7 +109,7 @@ fn backup_row(
             )
             .corner_radius(theme::radius::control())
             .child(
-                widgets::a11y_text(t("backups.restore"))
+                widgets::a11y_text(t(keys::BACKUPS_RESTORE))
                     .font_size(theme::font::micro())
                     .color(if dirty { theme::dim() } else { theme::text() }),
             ),
@@ -137,7 +144,7 @@ fn backup_row(
         )
         .child(
             widgets::a11y_text(fill(
-                "backups.original",
+                keys::BACKUPS_ORIGINAL,
                 &[("path", &backup.original.display().to_string())],
             ))
             .font_size(theme::font::micro())

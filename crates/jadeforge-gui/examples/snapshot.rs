@@ -103,15 +103,15 @@ fn main() {
     match wanted.as_deref() {
         Some("all") => {
             for tab in Tab::ALL {
-                if let Some(node) = find_label(&test, tab.label()) {
+                if let Some(node) = find_label(&test, tab.label().id()) {
                     click(&mut test, &node);
                 }
                 type_query(&mut test, tab, query.as_deref(), false);
                 let stem = output
                     .file_stem()
                     .map_or_else(|| "ui".to_owned(), |stem| stem.to_string_lossy().into());
-                let path =
-                    output.with_file_name(format!("{stem}-{}.png", tab.label().to_lowercase()));
+                let path = output
+                    .with_file_name(format!("{stem}-{}.png", tab.label().id().to_lowercase()));
                 test.render_to_file(&path);
                 println!("wrote {}", path.display());
             }
@@ -175,12 +175,12 @@ fn type_query(test: &mut TestingRunner, tab: Tab, query: Option<&str>, warn: boo
         if warn {
             eprintln!(
                 "warning: {} has no tab filter; --query was not applied",
-                tab.label()
+                tab.label().id()
             );
         }
         return;
     };
-    if let Some(node) = find_paragraph_exact(test, placeholder) {
+    if let Some(node) = find_paragraph_exact(test, placeholder.id()) {
         click(test, &node);
         test.write_text(query.to_owned());
         test.sync_and_update();
@@ -191,7 +191,7 @@ fn type_query(test: &mut TestingRunner, tab: Tab, query: Option<&str>, warn: boo
 fn tab_from_label(label: &str) -> Option<Tab> {
     Tab::ALL
         .into_iter()
-        .find(|tab| tab.label().eq_ignore_ascii_case(label))
+        .find(|tab| tab.label().id().eq_ignore_ascii_case(label))
 }
 
 /// Finds an input paragraph by its exact text (a placeholder or value).

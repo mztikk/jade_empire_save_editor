@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::i18n::{fill, t};
+use crate::i18n::{Key, fill, keys, t};
 use crate::theme;
 use crate::widgets::{self, AccessibleButton, Action};
 
@@ -25,7 +25,7 @@ pub mod styles;
 /// the same vocabulary as the tab caption.
 pub(crate) fn section_unreadable(section: crate::session::Section, error: &str) -> String {
     fill(
-        "error.section_unreadable",
+        keys::ERROR_SECTION_UNREADABLE,
         &[("section", t(section.label())), ("error", error)],
     )
 }
@@ -35,16 +35,16 @@ pub(crate) fn section_unreadable(section: crate::session::Section, error: &str) 
 /// The path is also rendered as a wrapping paragraph by the caller; these
 /// buttons make it usable without selecting text by hand. `what` names the
 /// path in the status and accessibility labels ("savegame", "backup", ...).
-pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: &'static str) -> Element {
+pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: Key) -> Element {
     let copy = {
         let ctx = ctx.clone();
         let path = path.to_owned();
         Action::new(move || {
             let what = t(what);
             let message = if crate::clipboard::copy(path.clone()) {
-                fill("path.copied", &[("what", what)])
+                fill(keys::PATH_COPIED, &[("what", what)])
             } else {
-                t("error.clipboard_unavailable").to_owned()
+                t(keys::ERROR_CLIPBOARD_UNAVAILABLE).to_owned()
             };
             ctx.run(|session| session.notify(&message));
         })
@@ -53,11 +53,11 @@ pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: &'stati
         let ctx = ctx.clone();
         Action::new(move || match crate::paths::open_folder(&folder) {
             Ok(()) => ctx.run(|session| {
-                session.notify(&fill("path.opened", &[("what", t(what))]));
+                session.notify(&fill(keys::PATH_OPENED, &[("what", t(what))]));
             }),
             Err(error) => ctx.run(|session| {
                 session.set_error(&fill(
-                    "path.open_failed",
+                    keys::PATH_OPEN_FAILED,
                     &[
                         ("what", t(what)),
                         ("folder", &folder.display().to_string()),
@@ -72,13 +72,13 @@ pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: &'stati
         .spacing(theme::space::md())
         .content(Content::wrap_spacing(theme::space::md()))
         .child(path_button(
-            fill("path.copy_action", &[("what", t(what))]),
-            t("path.copy"),
+            fill(keys::PATH_COPY_ACTION, &[("what", t(what))]),
+            t(keys::PATH_COPY),
             copy,
         ))
         .child(path_button(
-            fill("path.open_action", &[("what", t(what))]),
-            t("path.open"),
+            fill(keys::PATH_OPEN_ACTION, &[("what", t(what))]),
+            t(keys::PATH_OPEN),
             open,
         ))
         .into_element()

@@ -10,7 +10,7 @@ use freya::prelude::*;
 
 use crate::Locale;
 use crate::app::Ctx;
-use crate::i18n::{fill, locale_label, t};
+use crate::i18n::{Key, fill, keys, locale_label, t};
 use crate::message::capitalize;
 use crate::preferences::{TEXT_SCALES, ThemeChoice};
 use crate::session::{GameStatus, SaveSort};
@@ -35,13 +35,14 @@ pub fn view(
     let (sort, descending) = *sort.read();
     let save_folder = ctx.session.borrow().directory().to_path_buf();
     let game_text = match ctx.session.borrow().game_status() {
-        GameStatus::Loading => t("about.game_data.loading").to_owned(),
+        GameStatus::Loading => t(keys::ABOUT_GAME_DATA_LOADING).to_owned(),
         GameStatus::Loaded { root, .. } => root.display().to_string(),
-        GameStatus::NamesOnly { .. } => t("about.game_data.bundled").to_owned(),
-        GameStatus::Missing => t("about.game_data.missing").to_owned(),
-        GameStatus::Error(error) => {
-            fill("about.game_data.unreadable", &[("error", error.as_str())])
-        }
+        GameStatus::NamesOnly { .. } => t(keys::ABOUT_GAME_DATA_BUNDLED).to_owned(),
+        GameStatus::Missing => t(keys::ABOUT_GAME_DATA_MISSING).to_owned(),
+        GameStatus::Error(error) => fill(
+            keys::ABOUT_GAME_DATA_UNREADABLE,
+            &[("error", error.as_str())],
+        ),
     };
     let backup = ctx
         .session
@@ -51,12 +52,13 @@ pub fn view(
     let config_path = crate::config::Config::path();
 
     let close = Action::new(move || show_about.set(false));
-    let close_button = widgets::outline_action(t("about.close_page"), t("about.close"), close);
+    let close_button =
+        widgets::outline_action(t(keys::ABOUT_CLOSE_PAGE), t(keys::ABOUT_CLOSE), close);
 
     let selected_theme = *theme_choice.read();
     let selected_scale = *text_scale.read();
     let mut appearance: Vec<Element> = Vec::new();
-    appearance.push(widgets::hint(t("about.appearance.explanation")));
+    appearance.push(widgets::hint(t(keys::ABOUT_APPEARANCE_EXPLANATION)));
     let mut theme_chips: Vec<Element> = Vec::new();
     for choice in ThemeChoice::ALL {
         let mut theme_choice = theme_choice;
@@ -78,7 +80,7 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::sm())
             .content(Content::wrap_spacing(theme::space::sm()))
-            .child(widgets::section_label(t("label.theme").to_uppercase()))
+            .child(widgets::section_label(t(keys::LABEL_THEME).to_uppercase()))
             .children(theme_chips)
             .into_element(),
     );
@@ -90,7 +92,7 @@ pub fn view(
         scale_chips.push(appearance_chip(
             format!("{percent} %"),
             fill(
-                "about.text_size.option",
+                keys::ABOUT_TEXT_SIZE_OPTION,
                 &[("percent", &percent.to_string())],
             ),
             selected,
@@ -106,7 +108,7 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::sm())
             .content(Content::wrap_spacing(theme::space::sm()))
-            .child(widgets::section_label(t("about.text_size_heading")))
+            .child(widgets::section_label(t(keys::ABOUT_TEXT_SIZE_HEADING)))
             .children(scale_chips)
             .into_element(),
     );
@@ -118,7 +120,7 @@ pub fn view(
         locale_chips.push(appearance_chip(
             locale_label(candidate),
             fill(
-                "about.language.option",
+                keys::ABOUT_LANGUAGE_OPTION,
                 &[("language", locale_label(candidate))],
             ),
             selected,
@@ -134,7 +136,9 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::sm())
             .content(Content::wrap_spacing(theme::space::sm()))
-            .child(widgets::section_label(t("label.language").to_uppercase()))
+            .child(widgets::section_label(
+                t(keys::LABEL_LANGUAGE).to_uppercase(),
+            ))
             .children(locale_chips)
             .into_element(),
     );
@@ -143,9 +147,9 @@ pub fn view(
     // promise the size there. X11 and the desktop platforms restore both.
     let compositor_places_windows = crate::geometry::position_is_compositor_owned();
     let remember_description = if compositor_places_windows {
-        t("about.remember_size_wayland")
+        t(keys::ABOUT_REMEMBER_SIZE_WAYLAND)
     } else {
-        t("about.remember_size_description")
+        t(keys::ABOUT_REMEMBER_SIZE_DESCRIPTION)
     };
     appearance.push(
         rect()
@@ -153,9 +157,9 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::sm())
             .content(Content::wrap_spacing(theme::space::sm()))
-            .child(widgets::section_label(t("about.window_heading")))
+            .child(widgets::section_label(t(keys::ABOUT_WINDOW_HEADING)))
             .child(appearance_chip(
-                t("about.remember_size"),
+                t(keys::ABOUT_REMEMBER_SIZE),
                 remember_description,
                 remember,
                 Action::new(move || {
@@ -168,36 +172,36 @@ pub fn view(
             .into_element(),
     );
     if compositor_places_windows && remember {
-        appearance.push(widgets::hint(t("about.window.wayland_hint")));
+        appearance.push(widgets::hint(t(keys::ABOUT_WINDOW_WAYLAND_HINT)));
     }
 
     let mut diagnostics: Vec<(String, String)> = vec![
         (
-            t("about.diagnostics.version").to_owned(),
+            t(keys::ABOUT_DIAGNOSTICS_VERSION).to_owned(),
             crate::APP_VERSION.to_owned(),
         ),
         (
-            t("about.diagnostics.open_savegame").to_owned(),
+            t(keys::ABOUT_DIAGNOSTICS_OPEN_SAVEGAME).to_owned(),
             ctx.session.borrow().current_path().map_or_else(
-                || t("about.diagnostics.none").to_owned(),
+                || t(keys::ABOUT_DIAGNOSTICS_NONE).to_owned(),
                 |path| path.display().to_string(),
             ),
         ),
         (
-            capitalize(t("count.block.other")),
+            capitalize(t(keys::COUNT_BLOCK_OTHER)),
             ctx.session.borrow().block_count().to_string(),
         ),
         (
-            t("about.diagnostics.file_size").to_owned(),
+            t(keys::ABOUT_DIAGNOSTICS_FILE_SIZE).to_owned(),
             ctx.session.borrow().file_size().map_or_else(
-                || t("about.diagnostics.not_read").to_owned(),
+                || t(keys::ABOUT_DIAGNOSTICS_NOT_READ).to_owned(),
                 crate::session::format::bytes,
             ),
         ),
         (
-            capitalize(t("label.theme")),
+            capitalize(t(keys::LABEL_THEME)),
             fill(
-                "about.diagnostics.theme_value",
+                keys::ABOUT_DIAGNOSTICS_THEME_VALUE,
                 &[
                     ("theme", theme::current().palette.kind.key()),
                     (
@@ -208,25 +212,25 @@ pub fn view(
             ),
         ),
         (
-            capitalize(t("label.language")),
+            capitalize(t(keys::LABEL_LANGUAGE)),
             locale_label(crate::i18n::current()).to_owned(),
         ),
         (
-            t("about.diagnostics.renderer").to_owned(),
+            t(keys::ABOUT_DIAGNOSTICS_RENDERER).to_owned(),
             std::env::var("JADEFORGE_RENDERER")
-                .unwrap_or_else(|_| t("about.diagnostics.auto").to_owned()),
+                .unwrap_or_else(|_| t(keys::ABOUT_DIAGNOSTICS_AUTO).to_owned()),
         ),
         (
-            t("about.diagnostics.remember_window").to_owned(),
+            t(keys::ABOUT_DIAGNOSTICS_REMEMBER_WINDOW).to_owned(),
             if *remember_window.read() {
-                t("about.diagnostics.yes").to_owned()
+                t(keys::ABOUT_DIAGNOSTICS_YES).to_owned()
             } else {
-                t("about.diagnostics.no").to_owned()
+                t(keys::ABOUT_DIAGNOSTICS_NO).to_owned()
             },
         ),
     ];
     diagnostics.push((
-        t("about.diagnostics.backup_folder").to_owned(),
+        t(keys::ABOUT_DIAGNOSTICS_BACKUP_FOLDER).to_owned(),
         backup
             .as_ref()
             .and_then(|backup| backup.parent())
@@ -245,34 +249,34 @@ pub fn view(
         ));
     }
     let diagnostics_text = {
-        let mut text = format!("{}\n", t("about.diagnostics.title"));
+        let mut text = format!("{}\n", t(keys::ABOUT_DIAGNOSTICS_TITLE));
         report_line(
             &mut text,
-            t("about.diagnostics.version"),
+            t(keys::ABOUT_DIAGNOSTICS_VERSION),
             crate::APP_VERSION,
         );
         report_line(
             &mut text,
-            &capitalize(t("label.save.folder")),
+            &capitalize(t(keys::LABEL_SAVE_FOLDER)),
             &save_folder.display().to_string(),
         );
         if let Some(path) = ctx.session.borrow().current_path() {
             report_line(
                 &mut text,
-                &capitalize(t("count.savegame.one")),
+                &capitalize(t(keys::COUNT_SAVEGAME_ONE)),
                 &path.display().to_string(),
             );
         }
         let config = config_path.as_ref().map_or_else(
-            || t("about.diagnostics.unavailable").to_owned(),
+            || t(keys::ABOUT_DIAGNOSTICS_UNAVAILABLE).to_owned(),
             |path| path.display().to_string(),
         );
-        report_line(&mut text, t("about.diagnostics.config"), &config);
+        report_line(&mut text, t(keys::ABOUT_DIAGNOSTICS_CONFIG), &config);
         report_line(
             &mut text,
-            &capitalize(t("label.theme")),
+            &capitalize(t(keys::LABEL_THEME)),
             &fill(
-                "about.diagnostics.theme_value",
+                keys::ABOUT_DIAGNOSTICS_THEME_VALUE,
                 &[
                     ("theme", theme::current().palette.kind.key()),
                     (
@@ -284,7 +288,7 @@ pub fn view(
         );
         report_line(
             &mut text,
-            &capitalize(t("label.language")),
+            &capitalize(t(keys::LABEL_LANGUAGE)),
             locale_label(crate::i18n::current()),
         );
         text
@@ -295,9 +299,9 @@ pub fn view(
             let copied = crate::clipboard::copy(diagnostics_text.clone());
             ctx.run(|session| {
                 session.notify(if copied {
-                    t("about.diagnostics.copied")
+                    t(keys::ABOUT_DIAGNOSTICS_COPIED)
                 } else {
-                    t("error.clipboard_unavailable")
+                    t(keys::ERROR_CLIPBOARD_UNAVAILABLE)
                 });
             });
         })
@@ -305,29 +309,29 @@ pub fn view(
 
     let mut settings = Vec::new();
     if save_folder.as_os_str().is_empty() {
-        settings.push(widgets::hint(t("about.save_folder.none")));
+        settings.push(widgets::hint(t(keys::ABOUT_SAVE_FOLDER_NONE)));
     } else {
         settings.push(path_section(
             ctx,
-            capitalize(t("label.save.folder")),
+            capitalize(t(keys::LABEL_SAVE_FOLDER)),
             &save_folder.display().to_string(),
             save_folder.clone(),
-            "count.savegame.one",
+            keys::COUNT_SAVEGAME_ONE,
         ));
     }
     settings.extend([
         widgets::label_row(
-            t("about.sort_order"),
+            t(keys::ABOUT_SORT_ORDER),
             widgets::a11y_text(fill(
-                "about.",
+                keys::ABOUT_,
                 &[
                     ("name", t(sort.label())),
                     (
                         "direction",
                         if descending {
-                            t("sort.descending")
+                            t(keys::SORT_DESCENDING)
                         } else {
-                            t("sort.ascending")
+                            t(keys::SORT_ASCENDING)
                         },
                     ),
                 ],
@@ -336,7 +340,7 @@ pub fn view(
             .color(theme::text()),
         ),
         widgets::label_row(
-            t("overview.game_data"),
+            t(keys::OVERVIEW_GAME_DATA),
             widgets::a11y_text(game_text)
                 .font_size(theme::font::label())
                 .color(theme::text()),
@@ -349,16 +353,16 @@ pub fn view(
                 .map_or_else(|| save_folder.clone(), std::path::Path::to_path_buf);
             settings.push(path_section(
                 ctx,
-                t("about.settings_file"),
+                t(keys::ABOUT_SETTINGS_FILE),
                 &path.display().to_string(),
                 folder,
-                "path.settings",
+                keys::PATH_SETTINGS,
             ));
         }
-        None => settings.push(widgets::hint(t("about.config.none"))),
+        None => settings.push(widgets::hint(t(keys::ABOUT_CONFIG_NONE))),
     }
 
-    let mut backups = vec![widgets::hint(t("about.backup.explanation"))];
+    let mut backups = vec![widgets::hint(t(keys::ABOUT_BACKUP_EXPLANATION))];
     match &backup {
         Some(backup) => {
             let folder = backup
@@ -366,13 +370,13 @@ pub fn view(
                 .map_or_else(|| save_folder.clone(), std::path::Path::to_path_buf);
             backups.push(path_section(
                 ctx,
-                t("about.latest_backup"),
+                t(keys::ABOUT_LATEST_BACKUP),
                 &backup.display().to_string(),
                 folder,
-                "count.backup.one",
+                keys::COUNT_BACKUP_ONE,
             ));
         }
-        None => backups.push(widgets::hint(t("about.backup.none"))),
+        None => backups.push(widgets::hint(t(keys::ABOUT_BACKUP_NONE))),
     }
 
     let mut children = vec![
@@ -382,52 +386,52 @@ pub fn view(
             .content(Content::Flex)
             .cross_align(Alignment::Center)
             .child(
-                widgets::a11y_text(t("about.tagline"))
+                widgets::a11y_text(t(keys::ABOUT_TAGLINE))
                     .font_size(theme::font::body())
                     .color(theme::muted()),
             )
             .child(rect().width(Size::flex(1.0)))
             .child(close_button)
             .into_element(),
-        widgets::hint(t("about.read_write.summary")),
+        widgets::hint(t(keys::ABOUT_READ_WRITE_SUMMARY)),
         widgets::divider(),
-        widgets::section_label(t("about.settings_heading")),
-        widgets::hint(t("about.settings.explanation")),
+        widgets::section_label(t(keys::ABOUT_SETTINGS_HEADING)),
+        widgets::hint(t(keys::ABOUT_SETTINGS_EXPLANATION)),
     ];
     children.extend(settings);
     children.push(widgets::divider());
-    children.push(widgets::section_label(t("field.appearance")));
+    children.push(widgets::section_label(t(keys::FIELD_APPEARANCE)));
     children.extend(appearance);
     children.push(widgets::divider());
-    children.push(widgets::section_label(t("about.diagnostics_heading")));
+    children.push(widgets::section_label(t(keys::ABOUT_DIAGNOSTICS_HEADING)));
     children.extend(diagnostics_rows);
     children.push(
         widgets::outline_action(
-            t("about.copy_diagnostics_hint"),
-            t("about.copy_diagnostics"),
+            t(keys::ABOUT_COPY_DIAGNOSTICS_HINT),
+            t(keys::ABOUT_COPY_DIAGNOSTICS),
             copy_diagnostics,
         )
         .into_element(),
     );
     children.push(widgets::divider());
-    children.push(widgets::section_label(t("about.licenses_heading")));
-    children.push(widgets::hint(t("about.license.summary")));
+    children.push(widgets::section_label(t(keys::ABOUT_LICENSES_HEADING)));
+    children.push(widgets::hint(t(keys::ABOUT_LICENSE_SUMMARY)));
     children.push(widgets::divider());
     children.push(widgets::section_label(
-        t("count.backup.other").to_uppercase(),
+        t(keys::COUNT_BACKUP_OTHER).to_uppercase(),
     ));
     children.extend(backups);
     children.push(widgets::divider());
-    children.push(widgets::section_label(t("about.shortcuts_heading")));
+    children.push(widgets::section_label(t(keys::ABOUT_SHORTCUTS_HEADING)));
     for (action, keys) in [
-        (t("about.shortcut.save"), "Ctrl+S"),
-        (t("shell.choose_save_folder"), "Ctrl+O"),
-        (t("about.shortcut.focus"), "Ctrl+F"),
-        (t("about.shortcut.undo"), "Ctrl+Z"),
-        (t("about.shortcut.redo"), "Ctrl+Y or Ctrl+Shift+Z"),
-        (t("about.shortcut.scan"), "F5"),
-        (t("about.shortcut.help"), "Ctrl+/"),
-        (t("about.shortcut.escape"), "Escape"),
+        (t(keys::ABOUT_SHORTCUT_SAVE), "Ctrl+S"),
+        (t(keys::SHELL_CHOOSE_SAVE_FOLDER), "Ctrl+O"),
+        (t(keys::ABOUT_SHORTCUT_FOCUS), "Ctrl+F"),
+        (t(keys::ABOUT_SHORTCUT_UNDO), "Ctrl+Z"),
+        (t(keys::ABOUT_SHORTCUT_REDO), "Ctrl+Y or Ctrl+Shift+Z"),
+        (t(keys::ABOUT_SHORTCUT_SCAN), "F5"),
+        (t(keys::ABOUT_SHORTCUT_HELP), "Ctrl+/"),
+        (t(keys::ABOUT_SHORTCUT_ESCAPE), "Escape"),
     ] {
         children.push(widgets::label_row(
             action,
@@ -436,9 +440,9 @@ pub fn view(
     }
 
     widgets::card(
-        t("about.title"),
+        t(keys::ABOUT_TITLE),
         Some(fill(
-            "about.diagnostics.version_footer",
+            keys::ABOUT_DIAGNOSTICS_VERSION_FOOTER,
             &[("version", crate::APP_VERSION)],
         )),
         children,
@@ -451,7 +455,7 @@ fn report_line(text: &mut String, label: &str, value: &str) {
         text,
         "{}",
         fill(
-            "about.diagnostics.line",
+            keys::ABOUT_DIAGNOSTICS_LINE,
             &[("label", label), ("value", value)]
         ),
     );
@@ -463,7 +467,7 @@ fn path_section(
     title: impl Into<String>,
     path: &str,
     folder: std::path::PathBuf,
-    what: &'static str,
+    what: Key,
 ) -> Element {
     let value = path.to_owned();
     let title = title.into();

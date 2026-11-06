@@ -14,6 +14,7 @@ use freya::prelude::*;
 
 use crate::dialog::CloseChoice;
 use crate::form::Form;
+use crate::i18n::keys;
 use crate::session::{CharacterForm, GameStatus, Preview, Session, default_save_dir};
 use crate::theme;
 use crate::views;
@@ -90,13 +91,13 @@ impl HoverKey {
 ///
 /// The filter matches the folder label and the character name, so the
 /// placeholder names both instead of promising a folder-name-only search.
-pub const SAVE_FILTER_PLACEHOLDER: &str = "filter.savegame";
+pub const SAVE_FILTER_PLACEHOLDER: crate::i18n::Key = keys::FILTER_SAVEGAME;
 /// Placeholder of the item-database filter.
-pub const ITEM_FILTER_PLACEHOLDER: &str = "filter.items";
+pub const ITEM_FILTER_PLACEHOLDER: crate::i18n::Key = keys::FILTER_ITEMS;
 /// Placeholder of the learnable-style filter.
-pub const STYLE_FILTER_PLACEHOLDER: &str = "filter.styles";
+pub const STYLE_FILTER_PLACEHOLDER: crate::i18n::Key = keys::FILTER_STYLES;
 /// Placeholder of the gem-picker filter.
-pub const GEM_FILTER_PLACEHOLDER: &str = "filter.gems";
+pub const GEM_FILTER_PLACEHOLDER: crate::i18n::Key = keys::FILTER_GEMS;
 
 /// Title of the main window.
 ///
@@ -196,16 +197,16 @@ impl Tab {
         }
     }
 
-    /// Stable catalog id for the tab label and the snapshot example.
+    /// Stable catalog key for the tab label and the snapshot example.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> crate::i18n::Key {
         match self {
-            Self::Overview => "nav.overview",
-            Self::Character => "nav.character",
-            Self::Styles => "count.style.other",
-            Self::Inventory => "label.inventory",
-            Self::Gems => "count.gem.other",
-            Self::Companions => "nav.companions",
+            Self::Overview => keys::NAV_OVERVIEW,
+            Self::Character => keys::NAV_CHARACTER,
+            Self::Styles => keys::COUNT_STYLE_OTHER,
+            Self::Inventory => keys::LABEL_INVENTORY,
+            Self::Gems => keys::COUNT_GEM_OTHER,
+            Self::Companions => keys::NAV_COMPANIONS,
         }
     }
 
@@ -216,7 +217,7 @@ impl Tab {
     /// active tab's filter" must never fall back to the sidebar for Styles,
     /// Inventory or Gems. Tabs with no picker return `None`.
     #[must_use]
-    pub fn filter_placeholder(self) -> Option<&'static str> {
+    pub fn filter_placeholder(self) -> Option<crate::i18n::Key> {
         match self {
             Self::Inventory => Some(ITEM_FILTER_PLACEHOLDER),
             Self::Styles => Some(STYLE_FILTER_PLACEHOLDER),
@@ -1160,13 +1161,13 @@ mod tests {
     #[test]
     fn tab_positions_match_the_all_array() {
         for (position, tab) in Tab::ALL.into_iter().enumerate() {
-            assert_eq!(tab.index(), position, "{}", tab.label());
+            assert_eq!(tab.index(), position, "{}", tab.label().id());
         }
     }
 
     #[test]
     fn every_tab_has_a_distinct_label() {
-        let mut labels: Vec<&str> = Tab::ALL.iter().map(|tab| tab.label()).collect();
+        let mut labels: Vec<&str> = Tab::ALL.iter().map(|tab| tab.label().id()).collect();
         labels.sort_unstable();
         labels.dedup();
         assert_eq!(labels.len(), Tab::ALL.len());
@@ -1176,9 +1177,9 @@ mod tests {
     fn tab_labels_and_filter_placeholders_are_catalogued_ids() {
         for tab in Tab::ALL {
             assert!(
-                crate::i18n::has_id(tab.label()),
+                crate::i18n::has_id(tab.label().id()),
                 "missing tab id {}",
-                tab.label()
+                tab.label().id()
             );
         }
         for placeholder in [
@@ -1188,8 +1189,9 @@ mod tests {
             GEM_FILTER_PLACEHOLDER,
         ] {
             assert!(
-                crate::i18n::has_id(placeholder),
-                "missing filter placeholder id {placeholder}"
+                crate::i18n::has_id(placeholder.id()),
+                "missing filter placeholder id {}",
+                placeholder.id()
             );
         }
     }
@@ -1206,7 +1208,7 @@ mod tests {
         );
         assert_eq!(Tab::Gems.filter_placeholder(), Some(GEM_FILTER_PLACEHOLDER));
         for tab in [Tab::Overview, Tab::Character, Tab::Companions] {
-            assert_eq!(tab.filter_placeholder(), None, "{}", tab.label());
+            assert_eq!(tab.filter_placeholder(), None, "{}", tab.label().id());
         }
         for placeholder in [
             ITEM_FILTER_PLACEHOLDER,

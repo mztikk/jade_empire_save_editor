@@ -3,7 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::i18n::{fill, t};
+use crate::i18n::{fill, keys, t};
 use crate::message::capitalize;
 use crate::session::{GameStatus, format};
 use crate::theme;
@@ -19,7 +19,7 @@ pub fn view(
     style_count: usize,
 ) -> Element {
     let path = ctx.session.borrow().current_path().map_or_else(
-        || t("shell.no_savegame_selected").to_owned(),
+        || t(keys::SHELL_NO_SAVEGAME_SELECTED).to_owned(),
         |path| path.display().to_string(),
     );
     let block_count = ctx.session.borrow().block_count();
@@ -37,22 +37,30 @@ pub fn view(
     let (game_text, game_ok) = {
         let session = ctx.session.borrow();
         match session.game_status() {
-            GameStatus::Loading => (t("overview.game_data.loading").to_owned(), false),
+            GameStatus::Loading => (t(keys::OVERVIEW_GAME_DATA_LOADING).to_owned(), false),
             GameStatus::Loaded {
                 items,
                 styles,
                 root,
             } => (
                 fill(
-                    "overview.game_data.resolved",
+                    keys::OVERVIEW_GAME_DATA_RESOLVED,
                     &[
                         (
                             "items",
-                            &crate::i18n::plural(*items, "count.item.one", "count.item.other"),
+                            &crate::i18n::plural(
+                                *items,
+                                keys::COUNT_ITEM_ONE,
+                                keys::COUNT_ITEM_OTHER,
+                            ),
                         ),
                         (
                             "styles",
-                            &crate::i18n::plural(*styles, "count.style.one", "count.style.other"),
+                            &crate::i18n::plural(
+                                *styles,
+                                keys::COUNT_STYLE_ONE,
+                                keys::COUNT_STYLE_OTHER,
+                            ),
                         ),
                         ("root", &root.display().to_string()),
                     ],
@@ -61,30 +69,38 @@ pub fn view(
             ),
             GameStatus::NamesOnly { items, styles } => (
                 fill(
-                    "overview.game_data.bundled",
+                    keys::OVERVIEW_GAME_DATA_BUNDLED,
                     &[
                         (
                             "items",
-                            &crate::i18n::plural(*items, "count.item.one", "count.item.other"),
+                            &crate::i18n::plural(
+                                *items,
+                                keys::COUNT_ITEM_ONE,
+                                keys::COUNT_ITEM_OTHER,
+                            ),
                         ),
                         (
                             "styles",
-                            &crate::i18n::plural(*styles, "count.style.one", "count.style.other"),
+                            &crate::i18n::plural(
+                                *styles,
+                                keys::COUNT_STYLE_ONE,
+                                keys::COUNT_STYLE_OTHER,
+                            ),
                         ),
                     ],
                 ),
                 false,
             ),
-            GameStatus::Missing => (t("overview.game_data.missing").to_owned(), false),
+            GameStatus::Missing => (t(keys::OVERVIEW_GAME_DATA_MISSING).to_owned(), false),
             GameStatus::Error(error) => {
                 let bundled = if session.has_bundled_names() {
-                    t("overview.game_data.bundled_suffix")
+                    t(keys::OVERVIEW_GAME_DATA_BUNDLED_SUFFIX)
                 } else {
                     "."
                 };
                 (
                     fill(
-                        "overview.game_data.unreadable",
+                        keys::OVERVIEW_GAME_DATA_UNREADABLE,
                         &[("error", error.as_str()), ("bundled", bundled)],
                     ),
                     false,
@@ -116,12 +132,12 @@ pub fn view(
                 .spacing(theme::space::md())
                 .content(Content::wrap_spacing(theme::space::md()))
                 .child(widgets::badge(
-                    format!("{} {}", t("character.level"), character.level),
+                    format!("{} {}", t(keys::CHARACTER_LEVEL), character.level),
                     theme::accent(),
                     theme::on_accent(),
                 ))
                 .child(widgets::badge(
-                    format!("{} {}", t("character.chapter"), character.chapter),
+                    format!("{} {}", t(keys::CHARACTER_CHAPTER), character.chapter),
                     theme::surface_active(),
                     theme::text(),
                 ))
@@ -130,23 +146,23 @@ pub fn view(
         )
         .child(
             widgets::a11y_text(fill(
-                "overview.time_played",
+                keys::OVERVIEW_TIME_PLAYED,
                 &[
                     ("time", &format::duration(character.time_played)),
                     (
                         "kills",
                         &crate::i18n::plural(
                             usize::try_from(character.kills).unwrap_or(usize::MAX),
-                            "count.kill.one",
-                            "count.kill.other",
+                            keys::COUNT_KILL_ONE,
+                            keys::COUNT_KILL_OTHER,
                         ),
                     ),
                     (
                         "experience",
                         &crate::i18n::plural(
                             usize::try_from(character.experience).unwrap_or(usize::MAX),
-                            "count.experiencepoint.one",
-                            "count.experiencepoint.other",
+                            keys::COUNT_EXPERIENCEPOINT_ONE,
+                            keys::COUNT_EXPERIENCEPOINT_OTHER,
                         ),
                     ),
                 ],
@@ -156,13 +172,13 @@ pub fn view(
         )
         .child(widgets::stat_grid(vec![
             widgets::stat(
-                t("field.gold"),
+                t(keys::FIELD_GOLD),
                 character
                     .gold
-                    .map_or_else(|| t("character.not_set").to_owned(), format::amount),
+                    .map_or_else(|| t(keys::CHARACTER_NOT_SET).to_owned(), format::amount),
             ),
             widgets::stat(
-                t("field.health"),
+                t(keys::FIELD_HEALTH),
                 format!(
                     "{} / {}",
                     format::number(character.health),
@@ -170,11 +186,11 @@ pub fn view(
                 ),
             ),
             widgets::stat(
-                t("field.chi"),
+                t(keys::FIELD_CHI),
                 format!("{} / {}", format::number(character.chi), character.chi_max),
             ),
             widgets::stat(
-                t("field.focus"),
+                t(keys::FIELD_FOCUS),
                 format!(
                     "{} / {}",
                     format::number(character.focus),
@@ -185,33 +201,33 @@ pub fn view(
         .into_element();
 
     let quick = widgets::card(
-        t("overview.at_a_glance"),
+        t(keys::OVERVIEW_AT_A_GLANCE),
         None,
         vec![widgets::definition_list(vec![
             (
-                capitalize(t("label.inventory")),
+                capitalize(t(keys::LABEL_INVENTORY)),
                 widgets::a11y_text(widgets::plural(
                     item_count,
-                    "count.stack.one",
-                    "count.stack.other",
+                    keys::COUNT_STACK_ONE,
+                    keys::COUNT_STACK_OTHER,
                 ))
                 .font_size(theme::font::body())
                 .color(theme::text())
                 .into_element(),
             ),
             (
-                capitalize(t("count.style.other")),
+                capitalize(t(keys::COUNT_STYLE_OTHER)),
                 widgets::a11y_text(widgets::plural(
                     style_count,
-                    "count.style.learned.one",
-                    "count.style.learned.other",
+                    keys::COUNT_STYLE_LEARNED_ONE,
+                    keys::COUNT_STYLE_LEARNED_OTHER,
                 ))
                 .font_size(theme::font::body())
                 .color(theme::text())
                 .into_element(),
             ),
             (
-                t("field.attribute_points").to_owned(),
+                t(keys::FIELD_ATTRIBUTE_POINTS).to_owned(),
                 widgets::a11y_text(character.attribute_points.to_string())
                     .font_size(theme::font::body())
                     .color(if character.attribute_points > 0 {
@@ -222,7 +238,7 @@ pub fn view(
                     .into_element(),
             ),
             (
-                t("overview.body_mind_spirit").to_owned(),
+                t(keys::OVERVIEW_BODY_MIND_SPIRIT).to_owned(),
                 widgets::a11y_text(format!(
                     "{} / {} / {}",
                     character.body, character.mind, character.spirit
@@ -232,7 +248,7 @@ pub fn view(
                 .into_element(),
             ),
             (
-                t("overview.charm_intuition_intimidate").to_owned(),
+                t(keys::OVERVIEW_CHARM_INTUITION_INTIMIDATE).to_owned(),
                 widgets::a11y_text(format!(
                     "{} / {} / {}",
                     character.charm, character.intuition, character.intimidate
@@ -249,10 +265,10 @@ pub fn view(
         .width(Size::fill())
         .spacing(theme::space::xs())
         .child(widgets::label_row(
-            t("overview.file"),
+            t(keys::OVERVIEW_FILE),
             save_folder.clone().map_or_else(
                 || widgets::a11y_text("").into_element(),
-                |folder| path_actions(ctx, &path, folder, "count.savegame.one"),
+                |folder| path_actions(ctx, &path, folder, keys::COUNT_SAVEGAME_ONE),
             ),
         ))
         .child(
@@ -277,12 +293,12 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::xs())
             .child(widgets::label_row(
-                capitalize(t("count.backup.one")),
+                capitalize(t(keys::COUNT_BACKUP_ONE)),
                 path_actions(
                     ctx,
                     &backup.display().to_string(),
                     folder.clone(),
-                    "count.backup.one",
+                    keys::COUNT_BACKUP_ONE,
                 ),
             ))
             .child(
@@ -297,13 +313,13 @@ pub fn view(
                     })
                     .span(backup.display().to_string()),
             )
-            .child(widgets::hint(t("overview.backup.explanation")))
+            .child(widgets::hint(t(keys::OVERVIEW_BACKUP_EXPLANATION)))
             .into_element(),
-        _ => widgets::hint(t("overview.backup.created")),
+        _ => widgets::hint(t(keys::OVERVIEW_BACKUP_CREATED)),
     };
 
     let details = widgets::card(
-        capitalize(t("count.savegame.one")),
+        capitalize(t(keys::COUNT_SAVEGAME_ONE)),
         None,
         vec![
             path_row,
@@ -311,11 +327,16 @@ pub fn view(
             backup_row,
             widgets::divider(),
             widgets::label_row(
-                t("overview.contents"),
+                t(keys::OVERVIEW_CONTENTS),
                 widgets::a11y_text(format!(
                     "{} · {}",
-                    crate::i18n::plural(block_count, "count.block.one", "count.block.other"),
-                    file_size.map_or_else(|| t("overview.unknown_size").to_owned(), format::bytes)
+                    crate::i18n::plural(
+                        block_count,
+                        keys::COUNT_BLOCK_ONE,
+                        keys::COUNT_BLOCK_OTHER
+                    ),
+                    file_size
+                        .map_or_else(|| t(keys::OVERVIEW_UNKNOWN_SIZE).to_owned(), format::bytes)
                 ))
                 .font_size(theme::font::label())
                 .color(theme::muted()),
@@ -326,20 +347,20 @@ pub fn view(
                 .spacing(theme::space::md())
                 .child(
                     widgets::a11y_text(if game_ok {
-                        t("overview.game_data")
+                        t(keys::OVERVIEW_GAME_DATA)
                     } else {
-                        t("overview.notice")
+                        t(keys::OVERVIEW_NOTICE)
                     })
                     .font_size(theme::font::label())
                     .color(theme::muted()),
                 )
                 .child(widgets::badge(
                     if game_ok {
-                        t("overview.linked")
+                        t(keys::OVERVIEW_LINKED)
                     } else if game_loading {
-                        t("overview.loading")
+                        t(keys::OVERVIEW_LOADING)
                     } else {
-                        t("overview.not_found")
+                        t(keys::OVERVIEW_NOT_FOUND)
                     },
                     if game_ok {
                         theme::surface()
@@ -357,7 +378,7 @@ pub fn view(
                 .into_element(),
             widgets::hint(game_text),
             widgets::divider(),
-            widgets::hint(t("overview.backup.verification")),
+            widgets::hint(t(keys::OVERVIEW_BACKUP_VERIFICATION)),
         ],
     );
 

@@ -3,7 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::i18n::{fill, t};
+use crate::i18n::{fill, keys, t};
 use crate::session::{HenchRow, Section};
 use crate::theme;
 use crate::widgets::{self, Action};
@@ -25,17 +25,17 @@ pub fn view(
                     Section::Companions,
                     &error.message,
                 )),
-                None => widgets::hint(t("companions.empty_hint")),
+                None => widgets::hint(t(keys::COMPANIONS_EMPTY_HINT)),
             },
         );
     }
 
     widgets::card(
-        t("nav.companions"),
+        t(keys::NAV_COMPANIONS),
         Some(widgets::plural(
             henchmen.len(),
-            "count.companion.known.one",
-            "count.companion.known.other",
+            keys::COUNT_COMPANION_KNOWN_ONE,
+            keys::COUNT_COMPANION_KNOWN_OTHER,
         )),
         vec![
             rect()
@@ -45,7 +45,7 @@ pub fn view(
                 .children(rows)
                 .into_element(),
             widgets::divider(),
-            widgets::hint(t("companions.level_hint")),
+            widgets::hint(t(keys::COMPANIONS_LEVEL_HINT)),
         ],
     )
 }
@@ -93,7 +93,7 @@ fn henchman_row(
         move |text: String| {
             let Ok(value) = text.trim().parse::<u8>() else {
                 ctx.run(|session| {
-                    session.set_error(&fill("companions.level_error", &[("name", &name)]));
+                    session.set_error(&fill(keys::COMPANIONS_LEVEL_ERROR, &[("name", &name)]));
                 });
                 return;
             };
@@ -106,7 +106,10 @@ fn henchman_row(
         .width(Size::fill())
         .key(index)
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(fill("companions.accessible", &[("name", &henchman.name)]))
+        .a11y_alt(fill(
+            keys::COMPANIONS_ACCESSIBLE,
+            &[("name", &henchman.name)],
+        ))
         .spacing(theme::space::lg())
         .content(Content::Flex)
         .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::lg()))
@@ -143,17 +146,17 @@ fn henchman_row(
         )
         .child(if available {
             widgets::badge(
-                t("companions.available"),
+                t(keys::COMPANIONS_AVAILABLE),
                 theme::surface_active(),
                 theme::jade(),
             )
         } else {
             // Hidden is a resting state, not a failure: a calmer colour than
             // the danger red that made an unavailable companion look broken.
-            widgets::badge(t("companions.hidden"), theme::surface(), theme::muted())
+            widgets::badge(t(keys::COMPANIONS_HIDDEN), theme::surface(), theme::muted())
         })
         .child(widgets::row_action(
-            fill("companions.decrease", &[("name", &name)]),
+            fill(keys::COMPANIONS_DECREASE, &[("name", &name)]),
             "−",
             lower,
         ))
@@ -166,20 +169,20 @@ fn henchman_row(
                 .on_submit(set_level),
         )
         .child(widgets::row_action(
-            fill("companions.increase", &[("name", &name)]),
+            fill(keys::COMPANIONS_INCREASE, &[("name", &name)]),
             "+",
             raise,
         ))
         .child(widgets::row_action(
             if available {
-                fill("companions.hide_action", &[("name", &name)])
+                fill(keys::COMPANIONS_HIDE_ACTION, &[("name", &name)])
             } else {
-                fill("companions.make_available_action", &[("name", &name)])
+                fill(keys::COMPANIONS_MAKE_AVAILABLE_ACTION, &[("name", &name)])
             },
             if available {
-                t("companions.hide")
+                t(keys::COMPANIONS_HIDE)
             } else {
-                t("companions.make_available")
+                t(keys::COMPANIONS_MAKE_AVAILABLE)
             },
             toggle,
         ))

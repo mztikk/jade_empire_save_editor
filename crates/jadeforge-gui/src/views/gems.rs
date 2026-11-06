@@ -6,7 +6,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::i18n::{fill, t};
+use crate::i18n::{fill, keys, t};
 use crate::message::capitalize;
 use crate::session::{GemRow, GemSuggestion, Section};
 use crate::theme;
@@ -43,7 +43,7 @@ pub fn view(
     let carried = inventory.iter().filter(|gem| !gem.empty).count();
     let can_socket = amulet.is_some_and(|amulet| socketed < usize::from(amulet.sockets));
     let amulet_title = amulet.map_or_else(
-        || t("gems.no_amulet").to_owned(),
+        || t(keys::GEMS_NO_AMULET).to_owned(),
         |amulet| amulet_summary(amulet, socketed),
     );
     let amulet_error = ctx.session.borrow().section_error(Section::Amulet).cloned();
@@ -54,9 +54,9 @@ pub fn view(
             &error.message,
         ))]
     } else if amulet.is_none() {
-        vec![widgets::hint(t("gems.amulet_locked"))]
+        vec![widgets::hint(t(keys::GEMS_AMULET_LOCKED))]
     } else if amulet_gems.is_empty() {
-        vec![widgets::hint(t("gems.empty_amulet"))]
+        vec![widgets::hint(t(keys::GEMS_EMPTY_AMULET))]
     } else {
         amulet_gems
             .into_iter()
@@ -69,7 +69,7 @@ pub fn view(
             &error.message,
         ))]
     } else if inventory.is_empty() {
-        vec![widgets::hint(t("gems.empty_inventory"))]
+        vec![widgets::hint(t(keys::GEMS_EMPTY_INVENTORY))]
     } else {
         inventory
             .into_iter()
@@ -97,20 +97,20 @@ pub fn view(
         let ctx = ctx.clone();
         let item_id = gem.item_id;
         let effects = if gem.effects.is_empty() {
-            t("gems.no_effects").to_owned()
+            t(keys::GEMS_NO_EFFECTS).to_owned()
         } else {
             gem.effects.join(" · ")
         };
         picker_rows.push(widgets::PickerRow {
             key: item_id,
             accessible: fill(
-                "gems.accessible",
+                keys::GEMS_ACCESSIBLE,
                 &[("name", &gem.name), ("effects", &effects)],
             ),
             title: gem.name.clone(),
             subtitle: effects.clone(),
-            action_label: fill("gems.add_action", &[("name", &gem.name)]),
-            action_text: t("gems.add").to_owned(),
+            action_label: fill(keys::GEMS_ADD_ACTION, &[("name", &gem.name)]),
+            action_text: t(keys::GEMS_ADD).to_owned(),
             action: Action::new(move || ctx.run(|session| session.add_gem(item_id))),
             select: None,
             selected: false,
@@ -119,7 +119,7 @@ pub fn view(
     let mut add_children = vec![widgets::filter_input(
         query,
         crate::app::GEM_FILTER_PLACEHOLDER,
-        "gems.clear_filter",
+        keys::GEMS_CLEAR_FILTER,
         filter_id,
     )];
     add_children.push(
@@ -131,8 +131,8 @@ pub fn view(
             .child(
                 widgets::a11y_text(widgets::plural(
                     matching.len(),
-                    "count.gem.one",
-                    "count.gem.other",
+                    keys::COUNT_GEM_ONE,
+                    keys::COUNT_GEM_OTHER,
                 ))
                 .font_size(theme::font::micro())
                 .color(theme::dim()),
@@ -141,16 +141,16 @@ pub fn view(
     );
     if picker_rows.is_empty() {
         add_children.push(widgets::hint(if available.is_empty() {
-            t("gems.missing_hint")
+            t(keys::GEMS_MISSING_HINT)
         } else {
-            t("gems.no_match")
+            t(keys::GEMS_NO_MATCH)
         }));
     } else {
-        add_children.push(widgets::picker_list(t("gems.add_list"), picker_rows));
+        add_children.push(widgets::picker_list(t(keys::GEMS_ADD_LIST), picker_rows));
     }
     let add_card = widgets::card(
-        t("gems.add_heading"),
-        Some(t("gems.from_game_data").to_owned()),
+        t(keys::GEMS_ADD_HEADING),
+        Some(t(keys::GEMS_FROM_GAME_DATA).to_owned()),
         add_children,
     );
 
@@ -159,7 +159,7 @@ pub fn view(
         .width(Size::fill())
         .spacing(theme::space::xxl())
         .child(widgets::card(
-            capitalize(t("label.amulet")),
+            capitalize(t(keys::LABEL_AMULET)),
             Some(amulet_title),
             {
                 let mut children = vec![
@@ -172,9 +172,9 @@ pub fn view(
                 ];
                 if let Some(amulet) = amulet {
                     children.push(widgets::hint(if amulet.sockets >= 7 {
-                        t("gems.all_sockets")
+                        t(keys::GEMS_ALL_SOCKETS)
                     } else {
-                        t("gems.more_sockets")
+                        t(keys::GEMS_MORE_SOCKETS)
                     }));
                 }
                 children
@@ -184,11 +184,11 @@ pub fn view(
         // the player looks at first, and the 95-row add list would otherwise
         // push the inventory card below the fold.
         .child(widgets::card(
-            capitalize(t("label.inventory")),
+            capitalize(t(keys::LABEL_INVENTORY)),
             Some(widgets::plural(
                 carried,
-                "count.gem.carried.one",
-                "count.gem.carried.other",
+                keys::COUNT_GEM_CARRIED_ONE,
+                keys::COUNT_GEM_CARRIED_OTHER,
             )),
             vec![
                 rect()
@@ -197,7 +197,7 @@ pub fn view(
                     .spacing(theme::space::xs())
                     .children(inventory_rows)
                     .into_element(),
-                widgets::hint(t("gems.move_hint")),
+                widgets::hint(t(keys::GEMS_MOVE_HINT)),
             ],
         ))
         .child(add_card)
@@ -212,15 +212,15 @@ pub fn view(
 #[must_use]
 pub fn amulet_summary(amulet: AmuletInfo, socketed: usize) -> String {
     fill(
-        "gems.summary",
+        keys::GEMS_SUMMARY,
         &[
             ("socketed", &socketed.to_string()),
             (
                 "sockets",
                 &widgets::plural(
                     usize::from(amulet.sockets),
-                    "count.socket.one",
-                    "count.socket.other",
+                    keys::COUNT_SOCKET_ONE,
+                    keys::COUNT_SOCKET_OTHER,
                 ),
             ),
             ("tier", &amulet.tier.to_string()),
@@ -244,9 +244,9 @@ fn gem_row(
     let key = crate::app::HoverKey::Gem(index);
     let is_hovered = *hovered.read() == Some(key);
     let action = if socketed {
-        t("gems.move_to_inventory")
+        t(keys::GEMS_MOVE_TO_INVENTORY)
     } else {
-        t("gems.move_to_amulet")
+        t(keys::GEMS_MOVE_TO_AMULET)
     };
     let mut actions: Vec<Element> = Vec::new();
     if !gem.empty {
@@ -257,7 +257,7 @@ fn gem_row(
             actions.push(
                 widgets::row_action(
                     fill(
-                        "gems.move_action",
+                        keys::GEMS_MOVE_ACTION,
                         &[("action", action), ("name", &move_name)],
                     ),
                     action,
@@ -268,9 +268,9 @@ fn gem_row(
         } else {
             actions.push(
                 widgets::a11y_text(if has_amulet {
-                    t("gems.amulet_full")
+                    t(keys::GEMS_AMULET_FULL)
                 } else {
-                    t("gems.no_amulet")
+                    t(keys::GEMS_NO_AMULET)
                 })
                 .font_size(theme::font::micro())
                 .color(theme::dim())
@@ -280,12 +280,12 @@ fn gem_row(
         let remove_name = gem.name.clone();
         actions.push(
             widgets::row_action(
-                fill("gems.remove.action", &[("name", &remove_name)]),
-                t("gems.remove"),
+                fill(keys::GEMS_REMOVE_ACTION, &[("name", &remove_name)]),
+                t(keys::GEMS_REMOVE),
                 Action::new(move || {
                     if !crate::dialog::confirm(
-                        &fill("dialog.remove", &[("kind", t("count.gem.one"))]),
-                        &fill("gems.remove.confirm", &[("name", &remove_name)]),
+                        &fill(keys::DIALOG_REMOVE, &[("kind", t(keys::COUNT_GEM_ONE))]),
+                        &fill(keys::GEMS_REMOVE_CONFIRM, &[("name", &remove_name)]),
                     ) {
                         return;
                     }
@@ -301,7 +301,7 @@ fn gem_row(
         .width(Size::fill())
         .key(index)
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(fill("gems.row_accessible", &[("name", &gem.name)]))
+        .a11y_alt(fill(keys::GEMS_ROW_ACCESSIBLE, &[("name", &gem.name)]))
         .spacing(theme::space::lg())
         .content(Content::Flex)
         .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::lg()))
@@ -336,7 +336,7 @@ fn gem_row(
                 ))
                 .child(
                     widgets::a11y_text(if gem.effects.is_empty() {
-                        t("gems.no_effects").to_owned()
+                        t(keys::GEMS_NO_EFFECTS).to_owned()
                     } else {
                         gem.effects.join(" · ")
                     })

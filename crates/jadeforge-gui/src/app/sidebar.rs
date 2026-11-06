@@ -8,7 +8,7 @@ use freya::elements::image::ImageHandle;
 use freya::prelude::*;
 use jadeforge_core::Character;
 
-use crate::i18n::{fill, t};
+use crate::i18n::{fill, keys, t};
 use crate::message::capitalize;
 use crate::session::{SaveEntry, SaveSort};
 use crate::theme;
@@ -68,16 +68,26 @@ pub(super) fn sidebar(
     let show_preview = theme::text_scale() <= 1.25;
     let preview_block = preview_slot(preview, selected.is_some());
     let heading = if entries.is_empty() && scanning {
-        t("shell.loading_savegames").to_uppercase()
+        t(keys::SHELL_LOADING_SAVEGAMES).to_uppercase()
     } else if visible.len() == entries.len() {
-        crate::widgets::plural(entries.len(), "count.savegame.one", "count.savegame.other")
-            .to_uppercase()
+        crate::widgets::plural(
+            entries.len(),
+            keys::COUNT_SAVEGAME_ONE,
+            keys::COUNT_SAVEGAME_OTHER,
+        )
+        .to_uppercase()
     } else {
         let shown = visible.len().to_string();
-        let total =
-            crate::widgets::plural(entries.len(), "count.savegame.one", "count.savegame.other")
-                .to_uppercase();
-        fill("save_browser.of", &[("shown", &shown), ("total", &total)])
+        let total = crate::widgets::plural(
+            entries.len(),
+            keys::COUNT_SAVEGAME_ONE,
+            keys::COUNT_SAVEGAME_OTHER,
+        )
+        .to_uppercase();
+        fill(
+            keys::SAVE_BROWSER_OF,
+            &[("shown", &shown), ("total", &total)],
+        )
     };
     let list = if entries.is_empty() && scanning {
         loading_rows()
@@ -99,14 +109,14 @@ pub(super) fn sidebar(
     };
 
     let title = character.as_ref().map_or_else(
-        || t("shell.no_savegame_selected").to_owned(),
+        || t(keys::SHELL_NO_SAVEGAME_SELECTED).to_owned(),
         |character| character.name.clone(),
     );
     let subtitle = character.as_ref().map_or_else(
-        || t("save_browser.select.a.savegame").to_owned(),
+        || t(keys::SAVE_BROWSER_SELECT_A_SAVEGAME).to_owned(),
         |character| {
             fill(
-                "session.row.level_time",
+                keys::SESSION_ROW_LEVEL_TIME,
                 &[
                     ("level", &character.level.to_string()),
                     (
@@ -167,7 +177,7 @@ pub(super) fn sidebar(
         .child(crate::widgets::filter_input(
             query,
             crate::app::SAVE_FILTER_PLACEHOLDER,
-            "save_browser.clear_filter",
+            keys::SAVE_BROWSER_CLEAR_FILTER,
             filter_id,
         ))
         .child(sort_bar(ctx, sort, *sort.read()))
@@ -313,9 +323,9 @@ impl Component for SaveList {
                 .padding(Gaps::new_all(theme::space::xl()))
                 .child(
                     crate::widgets::a11y_text(if self.data.entries.is_empty() {
-                        t("save_browser.empty_folder")
+                        t(keys::SAVE_BROWSER_EMPTY_FOLDER)
                     } else {
-                        t("save_browser.no_match")
+                        t(keys::SAVE_BROWSER_NO_MATCH)
                     })
                     .font_size(theme::font::caption())
                     .color(theme::dim()),
@@ -345,7 +355,7 @@ impl Component for SaveList {
             .a11y_id(a11y_id)
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::ListBox)
-            .a11y_alt(capitalize(t("count.savegame.other")))
+            .a11y_alt(capitalize(t(keys::COUNT_SAVEGAME_OTHER)))
             .border(
                 Border::new()
                     .fill(if is_focused {
@@ -564,21 +574,21 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
         });
         let accessible = if is_active {
             fill(
-                "save_browser.sort_by.active",
+                keys::SAVE_BROWSER_SORT_BY_ACTIVE,
                 &[
                     ("name", t(key.label())),
                     (
                         "direction",
                         if descending {
-                            t("sort.descending")
+                            t(keys::SORT_DESCENDING)
                         } else {
-                            t("sort.ascending")
+                            t(keys::SORT_ASCENDING)
                         },
                     ),
                 ],
             )
         } else {
-            fill("save_browser.sort_by", &[("name", t(key.label()))])
+            fill(keys::SAVE_BROWSER_SORT_BY, &[("name", t(key.label()))])
         };
         buttons.push(
             AccessibleButton::new(
