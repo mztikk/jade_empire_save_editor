@@ -1,0 +1,174 @@
+# German interface strings for JadeForge.
+#
+# Keys are the exact English source strings used by `t("...")`; do not change
+# them. Translate the value on the right of each key. An empty value falls back
+# to English, so this file can be filled in progressively.
+#
+# Keep product and technical names unchanged (JadeForge, Jade Empire, KDE,
+# Wayland, TOML, save.sac, dialog.tlk, Ctrl+S, ...). Prefer the German terms
+# the game uses where they exist: Kampfstil (style), Edelstein (gem), Amulett
+# (amulet), Gefährte (companion), Fokus (focus); Chi stays Chi.
+#
+# Check coverage with:
+#   cargo test -p jadeforge-gui --lib every_german_value_is_filled -- --ignored
+
+# Header, footer, status line and empty states
+# src/app/shell.rs
+"About" = ""
+"About JadeForge, version, settings and backups" = ""
+"Backups" = ""
+"Browse the backups of the open savegame" = ""
+"Browse…" = ""
+"Cancel scan" = ""
+"Choose save folder" = ""
+"Copy" = ""
+"Copy the status message" = ""
+"GAME DATA" = ""
+"Jade Empire save editor" = ""
+"JadeForge is reading the save folder and the game data. The save list appears as soon as the scan finishes." = ""
+"JadeForge never writes a savegame without verifying it and keeping a backup." = ""
+"Loading savegames…" = ""
+"No savegame selected" = ""
+"Path to the Jade Empire Save folder" = ""
+"Path to the Jade Empire installation (with dialog.tlk)" = ""
+"Redo" = ""
+"Reload from disk" = ""
+"Revert" = ""
+"SAVE FOLDER" = ""
+"Save to disk" = ""
+"Undo" = ""
+"Use" = ""
+"all changes saved" = ""
+"no savegame open" = ""
+"unsaved changes" = ""
+
+# Save browser
+# src/app/sidebar.rs
+"Clear the savegame filter" = ""
+
+# Tabs and window
+# src/app/mod.rs
+"Character" = ""
+"Companions" = ""
+"Gems" = ""
+"Inventory" = ""
+"Overview" = ""
+"Styles" = ""
+
+# Overview tab
+# src/views/overview.rs
+"A timestamped backup is created next to the savegame on every save and shown here." = ""
+"At a glance" = ""
+"Backup" = ""
+"CHI" = ""
+"Contents" = ""
+"FOCUS" = ""
+"File" = ""
+"GOLD" = ""
+"Game data" = ""
+"HEALTH" = ""
+"JadeForge verifies every savegame by re-reading it before writing, writes it atomically and keeps a timestamped backup next to the file." = ""
+"Savegame" = ""
+"This is the file as it was before the last save. To restore it, close JadeForge and copy the backup over save.sac." = ""
+
+# Character tab
+# src/views/character.rs
+"Attribute points you can still spend; the field is created when the savegame does not have it." = ""
+"Attributes" = ""
+"Current sheet" = ""
+"Current values may stay below the maximum; the game fills them on rest." = ""
+"Gold is optional in the savegame: leave it empty to keep the field absent, or enter a value to create it when you save." = ""
+"Identity" = ""
+"Level" = ""
+"Name" = ""
+"Time played" = ""
+"Vitals" = ""
+"not set" = ""
+
+# Styles tab
+# src/views/styles.rs
+"A new style is stored with the same field layout as one the player already owns; the game fills in the remaining data from its own tables." = ""
+"Bundled English names are loaded, but new styles and upgrade details still need the game data. Levels, weapons and time spent come from the savegame." = ""
+"Clear the style filter" = ""
+"Fighting styles" = ""
+"Filled gold orbs are owned; an empty ring is available. Clicking tier N buys every missing tier up to N; clicking an owned tier removes it and everything above it." = ""
+"LEARN A STYLE" = ""
+"Reading the game data; learned styles can already be inspected and removed." = ""
+"The game data was not found, so style names and new styles are unavailable. Levels, weapons and time spent come from the savegame." = ""
+"The player has not learned any fighting styles." = ""
+"UPGRADES" = ""
+
+# Inventory tab
+# src/views/inventory.rs
+"ADD AN ITEM" = ""
+"CATEGORY" = ""
+"Clear the item database filter" = ""
+"Reading the game data; existing items can already be edited and removed." = ""
+"The game data was not found, so items can only be removed, not added. The category comes from the item type stored in the savegame." = ""
+"The inventory is empty." = ""
+
+# Gems tab
+# src/views/gems.rs
+"Add a gem" = ""
+"Amulet" = ""
+"Clear the gem filter" = ""
+"Moving a gem keeps its effects; JadeForge only changes which list references it." = ""
+"No gems carried in the inventory." = ""
+"No gems socketed into the amulet." = ""
+"The amulet is unlocked early in the story; it has no sockets before that." = ""
+
+# Companions tab
+# src/views/henchmen.rs
+"Companion levels follow the player through the game; raising them here only changes what the companion starts with." = ""
+"This savegame has no companions yet. They appear here once the story introduces them." = ""
+"available" = ""
+"hidden" = ""
+
+# Backups page
+# src/views/backups.rs
+"Back to editing" = ""
+"Close the backup browser" = ""
+"No backups were found next to this savegame. The first successful save creates one." = ""
+"Restore" = ""
+"Save or revert the unsaved changes before restoring a backup: a restore would otherwise silently discard them." = ""
+
+# Review-before-save page
+# src/views/review.rs
+"Nothing is written until the write button below is pressed. The file is verified by re-reading it, written atomically, and the previous file is kept as a backup. Invalid character fields are not applied; the other edits are." = ""
+"Review changes" = ""
+"Write savegame" = ""
+
+# About, settings and diagnostics
+# src/views/about.rs
+"APPEARANCE" = ""
+"About JadeForge" = ""
+"BACKUPS" = ""
+"Close" = ""
+"Close the About page" = ""
+"Copy diagnostics" = ""
+"Copy the diagnostics to the clipboard" = ""
+"DIAGNOSTICS" = ""
+"Every save writes a copy of the previous save.sac next to it, named save.sac.jadeforge-backup-<seconds>.<nanos>.<counter>. To undo a save, close JadeForge and copy the backup over save.sac. An earlier backup is never overwritten." = ""
+"Jade Empire savegame editor" = ""
+"JadeForge reads and writes save.sac files directly. Every write is verified by re-reading the produced file and is written atomically, and the game installation is only ever read." = ""
+"KEYBOARD SHORTCUTS" = ""
+"LANGUAGE" = ""
+"LICENSES" = ""
+"No backup has been written in this session; saving a change creates one and shows its exact path on the Overview tab." = ""
+"No config directory is available in this environment. JADEFORGE_CONFIG_DIR can point at one for portable installs." = ""
+"No save folder has been chosen yet. Use Browse… or Ctrl+O to pick one." = ""
+"Remember size and position" = ""
+"Remember the window size and position between runs" = ""
+"Remember the window size between runs; the compositor places the window" = ""
+"SETTINGS" = ""
+"Sort order" = ""
+"TEXT SIZE" = ""
+"THEME" = ""
+"The theme and text size apply immediately and are remembered in the settings file. System follows the operating system preference; high contrast can be selected here because the windowing layer does not report the platform's forced-colours setting." = ""
+"These preferences live in one TOML file. They are remembered between runs and can be edited while JadeForge is closed." = ""
+"WINDOW" = ""
+"Wayland compositors place windows themselves. Add a window rule in your desktop settings to pin the position." = ""
+
+# Shared widgets
+# src/widgets.rs
+"Clear" = ""

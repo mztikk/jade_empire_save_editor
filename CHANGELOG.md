@@ -29,9 +29,11 @@ All notable changes are documented here. The format follows
   browsable, only visible rows are built, and rows keep stable ids, accessible
   names and their description expansion.
 - An interface language catalog with English source strings, a QA
-  pseudolocale, `LC_ALL`/`LANG` detection and an About selector. No unreviewed
-  translation is shipped; every catalogued `t(...)` string is completeness
-  tested against the source tree.
+  pseudolocale and an About selector, plus a bundled German catalog
+  (`crates/jadeforge-gui/locales/de.toml`) with one key per source string.
+  Empty German values fall back to English while the translation is filled in;
+  the catalog is coverage tested, and a `de` locale with `de-DE` tag detection
+  is selectable from About.
 - About/help now shows version, savegame block count and size, theme, scale,
   language, renderer override and backup folder, with a Copy diagnostics
   action and a complete keyboard shortcut sheet (Ctrl+/ opens it). Window size

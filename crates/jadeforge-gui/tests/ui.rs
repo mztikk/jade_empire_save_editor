@@ -4462,6 +4462,17 @@ fn the_about_page_changes_the_language_and_persists_it() {
     );
     let config = jadeforge_gui::config::Config::load();
     assert_eq!(config.locale, jadeforge_gui::Locale::Pseudo);
+
+    assert!(
+        click_text(&mut test, "Deutsch"),
+        "the German language chip is missing"
+    );
+    assert_eq!(
+        jadeforge_gui::i18n::current(),
+        jadeforge_gui::Locale::German
+    );
+    let config = jadeforge_gui::config::Config::load();
+    assert_eq!(config.locale, jadeforge_gui::Locale::German);
 }
 
 #[test]

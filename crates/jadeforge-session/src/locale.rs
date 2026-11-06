@@ -1,11 +1,11 @@
 //! Application language selection.
 //!
-//! The game data is already localized; the application itself ships an English
-//! source catalog plus a QA pseudolocale that expands every string so layout
-//! regressions are visible. A real translation is added as another catalog;
-//! until a reviewed translation exists, every language falls back to English.
-//! That is deliberate: inventing unreviewed translations would be worse than
-//! falling back.
+//! The game data is already localized; the application ships an English source
+//! catalog, a German catalog and a QA pseudolocale that expands every string so
+//! layout regressions are visible. Further languages are added the same way:
+//! one [`Locale`] variant and one catalog file, with untranslated keys falling
+//! back to English. That fallback is deliberate: an incomplete catalog must
+//! never show a wrong or invented string.
 
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,9 @@ pub enum Locale {
     #[default]
     #[serde(rename = "en")]
     English,
+    /// German interface catalog.
+    #[serde(rename = "de")]
+    German,
     /// QA pseudolocale: every catalogued string is bracketed and accented to
     /// expose clipping and hardcoded text.
     #[serde(rename = "en-xa")]
@@ -25,13 +28,14 @@ pub enum Locale {
 
 impl Locale {
     /// Every selectable locale, in the order the settings UI shows them.
-    pub const ALL: [Self; 2] = [Self::English, Self::Pseudo];
+    pub const ALL: [Self; 3] = [Self::English, Self::German, Self::Pseudo];
 
     /// Stable settings-file code.
     #[must_use]
     pub fn code(self) -> &'static str {
         match self {
             Self::English => "en",
+            Self::German => "de",
             Self::Pseudo => "en-xa",
         }
     }
@@ -41,6 +45,7 @@ impl Locale {
     pub fn label(self) -> &'static str {
         match self {
             Self::English => "English",
+            Self::German => "Deutsch",
             Self::Pseudo => "English (pseudolocale)",
         }
     }
@@ -59,6 +64,8 @@ impl Locale {
             .to_lowercase();
         if normalized == "en-xa" || normalized == "qps" || normalized.starts_with("en-xa-") {
             Self::Pseudo
+        } else if normalized == "de" || normalized.starts_with("de-") {
+            Self::German
         } else {
             Self::English
         }
@@ -96,7 +103,10 @@ mod tests {
         assert_eq!(Locale::from_tag("en_US.UTF-8"), Locale::English);
         assert_eq!(Locale::from_tag("en-xa"), Locale::Pseudo);
         assert_eq!(Locale::from_tag("qps"), Locale::Pseudo);
-        assert_eq!(Locale::from_tag("de_DE.UTF-8"), Locale::English);
+        assert_eq!(Locale::from_tag("de_DE.UTF-8"), Locale::German);
+        assert_eq!(Locale::from_tag("de"), Locale::German);
+        assert_eq!(Locale::from_tag("de-AT"), Locale::German);
+        assert_eq!(Locale::from_tag("den"), Locale::English);
         assert_eq!(Locale::from_tag(""), Locale::English);
     }
 }

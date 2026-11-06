@@ -1986,6 +1986,7 @@ dependencies = [
  "open",
  "rfd",
  "serde_json",
+ "toml",
  "wayland-client",
  "wayland-protocols-plasma",
  "winresource",

@@ -1,17 +1,19 @@
 //! The interface language catalog.
 //!
-//! Static user-facing strings are wrapped in [`t`] at their call site. The
-//! English catalog maps each source string to itself; the QA pseudolocale maps
-//! it to a bracketed, accented variant that exposes clipping and untranslated
-//! constants. A real translation adds one catalog row per language; until a
-//! reviewed translation exists the source string is shown unchanged, which is
-//! why no invented translation ships with the application.
+//! Static user-facing strings are wrapped in [`t`] at their call site. English
+//! is the source language; German is bundled as `locales/de.toml`, and the QA
+//! pseudolocale maps every catalogued string to a bracketed, accented variant
+//! that exposes clipping and untranslated constants. Empty or missing German
+//! entries fall back to the source, so the catalog can be filled in stages
+//! without ever showing an invented string.
 //!
 //! The active locale is thread local, exactly like the theme: the root installs
 //! it before rendering and the headless suite can render several languages
 //! without leaking one test's choice into another.
 
 use std::cell::Cell;
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use crate::Locale;
 
@@ -37,14 +39,35 @@ pub fn current() -> Locale {
 /// translated a newly added key yet.
 #[must_use]
 pub fn t(text: &'static str) -> &'static str {
-    let locale = current();
-    if locale == Locale::English {
-        return text;
+    match current() {
+        Locale::English => text,
+        Locale::Pseudo => pseudo(text),
+        Locale::German => match german().get(text).map(String::as_str) {
+            Some(translated) if !translated.is_empty() => translated,
+            _ => text,
+        },
     }
+}
+
+fn pseudo(text: &'static str) -> &'static str {
     CATALOG
         .iter()
         .find(|(source, _pseudo)| *source == text)
         .map_or(text, |(_, translated)| *translated)
+}
+
+/// German catalog, parsed once from the bundled TOML.
+///
+/// A malformed file degrades to English rather than failing to start; the test
+/// below parses it and checks that every source key exists, and the opt-in
+/// completeness test reports untranslated values.
+static GERMAN: OnceLock<HashMap<String, String>> = OnceLock::new();
+
+fn german() -> &'static HashMap<String, String> {
+    GERMAN.get_or_init(|| {
+        toml::from_str::<HashMap<String, String>>(include_str!("../locales/de.toml"))
+            .unwrap_or_default()
+    })
 }
 
 /// Source string to QA pseudolocale translation.
@@ -429,11 +452,63 @@ mod tests {
 
     #[test]
     fn unknown_strings_fall_back_to_the_source() {
-        install(Locale::Pseudo);
-        assert_eq!(
-            t("A string that is not catalogued"),
-            "A string that is not catalogued"
-        );
+        for locale in Locale::ALL {
+            install(locale);
+            assert_eq!(
+                t("A string that is not catalogued"),
+                "A string that is not catalogued"
+            );
+        }
         install(Locale::English);
+    }
+
+    #[test]
+    fn the_german_catalog_covers_every_catalogued_string() {
+        let catalog = german();
+        assert!(
+            !catalog.is_empty(),
+            "locales/de.toml did not parse as a string table"
+        );
+        let missing: Vec<&str> = CATALOG
+            .iter()
+            .map(|(source, _)| *source)
+            .filter(|source| !catalog.contains_key(*source))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "missing German catalog keys:\n{}",
+            missing.join("\n")
+        );
+        let sources: std::collections::HashSet<&str> =
+            CATALOG.iter().map(|(source, _)| *source).collect();
+        let mut stale: Vec<&str> = catalog
+            .keys()
+            .filter(|key| !sources.contains(key.as_str()))
+            .map(String::as_str)
+            .collect();
+        stale.sort_unstable();
+        assert!(
+            stale.is_empty(),
+            "German catalog keys that no longer exist:\n{}",
+            stale.join("\n")
+        );
+    }
+
+    /// Run after filling `locales/de.toml`; empty values fall back to English.
+    #[test]
+    #[ignore = "run after filling locales/de.toml"]
+    fn every_german_value_is_filled() {
+        let mut empty: Vec<&str> = german()
+            .iter()
+            .filter(|(_, value)| value.trim().is_empty())
+            .map(|(key, _)| key.as_str())
+            .collect();
+        empty.sort_unstable();
+        assert!(
+            empty.is_empty(),
+            "{} untranslated German keys:\n{}",
+            empty.len(),
+            empty.join("\n")
+        );
     }
 }

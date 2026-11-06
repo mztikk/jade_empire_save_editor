@@ -37,6 +37,8 @@ freya = { workspace = true, features = ["engine"] }
 freya-winit = "0.5.0"
 open.workspace = true
 rfd.workspace = true
+# German and future interface catalogs are bundled TOML files.
+toml.workspace = true
 
 # Linux has no system theme through winit. `mundy` is already linked by Freya
 # for the accent colour; enabling its colour-scheme source adds the freedesktop
