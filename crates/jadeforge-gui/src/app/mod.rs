@@ -165,8 +165,8 @@ pub fn app() -> impl IntoElement {
 /// Builds the main application window.
 ///
 /// The binary and the automated windowed tests both use this, so the tests
-/// exercise the real title, icon, size, application id and unsaved-changes
-/// close guard instead of a test-only window. The hook returns
+/// exercise the real title, icon, size, application id, renderer choice and
+/// unsaved-changes close guard instead of a test-only window. The hook returns
 /// [`CloseDecision::KeepOpen`] when the user declines to discard edits.
 #[must_use]
 pub fn window_config<E>(app: impl Fn() -> E + 'static) -> WindowConfig
@@ -193,6 +193,7 @@ where
         .with_title(WINDOW_TITLE)
         .with_icon(LaunchConfig::window_icon(ICON_PNG))
         .with_app_id(APP_ID)
+        .with_renderer(crate::renderer::preference())
         .with_size(fallback.width, fallback.height)
         .with_min_size(fallback.min_width, fallback.min_height)
         .with_window_attributes(move |attributes, event_loop| {
@@ -659,7 +660,14 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             let _ = *revision.read();
             let entries = session.borrow().entries();
             let (sort, descending) = *save_sort.read();
-            crate::session::visible_entries(&entries, &save_query.read(), sort, descending)
+            // Shared so the virtual list can compare the filtered rows by
+            // identity instead of rebuilding them on every unrelated render.
+            Rc::new(crate::session::visible_entries(
+                &entries,
+                &save_query.read(),
+                sort,
+                descending,
+            ))
         });
         filtered.read().clone()
     };

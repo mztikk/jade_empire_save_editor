@@ -194,6 +194,52 @@ coverage` writes a line/function summary plus HTML and lcov reports to
    the savegame; copy it back over `save.sac` to undo a change. Repeated saves
    never overwrite an earlier backup.
 
+## Memory use
+
+JadeForge renders with Freya and Skia. By default Freya picks the GPU backend
+(Vulkan on Linux, Metal on macOS, OpenGL elsewhere). Two things keep that
+reasonable for a save editor: the savegame list is virtualized, so a folder with
+hundreds of saves costs the same to render as one with ten, and the Skia GPU
+resource cache is capped at 32 MiB instead of Skia's 256 MiB default. The
+savegame's unsaved-changes baseline is stored as a 128 bit fingerprint per
+block instead of a second copy of the block bytes.
+
+When memory matters more than GPU acceleration (small VMs, remote desktops,
+integrated graphics), the whole interface can be rendered on the CPU:
+
+```sh
+JADEFORGE_RENDERER=software jadeforge
+```
+
+The software renderer is still Skia, just without a GPU context and driver.
+The editor is mostly static, so the trade is cheap: a full 1280x800 frame takes
+a few milliseconds here and an idle window uses no measurable CPU.
+`JADEFORGE_RENDERER` accepts `auto`, `software`, `opengl` and `vulkan`
+(case-insensitive), and wins over Freya's own `FREYA_RENDERER`. Unset it (or use
+`auto`) to return to the default renderer for later runs.
+
+The backends are Freya's, not reimplemented here. A backend that cannot
+initialize falls back instead of preventing the editor from starting, and the
+one the window actually got is printed at startup, for example
+`jadeforge: renderer OpenGL (AMD Radeon RX 9070 XT)`. Run the editor from a
+terminal or check the journal to see it.
+
+| platform | `auto` picks | explicit choices |
+| --- | --- | --- |
+| Linux | Vulkan, then OpenGL, then software | `vulkan`, `opengl`, `software` |
+| Windows | OpenGL | `vulkan` (falls back to OpenGL, then software), `opengl`, `software` |
+| macOS | Metal | `software`; `opengl` and `vulkan` still resolve to Metal, because Freya only implements Metal there |
+
+Direct3D is not available. Skia itself can render through D3D12, but Freya 0.5
+has neither a Direct3D driver nor a renderer preference for it, so JadeForge has
+nothing to select. On Windows, `JADEFORGE_RENDERER=vulkan` uses the newer
+graphics API; Direct3D support would have to come from an upstream Freya driver.
+
+For scale: a live 1000x720 window with an opened savegame peaks at about 52 MiB
+with `JADEFORGE_RENDERER=software`. The GPU path adds the graphics driver and
+Skia's GPU resources on top of that, which is what puts the same window into the
+100-120 MiB range.
+
 ## Game data
 
 Names are not stored in savegames, they are talk table references in 2DA tables.

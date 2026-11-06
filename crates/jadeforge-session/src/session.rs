@@ -434,6 +434,34 @@ pub enum ScanApply {
     Stale,
 }
 
+/// Fingerprint of one canonical block payload.
+///
+/// Two independently salted 64-bit hashes rather than the canonical bytes: the
+/// dirty check only needs equality, and keeping every block's bytes duplicated
+/// the savegame in memory. A collision would hide an unsaved edit, so the two
+/// hashes are combined into 128 bits. The value is process-local; nothing
+/// persists or compares it across runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ContentFingerprint {
+    first: u64,
+    second: u64,
+}
+
+impl ContentFingerprint {
+    fn of(bytes: &[u8]) -> Self {
+        use std::hash::{Hash, Hasher};
+
+        let mut first = std::collections::hash_map::DefaultHasher::new();
+        (0_u8, bytes).hash(&mut first);
+        let mut second = std::collections::hash_map::DefaultHasher::new();
+        (1_u8, bytes).hash(&mut second);
+        Self {
+            first: first.finish(),
+            second: second.finish(),
+        }
+    }
+}
+
 /// A loaded editing session.
 pub struct Session {
     /// Folder that is currently scanned.
@@ -475,11 +503,14 @@ pub struct Session {
     pub(crate) preview: Option<Rc<Preview>>,
     /// Status of the last action.
     pub(crate) message: Message,
-    /// Canonical block payloads of the opened savegame.
+    /// Fingerprints of the canonical block payloads of the opened savegame.
     ///
-    /// Comparing content per block means an edit that is undone clears the
-    /// dirty state even when the block on disk was not canonically encoded.
-    baseline: Option<Vec<Vec<u8>>>,
+    /// Kept as two 64-bit hashes per block instead of the canonical bytes
+    /// themselves: a savegame is a few megabytes and the full baseline was a
+    /// large part of the editor's idle memory, while a 16-byte fingerprint
+    /// answers the same question. Two differently salted hashes make the
+    /// combined collision probability negligible (128 bits).
+    baseline: Option<Vec<ContentFingerprint>>,
     /// True when the in-memory savegame differs from the file on disk.
     dirty: bool,
     file_size: Option<u64>,
@@ -1158,17 +1189,16 @@ impl Session {
     /// Recomputes [`Session::is_dirty`] after a mutation.
     ///
     /// Only edited blocks are re-serialized, and they are compared with the
-    /// canonical form of the same block at load time. Restoring a value
-    /// therefore clears the flag instead of leaving a sticky "was touched"
-    /// marker behind.
+    /// fingerprint of the same block at load time. Restoring a value therefore
+    /// clears the flag instead of leaving a sticky "was touched" marker behind.
     fn refresh_dirty(&mut self) {
         self.dirty = match (self.save.as_ref(), self.baseline.as_ref()) {
             (Some(save), Some(baseline)) => {
                 save.blocks().iter().enumerate().any(|(index, block)| {
                     block.is_modified()
-                        && block
-                            .to_canonical_bytes()
-                            .is_ok_and(|bytes| baseline.get(index) != Some(&bytes))
+                        && block.to_canonical_bytes().is_ok_and(|bytes| {
+                            baseline.get(index) != Some(&ContentFingerprint::of(&bytes))
+                        })
                 })
             }
             (Some(save), None) => save.is_modified(),
@@ -1178,10 +1208,17 @@ impl Session {
 
     /// Remembers the current in-memory content as the clean baseline.
     fn accept_as_clean(&mut self) {
-        self.baseline = self
-            .save
-            .as_ref()
-            .and_then(|save| save.canonical_blocks().ok());
+        self.baseline = self.save.as_ref().and_then(|save| {
+            save.blocks()
+                .iter()
+                .map(|block| {
+                    block
+                        .to_canonical_bytes()
+                        .ok()
+                        .map(|bytes| ContentFingerprint::of(&bytes))
+                })
+                .collect::<Option<Vec<_>>>()
+        });
         self.dirty = false;
     }
 
@@ -3657,6 +3694,18 @@ mod tests {
         assert_eq!(
             session.complete_scan(&request, ScanOutcome::run(&request)),
             ScanApply::Stale
+        );
+    }
+
+    #[test]
+    fn content_fingerprints_match_equal_blocks_and_split_different_ones() {
+        assert_eq!(
+            ContentFingerprint::of(b"canonical block"),
+            ContentFingerprint::of(b"canonical block")
+        );
+        assert_ne!(
+            ContentFingerprint::of(b"canonical block"),
+            ContentFingerprint::of(b"canonical block ")
         );
     }
 }
