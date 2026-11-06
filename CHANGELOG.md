@@ -123,6 +123,14 @@ All notable changes are documented here. The format follows
 - `just install` now installs `jadeforge-cli` alongside the `jadeforge` GUI
   binary, so a source install provides both tools.
 
+### Fixed
+
+- A `System` theme choice now follows a dark KDE or GNOME desktop on Linux.
+  winit reports no desktop theme there, so the editor reads the freedesktop
+  appearance portal (and KDE's `kdeglobals` for the first frame) instead of
+  falling back to light, and keeps following portal changes while the window
+  is open.
+
 ## [0.2.1] - 2026-11-06
 
 ### Added

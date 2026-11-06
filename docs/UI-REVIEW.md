@@ -102,6 +102,12 @@ P3 verification caveats:
   in P3 is the configurable window remembering, whose decision logic is unit
   tested and whose real-window scenario (`window_geometry_restarts`) remains
   un-run on this branch.
+- Linux has no system theme through winit (X11 unsupported, Wayland only
+  overrides). A `System` choice therefore reads the freedesktop appearance
+  portal, with KDE's `kdeglobals` as the first-frame fallback, and follows
+  portal changes while the window is open. Detection was verified on the
+  reviewer's KDE Plasma Wayland session, where the portal reports dark; the
+  live-desktop test is opt-in because CI has no session bus.
 
 ## Upstream accessibility blockers
 

@@ -21,6 +21,14 @@ surface was dark, which would have rejected a light theme by construction.
   the OS preference reported by Freya, and `Light` is explicit.
 - The root subscribes to `Platform::get().current_window().preferred_theme`, so
   changing the OS theme repaints a `System` choice while the window is open.
+  That works on Windows and macOS. On Linux winit reports no desktop theme
+  (X11 is unsupported and Wayland only reports per-window overrides), so a
+  `System` choice read the Freya fallback, which is always light. The binary
+  now detects the freedesktop appearance portal through `mundy` (the crate
+  Freya already links for the accent colour) and reads KDE's `kdeglobals`
+  first so the first frame is correct without a D-Bus round trip. A portal
+  subscription repaints a `System` choice when the desktop changes; the
+  headless suite never opens a session bus.
 - The About page gets theme radio buttons. Changing one updates the reactive
   state immediately and writes `theme = "..."` to the TOML settings file.
 - The Freya component themes (`button`, `filled_button`, `outline_button`,
@@ -34,6 +42,10 @@ Upstream references:
   <https://docs.rs/freya/0.5.0/freya/prelude/fn.use_init_theme.html>
 - `PlatformWindow.preferred_theme`:
   <https://docs.rs/freya-core/0.5.0/freya_core/platform/struct.PlatformWindow.html>
+- `mundy` colour-scheme source and blocking query:
+  <https://docs.rs/mundy/0.2.3/mundy/struct.Preferences.html>
+- freedesktop appearance portal (`color-scheme`):
+  <https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.impl.portal.Settings.html>
 - winit theme source (light/dark only):
   <https://docs.rs/winit/0.30/winit/window/enum.Theme.html>
 - WCAG 2.2 contrast minimum:
@@ -59,6 +71,10 @@ above the 3:1 non-text minimum on the active surface.
 - Headless UI tests write `theme = "light"` and `theme = "system"` into the
   isolated settings file, launch the real root, and assert the installed
   palette. The About test clicks the theme chips and re-reads the settings file.
+  A Linux-only test installs a dark desktop preference for its thread and
+  asserts that `System` paints the dark palette; `system_theme` unit-tests the
+  KDE background parser and the portal scheme mapping. An ignored test reads a
+  live desktop (`--ignored --nocapture`) because CI has no session bus.
 - Screenshots: `docs/screenshot*.png` stay on the dark default; the light and
   high-contrast variants are rendered with `--theme` into the ignored
   `scratch/` folder (the tracked hero must show the project's identity).

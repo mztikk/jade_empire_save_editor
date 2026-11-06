@@ -21,6 +21,12 @@ Upstream evidence:
   <https://github.com/marc2332/freya/blob/main/crates/freya-core/src/platform.rs>
 - WCAG 2.2 high contrast is described by AAA 7:1 and non-text 4.5:1:
   <https://www.w3.org/WAI/WCAG22/Understanding/contrast-enhanced.html>
+- Freya links `mundy`, which can read the platform contrast preference (the
+  Linux portal reports `org.freedesktop.appearance contrast`, Windows high
+  contrast is exposed too):
+  <https://docs.rs/mundy/0.2.3/mundy/enum.Contrast.html>. That is the likely
+  route to automatic high contrast; it is not wired into the `System` choice
+  yet, so the theme remains a manual selection.
 
 ## Approach
 

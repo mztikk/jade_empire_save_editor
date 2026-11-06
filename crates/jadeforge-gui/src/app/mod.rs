@@ -289,15 +289,34 @@ where
 #[allow(clippy::too_many_lines, clippy::redundant_closure_for_method_calls)] // the root wires every view in dependency order
 pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     // The user's theme and text scale are installed before any child renders.
-    // The system preference is a reactive state, so flipping the OS theme while
-    // the window is open repaints a System choice without a restart.
+    // On Windows and macOS Freya's platform preference is reactive; on Linux
+    // winit reports nothing, so the binary's startup detection and the portal
+    // watcher installed here provide the System choice.
     let saved_config = use_hook(crate::config::Config::load);
     let theme_choice = use_state(|| saved_config.theme);
     let text_scale = use_state(|| saved_config.normalized_text_scale());
     let locale = use_state(|| saved_config.locale);
     let remember_window = use_state(|| saved_config.remember_window);
     crate::i18n::install(*locale.read());
-    let preferred = *Platform::get().current_window().preferred_theme.read();
+    let platform_preferred = *Platform::get().current_window().preferred_theme.read();
+    #[cfg(target_os = "linux")]
+    let mut system_preferred = use_state(crate::system_theme::detected);
+    #[cfg(target_os = "linux")]
+    let _system_theme_updates = use_future(move || {
+        let updates = crate::system_theme::enabled().then(crate::system_theme::subscribe);
+        async move {
+            let Some((_subscription, mut updates)) = updates else {
+                return;
+            };
+            while let Ok(theme) = updates.recv().await {
+                system_preferred.set(Some(theme));
+            }
+        }
+    });
+    #[cfg(target_os = "linux")]
+    let preferred = (*system_preferred.read()).unwrap_or(platform_preferred);
+    #[cfg(not(target_os = "linux"))]
+    let preferred = platform_preferred;
     let resolved = theme::resolved_choice(*theme_choice.read(), preferred);
     theme::install(theme::UiStyle::new(resolved, *text_scale.read()));
     let mut freya_theme = use_init_theme(theme::theme);

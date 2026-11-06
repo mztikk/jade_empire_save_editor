@@ -14,6 +14,8 @@ pub mod i18n;
 pub mod paths;
 pub mod perf;
 pub mod renderer;
+#[cfg(target_os = "linux")]
+pub mod system_theme;
 pub mod theme;
 pub mod views;
 pub mod widgets;

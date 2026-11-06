@@ -4143,6 +4143,23 @@ fn the_system_theme_follows_the_platform_preference() {
     drop(test);
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn the_system_theme_follows_a_dark_desktop() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    // The headless runner cannot reach a portal, so install the value its
+    // platform would have reported on a dark KDE or GNOME desktop.
+    write_ui_preferences(ThemeChoice::System, 100);
+    jadeforge_gui::system_theme::set_for_testing(Some(PreferredTheme::Dark));
+    let test = launch_sized(fixture.save_dir.clone(), 900.0);
+    assert_eq!(theme::current().palette.kind, theme::PaletteKind::Dark);
+    jadeforge_gui::system_theme::set_for_testing(None);
+    drop(test);
+}
+
 #[test]
 fn the_about_page_changes_theme_and_text_scale_and_persists_them() {
     let Some(fixture) = Fixture::create() else {

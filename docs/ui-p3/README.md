@@ -14,7 +14,7 @@ and 1600 px. The windowed suite is never run without explicit permission
 | # | item | note | status |
 | --- | --- | --- | --- |
 | 1 | light/system-following theme | [theme-light.md](theme-light.md) | implemented |
-| 2 | high contrast and forced colours | [high-contrast.md](high-contrast.md) | implemented manually; automatic detection blocked upstream |
+| 2 | high contrast and forced colours | [high-contrast.md](high-contrast.md) | implemented manually; the platform contrast signal is a documented follow-up |
 | 3 | text scaling to 200 % | [text-scaling.md](text-scaling.md) | implemented |
 | 4 | UI localization | [localization.md](localization.md) | infrastructure + English/pseudo catalogs; no reviewed translations ship |
 | 5 | virtualized browser and pickers | [virtual-lists.md](virtual-lists.md) | implemented |
