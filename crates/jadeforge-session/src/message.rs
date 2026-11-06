@@ -30,6 +30,20 @@ pub fn tr(source: &'static str) -> &'static str {
         .map_or(source, |translator| translator(source))
 }
 
+/// Uppercases the first character of a translated label.
+///
+/// The catalog keeps shared labels in lower case so a count noun and a card
+/// caption can use the same key. A view that needs a sentence-case caption
+/// applies this helper instead of storing a second copy of the word.
+#[must_use]
+pub fn capitalize(text: &str) -> String {
+    let mut characters = text.chars();
+    match characters.next() {
+        Some(first) => first.to_uppercase().chain(characters).collect(),
+        None => String::new(),
+    }
+}
+
 /// Fills `{name}` placeholders in a translated template.
 ///
 /// Values are inserted verbatim, so a path, a character name or an error
@@ -54,6 +68,13 @@ mod tests {
             fill("Opened {label}.", &[("label", "Auto 1")]),
             "Opened Auto 1."
         );
+    }
+
+    #[test]
+    fn a_label_can_be_capitalized_without_changing_the_rest() {
+        assert_eq!(capitalize("gems"), "Gems");
+        assert_eq!(capitalize("Gesundheit"), "Gesundheit");
+        assert_eq!(capitalize(""), "");
     }
 
     #[test]

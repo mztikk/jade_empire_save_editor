@@ -4462,6 +4462,12 @@ fn the_german_catalog_translations_render_in_the_shell() {
         find_label_text(&test, "Kein Spielstand ausgewählt").is_some(),
         "the translated empty state is missing"
     );
+    for translated in ["Edelsteine", "Stile", "Inventar"] {
+        assert!(
+            find_label_text(&test, translated).is_some(),
+            "the prefilled German tab {translated:?} is missing"
+        );
+    }
 }
 
 #[test]

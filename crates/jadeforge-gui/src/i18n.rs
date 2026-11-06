@@ -117,17 +117,13 @@ const CATALOG: &[(&str, &str)] = &[
         "⟦Ábóút JádéFórgé, vérsíóñ, séttíñgs áñd báçkúps⟧",
     ),
     ("Add a gem", "⟦Ádd á gém⟧"),
-    ("Amulet", "⟦Ámúlét⟧"),
     ("At a glance", "⟦Át á gláñçé⟧"),
     (
         "Attribute points you can still spend; the field is created when the savegame does not have it.",
         "⟦Áttríbúté póíñts yóú çáñ stíll spéñd; thé fíéld ís çréátéd whéñ thé sávégámé dóés ñót hávé ít.⟧",
     ),
     ("Attributes", "⟦Áttríbútés⟧"),
-    ("BACKUPS", "⟦BÁÇKÚPS⟧"),
     ("Back to editing", "⟦Báçk tó édítíñg⟧"),
-    ("Backup", "⟦Báçkúp⟧"),
-    ("Backups", "⟦Báçkúps⟧"),
     (
         "Browse the backups of the open savegame",
         "⟦Brówsé thé báçkúps óf thé ópéñ sávégámé⟧",
@@ -177,17 +173,14 @@ const CATALOG: &[(&str, &str)] = &[
         "Filled gold orbs are owned; an empty ring is available. Clicking tier N buys every missing tier up to N; clicking an owned tier removes it and everything above it.",
         "⟦Fílléd góld órbs áré ówñéd; áñ émpty ríñg ís áváíláblé. Çlíçkíñg tíér Ñ búys évéry míssíñg tíér úp tó Ñ; çlíçkíñg áñ ówñéd tíér rémóvés ít áñd évérythíñg ábóvé ít.⟧",
     ),
-    ("GAME DATA", "⟦GÁMÉ DÁTÁ⟧"),
     ("GOLD", "⟦GÓLD⟧"),
     ("Game data", "⟦Gámé dátá⟧"),
-    ("Gems", "⟦Géms⟧"),
     (
         "Gold is optional in the savegame: leave it empty to keep the field absent, or enter a value to create it when you save.",
         "⟦Góld ís óptíóñál íñ thé sávégámé: léávé ít émpty tó kéép thé fíéld ábséñt, ór éñtér á válúé tó çréáté ít whéñ yóú sávé.⟧",
     ),
     ("HEALTH", "⟦HÉÁLTH⟧"),
     ("Identity", "⟦Ídéñtíty⟧"),
-    ("Inventory", "⟦Íñvéñtóry⟧"),
     (
         "Jade Empire savegame editor",
         "⟦Jádé Émpíré sávégámé édítór⟧",
@@ -268,18 +261,14 @@ const CATALOG: &[(&str, &str)] = &[
     ("Restore", "⟦Réstóré⟧"),
     ("Revert", "⟦Révért⟧"),
     ("Review changes", "⟦Révíéw çháñgés⟧"),
-    ("SAVE FOLDER", "⟦SÁVÉ FÓLDÉR⟧"),
     ("SETTINGS", "⟦SÉTTÍÑGS⟧"),
     (
         "Save or revert the unsaved changes before restoring a backup: a restore would otherwise silently discard them.",
         "⟦Sávé ór révért thé úñsávéd çháñgés béfóré réstóríñg á báçkúp: á réstóré wóúld óthérwísé síléñtly dísçárd thém.⟧",
     ),
     ("Save to disk", "⟦Sávé tó dísk⟧"),
-    ("Savegame", "⟦Sávégámé⟧"),
     ("Sort order", "⟦Sórt órdér⟧"),
-    ("Styles", "⟦Stylés⟧"),
     ("TEXT SIZE", "⟦TÉXT SÍZÉ⟧"),
-    ("THEME", "⟦THÉMÉ⟧"),
     (
         "The amulet is unlocked early in the story; it has no sockets before that.",
         "⟦Thé ámúlét ís úñlóçkéd éárly íñ thé stóry; ít hás ñó sóçkéts béfóré thát.⟧",
@@ -325,7 +314,6 @@ const CATALOG: &[(&str, &str)] = &[
     ("no savegame open", "⟦ñó sávégámé ópéñ⟧"),
     ("not set", "⟦ñót sét⟧"),
     ("unsaved changes", "⟦úñsávéd çháñgés⟧"),
-    ("LANGUAGE", "⟦LÁNGÚÁGÉ⟧"),
     ("WINDOW", "⟦WÍNDÓW⟧"),
     ("Remember size and position", "⟦Rémémbér sízé ánd pósítíón⟧"),
     (
@@ -347,7 +335,6 @@ const CATALOG: &[(&str, &str)] = &[
         "Copy the diagnostics to the clipboard",
         "⟦Çópy thé díágnóstíçs tó thé çlípbóárd⟧",
     ),
-    ("SCANNING…", "⟦SÇÁÑÑÍÑG…⟧"),
     (
         "This savegame has unsaved changes: save them or press Revert before choosing another folder.",
         "⟦Thís sávégámé hás úñsávéd çháñgés: sávé thém ór préss Révért béfóré çhóósíñg áñóthér fóldér.⟧",
@@ -417,7 +404,6 @@ const CATALOG: &[(&str, &str)] = &[
         "This savegame changed on disk since it was opened. Reload it to edit the current file.",
         "⟦Thís sávégámé çháñgéd óñ dísk síñçé ít wás ópéñéd. Rélóád ít tó édít thé çúrréñt fílé.⟧",
     ),
-    ("Reload from disk?", "⟦Rélóád fróm dísk?⟧"),
     (
         "The savegame changed on disk outside JadeForge. Reloading discards every unsaved edit on screen.",
         "⟦Thé sávégámé çháñgéd óñ dísk óútsídé JádéFórgé. Rélóádíñg dísçárds évéry úñsávéd édít óñ sçrééñ.⟧",
@@ -427,7 +413,6 @@ const CATALOG: &[(&str, &str)] = &[
         "Choose the Jade Empire save folder",
         "⟦Çhóósé thé Jádé Émpíré sávé fóldér⟧",
     ),
-    ("Unsaved changes", "⟦Úñsávéd çháñgés⟧"),
     (
         "This savegame has changes that are only in memory. Save them before closing, discard them, or cancel and keep editing.",
         "⟦Thís sávégámé hás çháñgés thát áré óñly íñ mémóry. Sávé thém béfóré çlósíñg, dísçárd thém, ór çáñçél áñd kéép édítíñg.⟧",
@@ -435,7 +420,6 @@ const CATALOG: &[(&str, &str)] = &[
     ("Save", "⟦Sávé⟧"),
     ("Discard", "⟦Dísçárd⟧"),
     ("Cancel", "⟦Çáñçél⟧"),
-    ("LOADING SAVEGAMES…", "⟦LÓÁDÍÑG SÁVÉGÁMÉS…⟧"),
     ("Select a savegame", "⟦Séléçt á sávégámé⟧"),
     (
         "No savegames in this folder.",
@@ -445,7 +429,6 @@ const CATALOG: &[(&str, &str)] = &[
         "No savegame matches this filter.",
         "⟦Ñó sávégámé mátçhés thís fíltér.⟧",
     ),
-    ("Savegames", "⟦Sávégámés⟧"),
     ("{shown} OF {total}", "⟦{shówñ} óf {tótál}⟧"),
     (
         "Level {level} · Time played {time}",
@@ -507,8 +490,6 @@ const CATALOG: &[(&str, &str)] = &[
         "Cannot read the game data: {error}{bundled}",
         "⟦Çáññót réád thé gámé dátá: {érrór}{búñdléd}⟧",
     ),
-    ("Level {level}", "⟦Lévél {lévél}⟧"),
-    ("Chapter {chapter}", "⟦Çháptér {çháptér}⟧"),
     (
         "Time played {time} · {kills} · {experience}",
         "⟦Tímé pláyéd {tímé} · {kílls} · {éxpéríéñçé}⟧",
@@ -527,13 +508,7 @@ const CATALOG: &[(&str, &str)] = &[
         "{alignment} (the game starts at {default}, below is Closed Fist, above is Open Palm).",
         "⟦{álígñméñt} (thé gámé stárts át {défáúlt}, bélów ís Çlóséd Físt, ábóvé ís Ópéñ Pálm).⟧",
     ),
-    ("NAME", "⟦ÑÁMÉ⟧"),
-    ("LEVEL", "⟦LÉVÉL⟧"),
     ("EXPERIENCE", "⟦ÉXPÉRÍÉÑÇÉ⟧"),
-    ("UNSPENT ATTRIBUTE POINTS", "⟦ÚÑSPÉÑT ÁTTRÍBÚTÉ PÓÍÑTS⟧"),
-    ("HEALTH MAX", "⟦HÉÁLTH MÁX⟧"),
-    ("CHI MAX", "⟦ÇHÍ MÁX⟧"),
-    ("FOCUS MAX", "⟦FÓÇÚS MÁX⟧"),
     ("BODY", "⟦BÓDY⟧"),
     ("MIND", "⟦MÍÑD⟧"),
     ("SPIRIT", "⟦SPÍRÍT⟧"),
@@ -541,26 +516,13 @@ const CATALOG: &[(&str, &str)] = &[
     ("INTUITION", "⟦ÍÑTÚÍTÍÓÑ⟧"),
     ("INTIMIDATE", "⟦ÍÑTÍMÍDÁTÉ⟧"),
     ("ALIGNMENT", "⟦ÁLÍGÑMÉÑT⟧"),
-    ("CHAPTER", "⟦ÇHÁPTÉR⟧"),
-    ("KILLS", "⟦KÍLLS⟧"),
     ("at most 64 characters", "⟦át móst 64 çháráçtérs⟧"),
     ("1 to 255 (level)", "⟦1 tó 255 (lévél)⟧"),
-    ("0 to 4294967295 XP", "⟦0 tó 4294967295 XP⟧"),
-    ("0 to 4294967295 points", "⟦0 tó 4294967295 póíñts⟧"),
-    ("0 to 4294967295 kills", "⟦0 tó 4294967295 kílls⟧"),
     (
         "empty or 0 to 4294967295 gold",
         "⟦émpty ór 0 tó 4294967295 góld⟧",
     ),
-    ("0 to 1000000 health points", "⟦0 tó 1000000 héálth póíñts⟧"),
-    ("0 to 1000000 chi points", "⟦0 tó 1000000 çhí póíñts⟧"),
-    ("0 to 1000000 focus points", "⟦0 tó 1000000 fóçús póíñts⟧"),
-    ("1 to 1000000 health points", "⟦1 tó 1000000 héálth póíñts⟧"),
-    ("1 to 1000000 chi points", "⟦1 tó 1000000 çhí póíñts⟧"),
-    ("1 to 1000000 focus points", "⟦1 tó 1000000 fóçús póíñts⟧"),
     ("0 to 1000000 (index)", "⟦0 tó 1000000 (íñdéx)⟧"),
-    ("0 to 1000 points", "⟦0 tó 1000 póíñts⟧"),
-    ("-1000000 to 1000000 points", "⟦-1000000 tó 1000000 póíñts⟧"),
     (
         "-1000000 to 1000000, 128 balanced",
         "⟦-1000000 tó 1000000, 128 báláñçéd⟧",
@@ -574,7 +536,6 @@ const CATALOG: &[(&str, &str)] = &[
         "No styles match this search.",
         "⟦Ñó stylés mátçh thís séárçh.⟧",
     ),
-    ("STYLES TO LEARN", "⟦STYLÉS TÓ LÉÁRÑ⟧"),
     ("Learn", "⟦Léárñ⟧"),
     ("Styles you can learn", "⟦Stylés yóú çáñ léárñ⟧"),
     ("Remove style?", "⟦Rémóvé stylé?⟧"),
@@ -639,7 +600,6 @@ const CATALOG: &[(&str, &str)] = &[
         "No items match this search and category.",
         "⟦Ñó ítéms mátçh thís séárçh áñd çátégóry.⟧",
     ),
-    ("ALL ITEMS", "⟦ÁLL ÍTÉMS⟧"),
     ("SEARCH RESULTS", "⟦SÉÁRÇH RÉSÚLTS⟧"),
     ("Items you can add", "⟦Ítéms yóú çáñ ádd⟧"),
     ("All items", "⟦Áll ítéms⟧"),
@@ -785,11 +745,8 @@ const CATALOG: &[(&str, &str)] = &[
     ("Version", "⟦Vérsíóñ⟧"),
     ("Open savegame", "⟦Ópéñ sávégámé⟧"),
     ("none", "⟦ñóñé⟧"),
-    ("Blocks", "⟦Blóçks⟧"),
     ("File size", "⟦Fílé sízé⟧"),
     ("not read", "⟦ñót réád⟧"),
-    ("Theme", "⟦Thémé⟧"),
-    ("Language", "⟦Láñgúágé⟧"),
     ("Renderer override", "⟦Réñdérér óvérrídé⟧"),
     ("auto", "⟦áútó⟧"),
     ("Remember window", "⟦Rémémbér wíñdów⟧"),
@@ -806,7 +763,6 @@ const CATALOG: &[(&str, &str)] = &[
         "Could not copy the diagnostics: the system clipboard is not available.",
         "⟦Çóúld ñót çópy thé díágñóstíçs: thé systém çlípbóárd ís ñót áváíláblé.⟧",
     ),
-    ("Save folder", "⟦Sávé fóldér⟧"),
     ("descending", "⟦désçéñdíñg⟧"),
     ("ascending", "⟦ásçéñdíñg⟧"),
     ("Settings file", "⟦Séttíñgs fílé⟧"),
@@ -835,15 +791,6 @@ const CATALOG: &[(&str, &str)] = &[
         "⟦Úsé {láñgúágé} fór thé íñtérfáçé⟧",
     ),
     ("{theme} at {scale} %", "⟦{thémé} át {sçálé} %⟧"),
-    ("Version: {version}", "⟦Vérsíóñ: {vérsíóñ}⟧"),
-    ("Save folder: {path}", "⟦Sávé fóldér: {páth}⟧"),
-    ("Savegame: {path}", "⟦Sávégámé: {páth}⟧"),
-    ("Config: {path}", "⟦Çóñfíg: {páth}⟧"),
-    (
-        "Theme: {theme} at {scale} %",
-        "⟦Thémé: {thémé} át {sçálé} %⟧",
-    ),
-    ("Language: {language}", "⟦Láñgúágé: {láñgúágé}⟧"),
     ("{name}, {direction}", "⟦{ñámé}, {díréçtíóñ}⟧"),
     ("Version {version}", "⟦Vérsíóñ {vérsíóñ}⟧"),
     ("expanded", "⟦éxpáñdéd⟧"),
@@ -881,12 +828,10 @@ const CATALOG: &[(&str, &str)] = &[
     ("Way of the Closed Fist", "⟦Wáy óf thé Çlóséd Físt⟧"),
     ("Balanced", "⟦Báláñçéd⟧"),
     ("Power-ups", "⟦Pówér-úps⟧"),
-    ("Weapons", "⟦Wéápóñs⟧"),
     ("Plot items", "⟦Plót ítéms⟧"),
     ("Magic weapons", "⟦Mágíç wéápóñs⟧"),
     ("Improvements", "⟦Ímpróvéméñts⟧"),
     ("Martial", "⟦Mártíál⟧"),
-    ("Weapon", "⟦Wéápóñ⟧"),
     ("Magic", "⟦Mágíç⟧"),
     ("Support", "⟦Súppórt⟧"),
     ("Transformation", "⟦Tráñsfórmátíóñ⟧"),
@@ -972,7 +917,6 @@ const CATALOG: &[(&str, &str)] = &[
     ("amulet", "⟦ámúlét⟧"),
     ("Gem moved", "⟦Gém móvéd⟧"),
     ("Gem removed", "⟦Gém rémóvéd⟧"),
-    ("Gem removed.", "⟦Gém rémóvéd.⟧"),
     (
         "That style is not in the game data.",
         "⟦Thát stylé ís ñót íñ thé gámé dátá.⟧",
@@ -1098,14 +1042,12 @@ const CATALOG: &[(&str, &str)] = &[
     ),
     ("Added {name}.", "⟦Áddéd {ñámé}.⟧"),
     ("Cannot add item: {error}", "⟦Çáññót ádd ítém: {érrór}⟧"),
-    ("Removed {name}.", "⟦Rémóvéd {ñámé}.⟧"),
     (
         "Cannot remove item: {error}",
         "⟦Çáññót rémóvé ítém: {érrór}⟧",
     ),
     ("Upgrade {advance}", "⟦Úpgrádé {ádváñçé}⟧"),
     ("Bought {upgrades}.", "⟦Bóúght {úpgrádés}.⟧"),
-    ("Removed {upgrades}.", "⟦Rémóvéd {úpgrádés}.⟧"),
     (
         "Cannot change the upgrade: {error}",
         "⟦Çáññót çháñgé thé úpgrádé: {érrór}⟧",
@@ -1163,9 +1105,23 @@ const CATALOG: &[(&str, &str)] = &[
         "Gem moved to the inventory.",
         "⟦Gém móvéd tó thé íñvéñtóry.⟧",
     ),
-    ("game data: {message}", "⟦gámé dátá: {mésságé}⟧"),
     ("unknown", "⟦úñknówñ⟧"),
     ("settings", "⟦séttíñgs⟧"),
+    // Merged labels, composed ranges and shared templates.
+    ("theme", "⟦thémé⟧"),
+    ("language", "⟦láñgúágé⟧"),
+    ("save folder", "⟦sávé fóldér⟧"),
+    ("Chapter", "⟦Çháptér⟧"),
+    ("{stat} MAX", "⟦{stát} MÁX⟧"),
+    ("{min} to {max} {unit}", "⟦{míñ} tó {máx} {úñít}⟧"),
+    ("XP", "⟦XP⟧"),
+    ("points", "⟦póíñts⟧"),
+    ("health points", "⟦héálth póíñts⟧"),
+    ("chi points", "⟦çhí póíñts⟧"),
+    ("focus points", "⟦fóçús póíñts⟧"),
+    ("{label}: {value}", "⟦{lábél}: {válúé}⟧"),
+    ("Config", "⟦Çóñfíg⟧"),
+    ("Removed {what}.", "⟦Rémóvéd {whát}.⟧"),
     // Count nouns: singular and plural for the count helper.
     ("gem", "⟦gém⟧"),
     ("gems", "⟦géms⟧"),
@@ -1195,8 +1151,6 @@ const CATALOG: &[(&str, &str)] = &[
     ("groups", "⟦gróúps⟧"),
     ("backup", "⟦báckúp⟧"),
     ("backups", "⟦báckúps⟧"),
-    ("SAVEGAME", "⟦SÁVÉGÁMÉ⟧"),
-    ("SAVEGAMES", "⟦SÁVÉGÁMÉS⟧"),
     ("invalid field", "⟦ínválíd fíéld⟧"),
     ("invalid fields", "⟦ínválíd fíélds⟧"),
     ("experience point", "⟦éxpéríéncé póínt⟧"),
@@ -1402,18 +1356,13 @@ mod tests {
     }
 
     #[test]
-    fn every_character_field_caption_and_range_is_in_the_catalog() {
+    fn every_character_field_caption_is_in_the_catalog() {
         use crate::session::CharacterField;
         for field in CharacterField::ALL {
             assert!(
                 CATALOG.iter().any(|(source, _)| *source == field.label()),
                 "missing catalog entry for the field caption {:?}",
                 field.label()
-            );
-            assert!(
-                CATALOG.iter().any(|(source, _)| *source == field.range()),
-                "missing catalog entry for the field range {:?}",
-                field.range()
             );
         }
     }

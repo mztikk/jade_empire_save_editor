@@ -4,6 +4,7 @@ use freya::prelude::*;
 
 use crate::app::Ctx;
 use crate::i18n::{fill, t};
+use crate::message::capitalize;
 use crate::session::{GameStatus, format};
 use crate::theme;
 use crate::views::path_actions;
@@ -114,15 +115,12 @@ pub fn view(
                 .spacing(theme::space::md())
                 .content(Content::wrap_spacing(theme::space::md()))
                 .child(widgets::badge(
-                    fill("Level {level}", &[("level", &character.level.to_string())]),
+                    format!("{} {}", t("Level"), character.level),
                     theme::accent(),
                     theme::on_accent(),
                 ))
                 .child(widgets::badge(
-                    fill(
-                        "Chapter {chapter}",
-                        &[("chapter", &character.chapter.to_string())],
-                    ),
+                    format!("{} {}", t("Chapter"), character.chapter),
                     theme::surface_active(),
                     theme::text(),
                 ))
@@ -190,14 +188,14 @@ pub fn view(
         None,
         vec![widgets::definition_list(vec![
             (
-                t("Inventory").to_owned(),
+                capitalize(t("inventory")),
                 widgets::a11y_text(widgets::plural(item_count, "stack", "stacks"))
                     .font_size(theme::font::body())
                     .color(theme::text())
                     .into_element(),
             ),
             (
-                t("Styles").to_owned(),
+                capitalize(t("styles")),
                 widgets::a11y_text(widgets::plural(
                     style_count,
                     "style learned",
@@ -274,7 +272,7 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::xs())
             .child(widgets::label_row(
-                t("Backup"),
+                capitalize(t("backup")),
                 path_actions(ctx, &backup.display().to_string(), folder.clone(), "backup"),
             ))
             .child(
@@ -300,7 +298,7 @@ pub fn view(
     };
 
     let details = widgets::card(
-        t("Savegame"),
+        capitalize(t("savegame")),
         None,
         vec![
             path_row,

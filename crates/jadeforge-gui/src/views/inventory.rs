@@ -4,6 +4,7 @@ use freya::prelude::*;
 
 use crate::app::Ctx;
 use crate::i18n::{fill, t};
+use crate::message::capitalize;
 use crate::session::{ItemRow, ItemSuggestion, Section};
 use crate::theme;
 use crate::widgets::{self, AccessibleButton, Action};
@@ -81,7 +82,7 @@ pub fn view(
             let heading_text = active_category.as_deref().map_or_else(
                 || {
                     if browsing {
-                        t("ALL ITEMS").to_owned()
+                        t("All items").to_uppercase()
                     } else {
                         t("SEARCH RESULTS").to_owned()
                     }
@@ -158,7 +159,7 @@ pub fn view(
     }
 
     widgets::card(
-        t("Inventory"),
+        capitalize(t("inventory")),
         Some(widgets::plural(items.len(), "stack", "stacks")),
         children,
     )

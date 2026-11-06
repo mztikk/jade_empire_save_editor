@@ -202,9 +202,9 @@ impl Tab {
         match self {
             Self::Overview => "Overview",
             Self::Character => "Character",
-            Self::Styles => "Styles",
-            Self::Inventory => "Inventory",
-            Self::Gems => "Gems",
+            Self::Styles => "styles",
+            Self::Inventory => "inventory",
+            Self::Gems => "gems",
             Self::Companions => "Companions",
         }
     }

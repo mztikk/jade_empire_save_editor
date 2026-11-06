@@ -4,6 +4,7 @@ use std::fmt;
 
 use jadeforge_core::Character;
 
+use crate::message;
 use crate::session::format;
 
 /// A character form value that could not be parsed.
@@ -363,21 +364,21 @@ impl CharacterField {
         }
     }
 
-    /// Caption of the input.
+    /// Base caption of the input.
+    ///
+    /// The maximum fields reuse their stat label; [`CharacterField::caption`]
+    /// adds the catalogued maximum suffix when the caption is rendered.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
-            Self::Name => "NAME",
-            Self::Level => "LEVEL",
+            Self::Name => "Name",
+            Self::Level => "Level",
             Self::Experience => "EXPERIENCE",
             Self::Gold => "GOLD",
-            Self::AttributePoints => "UNSPENT ATTRIBUTE POINTS",
-            Self::Health => "HEALTH",
-            Self::HealthMax => "HEALTH MAX",
-            Self::Chi => "CHI",
-            Self::ChiMax => "CHI MAX",
-            Self::Focus => "FOCUS",
-            Self::FocusMax => "FOCUS MAX",
+            Self::AttributePoints => "Unspent attribute points",
+            Self::Health | Self::HealthMax => "HEALTH",
+            Self::Chi | Self::ChiMax => "CHI",
+            Self::Focus | Self::FocusMax => "FOCUS",
             Self::Body => "BODY",
             Self::Mind => "MIND",
             Self::Spirit => "SPIRIT",
@@ -386,32 +387,51 @@ impl CharacterField {
             Self::Intimidate => "INTIMIDATE",
             Self::Alignment => "ALIGNMENT",
             Self::Appearance => "APPEARANCE",
-            Self::Chapter => "CHAPTER",
-            Self::Kills => "KILLS",
+            Self::Chapter => "Chapter",
+            Self::Kills => "kills",
+        }
+    }
+
+    /// Translated caption of the input.
+    ///
+    /// The maximum fields are composed from their stat label and one shared
+    /// suffix, so the catalog does not need a separate copy of each stat name.
+    #[must_use]
+    pub fn caption(self) -> String {
+        match self {
+            Self::HealthMax => message::fill("{stat} MAX", &[("stat", message::tr("HEALTH"))]),
+            Self::ChiMax => message::fill("{stat} MAX", &[("stat", message::tr("CHI"))]),
+            Self::FocusMax => message::fill("{stat} MAX", &[("stat", message::tr("FOCUS"))]),
+            _ => message::tr(self.label()).to_owned(),
         }
     }
 
     /// Accepted values, mirroring the range checks in `jadeforge-core`.
+    ///
+    /// Repeating ranges are composed from one catalogued range template and a
+    /// unit, so a translator can reuse the same unit in every field.
     #[must_use]
-    pub fn range(self) -> &'static str {
+    pub fn range(self) -> String {
         match self {
-            Self::Name => "at most 64 characters",
-            Self::Level => "1 to 255 (level)",
-            Self::Experience => "0 to 4294967295 XP",
-            Self::AttributePoints => "0 to 4294967295 points",
-            Self::Kills => "0 to 4294967295 kills",
-            Self::Gold => "empty or 0 to 4294967295 gold",
-            Self::Health => "0 to 1000000 health points",
-            Self::Chi => "0 to 1000000 chi points",
-            Self::Focus => "0 to 1000000 focus points",
-            Self::HealthMax => "1 to 1000000 health points",
-            Self::ChiMax => "1 to 1000000 chi points",
-            Self::FocusMax => "1 to 1000000 focus points",
-            Self::Appearance => "0 to 1000000 (index)",
-            Self::Body | Self::Mind | Self::Spirit => "0 to 1000 points",
-            Self::Charm | Self::Intuition | Self::Intimidate => "-1000000 to 1000000 points",
-            Self::Alignment => "-1000000 to 1000000, 128 balanced",
-            Self::Chapter => "0 to 100 (chapter)",
+            Self::Name => message::tr("at most 64 characters").to_owned(),
+            Self::Level => message::tr("1 to 255 (level)").to_owned(),
+            Self::Experience => range_text(0, u64::from(u32::MAX), message::tr("XP")),
+            Self::AttributePoints => range_text(0, u64::from(u32::MAX), message::tr("points")),
+            Self::Kills => range_text(0, u64::from(u32::MAX), message::tr("kills")),
+            Self::Gold => message::tr("empty or 0 to 4294967295 gold").to_owned(),
+            Self::Health => range_text(0, 1_000_000, message::tr("health points")),
+            Self::Chi => range_text(0, 1_000_000, message::tr("chi points")),
+            Self::Focus => range_text(0, 1_000_000, message::tr("focus points")),
+            Self::HealthMax => range_text(1, 1_000_000, message::tr("health points")),
+            Self::ChiMax => range_text(1, 1_000_000, message::tr("chi points")),
+            Self::FocusMax => range_text(1, 1_000_000, message::tr("focus points")),
+            Self::Appearance => message::tr("0 to 1000000 (index)").to_owned(),
+            Self::Body | Self::Mind | Self::Spirit => range_text(0, 1000, message::tr("points")),
+            Self::Charm | Self::Intuition | Self::Intimidate => {
+                range_text(-1_000_000, 1_000_000, message::tr("points"))
+            }
+            Self::Alignment => message::tr("-1000000 to 1000000, 128 balanced").to_owned(),
+            Self::Chapter => message::tr("0 to 100 (chapter)").to_owned(),
         }
     }
 
@@ -474,6 +494,17 @@ impl FieldError {
             ),
         )
     }
+}
+
+fn range_text(min: i64, max: u64, unit: &str) -> String {
+    message::fill(
+        "{min} to {max} {unit}",
+        &[
+            ("min", &min.to_string()),
+            ("max", &max.to_string()),
+            ("unit", unit),
+        ],
+    )
 }
 
 fn check_name(name: &str) -> Result<(), String> {

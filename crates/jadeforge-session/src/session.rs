@@ -214,9 +214,9 @@ impl SaveSort {
 #[must_use]
 pub fn item_category_label(category: &str) -> String {
     match category.to_lowercase().as_str() {
-        "gems" => message::tr("Gems").to_owned(),
+        "gems" => message::capitalize(message::tr("gems")),
         "powerups" => message::tr("Power-ups").to_owned(),
-        "weapons" => message::tr("Weapons").to_owned(),
+        "weapons" => message::capitalize(message::tr("weapons")),
         "plot_items" => message::tr("Plot items").to_owned(),
         "mgweapons" => message::tr("Magic weapons").to_owned(),
         "improve" => message::tr("Improvements").to_owned(),
@@ -232,7 +232,7 @@ pub fn item_category_label(category: &str) -> String {
 pub fn style_kind_label(kind: &str) -> String {
     match kind.to_lowercase().as_str() {
         "martial" => message::tr("Martial").to_owned(),
-        "weapon" => message::tr("Weapon").to_owned(),
+        "weapon" => message::capitalize(message::tr("weapon")),
         "magic" => message::tr("Magic").to_owned(),
         "support" => message::tr("Support").to_owned(),
         "transformation" => message::tr("Transformation").to_owned(),
@@ -1079,8 +1079,8 @@ impl Session {
                 self.game = None;
                 self.game_status = GameStatus::Error(reason.clone());
                 vec![message::fill(
-                    "game data: {message}",
-                    &[("message", &reason)],
+                    "{label}: {value}",
+                    &[("label", message::tr("Game data")), ("value", &reason)],
                 )]
             }
         }
@@ -1217,7 +1217,13 @@ impl Session {
                     let mut problems: Vec<String> = self
                         .section_errors
                         .iter()
-                        .map(|error| format!("{}: {}", error.section.label(), error.message))
+                        .map(|error| {
+                            format!(
+                                "{}: {}",
+                                message::capitalize(error.section.label()),
+                                error.message
+                            )
+                        })
                         .collect();
                     problems.extend(warnings);
                     let problems = problems.join("; ");
@@ -2351,7 +2357,7 @@ impl Session {
                     None,
                 );
                 self.message =
-                    Message::success(message::fill("Removed {name}.", &[("name", &name)]));
+                    Message::success(message::fill("Removed {what}.", &[("what", &name)]));
             }
             Ok(false) => self.message = Message::info(message::tr("The item was already gone.")),
             Err(error) => {
@@ -2590,10 +2596,7 @@ impl Session {
                             &[("upgrades", &upgrades)],
                         ))
                     } else {
-                        Message::success(message::fill(
-                            "Removed {upgrades}.",
-                            &[("upgrades", &upgrades)],
-                        ))
+                        Message::success(message::fill("Removed {what}.", &[("what", &upgrades)]))
                     }
                 };
                 changed > 0
@@ -2815,7 +2818,7 @@ impl Session {
                         None,
                     );
                 }
-                self.message = Message::success(message::tr("Gem removed."));
+                self.message = Message::success(format!("{}.", message::tr("Gem removed")));
             }
             Err(error) => {
                 self.message = Message::error(message::fill(
@@ -2949,7 +2952,7 @@ impl Session {
                     None,
                 );
                 self.message =
-                    Message::success(message::fill("Removed {name}.", &[("name", &name)]));
+                    Message::success(message::fill("Removed {what}.", &[("what", &name)]));
             }
             Ok(false) => self.message = Message::info(message::tr("The style was already gone.")),
             Err(error) => {

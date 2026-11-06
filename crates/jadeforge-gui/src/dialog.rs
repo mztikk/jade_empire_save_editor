@@ -12,6 +12,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
 use crate::i18n::t;
+use crate::message::capitalize;
 
 /// What the test seam should answer instead of opening a dialog.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -139,7 +140,7 @@ pub fn ask_close_choice() -> CloseChoice {
         return choice;
     }
     let result = rfd::MessageDialog::new()
-        .set_title(t("Unsaved changes"))
+        .set_title(capitalize(t("unsaved changes")))
         .set_description(t(
             "This savegame has changes that are only in memory. Save them before closing, discard them, or cancel and keep editing.",
         ))

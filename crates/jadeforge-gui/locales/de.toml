@@ -19,14 +19,12 @@
 # src/app/shell.rs
 "About" = "Über JadeForge"
 "About JadeForge, version, settings and backups" = "Über JadeForge, Version, Einstellungen und Backups"
-"Backups" = "Backups"
 "Browse the backups of the open savegame" = "Die Backups des geöffneten Spielstands durchsuchen"
 "Browse…" = "Durchsuchen…"
 "Cancel scan" = "Suche abbrechen"
 "Choose save folder" = "Spielstand-Ordner auswählen"
 "Copy" = "Kopieren"
 "Copy the status message" = "Statusmeldung kopieren"
-"GAME DATA" = "SPIELDATEN"
 "JadeForge is reading the save folder and the game data. The save list appears as soon as the scan finishes." = "JadeForge liest den Spielstand-Ordner und die Spieldaten. Die Liste der Spielstände erscheint, sobald die Suche abgeschlossen ist."
 "JadeForge never writes a savegame without verifying it and keeping a backup." = "JadeForge schreibt niemals einen Spielstand, ohne ihn zu überprüfen und ein Backup zu erstellen."
 "Loading savegames…" = "Spielstände werden geladen…"
@@ -36,7 +34,6 @@
 "Redo" = "Wiederherstellen"
 "Reload from disk" = "Von Festplatte neu laden"
 "Revert" = "Zurücksetzen"
-"SAVE FOLDER" = "SAVE ORDNER"
 "Save to disk" = "Speichern"
 "Undo" = "Rückgängig"
 "Use" = "Benutzen"
@@ -52,16 +49,12 @@
 # src/app/mod.rs
 "Character" = "Charakter"
 "Companions" = "Gefährten"
-"Gems" = "Edelsteine"
-"Inventory" = "Inventar"
 "Overview" = "Übersicht"
-"Styles" = "Stile"
 
 # Overview tab
 # src/views/overview.rs
 "A timestamped backup is created next to the savegame on every save and shown here." = "Ein Backup mit Zeitstempel wird bei jedem Speichern neben dem Spielstand erstellt und hier angezeigt."
 "At a glance" = "Auf einen Blick"
-"Backup" = "Backup"
 "CHI" = "CHI"
 "Contents" = "Inhalt"
 "FOCUS" = "FOCUS"
@@ -70,7 +63,6 @@
 "Game data" = "Spieldaten"
 "HEALTH" = "Gesundheit"
 "JadeForge verifies every savegame by re-reading it before writing, writes it atomically and keeps a timestamped backup next to the file." = "JadeForge überprüft jeden Spielstand, indem es ihn vor dem Schreiben erneut list, alle Schreibvorgänge atomar ausführt und ein Backup mit Zeitstempel neben der Datei speichert."
-"Savegame" = "Spielstand"
 "This is the file as it was before the last save. To restore it, close JadeForge and copy the backup over save.sac." = "Die Datei, wie sie vor dem letzten Speichern war. Um sie wiederherzustellen, schließen Sie JadeForge und kopieren Sie das Backup über save.sac."
 
 # Character tab
@@ -112,7 +104,6 @@
 # Gems tab
 # src/views/gems.rs
 "Add a gem" = "Einen Edelstein hinzufügen"
-"Amulet" = "Amulett"
 "Clear the gem filter" = "Edelstein-Filter löschen"
 "Moving a gem keeps its effects; JadeForge only changes which list references it." = "Das Verschieben eines Edelsteins behält seine Effekte bei; JadeForge ändert nur, welche Liste darauf verweist."
 "No gems carried in the inventory." = "Keine Edelsteine im Inventar."
@@ -144,7 +135,6 @@
 # src/views/about.rs
 "APPEARANCE" = "ANSICHT"
 "About JadeForge" = "Über JadeForge"
-"BACKUPS" = "BACKUPS"
 "Close" = "Schließen"
 "Close the About page" = "Überblicksseite schließen"
 "Copy diagnostics" = "Diagnose kopieren"
@@ -154,7 +144,6 @@
 "Jade Empire savegame editor" = "Jade Empire Spielstand-Editor"
 "JadeForge reads and writes save.sac files directly. Every write is verified by re-reading the produced file and is written atomically, and the game installation is only ever read." = "JadeForge liest und schreibt save.sac Dateien direkt. Jeder Schreibvorgang wird durch erneutes Lesen der erzeugten Datei überprüft und atomar geschrieben. Die Spielinstallation wird nur gelesen."
 "KEYBOARD SHORTCUTS" = "Tastenkombinationen"
-"LANGUAGE" = "SPRACHE"
 "LICENSES" = "LIZENZEN"
 "No backup has been written in this session; saving a change creates one and shows its exact path on the Overview tab." = "Kein Backup wurde in dieser Sitzung geschrieben; das Speichern einer Änderung erstellt eines und zeigt seinen genauen Pfad auf der Übersichtsseite an."
 "No config directory is available in this environment. JADEFORGE_CONFIG_DIR can point at one for portable installs." = "Kein Konfigurationsverzeichnis ist in dieser Umgebung verfügbar. JADEFORGE_CONFIG_DIR kann auf eines für portable Installationen verweisen."
@@ -165,7 +154,6 @@
 "SETTINGS" = "EINSTELLUNGEN"
 "Sort order" = "Sotierreihenfolge"
 "TEXT SIZE" = "TEXTGRÖSSE"
-"THEME" = "THEME"
 "The theme and text size apply immediately and are remembered in the settings file. System follows the operating system preference; high contrast can be selected here because the windowing layer does not report the platform's forced-colours setting." = "Das Theme und die Textgröße werden sofort angewendet und in der Einstellungsdatei gespeichert. System folgt der Betriebssystempräferenz; hoher Kontrast kann hier ausgewählt werden, da die Fensterschicht die erzwungene Farbgebungseinstellung der Plattform nicht meldet."
 "These preferences live in one TOML file. They are remembered between runs and can be edited while JadeForge is closed." = "Diese Einstellungen befinden sich in einer TOML-Datei. Sie werden zwischen den Starts gespeichert und können bearbeitet werden, während JadeForge geschlossen ist."
 "WINDOW" = "FENSTER"
@@ -177,7 +165,7 @@
 
 # Count nouns: singular and plural
 "gem" = ""
-"gems" = ""
+"gems" = "Edelsteine"
 "carried gem" = ""
 "carried gems" = ""
 "socket" = ""
@@ -191,7 +179,7 @@
 "stack" = ""
 "stacks" = ""
 "style" = ""
-"styles" = ""
+"styles" = "Stile"
 "style to learn" = ""
 "styles to learn" = ""
 "style learned" = ""
@@ -202,10 +190,8 @@
 "changes" = ""
 "group" = ""
 "groups" = ""
-"backup" = ""
-"backups" = ""
-"SAVEGAME" = ""
-"SAVEGAMES" = ""
+"backup" = "Backup"
+"backups" = "Backups"
 "invalid field" = ""
 "invalid fields" = ""
 "experience point" = ""
@@ -214,14 +200,17 @@
 "blocks" = ""
 "effect" = ""
 "effects" = ""
-
-# Additional strings awaiting translation.
-# New keys are empty until they are translated; an empty value falls back
-# to the English source.
+"kill" = ""
+"kills" = ""
+"weapon" = ""
+"weapons" = ""
+"savegame" = "Spielstand"
+"savegames" = ""
+"upgrade" = ""
+"upgrades" = ""
 
 # Header, footer, status line and empty states
 # src/app/shell.rs, src/app/navigation.rs
-"SCANNING…" = ""
 "This savegame has unsaved changes: save them or press Revert before choosing another folder." = ""
 "No folder was chosen; the save folder on screen is unchanged." = ""
 "Copied the status message to the clipboard." = ""
@@ -246,14 +235,12 @@
 "Pick a savegame on the left to start editing." = ""
 "This savegame changed on disk since it was opened. Saving will be refused; reloading discards the unsaved edits on screen and shows the file that is on disk." = ""
 "This savegame changed on disk since it was opened. Reload it to edit the current file." = ""
-"Reload from disk?" = ""
 "The savegame changed on disk outside JadeForge. Reloading discards every unsaved edit on screen." = ""
 "{items} loaded" = ""
 
 # Dialogs
 # src/dialog.rs
 "Choose the Jade Empire save folder" = ""
-"Unsaved changes" = ""
 "This savegame has changes that are only in memory. Save them before closing, discard them, or cancel and keep editing." = ""
 "Save" = ""
 "Discard" = ""
@@ -261,11 +248,9 @@
 
 # Save browser
 # src/app/sidebar.rs
-"LOADING SAVEGAMES…" = ""
 "Select a savegame" = ""
 "No savegames in this folder." = ""
 "No savegame matches this filter." = ""
-"Savegames" = ""
 "{shown} OF {total}" = ""
 "Level {level} · Time played {time}" = ""
 "Sort by {name} ({direction})" = ""
@@ -294,8 +279,6 @@
 "{items} and {styles} resolved from {root}" = ""
 "No game installation found: using bundled English names for {items} and {styles}. Descriptions and upgrades still need the game data." = ""
 "Cannot read the game data: {error}{bundled}" = ""
-"Level {level}" = ""
-"Chapter {chapter}" = ""
 "Time played {time} · {kills} · {experience}" = ""
 
 # Character tab and fields
@@ -305,13 +288,7 @@
 "+1 point" = ""
 "+5 points" = ""
 "{alignment} (the game starts at {default}, below is Closed Fist, above is Open Palm)." = ""
-"NAME" = ""
-"LEVEL" = ""
 "EXPERIENCE" = ""
-"UNSPENT ATTRIBUTE POINTS" = ""
-"HEALTH MAX" = ""
-"CHI MAX" = ""
-"FOCUS MAX" = ""
 "BODY" = ""
 "MIND" = ""
 "SPIRIT" = ""
@@ -319,23 +296,10 @@
 "INTUITION" = ""
 "INTIMIDATE" = ""
 "ALIGNMENT" = ""
-"CHAPTER" = ""
-"KILLS" = ""
 "at most 64 characters" = ""
 "1 to 255 (level)" = ""
-"0 to 4294967295 XP" = ""
-"0 to 4294967295 points" = ""
-"0 to 4294967295 kills" = ""
 "empty or 0 to 4294967295 gold" = ""
-"0 to 1000000 health points" = ""
-"0 to 1000000 chi points" = ""
-"0 to 1000000 focus points" = ""
-"1 to 1000000 health points" = ""
-"1 to 1000000 chi points" = ""
-"1 to 1000000 focus points" = ""
 "0 to 1000000 (index)" = ""
-"0 to 1000 points" = ""
-"-1000000 to 1000000 points" = ""
 "-1000000 to 1000000, 128 balanced" = ""
 "0 to 100 (chapter)" = ""
 
@@ -343,7 +307,6 @@
 # src/views/styles.rs
 "Every style in the game data is already learned." = ""
 "No styles match this search." = ""
-"STYLES TO LEARN" = ""
 "Learn" = ""
 "Styles you can learn" = ""
 "Remove style?" = ""
@@ -372,7 +335,6 @@
 "No items in this category." = ""
 "The item database is empty." = ""
 "No items match this search and category." = ""
-"ALL ITEMS" = ""
 "SEARCH RESULTS" = ""
 "Items you can add" = ""
 "All items" = ""
@@ -462,11 +424,8 @@
 "Version" = ""
 "Open savegame" = ""
 "none" = ""
-"Blocks" = ""
 "File size" = ""
 "not read" = ""
-"Theme" = ""
-"Language" = ""
 "Renderer override" = ""
 "auto" = ""
 "Remember window" = ""
@@ -477,7 +436,6 @@
 "unavailable" = ""
 "Copied the diagnostics to the clipboard." = ""
 "Could not copy the diagnostics: the system clipboard is not available." = ""
-"Save folder" = ""
 "descending" = ""
 "ascending" = ""
 "Settings file" = ""
@@ -494,12 +452,6 @@
 "Use {percent} percent text size" = ""
 "Use {language} for the interface" = ""
 "{theme} at {scale} %" = ""
-"Version: {version}" = ""
-"Save folder: {path}" = ""
-"Savegame: {path}" = ""
-"Config: {path}" = ""
-"Theme: {theme} at {scale} %" = ""
-"Language: {language}" = ""
 "{name}, {direction}" = ""
 "Version {version}" = ""
 
@@ -534,12 +486,10 @@
 "Way of the Closed Fist" = ""
 "Balanced" = ""
 "Power-ups" = ""
-"Weapons" = ""
 "Plot items" = ""
 "Magic weapons" = ""
 "Improvements" = ""
 "Martial" = ""
-"Weapon" = ""
 "Magic" = ""
 "Support" = ""
 "Transformation" = ""
@@ -576,11 +526,10 @@
 "Empty socket" = ""
 "That gem is not in the game data." = ""
 "Gem added" = ""
-"inventory" = ""
-"amulet" = ""
+"inventory" = "Inventar"
+"amulet" = "Amulett"
 "Gem moved" = ""
 "Gem removed" = ""
-"Gem removed." = ""
 "That style is not in the game data." = ""
 "Learn a style first so JadeForge can copy the field layout." = ""
 "Style added" = ""
@@ -622,11 +571,9 @@
 "item {item_id} has no savegame category type" = ""
 "Added {name}." = ""
 "Cannot add item: {error}" = ""
-"Removed {name}." = ""
 "Cannot remove item: {error}" = ""
 "Upgrade {advance}" = ""
 "Bought {upgrades}." = ""
-"Removed {upgrades}." = ""
 "Cannot change the upgrade: {error}" = ""
 "Gem {item_id}" = ""
 "Cannot add the gem: {error}" = ""
@@ -645,16 +592,27 @@
 "{directory} is a file, not a save folder." = ""
 "The save folder {directory} cannot be listed: {error}." = ""
 "Gem moved to the inventory." = ""
-"game data: {message}" = ""
 
 "unknown" = ""
 
-# Additional count nouns: singular and plural
-"kill" = ""
-"kills" = ""
-"weapon" = ""
-"weapons" = ""
-"savegame" = ""
-"savegames" = ""
-"upgrade" = ""
-"upgrades" = ""
+# Merged labels
+"theme" = "THEME"
+"language" = "SPRACHE"
+"save folder" = "SAVE ORDNER"
+"Chapter" = ""
+
+# Composed field text
+"{stat} MAX" = ""
+"{min} to {max} {unit}" = ""
+"XP" = ""
+"points" = ""
+"health points" = ""
+"chi points" = ""
+"focus points" = ""
+
+# Diagnostics report
+"{label}: {value}" = ""
+"Config" = ""
+
+# Session messages
+"Removed {what}." = ""

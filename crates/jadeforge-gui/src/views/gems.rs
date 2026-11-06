@@ -7,6 +7,7 @@ use freya::prelude::*;
 
 use crate::app::Ctx;
 use crate::i18n::{fill, t};
+use crate::message::capitalize;
 use crate::session::{GemRow, GemSuggestion, Section};
 use crate::theme;
 use crate::widgets::{self, Action};
@@ -155,7 +156,7 @@ pub fn view(
         .vertical()
         .width(Size::fill())
         .spacing(theme::space::xxl())
-        .child(widgets::card(t("Amulet"),
+        .child(widgets::card(capitalize(t("amulet")),
             Some(amulet_title),
             {
                 let mut children = vec![rect()
@@ -177,7 +178,7 @@ pub fn view(
         // The carried gems come before the long picker: the owned list is what
         // the player looks at first, and the 95-row add list would otherwise
         // push the inventory card below the fold.
-        .child(widgets::card(t("Inventory"),
+        .child(widgets::card(capitalize(t("inventory")),
             Some(widgets::plural(carried, "carried gem", "carried gems")),
             vec![
                 rect()

@@ -8,6 +8,7 @@ use freya::prelude::*;
 
 use crate::form::Form;
 use crate::i18n::{fill, t};
+use crate::message::capitalize;
 use crate::session::{FieldError, GameStatus, MessageKind, Session};
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
@@ -246,7 +247,7 @@ pub(super) fn header(
             .content(Content::Flex)
             .cross_align(Alignment::Center)
             .child(
-                crate::widgets::a11y_text(t("SAVE FOLDER"))
+                crate::widgets::a11y_text(t("save folder").to_uppercase())
                     .font_size(theme::font::micro())
                     .font_weight(FontWeight::BOLD)
                     .color(theme::dim()),
@@ -296,7 +297,7 @@ pub(super) fn header(
                 .content(Content::Flex)
                 .cross_align(Alignment::Center)
                 .child(
-                    crate::widgets::a11y_text(t("GAME DATA"))
+                    crate::widgets::a11y_text(t("Game data").to_uppercase())
                         .font_size(theme::font::micro())
                         .font_weight(FontWeight::BOLD)
                         .color(theme::dim()),
@@ -399,7 +400,7 @@ fn backups_button(
 ) -> Element {
     crate::widgets::outline_action(
         t("Browse the backups of the open savegame"),
-        t("Backups"),
+        capitalize(t("backups")),
         Action::new(move || {
             show_backups.set(true);
             show_about.set(false);
@@ -737,7 +738,7 @@ pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element 
         move |_| {
             if dirty
                 && !crate::dialog::confirm(
-                    t("Reload from disk?"),
+                    &format!("{}?", t("Reload from disk")),
                     t(
                         "The savegame changed on disk outside JadeForge. Reloading discards every \
                      unsaved edit on screen.",

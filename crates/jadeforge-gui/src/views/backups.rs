@@ -13,6 +13,7 @@ use freya::prelude::*;
 
 use crate::app::Ctx;
 use crate::i18n::{fill, t};
+use crate::message::capitalize;
 use crate::theme;
 use crate::widgets::{self, AccessibleButton, Action};
 
@@ -60,7 +61,7 @@ pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> Element {
     );
 
     widgets::card(
-        t("Backups"),
+        capitalize(t("backups")),
         Some(t("timestamps are UTC").to_owned()),
         children,
     )

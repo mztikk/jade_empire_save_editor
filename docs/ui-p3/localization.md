@@ -4,9 +4,12 @@
 
 The application ships an English source catalog, a bundled German catalog and
 a QA pseudolocale. Every user-facing GUI string and every session status
-template is catalogued; the German values that existed before this pass are preserved, and 380 new keys are waiting for translation with an empty value.
-An empty German value falls back to English, so the interface stays usable
-while the catalog is filled in.
+template is catalogued; the German values that existed before this pass are
+preserved. Case-only duplicate labels now share one key, repeated field ranges
+and maximum captions are composed from templates, and 10 previously empty keys
+were prefilled from an existing German value. 376 keys are still waiting for
+translation. An empty German value falls back to English, so the interface
+stays usable while the catalog is filled in.
 
 ## Layers
 
@@ -52,9 +55,11 @@ therefore keeps the English source strings.
 
 The same hook translates the labels the session owns rather than the views:
 sort labels, item categories, style kinds, alignment names, section names,
-theme choices and `SaveEntry` summaries. Character field captions and ranges
-are translated by the widget that renders them, and a test asserts that every
-caption and range is catalogued.
+theme choices and `SaveEntry` summaries. Character field captions are
+translated by the session and the maximum captions are composed from the stat
+label; ranges are composed from one range template and a unit. A test asserts
+that every base caption is catalogued, and the session source scan covers the
+composed templates and units.
 
 ## Catalog bookkeeping
 
@@ -64,9 +69,9 @@ caption and range is catalogued.
   not contain it.
 - A second scan covers `tr("...")` and `fill("...")` literals under
   `crates/jadeforge-session/src`.
-- A third test asserts that every character field caption and range and every
-  filter placeholder is catalogued; those values are passed as variables, not
-  as literals at the call site.
+- A third test asserts that every character field base caption and every
+  filter placeholder is catalogued; the range template, its units and the
+  special range phrases are covered by the session source scan.
 - The German coverage test asserts that every catalogued key exists exactly
   once in `de.toml` and that no stale German key remains.
 - The opt-in `every_german_value_is_filled` test lists the untranslated values:
@@ -128,7 +133,8 @@ No view code changes are needed for a language with the same placeholders.
 - Headless UI: launch with `locale = "en-xa"` and assert a catalogued action is
   pseudolocalized; open About, click the pseudolocale chip and then the German
   chip, assert the active locale and the persisted `locale` value; launch with
-  `locale = "de"` and assert the translated About button and empty state.
+  `locale = "de"` and assert the translated About button, empty state and the
+  prefilled German tab labels.
 - The snapshot example keeps English as the default; a pseudolocale screenshot
   is a QA image, not tracked documentation.
 

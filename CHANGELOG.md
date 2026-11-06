@@ -37,8 +37,10 @@ All notable changes are documented here. The format follows
   diagnostics and report, dialogs, empty states, row subtitles, tooltips,
   accessible names, field captions and range hints) is catalogued, and a
   `jadeforge_session::message` hook localizes session status templates,
-  pending-change labels and session-owned row labels. The new keys are
-  awaiting translation.
+  pending-change labels and session-owned row labels. The catalog then merged
+  case-only duplicate labels, composed repeated field ranges and maximum
+  captions from templates, and reused 10 existing German values for the merged
+  keys. 376 keys are still awaiting translation.
 - About/help now shows version, savegame block count and size, theme, scale,
   language, renderer override and backup folder, with a Copy diagnostics
   action and a complete keyboard shortcut sheet (Ctrl+/ opens it). Window size

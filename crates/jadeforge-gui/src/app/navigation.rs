@@ -3,6 +3,7 @@
 use freya::prelude::*;
 
 use crate::i18n::t;
+use crate::message::capitalize;
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
 
@@ -59,7 +60,7 @@ pub(super) fn tab_bar(
                     }),
             )
             .child(
-                crate::widgets::a11y_text(t(candidate.label()))
+                crate::widgets::a11y_text(capitalize(t(candidate.label())))
                     .font_size(theme::font::label())
                     .max_lines(1)
                     // Keep the weight constant: bold text is wider,
@@ -76,7 +77,7 @@ pub(super) fn tab_bar(
             .into_element();
         if enabled {
             buttons.push(
-                AccessibleButton::new(t(candidate.label()), action, content)
+                AccessibleButton::new(capitalize(t(candidate.label())), action, content)
                     .role(AccessibilityRole::Tab)
                     .selected(is_active)
                     .hover_background(theme::surface_hover())
@@ -176,17 +177,21 @@ fn busy_slot(scanning: bool) -> Element {
         .main_align(Alignment::Center)
         .cross_align(Alignment::End)
         .child(
-            crate::widgets::a11y_text(if scanning { t("SCANNING…") } else { "" })
-                .a11y_builder(move |node| {
-                    if scanning {
-                        node.set_role(AccessibilityRole::Status);
-                        node.set_live(accesskit::Live::Polite);
-                    }
-                })
-                .font_size(theme::font::micro())
-                .font_weight(FontWeight::BOLD)
-                .max_lines(1)
-                .color(theme::warning()),
+            crate::widgets::a11y_text(if scanning {
+                t("Scanning…").to_uppercase()
+            } else {
+                String::new()
+            })
+            .a11y_builder(move |node| {
+                if scanning {
+                    node.set_role(AccessibilityRole::Status);
+                    node.set_live(accesskit::Live::Polite);
+                }
+            })
+            .font_size(theme::font::micro())
+            .font_weight(FontWeight::BOLD)
+            .max_lines(1)
+            .color(theme::warning()),
         )
         .into_element()
 }

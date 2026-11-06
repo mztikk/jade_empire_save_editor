@@ -16,7 +16,7 @@ and 1600 px. The windowed suite is never run without explicit permission
 | 1 | light/system-following theme | [theme-light.md](theme-light.md) | implemented |
 | 2 | high contrast and forced colours | [high-contrast.md](high-contrast.md) | implemented manually; the platform contrast signal is a documented follow-up |
 | 3 | text scaling to 200 % | [text-scaling.md](text-scaling.md) | implemented |
-| 4 | UI localization | [localization.md](localization.md) | English/German catalogs wired; every GUI string and session status template is catalogued; 380 new German values are awaiting translation |
+| 4 | UI localization | [localization.md](localization.md) | English/German catalogs wired; every GUI string and session status template is catalogued; duplicate labels, ranges and captions are merged or composed, 10 keys were prefilled from existing German, and 376 keys still await translation |
 | 5 | virtualized browser and pickers | [virtual-lists.md](virtual-lists.md) | implemented |
 | 6 | per-action undo/redo | [undo-redo.md](undo-redo.md) | implemented |
 | 7 | pending-changes diff before save | [pending-diff.md](pending-diff.md) | implemented |

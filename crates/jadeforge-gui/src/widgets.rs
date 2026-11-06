@@ -19,7 +19,8 @@ pub fn a11y_text(content: impl Into<String>) -> Label {
 }
 
 /// A card with a title, an optional hint and a vertical body.
-pub fn card(title: &'static str, hint: Option<String>, children: Vec<Element>) -> Element {
+pub fn card(title: impl Into<String>, hint: Option<String>, children: Vec<Element>) -> Element {
+    let title = title.into();
     rect()
         .vertical()
         .width(Size::fill())
@@ -83,10 +84,8 @@ pub fn field_checked(
     input: impl IntoElement,
     error: Option<&FieldError>,
 ) -> Element {
-    let message = error.map_or_else(
-        || t(field.range()).to_owned(),
-        |error| error.message.clone(),
-    );
+    let message = error.map_or_else(|| field.range(), |error| error.message.clone());
+    let caption = field.caption().to_uppercase();
     let invalid = error.is_some();
     // Freya 0.5 still has no Input::label API. Naming the field group at
     // least gives a screen reader the caption before it reaches the input's
@@ -97,9 +96,9 @@ pub fn field_checked(
         .width(Size::flex(1.0))
         .min_width(Size::px(theme::layout::field_min_width()))
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(t(field.label()))
+        .a11y_alt(caption.clone())
         .child(
-            a11y_text(t(field.label()))
+            a11y_text(caption)
                 .font_size(theme::font::micro())
                 .font_weight(FontWeight::BOLD)
                 .color(if invalid {

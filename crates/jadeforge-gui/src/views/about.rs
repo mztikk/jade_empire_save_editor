@@ -11,6 +11,7 @@ use freya::prelude::*;
 use crate::Locale;
 use crate::app::Ctx;
 use crate::i18n::{fill, t};
+use crate::message::capitalize;
 use crate::preferences::{TEXT_SCALES, ThemeChoice};
 use crate::session::{GameStatus, SaveSort};
 use crate::theme;
@@ -79,7 +80,7 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::sm())
             .content(Content::wrap_spacing(theme::space::sm()))
-            .child(widgets::section_label(t("THEME")))
+            .child(widgets::section_label(t("theme").to_uppercase()))
             .children(theme_chips)
             .into_element(),
     );
@@ -135,7 +136,7 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::sm())
             .content(Content::wrap_spacing(theme::space::sm()))
-            .child(widgets::section_label(t("LANGUAGE")))
+            .child(widgets::section_label(t("language").to_uppercase()))
             .children(locale_chips)
             .into_element(),
     );
@@ -184,7 +185,7 @@ pub fn view(
                 .map_or_else(|| t("none").to_owned(), |path| path.display().to_string()),
         ),
         (
-            t("Blocks").to_owned(),
+            capitalize(t("blocks")),
             ctx.session.borrow().block_count().to_string(),
         ),
         (
@@ -195,7 +196,7 @@ pub fn view(
                 .map_or_else(|| t("not read").to_owned(), crate::session::format::bytes),
         ),
         (
-            t("Theme").to_owned(),
+            capitalize(t("theme")),
             fill(
                 "{theme} at {scale} %",
                 &[
@@ -208,7 +209,7 @@ pub fn view(
             ),
         ),
         (
-            t("Language").to_owned(),
+            capitalize(t("language")),
             crate::i18n::current().label().to_owned(),
         ),
         (
@@ -245,36 +246,29 @@ pub fn view(
     }
     let diagnostics_text = {
         let mut text = format!("{}\n", t("JadeForge diagnostics"));
-        let _ = writeln!(
-            text,
-            "{}",
-            fill("Version: {version}", &[("version", crate::APP_VERSION)],)
-        );
-        let _ = writeln!(
-            text,
-            "{}",
-            fill(
-                "Save folder: {path}",
-                &[("path", &save_folder.display().to_string())],
-            )
+        report_line(&mut text, t("Version"), crate::APP_VERSION);
+        report_line(
+            &mut text,
+            &capitalize(t("save folder")),
+            &save_folder.display().to_string(),
         );
         if let Some(path) = ctx.session.borrow().current_path() {
-            let _ = writeln!(
-                text,
-                "{}",
-                fill("Savegame: {path}", &[("path", &path.display().to_string())]),
+            report_line(
+                &mut text,
+                &capitalize(t("savegame")),
+                &path.display().to_string(),
             );
         }
         let config = config_path.as_ref().map_or_else(
             || t("unavailable").to_owned(),
             |path| path.display().to_string(),
         );
-        let _ = writeln!(text, "{}", fill("Config: {path}", &[("path", &config)]));
-        let _ = writeln!(
-            text,
-            "{}",
-            fill(
-                "Theme: {theme} at {scale} %",
+        report_line(&mut text, t("Config"), &config);
+        report_line(
+            &mut text,
+            &capitalize(t("theme")),
+            &fill(
+                "{theme} at {scale} %",
                 &[
                     ("theme", theme::current().palette.kind.key()),
                     (
@@ -282,15 +276,12 @@ pub fn view(
                         &(theme::current().text_scale * 100.0).round().to_string(),
                     ),
                 ],
-            )
+            ),
         );
-        let _ = writeln!(
-            text,
-            "{}",
-            fill(
-                "Language: {language}",
-                &[("language", crate::i18n::current().label())],
-            )
+        report_line(
+            &mut text,
+            &capitalize(t("language")),
+            crate::i18n::current().label(),
         );
         text
     };
@@ -316,7 +307,7 @@ pub fn view(
     } else {
         settings.push(path_section(
             ctx,
-            t("Save folder"),
+            capitalize(t("save folder")),
             &save_folder.display().to_string(),
             save_folder.clone(),
             "savegame",
@@ -440,7 +431,7 @@ pub fn view(
          and are not covered by that license; see NOTICE and docs/NAMES.md.",
     )));
     children.push(widgets::divider());
-    children.push(widgets::section_label(t("BACKUPS")));
+    children.push(widgets::section_label(t("backups").to_uppercase()));
     children.extend(backups);
     children.push(widgets::divider());
     children.push(widgets::section_label(t("KEYBOARD SHORTCUTS")));
@@ -470,15 +461,25 @@ pub fn view(
     )
 }
 
+/// Appends one `label: value` line to the copied diagnostics report.
+fn report_line(text: &mut String, label: &str, value: &str) {
+    let _ = writeln!(
+        text,
+        "{}",
+        fill("{label}: {value}", &[("label", label), ("value", value)]),
+    );
+}
+
 /// A labelled path with wrapping text and copy/open actions.
 fn path_section(
     ctx: &Ctx,
-    title: &'static str,
+    title: impl Into<String>,
     path: &str,
     folder: std::path::PathBuf,
     what: &'static str,
 ) -> Element {
     let value = path.to_owned();
+    let title = title.into();
     rect()
         .vertical()
         .width(Size::fill())

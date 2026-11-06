@@ -83,9 +83,9 @@ pub fn view(
                 .spacing(theme::space::lg())
                 .content(Content::Flex)
                 .child(widgets::section_label(if browsing {
-                    t("STYLES TO LEARN")
+                    t("styles to learn").to_uppercase()
                 } else {
-                    t("SEARCH RESULTS")
+                    t("SEARCH RESULTS").to_owned()
                 }))
                 .child(rect().width(Size::flex(1.0)))
                 .child(
@@ -237,7 +237,7 @@ fn style_row(
                     style_badge_color(style.kind),
                 ))
                 .child(
-                    widgets::a11y_text(fill("Level {level}", &[("level", &level.to_string())]))
+                    widgets::a11y_text(format!("{} {level}", t("Level")))
                         .font_size(theme::font::label())
                         .width(Size::px(theme::layout::level_width()))
                         .text_align(TextAlign::Center)

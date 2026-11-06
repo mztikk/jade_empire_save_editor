@@ -9,6 +9,7 @@ use freya::prelude::*;
 use jadeforge_core::Character;
 
 use crate::i18n::{fill, t};
+use crate::message::capitalize;
 use crate::session::{SaveEntry, SaveSort};
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
@@ -67,12 +68,12 @@ pub(super) fn sidebar(
     let show_preview = theme::text_scale() <= 1.25;
     let preview_block = preview_slot(preview, selected.is_some());
     let heading = if entries.is_empty() && scanning {
-        t("LOADING SAVEGAMES…").to_owned()
+        t("Loading savegames…").to_uppercase()
     } else if visible.len() == entries.len() {
-        crate::widgets::plural(entries.len(), "SAVEGAME", "SAVEGAMES")
+        crate::widgets::plural(entries.len(), "savegame", "savegames").to_uppercase()
     } else {
         let shown = visible.len().to_string();
-        let total = crate::widgets::plural(entries.len(), "SAVEGAME", "SAVEGAMES");
+        let total = crate::widgets::plural(entries.len(), "savegame", "savegames").to_uppercase();
         fill(
             "{shown} OF {total}",
             &[("shown", &shown), ("total", &total)],
@@ -344,7 +345,7 @@ impl Component for SaveList {
             .a11y_id(a11y_id)
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::ListBox)
-            .a11y_alt(t("Savegames"))
+            .a11y_alt(capitalize(t("savegames")))
             .border(
                 Border::new()
                     .fill(if is_focused {

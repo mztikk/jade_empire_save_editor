@@ -130,11 +130,11 @@ impl Section {
     pub fn label(self) -> &'static str {
         match self {
             Self::Character => message::tr("Character"),
-            Self::Items => message::tr("Inventory"),
-            Self::Styles => message::tr("Styles"),
+            Self::Items => message::tr("inventory"),
+            Self::Styles => message::tr("styles"),
             Self::Companions => message::tr("Companions"),
-            Self::Gems => message::tr("Gems"),
-            Self::Amulet => message::tr("Amulet"),
+            Self::Gems => message::tr("gems"),
+            Self::Amulet => message::tr("amulet"),
         }
     }
 }
