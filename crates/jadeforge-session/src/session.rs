@@ -1456,31 +1456,29 @@ impl Session {
                         && now.duration_since(last.recorded) <= HISTORY_COALESCE_WINDOW
                 })
         });
-        if merge {
-            if let Some(last) = self.history.last_mut() {
-                let old_cost = last.cost();
-                for state in before {
-                    if !last.before.iter().any(|known| known.index == state.index) {
-                        last.before.push(state);
-                    }
+        if merge && let Some(last) = self.history.last_mut() {
+            let old_cost = last.cost();
+            for state in before {
+                if !last.before.iter().any(|known| known.index == state.index) {
+                    last.before.push(state);
                 }
-                last.after = after;
-                for change in changes {
-                    if let Some(existing) = last
-                        .changes
-                        .iter_mut()
-                        .find(|existing| existing.field == change.field)
-                    {
-                        existing.after = change.after;
-                    } else {
-                        last.changes.push(change);
-                    }
-                }
-                last.recorded = now;
-                let new_cost = last.cost();
-                self.history_bytes = self.history_bytes.saturating_sub(old_cost) + new_cost;
-                return;
             }
+            last.after = after;
+            for change in changes {
+                if let Some(existing) = last
+                    .changes
+                    .iter_mut()
+                    .find(|existing| existing.field == change.field)
+                {
+                    existing.after = change.after;
+                } else {
+                    last.changes.push(change);
+                }
+            }
+            last.recorded = now;
+            let new_cost = last.cost();
+            self.history_bytes = self.history_bytes.saturating_sub(old_cost) + new_cost;
+            return;
         }
         let entry = HistoryEntry {
             label: label.to_owned(),
@@ -2145,8 +2143,7 @@ impl Session {
             .items
             .iter()
             .find(|item| item.struct_index == struct_index)
-            .map(|item| item.count)
-            .unwrap_or(count);
+            .map_or(count, |item| item.count);
         match save.set_item_count(struct_index, count) {
             Ok(()) => {
                 if let Some(item) = Rc::make_mut(&mut self.items)
@@ -2439,8 +2436,7 @@ impl Session {
                         .styles
                         .iter()
                         .find(|row| row.struct_index == struct_index)
-                        .map(|row| (row.mask, row.level))
-                        .unwrap_or((before_mask, before_level));
+                        .map_or((before_mask, before_level), |row| (row.mask, row.level));
                     self.remember_edit(
                         "Style upgrade",
                         vec![
@@ -2449,7 +2445,7 @@ impl Session {
                                     "StyleList[{struct_index}].StyleLevelInfo ({})",
                                     style.name
                                 ),
-                                format!("0x{:016X}", before_mask),
+                                format!("0x{before_mask:016X}"),
                                 format!("0x{:016X}", after.0),
                             ),
                             PendingChange::new(

@@ -15,9 +15,11 @@ use serde::{Deserialize, Serialize};
 pub enum Locale {
     /// English source strings.
     #[default]
+    #[serde(rename = "en")]
     English,
     /// QA pseudolocale: every catalogued string is bracketed and accented to
     /// expose clipping and hardcoded text.
+    #[serde(rename = "en-xa")]
     Pseudo,
 }
 

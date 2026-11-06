@@ -18,7 +18,7 @@ use crate::widgets::{self, AccessibleButton, Action};
 
 /// Renders the backup browser.
 #[must_use]
-pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: Rc<dyn Fn()>) -> Element {
+pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> Element {
     let backups = ctx.session.borrow().backups();
     let dirty = ctx.session.borrow().is_dirty();
     let open = ctx.session.borrow().current_path().map_or_else(
@@ -42,10 +42,10 @@ pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: Rc<dyn Fn()>) -> Element {
             "No backups were found next to this savegame. The first successful save creates one.",
         )));
     } else {
-        let heading = format!("{}", widgets::plural(backups.len(), "backup", "backups"));
+        let heading = widgets::plural(backups.len(), "backup", "backups");
         children.push(widgets::section_label(heading.to_uppercase()));
         for backup in backups {
-            children.push(backup_row(ctx, &backup, dirty, sync.clone()));
+            children.push(backup_row(ctx, &backup, dirty, sync));
         }
     }
     children.push(widgets::divider());
@@ -70,7 +70,7 @@ fn backup_row(
     ctx: &Ctx,
     backup: &crate::session::BackupRow,
     dirty: bool,
-    sync: Rc<dyn Fn()>,
+    sync: &Rc<dyn Fn()>,
 ) -> Element {
     let path: PathBuf = backup.path.clone();
     let restore = {

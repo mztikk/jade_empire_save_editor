@@ -4,6 +4,8 @@
 //! small enough to show on one page next to the version and the backup rules,
 //! which is also the place a user looks when they need to find the config file.
 
+use std::fmt::Write as _;
+
 use freya::prelude::*;
 
 use crate::Locale;
@@ -27,6 +29,7 @@ pub fn view(
     theme_choice: State<ThemeChoice>,
     text_scale: State<u16>,
     locale: State<Locale>,
+    remember_window: State<bool>,
 ) -> Element {
     let (sort, descending) = *sort.read();
     let save_folder = ctx.session.borrow().directory().to_path_buf();
@@ -130,6 +133,129 @@ pub fn view(
             .children(locale_chips)
             .into_element(),
     );
+    let remember = *remember_window.read();
+    appearance.push(
+        rect()
+            .horizontal()
+            .width(Size::fill())
+            .spacing(theme::space::sm())
+            .content(Content::wrap_spacing(theme::space::sm()))
+            .child(widgets::section_label(t("WINDOW")))
+            .child(appearance_chip(
+                t("Remember size and position"),
+                t("Remember the window size and position between runs"),
+                remember,
+                Action::new(move || {
+                    let mut state = remember_window;
+                    let next = !*state.read();
+                    state.set(next);
+                    crate::config::Config::remember_window_preference(next);
+                }),
+            ))
+            .into_element(),
+    );
+
+    let mut diagnostics: Vec<(String, String)> = vec![
+        ("Version".to_owned(), crate::APP_VERSION.to_owned()),
+        (
+            "Open savegame".to_owned(),
+            ctx.session
+                .borrow()
+                .current_path()
+                .map_or_else(|| "none".to_owned(), |path| path.display().to_string()),
+        ),
+        (
+            "Blocks".to_owned(),
+            ctx.session.borrow().block_count().to_string(),
+        ),
+        (
+            "File size".to_owned(),
+            ctx.session
+                .borrow()
+                .file_size()
+                .map_or_else(|| "not read".to_owned(), crate::session::format::bytes),
+        ),
+        (
+            "Theme".to_owned(),
+            format!(
+                "{} at {} %",
+                theme::current().palette.kind.key(),
+                (theme::current().text_scale * 100.0).round()
+            ),
+        ),
+        (
+            "Language".to_owned(),
+            crate::i18n::current().label().to_owned(),
+        ),
+        (
+            "Renderer override".to_owned(),
+            std::env::var("JADEFORGE_RENDERER").unwrap_or_else(|_| "auto".to_owned()),
+        ),
+        (
+            "Remember window".to_owned(),
+            if *remember_window.read() {
+                "yes".to_owned()
+            } else {
+                "no".to_owned()
+            },
+        ),
+    ];
+    diagnostics.push((
+        "Backup folder".to_owned(),
+        backup
+            .as_ref()
+            .and_then(|backup| backup.parent())
+            .map_or_else(
+                || save_folder.display().to_string(),
+                |path| path.display().to_string(),
+            ),
+    ));
+    let mut diagnostics_rows: Vec<Element> = Vec::new();
+    for (name, value) in diagnostics {
+        diagnostics_rows.push(widgets::label_row(
+            name,
+            widgets::a11y_text(value)
+                .font_size(theme::font::label())
+                .color(theme::text()),
+        ));
+    }
+    let diagnostics_text = {
+        let mut text = String::from("JadeForge diagnostics\n");
+        let _ = writeln!(text, "Version: {}", crate::APP_VERSION);
+        let _ = writeln!(text, "Save folder: {}", save_folder.display());
+        if let Some(path) = ctx.session.borrow().current_path() {
+            let _ = writeln!(text, "Savegame: {}", path.display());
+        }
+        let _ = writeln!(
+            text,
+            "Config: {}",
+            config_path.as_ref().map_or_else(
+                || "unavailable".to_owned(),
+                |path| path.display().to_string()
+            )
+        );
+        let _ = writeln!(
+            text,
+            "Theme: {} at {} %",
+            theme::current().palette.kind.key(),
+            (theme::current().text_scale * 100.0).round()
+        );
+        let _ = writeln!(text, "Language: {}", crate::i18n::current().label());
+        text
+    };
+    let copy_diagnostics = {
+        let ctx = ctx.clone();
+        Action::new(move || {
+            let copied = crate::clipboard::copy(diagnostics_text.clone());
+            ctx.run(|session| {
+                session.notify(if copied {
+                    "Copied the diagnostics to the clipboard."
+                } else {
+                    "Could not copy the diagnostics: the system clipboard is not available."
+                });
+            });
+        })
+    };
 
     let mut settings = Vec::new();
     if save_folder.as_os_str().is_empty() {
@@ -241,15 +367,35 @@ pub fn view(
     children.push(widgets::section_label(t("APPEARANCE")));
     children.extend(appearance);
     children.push(widgets::divider());
+    children.push(widgets::section_label(t("DIAGNOSTICS")));
+    children.extend(diagnostics_rows);
+    children.push(
+        widgets::outline_action(
+            t("Copy the diagnostics to the clipboard"),
+            t("Copy diagnostics"),
+            copy_diagnostics,
+        )
+        .into_element(),
+    );
+    children.push(widgets::divider());
+    children.push(widgets::section_label(t("LICENSES")));
+    children.push(widgets::hint(t(
+        "JadeForge is MIT licensed. The bundled English item and style names are game content \
+         and are not covered by that license; see NOTICE and docs/NAMES.md.",
+    )));
+    children.push(widgets::divider());
     children.push(widgets::section_label(t("BACKUPS")));
     children.extend(backups);
     children.push(widgets::divider());
     children.push(widgets::section_label(t("KEYBOARD SHORTCUTS")));
     for (action, keys) in [
-        ("Save", "Ctrl+S"),
+        ("Save (opens the review)", "Ctrl+S"),
         ("Choose save folder", "Ctrl+O"),
         ("Focus the active filter", "Ctrl+F"),
+        ("Undo the last edit", "Ctrl+Z"),
+        ("Redo an undone edit", "Ctrl+Y or Ctrl+Shift+Z"),
         ("Scan the save folder", "F5"),
+        ("Open this help page", "Ctrl+/"),
         ("Clear the active filter or close this page", "Escape"),
     ] {
         children.push(widgets::label_row(

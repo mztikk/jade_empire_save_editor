@@ -4446,3 +4446,44 @@ fn the_about_page_changes_the_language_and_persists_it() {
     let config = jadeforge_gui::config::Config::load();
     assert_eq!(config.locale, jadeforge_gui::Locale::Pseudo);
 }
+
+#[test]
+fn the_about_page_shows_diagnostics_and_licenses() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 2400.0);
+    assert!(click_text(&mut test, "About"), "About is missing");
+    assert!(find_label_text(&test, "DIAGNOSTICS").is_some());
+    assert!(find_label_text(&test, "Version").is_some());
+    assert!(find_label_text(&test, "Copy diagnostics").is_some());
+    assert!(find_label_text(&test, "LICENSES").is_some());
+    assert!(find_label_text(&test, "MIT licensed").is_some());
+    assert!(
+        find_label_text(&test, "Ctrl+Z").is_some(),
+        "the shortcut cheat sheet is missing undo"
+    );
+    assert!(
+        click_text(&mut test, "Copy diagnostics"),
+        "the diagnostics copy action is missing"
+    );
+    assert!(click_text(&mut test, "Remember size and position"));
+    assert!(!jadeforge_gui::config::Config::load().remember_window);
+    assert!(click_text(&mut test, "Remember size and position"));
+    assert!(jadeforge_gui::config::Config::load().remember_window);
+}
+
+#[test]
+fn ctrl_slash_opens_the_shortcut_cheat_sheet() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1600.0);
+    click_ctrl(&mut test, Key::Character("/".to_owned()));
+    assert!(
+        find_label_text(&test, "KEYBOARD SHORTCUTS").is_some(),
+        "Ctrl+/ did not open the About shortcut sheet"
+    );
+}

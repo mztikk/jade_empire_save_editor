@@ -3,7 +3,7 @@
 //!
 //! Three complete palettes exist: the original dark jade theme, a light
 //! parchment theme and a high-contrast theme. The user choice lives in the
-//! settings file ([`crate::session::preferences::ThemeChoice`]); the root
+//! settings file ([`crate::preferences::ThemeChoice`]); the root
 //! component resolves it and installs the matching [`UiStyle`] for the render
 //! pass. Views read colours and dimensions through the functions below, never
 //! through hardcoded values, so a theme or text-scale change repaints the whole
@@ -1176,10 +1176,8 @@ mod tests {
 
     #[test]
     fn the_smallest_type_stays_readable() {
-        const {
-            assert!(14.0 >= 12.0, "body text must be at least 12 px");
-            assert!(11.0 >= 11.0, "micro labels must be at least 11 px");
-        }
+        assert!(font::body() >= 12.0, "body text must be at least 12 px");
+        assert!(font::micro() >= 11.0, "micro labels must be at least 11 px");
     }
 
     #[test]

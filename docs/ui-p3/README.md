@@ -22,10 +22,10 @@ and 1600 px. The windowed suite is never run without explicit permission
 | 7 | pending-changes diff before save | [pending-diff.md](pending-diff.md) | implemented |
 | 8 | backup browsing and restore screen | [backups.md](backups.md) | implemented |
 | 9 | reload from disk after an external change | [reload-from-disk.md](reload-from-disk.md) | implemented |
-| 10 | item and style icons | [icons.md](icons.md) | pending |
-| 11 | About/help with diagnostics | [about-diagnostics.md](about-diagnostics.md) | pending |
-| 12 | command palette or shortcut sheet | [command-palette.md](command-palette.md) | pending |
-| 13 | configurable geometry, DPI and multi-monitor policy | [geometry-dpi.md](geometry-dpi.md) | pending |
+| 10 | item and style icons | [icons.md](icons.md) | blocked: icon references exist but the images are engine BIF/KEY textures, not RIM images |
+| 11 | About/help with diagnostics | [about-diagnostics.md](about-diagnostics.md) | implemented |
+| 12 | command palette or shortcut sheet | [command-palette.md](command-palette.md) | implemented as a complete shortcut sheet |
+| 13 | configurable geometry, DPI and multi-monitor policy | [geometry-dpi.md](geometry-dpi.md) | implemented; live window scenario not run |
 
 ## Order and dependencies
 

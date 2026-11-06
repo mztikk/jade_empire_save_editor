@@ -106,6 +106,15 @@ pub struct Config {
     /// Interface language; unsupported languages fall back to English.
     #[serde(default)]
     pub locale: Locale,
+    /// Whether the window size and position are remembered between runs.
+    #[serde(default = "default_true")]
+    pub remember_window: bool,
+}
+
+/// Default for boolean settings that are on unless the user turns them off.
+#[must_use]
+pub fn default_true() -> bool {
+    true
 }
 
 /// Default text scale in percent.
@@ -125,6 +134,7 @@ impl Default for Config {
             theme: ThemeChoice::default(),
             text_scale: default_text_scale(),
             locale: Locale::default(),
+            remember_window: default_true(),
         }
     }
 }
@@ -146,6 +156,13 @@ impl Config {
     pub fn remember_locale(locale: Locale) {
         let mut config = Self::load();
         config.locale = locale;
+        let _ = config.store();
+    }
+
+    /// Persists whether the window rectangle is remembered (best effort).
+    pub fn remember_window_preference(remember: bool) {
+        let mut config = Self::load();
+        config.remember_window = remember;
         let _ = config.store();
     }
 
@@ -388,6 +405,7 @@ mod tests {
             theme: ThemeChoice::Light,
             text_scale: 150,
             locale: Locale::Pseudo,
+            remember_window: true,
         };
         let text = config.to_text();
         assert!(text.contains("save_dir = \"/games/Jade Empire/Save\""));
@@ -395,8 +413,19 @@ mod tests {
         assert!(text.contains("sort_descending = true"));
         assert!(text.contains("game_dir = \"/games/Jade Empire\""));
         assert!(text.contains("theme = \"light\""), "{text}");
-        assert!(text.contains("locale = \"pseudo\""), "{text}");
+        assert!(text.contains("locale = \"en-xa\""), "{text}");
         assert_eq!(Config::parse(&text), config);
+    }
+
+    #[test]
+    fn the_window_rectangle_is_remembered_by_default() {
+        let config = Config::parse("save_dir = \"/tmp/saves\"\n");
+        assert!(config.remember_window);
+        let config = Config {
+            remember_window: false,
+            ..Config::default()
+        };
+        assert_eq!(Config::parse(&config.to_text()), config);
     }
 
     #[test]
@@ -493,6 +522,7 @@ mod tests {
             theme: ThemeChoice::Dark,
             text_scale: 100,
             locale: Locale::English,
+            remember_window: true,
         };
         config.store().expect("store settings");
         assert_eq!(Config::load(), config);
@@ -539,6 +569,7 @@ mod tests {
             theme: ThemeChoice::Dark,
             text_scale: 100,
             locale: Locale::English,
+            remember_window: true,
         };
         config.store().expect("store");
         let parent = path.parent().expect("parent");
@@ -568,6 +599,7 @@ mod tests {
             theme: ThemeChoice::Dark,
             text_scale: 100,
             locale: Locale::English,
+            remember_window: true,
         };
         good.store().expect("store good settings");
         let before = std::fs::read(&path).expect("read config");
@@ -581,6 +613,7 @@ mod tests {
             theme: ThemeChoice::Dark,
             text_scale: 100,
             locale: Locale::English,
+            remember_window: true,
         };
         assert!(bad.store().is_err());
         assert_eq!(std::fs::read(&path).expect("read config"), before);

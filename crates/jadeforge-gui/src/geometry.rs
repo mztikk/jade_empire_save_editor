@@ -142,6 +142,9 @@ impl FreyaPlugin for WindowGeometryPlugin {
             .outer_position()
             .ok()
             .map(|position| position.to_logical::<f64>(scale));
+        if !crate::config::Config::load().remember_window {
+            return;
+        }
         let geometry = WindowGeometry {
             width: size.width.max(1.0).round() as u32,
             height: size.height.max(1.0).round() as u32,
@@ -283,6 +286,44 @@ mod tests {
         assert!((fitted.height - 800.0).abs() < f64::EPSILON);
         assert_eq!(fitted.x, Some(64.0));
         assert_eq!(fitted.y, Some(48.0));
+    }
+
+    #[test]
+    fn a_window_on_a_second_monitor_stays_inside_that_monitor() {
+        let work = WorkArea {
+            x: -1920.0,
+            y: 0.0,
+            width: 1920.0,
+            height: 1080.0,
+        };
+        let stored = WindowGeometry {
+            width: 1000,
+            height: 700,
+            x: Some(-500),
+            y: Some(200),
+        };
+        let fitted = fit_window(preferred(), Some(stored), Some(work), minimum());
+        assert_eq!(fitted.x, Some(-1000.0));
+        assert_eq!(fitted.y, Some(200.0));
+        let displaced = WindowGeometry {
+            width: 1000,
+            height: 700,
+            x: Some(500),
+            y: Some(2000),
+        };
+        let fitted = fit_window(preferred(), Some(displaced), Some(work), minimum());
+        assert_eq!(fitted.x, Some(-1000.0));
+        assert_eq!(fitted.y, Some(380.0));
+    }
+
+    #[test]
+    fn a_150_percent_display_still_fits_the_default() {
+        // 2560x1440 physical at 150% is 1706.7x960 logical.
+        let work = screen(2560.0 / 1.5, 1440.0 / 1.5);
+        let fitted = fit_window(preferred(), None, Some(work), minimum());
+        assert!(fitted.width <= work.width - 16.0);
+        assert!(fitted.height <= work.height - 16.0);
+        assert_eq!(fitted.min_width, 900.0);
     }
 
     #[test]

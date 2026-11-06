@@ -2,12 +2,13 @@
 
 **Reviewed:** 2026-11-05, P1 follow-up 2026-11-06, P2 polish 2026-11-06 · **Base:** `main` at `491163c`
 **Scope:** the Freya 0.5 desktop UI in `crates/jadeforge-gui`, the session state it renders, and the real 89-savegame corpus.
-**Status:** P0 release blockers and the P1 follow-ups are addressed. The P2
-polish is implemented on `fix/ui-p2-polish` and verified with the headless
-suite and snapshots; its native close dialog and folder-picker backend are not
-window-verified because permission was not granted. P3 work remains tracked in
-[#9](https://github.com/mztikk/jade_empire_save_editor/issues/9). The remaining
-upstream blocker is the missing `Input` label association.
+**Status:** P0 release blockers, the P1 follow-ups and the P2 polish are
+addressed. The P3 strategic work is implemented on `feat/ui-p3-strategic` and
+verified with the headless suite and snapshots; the item-icon reference is
+blocked on engine BIF/KEY texture data (see
+[docs/ui-p3/icons.md](ui-p3/icons.md)), and the windowed suite was not run
+because permission was not granted. The remaining upstream blocker is the
+missing `Input` label association.
 
 ![JadeForge overview](screenshot.png)
 
@@ -78,11 +79,29 @@ Addressed on `fix/ui-p2-polish`:
 
 ### P3: [#9](https://github.com/mztikk/jade_empire_save_editor/issues/9)
 
-Strategic work:
+Addressed on `feat/ui-p3-strategic`; each item has a design note with its test
+plan in [docs/ui-p3/](ui-p3/README.md). Item icons are the one blocked item.
 
-- Light/system theme, high-contrast support, text scaling/zoom, UI localization.
-- Virtualized large lists, full undo/redo, pending-changes diff, backup restore screen, external-change reload.
-- Item/style icons, About/help, command palette/cheat sheet, configurable window geometry and multi-monitor policy.
+| Area | Result |
+| --- | --- |
+| Themes | Dark, light, system-following and high-contrast palettes share one semantic `Palette`; the choice persists and is selected on About. Palette tests assert WCAG AA on every surface for every theme and AAA for high contrast. High contrast is manual because Freya/winit expose no forced-colours signal (recorded in the note). |
+| Text scaling | 100/125/150/200 % scales type, spacing, radii and type-related fixed dimensions; the status slot and save rows grow, and the sidebar hides its decorative preview above 125 % so the list stays usable. Tests render all tabs at 200 %. |
+| Localization | English source catalog with a QA pseudolocale, `LC_ALL`/`LANG` detection, an About selector and a source-scan completeness test. No unreviewed translation ships; dynamic session messages remain English templates and are documented as the follow-up. |
+| Large lists | Save browser unchanged (already virtual); item, style and gem pickers now virtualize the full filtered list, keep stable ids and accessible names, and show descriptions in a panel below the fixed-height rows. |
+| Editing safety | Bounded per-action undo/redo with coalesced character typing, a pending-changes review page before Save, a backup browser with verified restore and safety copy, and an external-change banner with an explicit reload/discard path. |
+| Content and identity | About now carries diagnostics (version, savegame, blocks, size, theme, scale, language, renderer, backup folder), licenses, a Copy diagnostics action and a complete shortcut sheet opened with Ctrl+/; window remembering is configurable. Item/style icons are blocked: the references resolve but the images are engine BIF/KEY textures, not RIM images. |
+
+P3 verification caveats:
+
+- Item icons are blocked on a new KEY/BIF + engine-texture reader; the evidence
+  (icon references, RIM resource types and payload samples) is recorded in
+  [docs/ui-p3/icons.md](ui-p3/icons.md). No placeholder icon was added.
+- The windowed suite was not run for P3 because permission was not granted.
+  Theme, scaling, localization, page routing and the new banners are covered by
+  the headless suite and the snapshot example; the only window-path behaviour
+  in P3 is the configurable window remembering, whose decision logic is unit
+  tested and whose real-window scenario (`window_geometry_restarts`) remains
+  un-run on this branch.
 
 ## Upstream accessibility blockers
 
@@ -120,6 +139,8 @@ cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" docs/scre
 cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" docs/screenshot.png Overview
 cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" scratch/narrow.png Overview --width 900 --height 700
 cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" scratch/wide.png all --width 1600 --height 900
+cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" scratch/light.png all --theme light
+cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" scratch/zoom.png all --scale 200 --width 1600 --height 900
 ```
 
 `--query <text>` types into the active tab's own picker filter (Inventory,
@@ -129,7 +150,7 @@ breakpoints and the a11y tree, so a screenshot alone is never the test.
 
 ## Verification
 
-- `just check`: 437 workspace tests passed (1 skipped: the opt-in live suite), clippy, formatting and rustdoc clean after the P2 work (see `docs/COVERAGE.md` for coverage).
+- `just check`: the full workspace suite (formatting, clippy, rustdoc, nextest and doctests) passes after the P3 work; the opt-in live suite remains skipped. P3 adds palette/contrast tests for three themes, text-scale token tests, source-scan localization completeness, core backup tests, session undo/diff/backup/reload tests, virtualized-picker tests and headless UI tests for themes, 200 % text, undo/redo, review, backups, external reload, diagnostics and the shortcut sheet.
 - P2 headless coverage: the empty carried-gems count, amulet summary, `STYLES TO LEARN`, friendly item categories and the category filter, `Level`/`Time played`/available wording, the optional-Gold explanation, field units, the save-filter character match, the About page and its settings, the About entry semantics and tab selection while the page is open, backup surfacing/copy/open actions, no-op Save/Revert, folder-picker cancellation and unreadable paths, loading skeletons and the manual-scan busy slot, full-width overview rows at 900/1280/1600, and the sidebar preview alignment. The snapshot example's filter targeting is covered by the tab-filter unit test and a headless Styles-filter test.
 - Windowed verification for P2: not run, because the user did not grant permission under AGENTS.md rule 13. The native close dialog's Save / Discard / Cancel labels, the actual folder-dialog cancellation backend and the Windows ComCtl32 v6 manifest therefore remain unverified in a real window; the choice mapping and the save-before-close decision table are unit tested, and the manifest is embedded by the existing Windows resource build.
 - Headless coverage of the P1 work: geometry at 1180x760, 900x700 and 1600x900; DPI geometry for 1366x768 at 125 %; scan-keeps-save; dirty content comparison; invalid-form save independence; first-invalid-field focus; focus restoration after removal; target sizes; keyboard scrolling focus; the 89-save render test.

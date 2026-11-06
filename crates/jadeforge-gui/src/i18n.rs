@@ -279,6 +279,19 @@ const CATALOG: &[(&str, &str)] = &[
     ("not set", "⟦ñót sét⟧"),
     ("unsaved changes", "⟦úñsávéd çháñgés⟧"),
     ("LANGUAGE", "⟦LÁNGÚÁGÉ⟧"),
+    ("WINDOW", "⟦WÍNDÓW⟧"),
+    ("Remember size and position", "⟦Rémémbér sízé ánd pósítíón⟧"),
+    (
+        "Remember the window size and position between runs",
+        "⟦Rémémbér thé wíndów sízé ánd pósítíón bétwéén rúns⟧",
+    ),
+    ("DIAGNOSTICS", "⟦DÍÁGNÓSTÍÇS⟧"),
+    ("LICENSES", "⟦LÍÇÉNSÉS⟧"),
+    ("Copy diagnostics", "⟦Çópy díágnóstíçs⟧"),
+    (
+        "Copy the diagnostics to the clipboard",
+        "⟦Çópy thé díágnóstíçs tó thé çlípbóárd⟧",
+    ),
 ];
 
 #[cfg(test)]
@@ -334,7 +347,7 @@ mod tests {
         let bytes = source.as_bytes();
         let mut literals = Vec::new();
         let mut index = 0;
-        while let Some(found) = source[index..].find("t(\"") {
+        while let Some(found) = source.get(index..).and_then(|rest| rest.find("t(\"")) {
             let at = index + found;
             if at > 0 {
                 let previous = bytes[at - 1];
@@ -359,7 +372,10 @@ mod tests {
                 position += 1;
             }
             if position < bytes.len() {
-                let literal = decode_rust(&source[start..position]);
+                let literal = source
+                    .get(start..position)
+                    .map(decode_rust)
+                    .unwrap_or_default();
                 if !literal.is_empty() {
                     literals.push(literal);
                 }
@@ -398,7 +414,7 @@ mod tests {
     #[test]
     fn every_catalogued_string_has_a_pseudolocale_translation() {
         for (source, pseudo) in CATALOG {
-            assert!(!source.is_empty());
+            assert_ne!(*source, "");
             assert_ne!(source, pseudo, "a pseudo entry must be visibly different");
         }
     }

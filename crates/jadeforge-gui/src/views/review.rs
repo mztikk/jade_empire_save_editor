@@ -19,7 +19,7 @@ use crate::i18n::t;
 
 /// Renders the review page.
 #[must_use]
-pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: Rc<dyn Fn()>) -> Element {
+pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> Element {
     let dirty = ctx.session.borrow().is_dirty();
     let groups = ctx.session.borrow().pending_changes();
     let total: usize = groups.iter().map(|group| group.changes.len()).sum();

@@ -252,7 +252,8 @@ where
         f64::from(theme::layout::min_window_width()),
         f64::from(theme::layout::min_window_height()),
     );
-    let stored = crate::config::Config::load().window;
+    let config = crate::config::Config::load();
+    let stored = config.remember_window.then_some(config.window).flatten();
     // Without a monitor (a headless start or a failed query) the preferred
     // rectangle is used; the attributes hook replaces it with the fitted one
     // once the real monitor is known.
@@ -294,6 +295,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let theme_choice = use_state(|| saved_config.theme);
     let text_scale = use_state(|| saved_config.normalized_text_scale());
     let locale = use_state(|| saved_config.locale);
+    let remember_window = use_state(|| saved_config.remember_window);
     crate::i18n::install(*locale.read());
     let preferred = *Platform::get().current_window().preferred_theme.read();
     let resolved = theme::resolved_choice(*theme_choice.read(), preferred);
@@ -722,24 +724,18 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let show_about_now = *show_about.read();
     let show_backups_now = *show_backups.read();
     let show_review_now = *show_review.read();
-    let close_review: Rc<dyn Fn()> = {
-        let show_review = show_review;
-        Rc::new(move || {
-            let mut show_review = show_review;
-            show_review.set(false);
-        })
-    };
-    let close_backups: Rc<dyn Fn()> = {
-        let show_backups = show_backups;
-        Rc::new(move || {
-            let mut show_backups = show_backups;
-            show_backups.set(false);
-        })
-    };
+    let close_review: Rc<dyn Fn()> = Rc::new(move || {
+        let mut state = show_review;
+        state.set(false);
+    });
+    let close_backups: Rc<dyn Fn()> = Rc::new(move || {
+        let mut state = show_backups;
+        state.set(false);
+    });
     let content = if show_review_now {
-        views::review::view(&ctx, form, close_review, sync.clone())
+        views::review::view(&ctx, form, close_review, &sync)
     } else if show_backups_now {
-        views::backups::view(&ctx, close_backups, sync.clone())
+        views::backups::view(&ctx, close_backups, &sync)
     } else if show_about_now {
         views::about::view(
             &ctx,
@@ -748,16 +744,15 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             theme_choice,
             text_scale,
             locale,
+            remember_window,
         )
     } else {
         tab_content
     };
     let page_index = if show_review_now {
         2
-    } else if show_backups_now {
-        1
     } else {
-        0
+        usize::from(show_backups_now)
     };
 
     let content = rect()
@@ -890,6 +885,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                     "o" => {
                         shell::choose_folder(&ctx, directory, &start_scan);
                     }
+                    "/" | "?" => {
+                        show_review.set(false);
+                        show_backups.set(false);
+                        show_about.set(true);
+                    }
                     "f" => {
                         show_about.set(false);
                         let id = match active {
@@ -955,7 +955,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         .content(Content::Flex)
                         .child(tabs)
                         .maybe_child(
-                            disk_changed.then(|| shell::external_change_banner(&ctx, sync.clone())),
+                            disk_changed.then(|| shell::external_change_banner(&ctx, &sync)),
                         )
                         .child(
                             rect()

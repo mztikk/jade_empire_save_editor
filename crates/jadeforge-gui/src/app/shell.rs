@@ -458,7 +458,8 @@ pub(super) fn preview_slot(preview: Option<ImageHandle>, selected: bool) -> Elem
 #[allow(
     clippy::large_types_passed_by_value, // `Form` is a bundle of cheap `Copy` handles
     clippy::needless_pass_by_value, // the closures own the sync handle
-    clippy::too_many_arguments // one parameter per independent footer control
+    clippy::too_many_arguments, // one parameter per independent footer control
+    clippy::too_many_lines // one declarative footer keeps the actions in order
 )]
 pub(super) fn footer(
     ctx: &Ctx,
@@ -473,7 +474,6 @@ pub(super) fn footer(
 ) -> Element {
     let save = {
         let ctx = ctx.clone();
-        let form = form;
         move |_| {
             let errors = ctx.run(|session| session.form_errors(&form.read()));
             if let Some(first) = errors.first() {
@@ -706,7 +706,7 @@ pub(super) fn empty_state(
 /// A clean savegame reloads directly. A dirty one explains that reloading
 /// discards the unsaved edits, because the write path refuses to overwrite a
 /// file that changed underneath it.
-pub(super) fn external_change_banner(ctx: &Ctx, sync: Rc<dyn Fn()>) -> Element {
+pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element {
     let dirty = ctx.session.borrow().is_dirty();
     let text = if dirty {
         "This savegame changed on disk since it was opened. Saving will be refused; reloading \
@@ -728,7 +728,7 @@ pub(super) fn external_change_banner(ctx: &Ctx, sync: Rc<dyn Fn()>) -> Element {
                 return;
             }
             let result = if dirty {
-                ctx.run(|session| session.revert())
+                ctx.run(Session::revert)
             } else {
                 ctx.run(Session::reload_from_disk)
             };

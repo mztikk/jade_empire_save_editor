@@ -115,7 +115,7 @@ pub fn view(
                     subtitle: format!(
                         "{} · {}",
                         subtitle,
-                        crate::session::style_kind_label(&suggestion.kind)
+                        crate::session::style_kind_label(suggestion.kind)
                     ),
                     accessible: format!("{} style", suggestion.name),
                     action_label: format!("Learn {} style", suggestion.name),
