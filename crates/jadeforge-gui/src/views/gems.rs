@@ -22,7 +22,6 @@ pub fn view(
     query: State<String>,
     available: &[GemSuggestion],
     amulet: Option<AmuletInfo>,
-    gem_limit: State<usize>,
     hovered: State<Option<crate::app::HoverKey>>,
     filter_id: AccessibilityId,
 ) -> Element {
@@ -93,10 +92,8 @@ pub fn view(
         .iter()
         .filter(|gem| needle.is_empty() || gem.name.to_lowercase().contains(&needle))
         .collect();
-    let limit = *gem_limit.read();
-    let shown = matching.len().min(limit);
-    let mut add_rows: Vec<Element> = Vec::new();
-    for gem in matching.iter().take(shown) {
+    let mut picker_rows = Vec::with_capacity(matching.len());
+    for gem in &matching {
         let ctx = ctx.clone();
         let item_id = gem.item_id;
         let effects = if gem.effects.is_empty() {
@@ -104,54 +101,17 @@ pub fn view(
         } else {
             gem.effects.join(" · ")
         };
-        add_rows.push(
-            rect()
-                .horizontal()
-                .width(Size::fill())
-                .key(item_id)
-                .a11y_role(AccessibilityRole::Group)
-                .a11y_alt(format!("{} gem, {effects}", gem.name))
-                .spacing(theme::space::lg())
-                .content(Content::Flex)
-                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
-                .child(
-                    rect()
-                        .vertical()
-                        .width(Size::flex(1.0))
-                        .spacing(theme::space::xxs())
-                        .child(widgets::with_tooltip(
-                            gem.name.clone(),
-                            widgets::a11y_text(gem.name.clone())
-                                .font_size(theme::font::label())
-                                .max_lines(1)
-                                .text_overflow(TextOverflow::Ellipsis)
-                                .color(theme::text()),
-                        ))
-                        // The effect lines are the reason to add a gem; they
-                        // belong in the picker, not only on the owned rows.
-                        .child(widgets::with_tooltip(
-                            effects.clone(),
-                            widgets::a11y_text(effects.clone())
-                                .font_size(theme::font::micro())
-                                .max_lines(1)
-                                .text_overflow(TextOverflow::Ellipsis)
-                                .color(theme::dim()),
-                        )),
-                )
-                .child(widgets::row_action(
-                    format!("Add {}", gem.name),
-                    "Add",
-                    Action::new(move || ctx.run(|session| session.add_gem(item_id))),
-                ))
-                .into_element(),
-        );
-    }
-    if add_rows.is_empty() {
-        add_rows.push(widgets::hint(if available.is_empty() {
-            "The game data with the gem definitions was not found."
-        } else {
-            "No gem matches this filter."
-        }));
+        picker_rows.push(widgets::PickerRow {
+            key: item_id,
+            accessible: format!("{} gem, {effects}", gem.name),
+            title: gem.name.clone(),
+            subtitle: effects.clone(),
+            action_label: format!("Add {}", gem.name),
+            action_text: "Add".to_owned(),
+            action: Action::new(move || ctx.run(|session| session.add_gem(item_id))),
+            select: None,
+            selected: false,
+        });
     }
     let mut add_children = vec![widgets::filter_input(
         query,
@@ -159,47 +119,28 @@ pub fn view(
         "Clear the gem filter",
         filter_id,
     )];
-    {
-        let mut gem_limit = gem_limit;
-        add_children.push(
-            rect()
-                .horizontal()
-                .width(Size::fill())
-                .spacing(theme::space::md())
-                .content(Content::Flex)
-                .child(
-                    widgets::a11y_text(if matching.is_empty() {
-                        widgets::plural(0, "gem", "gems")
-                    } else {
-                        format!(
-                            "{shown} of {}",
-                            widgets::plural(matching.len(), "gem", "gems")
-                        )
-                    })
-                    .font_size(theme::font::micro())
-                    .color(theme::dim()),
-                )
-                .child(rect().width(Size::flex(1.0)))
-                .maybe(matching.len() > shown, |el| {
-                    el.child(
-                        Button::new()
-                            .compact()
-                            .outline()
-                            .child("Show more")
-                            .on_press(move |_| *gem_limit.write() += crate::app::PAGE_SIZE),
-                    )
-                })
-                .into_element(),
-        );
-    }
     add_children.push(
         rect()
-            .vertical()
+            .horizontal()
             .width(Size::fill())
-            .spacing(theme::space::xxs())
-            .children(add_rows)
+            .spacing(theme::space::md())
+            .content(Content::Flex)
+            .child(
+                widgets::a11y_text(widgets::plural(matching.len(), "gem", "gems"))
+                    .font_size(theme::font::micro())
+                    .color(theme::dim()),
+            )
             .into_element(),
     );
+    if picker_rows.is_empty() {
+        add_children.push(widgets::hint(if available.is_empty() {
+            "The game data with the gem definitions was not found."
+        } else {
+            "No gem matches this filter."
+        }));
+    } else {
+        add_children.push(widgets::picker_list("Gems you can add", picker_rows));
+    }
     let add_card = widgets::card(
         "Add a gem",
         Some("From the game data".to_owned()),

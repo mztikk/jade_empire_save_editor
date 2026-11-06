@@ -27,7 +27,6 @@ pub fn view(
     expanded_suggestion: State<Option<u16>>,
     hovered: State<Option<crate::app::HoverKey>>,
     filter_id: AccessibilityId,
-    show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for item in items {
@@ -76,7 +75,6 @@ pub fn view(
                 "No items match this search and category."
             }));
         } else {
-            let shown = results.len();
             let browsing = query.read().trim().is_empty() && active_category.is_none();
             let total = if browsing { total_items } else { matching };
             let heading_text = active_category.as_deref().map_or_else(
@@ -89,12 +87,10 @@ pub fn view(
                 },
                 |category| crate::session::item_category_label(category).to_uppercase(),
             );
-            let count_text = match (browsing, shown == total) {
-                (true, _) => format!("{shown} of {}", widgets::plural(total, "item", "items")),
-                (false, true) => widgets::plural(total, "match", "matches"),
-                (false, false) => {
-                    format!("{shown} of {}", widgets::plural(total, "match", "matches"))
-                }
+            let count_text = if browsing {
+                widgets::plural(total, "item", "items")
+            } else {
+                widgets::plural(total, "match", "matches")
             };
             let heading = rect()
                 .horizontal()
@@ -107,34 +103,47 @@ pub fn view(
                     widgets::a11y_text(count_text)
                         .font_size(theme::font::micro())
                         .color(theme::dim()),
-                )
-                .maybe(shown < total, |el| {
-                    el.child(
-                        Button::new()
-                            .compact()
-                            .outline()
-                            .child("Show more")
-                            .on_press(show_more),
-                    )
-                });
+                );
             children.push(heading.into_element());
-            let mut result_rows: Vec<Element> = Vec::new();
+            let selected = *expanded_suggestion.read();
+            let mut picker_rows = Vec::with_capacity(results.len());
             for suggestion in results {
-                result_rows.push(suggestion_row(
-                    ctx,
-                    suggestion,
-                    expanded_suggestion,
-                    hovered,
-                ));
+                let id = suggestion.item_id;
+                let selectable = suggestion
+                    .description
+                    .as_deref()
+                    .is_some_and(|text| !text.trim().is_empty());
+                let select = selectable.then_some(expanded_suggestion);
+                picker_rows.push(widgets::PickerRow {
+                    key: id,
+                    title: suggestion.name.clone(),
+                    subtitle: item_subtitle(
+                        id,
+                        Some(suggestion.category.as_str()),
+                        suggestion.save_type,
+                    ),
+                    accessible: format!("{} item", suggestion.name),
+                    action_label: format!("Add {}", suggestion.name),
+                    action_text: "Add".to_owned(),
+                    action: {
+                        let ctx = ctx.clone();
+                        let id = suggestion.item_id;
+                        Action::new(move || {
+                            ctx.run(|session| {
+                                let _ = session.add_item(id);
+                            });
+                        })
+                    },
+                    select,
+                    selected: selected == Some(id),
+                });
             }
-            children.push(
-                rect()
-                    .vertical()
-                    .width(Size::fill())
-                    .spacing(theme::space::xxs())
-                    .children(result_rows)
-                    .into_element(),
-            );
+            children.push(widgets::picker_list("Items you can add", picker_rows));
+            if let Some(selected) = selected
+                && let Some(suggestion) = results.iter().find(|row| row.item_id == selected)
+            {
+                children.extend(widgets::details(suggestion.description.as_deref()));
+            }
         }
     } else if game_loading {
         children.push(widgets::hint(
@@ -352,74 +361,6 @@ fn item_row(
         )
         .maybe_child(if is_expanded {
             widgets::details(item.description.as_deref())
-        } else {
-            None
-        })
-        .into_element()
-}
-
-fn suggestion_row(
-    ctx: &Ctx,
-    suggestion: &ItemSuggestion,
-    expanded: State<Option<u16>>,
-    mut hovered: State<Option<crate::app::HoverKey>>,
-) -> Element {
-    let key = crate::app::HoverKey::ItemSuggestion(suggestion.item_id);
-    let is_hovered = *hovered.read() == Some(key);
-    let add = {
-        let ctx = ctx.clone();
-        let item_id = suggestion.item_id;
-        Action::new(move || {
-            ctx.run(|session| {
-                let _ = session.add_item(item_id);
-            });
-        })
-    };
-    let is_expanded = *expanded.read() == Some(suggestion.item_id);
-    rect()
-        .vertical()
-        .width(Size::fill())
-        .key(suggestion.item_id)
-        .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(format!("{} item", suggestion.name))
-        .background(if is_hovered {
-            theme::surface()
-        } else {
-            theme::panel()
-        })
-        .corner_radius(theme::radius::control())
-        .on_pointer_enter(move |_| *hovered.write() = Some(key))
-        .on_pointer_leave(move |_| {
-            if *hovered.read() == Some(key) {
-                *hovered.write() = None;
-            }
-        })
-        .child(
-            rect()
-                .horizontal()
-                .width(Size::fill())
-                .spacing(theme::space::lg())
-                .content(Content::Flex)
-                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::xs()))
-                .child(widgets::expanding_name(
-                    suggestion.item_id,
-                    suggestion.name.clone(),
-                    item_subtitle(
-                        suggestion.item_id,
-                        Some(suggestion.category.as_str()),
-                        suggestion.save_type,
-                    ),
-                    expanded,
-                    theme::font::label(),
-                ))
-                .child(widgets::row_action(
-                    format!("Add {}", suggestion.name),
-                    "Add",
-                    add,
-                )),
-        )
-        .maybe_child(if is_expanded {
-            widgets::details(suggestion.description.as_deref())
         } else {
             None
         })

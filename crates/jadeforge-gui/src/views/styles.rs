@@ -25,11 +25,9 @@ pub fn view(
     game_loading: bool,
     names_ready: bool,
     learnable: Option<usize>,
-    matching: usize,
     expanded: State<Option<u16>>,
     hovered: State<Option<crate::app::HoverKey>>,
     filter_id: AccessibilityId,
-    show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for style in styles {
@@ -77,7 +75,7 @@ pub fn view(
             }));
         } else {
             let browsing = query.read().trim().is_empty();
-            let shown = matches.len();
+            let total = matches.len();
             let heading = rect()
                 .horizontal()
                 .width(Size::fill())
@@ -90,42 +88,51 @@ pub fn view(
                 }))
                 .child(rect().width(Size::flex(1.0)))
                 .child(
-                    widgets::a11y_text(match (browsing, shown == matching) {
-                        (true, _) => format!(
-                            "{shown} of {}",
-                            crate::widgets::plural(matching, "style to learn", "styles to learn")
-                        ),
-                        (false, true) => crate::widgets::plural(matching, "match", "matches"),
-                        (false, false) => format!(
-                            "{shown} of {}",
-                            crate::widgets::plural(matching, "match", "matches")
-                        ),
+                    widgets::a11y_text(if browsing {
+                        crate::widgets::plural(total, "style to learn", "styles to learn")
+                    } else {
+                        crate::widgets::plural(total, "match", "matches")
                     })
                     .font_size(theme::font::micro())
                     .color(theme::dim()),
-                )
-                .maybe(shown < matching, |el| {
-                    el.child(
-                        Button::new()
-                            .compact()
-                            .outline()
-                            .child("Show more")
-                            .on_press(show_more),
-                    )
-                });
+                );
             children.push(heading.into_element());
-            let mut result_rows: Vec<Element> = Vec::new();
+            let selected = *expanded.read();
+            let mut picker_rows = Vec::with_capacity(matches.len());
             for suggestion in matches {
-                result_rows.push(learn_row(ctx, suggestion, expanded, hovered));
+                let id = suggestion.style_id;
+                let subtitle =
+                    style_subtitle(id, &suggestion.label).unwrap_or_else(|| format!("#{id}"));
+                let selectable = suggestion
+                    .description
+                    .as_deref()
+                    .is_some_and(|text| !text.trim().is_empty());
+                let select = selectable.then_some(expanded);
+                picker_rows.push(widgets::PickerRow {
+                    key: id,
+                    title: suggestion.name.clone(),
+                    subtitle: format!(
+                        "{} · {}",
+                        subtitle,
+                        crate::session::style_kind_label(&suggestion.kind)
+                    ),
+                    accessible: format!("{} style", suggestion.name),
+                    action_label: format!("Learn {} style", suggestion.name),
+                    action_text: "Learn".to_owned(),
+                    action: {
+                        let ctx = ctx.clone();
+                        Action::new(move || ctx.run(|session| session.add_style(id)))
+                    },
+                    select,
+                    selected: selected == Some(id),
+                });
             }
-            children.push(
-                rect()
-                    .vertical()
-                    .width(Size::fill())
-                    .spacing(theme::space::xxs())
-                    .children(result_rows)
-                    .into_element(),
-            );
+            children.push(widgets::picker_list("Styles you can learn", picker_rows));
+            if let Some(selected) = selected
+                && let Some(suggestion) = matches.iter().find(|row| row.style_id == selected)
+            {
+                children.extend(widgets::details(suggestion.description.as_deref()));
+            }
         }
     } else if game_loading {
         children.push(widgets::hint(
@@ -660,74 +667,6 @@ fn style_badge_color(kind: &str) -> Color {
         "transformation" | "unique" => theme::accent(),
         _ => theme::muted(),
     }
-}
-
-fn learn_row(
-    ctx: &Ctx,
-    suggestion: &StyleSuggestion,
-    expanded: State<Option<u16>>,
-    mut hovered: State<Option<crate::app::HoverKey>>,
-) -> Element {
-    let key = crate::app::HoverKey::StyleSuggestion(suggestion.style_id);
-    let is_hovered = *hovered.read() == Some(key);
-    let learn = {
-        let ctx = ctx.clone();
-        let style_id = suggestion.style_id;
-        Action::new(move || ctx.run(|session| session.add_style(style_id)))
-    };
-    let subtitle = style_subtitle(suggestion.style_id, &suggestion.label)
-        .unwrap_or_else(|| format!("#{}", suggestion.style_id));
-    let is_expanded = *expanded.read() == Some(suggestion.style_id);
-
-    rect()
-        .vertical()
-        .width(Size::fill())
-        .key(suggestion.style_id)
-        .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(format!("{} style", suggestion.name))
-        .background(if is_hovered {
-            theme::surface()
-        } else {
-            theme::panel()
-        })
-        .corner_radius(theme::radius::control())
-        .on_pointer_enter(move |_| *hovered.write() = Some(key))
-        .on_pointer_leave(move |_| {
-            if *hovered.read() == Some(key) {
-                *hovered.write() = None;
-            }
-        })
-        .child(
-            rect()
-                .horizontal()
-                .width(Size::fill())
-                .spacing(theme::space::lg())
-                .content(Content::Flex)
-                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::xs()))
-                .child(widgets::expanding_name(
-                    suggestion.style_id,
-                    suggestion.name.clone(),
-                    subtitle,
-                    expanded,
-                    theme::font::label(),
-                ))
-                .child(widgets::badge(
-                    crate::session::style_kind_label(suggestion.kind),
-                    theme::surface_active(),
-                    style_badge_color(suggestion.kind),
-                ))
-                .child(widgets::row_action(
-                    format!("Learn {} style", suggestion.name),
-                    "Learn",
-                    learn,
-                )),
-        )
-        .maybe_child(if is_expanded {
-            widgets::details(suggestion.description.as_deref())
-        } else {
-            None
-        })
-        .into_element()
 }
 
 #[cfg(test)]

@@ -86,9 +86,6 @@ impl HoverKey {
     }
 }
 
-/// Entries a searchable picker renders per page (items, styles, gems).
-pub const PAGE_SIZE: usize = 30;
-
 /// Placeholder of the savegame-list filter.
 ///
 /// The filter matches the folder label and the character name, so the
@@ -332,9 +329,6 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let show_backups = use_state(|| false);
     let show_review = use_state(|| false);
     let style_query = use_state(String::new);
-    let item_limit = use_state(|| PAGE_SIZE);
-    let style_limit = use_state(|| PAGE_SIZE);
-    let gem_limit = use_state(|| PAGE_SIZE);
     let hovered = use_state(|| None::<HoverKey>);
     let gem_query = use_state(String::new);
     let expanded_item = use_state(|| None::<usize>);
@@ -462,9 +456,6 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 show_review,
                 style_query,
                 gem_query,
-                item_limit,
-                style_limit,
-                gem_limit,
                 expanded_item,
                 expanded_suggestion,
                 expanded_style,
@@ -528,10 +519,9 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             let _ = *revision.read();
             let query = item_query.read().clone();
             let category = item_category.read().clone();
-            let limit = *item_limit.read();
             session
                 .borrow()
-                .search_items_filtered(&query, category.as_deref(), limit)
+                .search_items_filtered(&query, category.as_deref(), usize::MAX)
         });
         results.read().clone()
     };
@@ -543,12 +533,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         });
         categories.read().clone()
     };
-    let (style_matches, style_matches_total, total_missing) = {
+    let (style_matches, total_missing) = {
         let session = session.clone();
         let results = use_memo(move || {
             let _ = *revision.read();
             let query = style_query.read().trim().to_lowercase();
-            let limit = *style_limit.read();
             let missing = session.borrow().missing_styles();
             let total_missing = missing.len();
             let matching: Vec<_> = missing
@@ -559,12 +548,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         || style.label.to_lowercase().contains(&query)
                 })
                 .collect();
-            let total = matching.len();
-            (
-                matching.into_iter().take(limit).collect::<Vec<_>>(),
-                total,
-                total_missing,
-            )
+            (matching, total_missing)
         });
         results.read().clone()
     };
@@ -686,44 +670,35 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             views::overview::view(&ctx, character, items.len(), styles.len())
         }
         (Tab::Character, Some(character)) => views::character::view(&ctx, character, &form_errors),
-        (Tab::Styles, _) => {
-            let mut style_limit = style_limit;
-            views::styles::view(
-                &ctx,
-                &styles,
-                style_query,
-                &style_matches,
-                game_ready,
-                game_loading,
-                names_ready,
-                game_ready.then_some(total_missing),
-                style_matches_total,
-                expanded_style,
-                hovered,
-                style_filter_id,
-                move |_| *style_limit.write() += PAGE_SIZE,
-            )
-        }
-        (Tab::Inventory, _) => {
-            let mut item_limit = item_limit;
-            views::inventory::view(
-                &ctx,
-                &items,
-                item_query,
-                item_category,
-                &item_categories,
-                &item_results,
-                items_ready,
-                game_loading,
-                item_matches,
-                total_items,
-                expanded_item,
-                expanded_suggestion,
-                hovered,
-                item_filter_id,
-                move |_| *item_limit.write() += PAGE_SIZE,
-            )
-        }
+        (Tab::Styles, _) => views::styles::view(
+            &ctx,
+            &styles,
+            style_query,
+            &style_matches,
+            game_ready,
+            game_loading,
+            names_ready,
+            game_ready.then_some(total_missing),
+            expanded_style,
+            hovered,
+            style_filter_id,
+        ),
+        (Tab::Inventory, _) => views::inventory::view(
+            &ctx,
+            &items,
+            item_query,
+            item_category,
+            &item_categories,
+            &item_results,
+            items_ready,
+            game_loading,
+            item_matches,
+            total_items,
+            expanded_item,
+            expanded_suggestion,
+            hovered,
+            item_filter_id,
+        ),
         (Tab::Gems, _) => {
             let available = session.borrow().available_gems();
             let amulet = session.borrow().amulet();
@@ -734,7 +709,6 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 gem_query,
                 &available,
                 amulet,
-                gem_limit,
                 hovered,
                 gem_filter_id,
             )
@@ -1064,9 +1038,6 @@ fn reset_pickers(
     show_review: State<bool>,
     style_query: State<String>,
     gem_query: State<String>,
-    item_limit: State<usize>,
-    style_limit: State<usize>,
-    gem_limit: State<usize>,
     expanded_item: State<Option<usize>>,
     expanded_suggestion: State<Option<u16>>,
     expanded_style: State<Option<u16>>,
@@ -1091,12 +1062,6 @@ fn reset_pickers(
     style_query.set(String::new());
     let mut gem_query = gem_query;
     gem_query.set(String::new());
-    let mut item_limit = item_limit;
-    item_limit.set(PAGE_SIZE);
-    let mut style_limit = style_limit;
-    style_limit.set(PAGE_SIZE);
-    let mut gem_limit = gem_limit;
-    gem_limit.set(PAGE_SIZE);
     let mut expanded_item = expanded_item;
     expanded_item.set(None);
     let mut expanded_suggestion = expanded_suggestion;

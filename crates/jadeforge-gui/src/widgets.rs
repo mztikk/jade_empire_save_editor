@@ -501,7 +501,7 @@ impl Action {
         Self(Rc::new(RefCell::new(action)))
     }
 
-    fn call(&self) {
+    pub(crate) fn call(&self) {
         (self.0.borrow_mut())();
     }
 }
@@ -663,7 +663,7 @@ impl Component for AccessibleButton {
 /// flat buttons it replaces.
 pub fn row_action(
     accessible: impl Into<String>,
-    text: &'static str,
+    text: impl Into<String>,
     action: Action,
 ) -> AccessibleButton {
     AccessibleButton::new(
@@ -678,7 +678,7 @@ pub fn row_action(
             .min_height(Size::px(theme::layout::target_min()))
             .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::sm()))
             .child(
-                a11y_text(text)
+                a11y_text(text.into())
                     .font_size(theme::font::micro())
                     .color(theme::muted()),
             ),
@@ -751,4 +751,166 @@ mod tests {
         assert_eq!(plural(1, "effect", "effects"), "1 effect");
         assert_eq!(plural(2, "stack", "stacks"), "2 stacks");
     }
+}
+
+/// One row of a virtualized picker.
+///
+/// The row model is deliberately UI independent of the picker that produced it:
+/// the item, style and gem lists all render the same compact two-line row, so a
+/// very large database only builds the rows inside the viewport.
+#[derive(Clone, PartialEq)]
+pub struct PickerRow {
+    /// Stable key, the game id of the item or style.
+    pub key: u16,
+    /// Primary line.
+    pub title: String,
+    /// Secondary line.
+    pub subtitle: String,
+    /// Accessible name of the whole row.
+    pub accessible: String,
+    /// Accessible name of the add/learn action.
+    pub action_label: String,
+    /// Visible action text.
+    pub action_text: String,
+    /// Adds or learns the row.
+    pub action: Action,
+    /// Toggles the description panel below the list, when the row has one.
+    pub select: Option<State<Option<u16>>>,
+    /// Whether the description panel is currently open for this row.
+    pub selected: bool,
+}
+
+/// The data a virtualized picker builds its visible rows from.
+#[derive(Clone, PartialEq)]
+pub struct PickerData {
+    /// Every filtered row, in display order.
+    pub rows: Rc<Vec<PickerRow>>,
+}
+
+/// Number of picker rows a virtualized list shows before it scrolls.
+///
+/// The list is inside the page's own scroll view; seven rows keep the picker
+/// reachable while the wheel still scrolls the page when the pointer is
+/// outside the list.
+const PICKER_VISIBLE_ROWS: usize = 7;
+
+/// Builds a virtualized picker list with a fixed visible height.
+///
+/// Only the rows inside the viewport are built. The rows keep their stable
+/// `u16` keys across filtering, and the list is a single accessibility list
+/// box rather than a tab stop per off-screen row.
+pub fn picker_list(label: &'static str, rows: Vec<PickerRow>) -> Element {
+    let row_count = rows.len();
+    let visible = row_count.clamp(1, PICKER_VISIBLE_ROWS);
+    let height = theme::layout::picker_row_height() * visible as f32;
+    PickerList {
+        data: PickerData {
+            rows: Rc::new(rows),
+        },
+        height,
+        label,
+        key: DiffKey::None,
+    }
+    .key("picker-list")
+    .into_element()
+}
+
+#[derive(PartialEq)]
+struct PickerList {
+    data: PickerData,
+    height: f32,
+    label: &'static str,
+    key: DiffKey,
+}
+
+impl KeyExt for PickerList {
+    fn key_mut(&mut self) -> &mut DiffKey {
+        &mut self.key
+    }
+}
+
+impl Component for PickerList {
+    fn render(&self) -> impl IntoElement {
+        let data = self.data.clone();
+        let length = self.data.rows.len();
+        let item_size = theme::layout::picker_row_height();
+        rect()
+            .width(Size::fill())
+            .height(Size::px(self.height))
+            .a11y_role(AccessibilityRole::ListBox)
+            .a11y_alt(self.label)
+            .child(
+                VirtualScrollView::new_with_data(data, |item, data: &PickerData| {
+                    data.rows.get(item.index).map_or_else(
+                        || rect().height(Size::px(item.size)).into_element(),
+                        |row| picker_row(row, item.size),
+                    )
+                })
+                .length(length)
+                .item_size(item_size)
+                .show_scrollbar(true)
+                .auto_hide_scrollbars(false)
+                // The picker sits inside the page's scroll view; drag scrolling
+                // here would capture the pointer press and swallow row clicks.
+                .drag_scrolling(false)
+                .key("picker-rows"),
+            )
+            .into_element()
+    }
+}
+
+/// One compact row inside a virtualized picker.
+fn picker_row(row: &PickerRow, height: f32) -> Element {
+    let content = rect()
+        .vertical()
+        .width(Size::flex(1.0))
+        .spacing(theme::space::xxs())
+        .child(
+            a11y_text(row.title.clone())
+                .font_size(theme::font::label())
+                .max_lines(1)
+                .text_overflow(TextOverflow::Ellipsis)
+                .color(theme::text()),
+        )
+        .child(
+            a11y_text(row.subtitle.clone())
+                .font_size(theme::font::micro())
+                .max_lines(1)
+                .text_overflow(TextOverflow::Ellipsis)
+                .color(theme::dim()),
+        );
+    let title: Element = match row.select {
+        Some(expanded) => expanding_name(
+            row.key,
+            row.title.clone(),
+            row.subtitle.clone(),
+            expanded,
+            theme::font::label(),
+        ),
+        None => content.into_element(),
+    };
+    rect()
+        .horizontal()
+        .width(Size::fill())
+        .height(Size::px(height))
+        .key(row.key)
+        .a11y_role(AccessibilityRole::Group)
+        .a11y_alt(row.accessible.clone())
+        .spacing(theme::space::md())
+        .content(Content::Flex)
+        .cross_align(Alignment::Center)
+        .padding(Gaps::new_symmetric(theme::space::xxs(), theme::space::md()))
+        .background(if row.selected {
+            theme::surface_hover()
+        } else {
+            theme::surface()
+        })
+        .corner_radius(theme::radius::control())
+        .child(rect().width(Size::flex(1.0)).child(title))
+        .child(row_action(
+            row.action_label.clone(),
+            row.action_text.clone(),
+            row.action.clone(),
+        ))
+        .into_element()
 }

@@ -136,20 +136,6 @@ fn find_label_text(test: &TestingRunner, needle: &str) -> Option<String> {
     })
 }
 
-/// Finds the `n of m <noun>` page counter, ignoring item names with " of ".
-fn find_counter(test: &TestingRunner) -> Option<String> {
-    test.find(|_, element| {
-        let label = Label::try_downcast(element)?;
-        let label_text = label.text.as_ref();
-        let (count, rest) = label_text.split_once(" of ")?;
-        let total = rest.split_whitespace().next()?;
-        let digits = |value: &str| {
-            !value.is_empty() && value.chars().all(|character| character.is_ascii_digit())
-        };
-        (digits(count) && digits(total)).then(|| label_text.to_owned())
-    })
-}
-
 fn find_node_with_text(test: &TestingRunner, needle: &str) -> Option<freya_testing::TestingNode> {
     test.find(|node, element| {
         let label = Label::try_downcast(element)?;
@@ -791,7 +777,7 @@ fn every_list_is_browsable_and_labelled_the_same_way() {
         "the item list is not browsable without a search"
     );
     assert!(
-        find_label_text(&test, " of ").is_some(),
+        find_label_text(&test, "items").is_some(),
         "the item list does not show how many entries exist"
     );
     assert!(
@@ -1449,7 +1435,7 @@ fn expanded_styles_show_upgrade_choices() {
 }
 
 #[test]
-fn pickers_share_the_same_page_size() {
+fn pickers_virtualize_large_lists_and_keep_the_full_count() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
         return;
@@ -1458,52 +1444,69 @@ fn pickers_share_the_same_page_size() {
     assert!(session.open(0));
     let styles = session.missing_styles().len();
     let gems = session.available_gems().len();
-    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    let items = session.item_database_count();
+    let mut test = launch_sized(fixture.save_dir.clone(), 2000.0);
 
-    if styles > jadeforge_gui::app::PAGE_SIZE {
+    if items > 7 {
+        assert!(click_text(&mut test, "Inventory"));
+        settle(&mut test);
+        assert!(
+            find_label_text(&test, &format!("{items} items")).is_some(),
+            "the item picker does not report the full database size"
+        );
+        let add_buttons = test.find_many(|_, element| {
+            Label::try_downcast(element)
+                .filter(|label| label.text.as_ref() == "Add")
+                .map(|_| ())
+        });
+        assert!(
+            add_buttons.len() < items,
+            "the virtualized item picker built every row ({} of {items})",
+            add_buttons.len()
+        );
+    } else {
+        eprintln!("skipping item virtualization: only {items} items");
+    }
+
+    if styles > 7 {
         assert!(click_text(&mut test, "Styles"));
         assert!(
-            find_label_text(&test, "30 of ").is_some(),
-            "styles do not render the shared page size of 30"
+            find_label_text(&test, &format!("{styles} styles to learn")).is_some(),
+            "the style picker does not report the full count"
+        );
+        let learn_buttons = test.find_many(|_, element| {
+            Label::try_downcast(element)
+                .filter(|label| label.text.as_ref() == "Learn")
+                .map(|_| ())
+        });
+        assert!(
+            learn_buttons.len() < styles,
+            "the virtualized style picker built {} of {styles} rows",
+            learn_buttons.len()
         );
     } else {
-        eprintln!("skipping style page size: only {styles} missing styles");
+        eprintln!("skipping style virtualization: only {styles} learnable styles");
     }
 
-    if gems > jadeforge_gui::app::PAGE_SIZE {
+    if gems > 7 {
         assert!(click_text(&mut test, "Gems"));
         assert!(
-            find_label_text(&test, "30 of ").is_some(),
-            "gems do not render the shared page size of 30"
+            find_label_text(&test, &format!("{gems} gems")).is_some(),
+            "the gem picker does not report the full count"
         );
-        assert!(click_text(&mut test, "Show more"));
-        test.sync_and_update();
+        let add_buttons = test.find_many(|_, element| {
+            Label::try_downcast(element)
+                .filter(|label| label.text.as_ref() == "Add")
+                .map(|_| ())
+        });
         assert!(
-            find_label_text(&test, "60 of ").is_some(),
-            "the page step is not the shared page size"
+            add_buttons.len() < gems,
+            "the virtualized gem picker built {} of {gems} rows",
+            add_buttons.len()
         );
     } else {
-        eprintln!("skipping gem page size: only {gems} gems");
+        eprintln!("skipping gem virtualization: only {gems} gems");
     }
-}
-
-#[test]
-fn show_more_pages_through_the_item_database() {
-    let Some(fixture) = Fixture::create() else {
-        eprintln!("skipping: no savegames found");
-        return;
-    };
-    if !fixture.game_data {
-        eprintln!("skipping: no game data to browse");
-        return;
-    }
-    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
-    assert!(click_text(&mut test, "Inventory"));
-    let before = find_counter(&test).expect("browse counter");
-    assert!(click_text(&mut test, "Show more"), "no show more button");
-    let after = find_counter(&test).expect("browse counter after paging");
-    assert_ne!(before, after, "paging did not change the counter");
-    assert!(after.contains("of"), "{after}");
 }
 
 #[test]
@@ -4347,5 +4350,53 @@ fn an_external_change_is_explained_and_can_be_reloaded() {
     assert!(
         find_label_text(&test, "Level 42").is_some(),
         "the reload did not show the file on disk"
+    );
+}
+
+#[test]
+fn a_virtualized_picker_row_still_opens_its_description() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let Some(item) = session
+        .search_items_filtered("", None, usize::MAX)
+        .0
+        .into_iter()
+        .find(|row| {
+            row.description
+                .as_deref()
+                .is_some_and(|text| !text.trim().is_empty())
+        })
+    else {
+        eprintln!("skipping: no item has a description");
+        return;
+    };
+    let description = item.description.clone().expect("description");
+    let mut test = launch_sized(fixture.save_dir.clone(), 2200.0);
+    assert!(click_text(&mut test, "Inventory"));
+    let title = find_label_exact(&test, &item.name).expect("picker row title");
+    // The owned inventory may share the name; the picker sits below it, so the
+    // bottom-most matching title is the picker row.
+    let nodes = exact_label_nodes(&test, &item.name);
+    let node = nodes
+        .into_iter()
+        .max_by(|left, right| {
+            left.layout()
+                .area
+                .origin
+                .y
+                .total_cmp(&right.layout().area.origin.y)
+        })
+        .unwrap_or(title);
+    click_node(&mut test, &node);
+    let needle: String = description.chars().take(40).collect();
+    assert!(
+        find_text_node(&test, &needle).is_some(),
+        "expanding a virtualized picker row did not show its description"
     );
 }

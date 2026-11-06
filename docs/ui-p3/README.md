@@ -17,7 +17,7 @@ and 1600 px. The windowed suite is never run without explicit permission
 | 2 | high contrast and forced colours | [high-contrast.md](high-contrast.md) | implemented manually; automatic detection blocked upstream |
 | 3 | text scaling to 200 % | [text-scaling.md](text-scaling.md) | implemented |
 | 4 | UI localization | [localization.md](localization.md) | pending |
-| 5 | virtualized browser and pickers | [virtual-lists.md](virtual-lists.md) | pending |
+| 5 | virtualized browser and pickers | [virtual-lists.md](virtual-lists.md) | implemented |
 | 6 | per-action undo/redo | [undo-redo.md](undo-redo.md) | implemented |
 | 7 | pending-changes diff before save | [pending-diff.md](pending-diff.md) | implemented |
 | 8 | backup browsing and restore screen | [backups.md](backups.md) | implemented |

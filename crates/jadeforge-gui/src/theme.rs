@@ -670,6 +670,14 @@ pub mod layout {
     pub fn text_measure() -> f32 {
         scaled(720.0)
     }
+    /// Height of one row in a virtualized picker.
+    ///
+    /// Two text lines plus the action button fit, and the virtual list uses it
+    /// as its fixed item size.
+    #[must_use]
+    pub fn picker_row_height() -> f32 {
+        scaled(56.0)
+    }
     /// Smallest click target of a row control.
     #[must_use]
     pub fn target_min() -> f32 {
@@ -1233,6 +1241,7 @@ mod tests {
             layout::level_width(),
             layout::item_count_width(),
             layout::upgrade_label_width(),
+            layout::picker_row_height(),
             layout::field_narrow(),
             layout::field_medium(),
             layout::field_wide(),
