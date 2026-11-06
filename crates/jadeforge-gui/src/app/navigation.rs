@@ -18,8 +18,8 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
                 candidate.label(),
                 action,
                 rect()
-                    .padding(Gaps::new_symmetric(6., 12.))
-                    .corner_radius(8.)
+                    .padding(Gaps::new_symmetric(theme::space::SM, theme::space::XL))
+                    .corner_radius(theme::radius::MEDIUM)
                     .background(if is_active {
                         theme::SURFACE_ACTIVE
                     } else {
@@ -27,7 +27,7 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
                     })
                     .child(
                         crate::widgets::a11y_text(candidate.label())
-                            .font_size(12.)
+                            .font_size(theme::font::LABEL)
                             .max_lines(1)
                             // Keep the weight constant: bold text is wider,
                             // so toggling it moved the active tab.
@@ -49,14 +49,19 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(0.)
+        .spacing(theme::space::NONE)
         .child(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(4.)
-                .content(Content::wrap_spacing(4.))
-                .padding(Gaps::new(10., 18., 8., 18.))
+                .spacing(theme::space::XS)
+                .content(Content::wrap_spacing(theme::space::XS))
+                .padding(Gaps::new(
+                    theme::space::LG,
+                    theme::space::CARD,
+                    theme::space::MD,
+                    theme::space::CARD,
+                ))
                 .a11y_role(AccessibilityRole::TabList)
                 .children(buttons)
                 .into_element(),
@@ -64,7 +69,7 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab) -> Element {
         .child(
             rect()
                 .width(Size::fill())
-                .height(Size::px(1.))
+                .height(Size::px(theme::layout::DIVIDER))
                 .background(theme::BORDER)
                 .into_element(),
         )
