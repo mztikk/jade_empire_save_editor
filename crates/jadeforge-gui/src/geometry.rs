@@ -121,7 +121,7 @@ pub fn monitor_work_area(
 
 /// Remembers the window rectangle when the window closes.
 ///
-/// The close hook of a [`WindowConfig`] only sees the renderer context, whose
+/// The close hook of a `WindowConfig` only sees the renderer context, whose
 /// window is private to `freya-winit`, so the plugin event is the supported way
 /// to read the final size and position. Wayland does not report a window
 /// position; the stored one is kept in that case.

@@ -200,7 +200,7 @@ pub mod layout {
     /// together instead of spreading a paragraph across the whole screen.
     pub const EDITOR_MAX_WIDTH: f32 = 1100.0;
     /// Largest width of a run of body text, about 75 characters at
-    /// [`font::BODY`].
+    /// [`font::BODY`](crate::theme::font::BODY).
     pub const TEXT_MEASURE: f32 = 720.0;
     /// Smallest click target of a row control.
     ///
