@@ -2,7 +2,7 @@
 
 **Reviewed:** 2026-11-05, P1 follow-up 2026-11-06 · **Base:** `main` at `6e1d4b8`
 **Scope:** the Freya 0.5 desktop UI in `crates/jadeforge-gui`, the session state it renders, and the real 89-savegame corpus.
-**Status:** P0 release blockers are addressed and the P1 follow-ups are implemented on `fix/ui-p1-followups`, with the exceptions listed under P1. P2/P3 work is tracked in GitHub issues; the remaining upstream blocker is the missing `Input` label association.
+**Status:** P0 release blockers are addressed and the P1 follow-ups are implemented on `fix/ui-p1-followups`, with the verification gaps listed under P1. P2/P3 work is tracked in GitHub issues; the remaining upstream blocker is the missing `Input` label association.
 
 ![JadeForge overview](screenshot.png)
 
@@ -50,11 +50,14 @@ Addressed on the `fix/ui-p1-followups` branch:
 
 Still open for #7:
 
-- The window-geometry plugin and the scroll-view paging keys are window-path
-  behaviour. The headless suite covers the pure geometry and the focus target,
-  but the real window and the resulting scroll offset were not run (the
-  windowed suite needs explicit permission).
-- The status live region still needs a screen-reader pass with Orca or NVDA.
+- `just live` passed all five windowed scenarios, so real window creation,
+  presentation, pointer input and keyboard navigation are verified. There is
+  no live scenario that closes and reopens the window to observe the stored
+  rectangle, and the scroll-view paging keys only have their focus target
+  asserted, so the remembered geometry and the real scroll offset remain
+  unverified.
+- The status live region still needs a screen-reader pass with Orca or NVDA
+  (neither is installed on the review machine).
 
 ### P2: [#8](https://github.com/mztikk/jade_empire_save_editor/issues/8)
 
@@ -92,9 +95,9 @@ tracked as an open issue:
 
 ## Verification
 
-- `just check`: workspace tests, clippy and formatting clean after the P1 work (see `docs/COVERAGE.md` for the current counts and coverage).
+- `just check`: 396 workspace tests passed (1 skipped: the opt-in live suite), clippy and formatting clean after the P1 work (see `docs/COVERAGE.md` for coverage).
 - Headless coverage of the P1 work: geometry at 1180x760, 900x700 and 1600x900; DPI geometry for 1366x768 at 125 %; scan-keeps-save; dirty content comparison; invalid-form save independence; first-invalid-field focus; focus restoration after removal; target sizes; keyboard scrolling focus; the 89-save render test.
-- `just live` was **not** run for this branch. The window geometry plugin, the presentation of the new theme values and the scroll-view paging keys are window-path behaviour and remain unverified in a real window.
+- `just live`: all five windowed scenarios passed on Wayland with the KWin input backend at 1180x760. The window opened at the configured size, save opening and tab switching, item filtering, keyboard save-list navigation and real frame presentation all worked; the captured frame was written to the ignored `target/live-ui/presented.png`. Every scenario used its own settings directory.
 - Live AT-SPI check: static text, count, status, tab selected state and the focusable save list box were current; the desktop accessibility setting was restored afterwards. This was the P0 review; the P1 status live region has not been re-validated with a screen reader.
 - The P0 work is merged on `main`; the remaining P1 items and #8/#9 are tracked in the issues above.
 
