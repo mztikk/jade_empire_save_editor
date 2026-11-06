@@ -32,6 +32,9 @@ futures-channel = "0.3"
 jadeforge-core.workspace = true
 jadeforge-session.workspace = true
 freya = { workspace = true, features = ["engine"] }
+# Window geometry is read through the plugin events; `freya` only re-exports
+# the winit crate, not the plugin types.
+freya-winit = "0.5.0"
 rfd.workspace = true
 
 [build-dependencies]

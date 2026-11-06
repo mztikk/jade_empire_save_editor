@@ -118,18 +118,20 @@ pub fn stat(label_text: &'static str, value: String) -> Element {
 /// The four hero values stay a 2x2 block at every supported width instead of
 /// wrapping 3+1, which used to leave the last value alone under a wide row.
 pub fn stat_grid(children: Vec<Element>) -> Element {
-    let rows: Vec<Element> = children
-        .chunks(2)
-        .map(|pair| {
+    let mut remaining = children.into_iter();
+    let mut rows: Vec<Element> = Vec::new();
+    while remaining.len() > 0 {
+        let pair: Vec<Element> = remaining.by_ref().take(2).collect();
+        rows.push(
             rect()
                 .horizontal()
                 .width(Size::fill())
                 .spacing(theme::space::GRID)
                 .content(Content::Flex)
-                .children(pair.iter().cloned())
-                .into_element()
-        })
-        .collect();
+                .children(pair)
+                .into_element(),
+        );
+    }
     rect()
         .vertical()
         .width(Size::fill())

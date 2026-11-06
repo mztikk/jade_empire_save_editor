@@ -154,18 +154,39 @@ pub fn window_config<E>(app: impl Fn() -> E + 'static) -> WindowConfig
 where
     E: IntoElement + 'static,
 {
+    use freya::winit::dpi::{LogicalPosition, LogicalSize};
+
+    let preferred = (
+        f64::from(theme::layout::WINDOW_WIDTH),
+        f64::from(theme::layout::WINDOW_HEIGHT),
+    );
+    let minimum = (
+        f64::from(theme::layout::MIN_WINDOW_WIDTH),
+        f64::from(theme::layout::MIN_WINDOW_HEIGHT),
+    );
+    let stored = crate::config::Config::load().window;
+    // Without a monitor (a headless start or a failed query) the preferred
+    // rectangle is used; the attributes hook replaces it with the fitted one
+    // once the real monitor is known.
+    let fallback = crate::geometry::fit_window(preferred, stored, None, minimum);
+
     WindowConfig::new(app)
         .with_title(WINDOW_TITLE)
         .with_icon(LaunchConfig::window_icon(ICON_PNG))
         .with_app_id(APP_ID)
-        .with_size(
-            theme::layout::WINDOW_WIDTH.into(),
-            theme::layout::WINDOW_HEIGHT.into(),
-        )
-        .with_min_size(
-            theme::layout::MIN_WINDOW_WIDTH.into(),
-            theme::layout::MIN_WINDOW_HEIGHT.into(),
-        )
+        .with_size(fallback.width, fallback.height)
+        .with_min_size(fallback.min_width, fallback.min_height)
+        .with_window_attributes(move |attributes, event_loop| {
+            let work = crate::geometry::monitor_work_area(event_loop);
+            let fitted = crate::geometry::fit_window(preferred, stored, work, minimum);
+            let attributes = attributes
+                .with_inner_size(LogicalSize::new(fitted.width, fitted.height))
+                .with_min_inner_size(LogicalSize::new(fitted.min_width, fitted.min_height));
+            match (fitted.x, fitted.y) {
+                (Some(x), Some(y)) => attributes.with_position(LogicalPosition::new(x, y)),
+                _ => attributes,
+            }
+        })
         .with_on_close(|_, _| {
             if !ui_is_dirty() {
                 return CloseDecision::Close;

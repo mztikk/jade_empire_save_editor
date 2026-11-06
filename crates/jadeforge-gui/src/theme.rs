@@ -212,6 +212,8 @@ pub mod layout {
     pub const MIN_WINDOW_WIDTH: f32 = 900.0;
     /// Smallest supported window height.
     pub const MIN_WINDOW_HEIGHT: f32 = 700.0;
+    /// Free space kept between a window and the monitor edges.
+    pub const WINDOW_MARGIN: f32 = 16.0;
 }
 
 /// The colour sheet used by every component theme.

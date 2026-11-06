@@ -1788,9 +1788,9 @@ fn a_save_without_gold_opens_without_an_invalid_form() {
 }
 
 /// Layout area of an exact label, which is the visible anchor of its field.
-fn label_area(test: &TestingRunner, text: &str) -> freya::prelude::Area {
-    find_label_exact(test, text)
-        .unwrap_or_else(|| panic!("missing label {text:?}"))
+fn label_area(test: &TestingRunner, wanted: &str) -> freya::prelude::Area {
+    find_label_exact(test, wanted)
+        .expect("the label should be rendered")
         .layout()
         .area
 }
