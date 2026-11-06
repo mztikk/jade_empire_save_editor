@@ -290,6 +290,16 @@ pub fn set_test_game_root(root: Option<PathBuf>) {
     TEST_ROOT.with(|cell| *cell.borrow_mut() = root);
 }
 
+/// Returns the game root installed for the current thread (tests only).
+///
+/// A worker that must resolve game data like the UI thread captures this value
+/// on the UI thread and installs it for the duration of its own lookup.
+#[doc(hidden)]
+#[must_use]
+pub fn test_game_root() -> Option<PathBuf> {
+    TEST_ROOT.with(|cell| cell.borrow().clone())
+}
+
 impl GameData {
     /// Tries to find the game installation that a savegame belongs to.
     ///

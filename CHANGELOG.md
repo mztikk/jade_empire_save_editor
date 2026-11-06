@@ -25,6 +25,12 @@ All notable changes are documented here. The format follows
   dirty flag again; Scan keeps the open savegame when the folder did not
   change; a missing, unreadable, empty and file path are reported separately;
   only a successful scan replaces the remembered folder.
+- Every scan (startup, the Scan button, Enter on the folder field, F5 and
+  Browse) runs on a worker thread with an in-flight status and a Cancel
+  action. Cancelled, failed and superseded scans keep the entries and open
+  savegame on screen, discard stale results through a scan token, and persist
+  nothing; the game data is read on the same worker and the first frame shows
+  a loading state instead of waiting for it.
 - The missing game installation can be chosen from the header, is remembered
   in the settings file, and the discovered root is shown; sections that could
   not be read are no longer rendered as empty lists.

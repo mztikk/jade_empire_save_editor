@@ -18,6 +18,7 @@ pub fn view(
     query: State<String>,
     results: &[ItemSuggestion],
     game_ready: bool,
+    game_loading: bool,
     matching: usize,
     total_items: usize,
     expanded: State<Option<usize>>,
@@ -118,6 +119,10 @@ pub fn view(
                     .into_element(),
             );
         }
+    } else if game_loading {
+        children.push(widgets::hint(
+            "Reading the game data; existing items can already be edited and removed.",
+        ));
     } else {
         children.push(widgets::hint(
             "The game data was not found, so items can only be removed, not added. \

@@ -22,6 +22,7 @@ pub fn view(
     query: State<String>,
     matches: &[StyleSuggestion],
     game_ready: bool,
+    game_loading: bool,
     names_ready: bool,
     learnable: Option<usize>,
     matching: usize,
@@ -123,6 +124,10 @@ pub fn view(
                     .into_element(),
             );
         }
+    } else if game_loading {
+        children.push(widgets::hint(
+            "Reading the game data; learned styles can already be inspected and removed.",
+        ));
     } else if names_ready {
         children.push(widgets::hint(
             "Bundled English names are loaded, but new styles and upgrade details still need \

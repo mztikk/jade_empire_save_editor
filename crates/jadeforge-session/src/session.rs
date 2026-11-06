@@ -310,6 +310,130 @@ pub fn visible_entries(
     indices
 }
 
+thread_local! {
+    /// Artificial delay applied to worker scans started from this thread.
+    ///
+    /// The headless UI test uses it to observe the in-flight state; it is
+    /// captured into the request on the UI thread and applied on the worker, so
+    /// it can never slow down another thread or the real application.
+    static SCAN_DELAY: std::cell::Cell<std::time::Duration> =
+        const { std::cell::Cell::new(std::time::Duration::ZERO) };
+}
+
+/// Delays worker scans started from the current thread (tests only).
+#[doc(hidden)]
+pub fn set_scan_delay_for_tests(delay: std::time::Duration) {
+    SCAN_DELAY.with(|cell| cell.set(delay));
+}
+
+/// Environment a scan worker needs to behave exactly like the UI thread.
+///
+/// The gamedata test root and the settings file path are thread local for test
+/// isolation, so a worker cannot read them itself. They are captured when the
+/// scan starts and installed on the worker for the duration of the lookup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GameDataContext {
+    test_root: Option<PathBuf>,
+    config_path: Option<PathBuf>,
+    scan_delay: std::time::Duration,
+}
+
+impl GameDataContext {
+    /// Captures the current thread's test overrides and settings path.
+    #[must_use]
+    pub fn capture() -> Self {
+        Self {
+            test_root: jadeforge_gamedata::test_game_root(),
+            config_path: crate::config::Config::path(),
+            scan_delay: SCAN_DELAY.with(std::cell::Cell::get),
+        }
+    }
+
+    /// Resolves the installation for `directory`, exactly like the UI would.
+    ///
+    /// `JADEFORGE_GAME_DIR` and a broken discovery still win, and a
+    /// user-chosen installation from the settings file is the fallback, so the
+    /// worker keeps the documented precedence.
+    fn load_game_data(&self, directory: &Path) -> jadeforge_gamedata::Result<Option<GameData>> {
+        jadeforge_gamedata::set_test_game_root(self.test_root.clone());
+        let configured = self
+            .config_path
+            .as_ref()
+            .and_then(|path| crate::config::Config::load_from(&Some(path.clone())).game_dir);
+        let result = match GameData::discover_result(directory) {
+            Ok(Some(game)) => Ok(Some(game)),
+            Ok(None) => configured.map_or(Ok(None), |root| GameData::open(root).map(Some)),
+            Err(error) => Err(error),
+        };
+        jadeforge_gamedata::set_test_game_root(None);
+        result
+    }
+}
+
+/// A scan that has started; the UI hands it to a worker and back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScanRequest {
+    directory: PathBuf,
+    token: u64,
+    context: GameDataContext,
+}
+
+impl ScanRequest {
+    /// Folder this scan reads.
+    #[must_use]
+    pub fn directory(&self) -> &Path {
+        &self.directory
+    }
+
+    /// Scan generation; a newer scan always has a higher token.
+    #[must_use]
+    pub fn token(&self) -> u64 {
+        self.token
+    }
+}
+
+/// Everything a scan worker produces for one request.
+pub struct ScanOutcome {
+    entries: Vec<SaveEntry>,
+    game: Result<Option<GameData>, String>,
+}
+
+impl ScanOutcome {
+    /// Runs the worker half of `request`: list savegames and resolve game data.
+    ///
+    /// This touches no session state and can run on any thread.
+    #[must_use]
+    pub fn run(request: &ScanRequest) -> Self {
+        if !request.context.scan_delay.is_zero() {
+            std::thread::sleep(request.context.scan_delay);
+        }
+        let entries = Session::scan_entries(&request.directory);
+        let game = request
+            .context
+            .load_game_data(&request.directory)
+            .map_err(|error| error.to_string());
+        Self { entries, game }
+    }
+}
+
+/// What a completed scan committed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScanCompletion {
+    /// True when the scan replaced the folder instead of refreshing it.
+    pub directory_changed: bool,
+}
+
+/// Result of applying a worker scan to the session.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScanApply {
+    /// The result was current and was committed.
+    Applied(ScanCompletion),
+    /// The result was current but the folder could not be read any more.
+    Failed,
+    /// A newer scan or a cancellation superseded the result.
+    Stale,
+}
+
 /// A loaded editing session.
 pub struct Session {
     /// Folder that is currently scanned.
@@ -361,6 +485,12 @@ pub struct Session {
     file_size: Option<u64>,
     preview_generation: u64,
     scan_token: u64,
+    /// Directory and token of a scan that is running on a worker.
+    ///
+    /// The session keeps its current directory, entries and open savegame until
+    /// the matching result is applied, so a cancelled or failed scan leaves the
+    /// screen untouched.
+    scanning: Option<(PathBuf, u64)>,
 }
 
 impl Default for Session {
@@ -386,13 +516,43 @@ impl Session {
 
     /// Creates a session without scanning the directory.
     ///
-    /// The UI shows its first frame immediately and calls [`Session::scan`]
-    /// afterwards, so opening the window does not wait for every savegame.
+    /// The game installation is read on the calling thread. The UI uses
+    /// [`Session::pending`] instead, so opening the window neither scans the
+    /// savegames nor reads the game data synchronously.
     #[must_use]
     pub fn empty(directory: impl Into<PathBuf>) -> Self {
-        let directory = directory.into();
-        let mut session = Self {
-            directory,
+        let mut session = Self::unloaded(directory);
+        session.load_game_data();
+        session
+    }
+
+    /// Creates a session whose first scan the caller runs on a worker.
+    ///
+    /// Unlike [`Session::empty`] this never reads a savegame or the game data on
+    /// the calling thread: the game data is [`GameStatus::Loading`] until the
+    /// matching [`Session::complete_scan`] applies the worker result. The UI
+    /// renders its first frame from this state and starts the scan itself.
+    #[must_use]
+    pub fn pending(directory: impl Into<PathBuf>) -> Self {
+        let mut session = Self::unloaded(directory);
+        if session.directory.as_os_str().is_empty() {
+            session.game_status = GameStatus::Missing;
+            session.message =
+                Message::info("Choose the folder that contains your Jade Empire savegames.");
+        } else {
+            session.game_status = GameStatus::Loading;
+            session.message = Message::info(format!(
+                "Scanning {} for savegames…",
+                session.directory.display()
+            ));
+        }
+        session
+    }
+
+    /// Builds the empty session state without reading the game installation.
+    fn unloaded(directory: impl Into<PathBuf>) -> Self {
+        Self {
+            directory: directory.into(),
             entries: Rc::new(Vec::new()),
             selected: None,
             save: None,
@@ -414,38 +574,24 @@ impl Session {
             file_size: None,
             preview_generation: 0,
             scan_token: 0,
-        };
-        session.load_game_data();
-        session
+            scanning: None,
+        }
     }
 
-    /// Changes the directory and scans it.
+    /// Changes the directory and scans it synchronously.
     ///
-    /// Refuses to throw away unsaved changes, rejects a folder that cannot be
-    /// read instead of showing it as empty, and keeps the open savegame when
-    /// the folder did not actually change. The chosen folder is only persisted
-    /// after a successful scan, so a rejected Scan leaves the remembered path
-    /// alone.
+    /// This is the convenience path for tests and non-UI callers. The desktop
+    /// UI uses [`Session::begin_scan`] plus [`Session::complete_scan`] on a
+    /// worker, so no savegame or game data is read on the UI thread. The
+    /// semantics are otherwise identical: unsaved changes and unreadable
+    /// folders are rejected, a same-folder refresh keeps the open savegame, and
+    /// only a successful scan replaces the remembered folder.
     pub fn set_directory(&mut self, directory: impl Into<PathBuf>) -> bool {
-        let directory = directory.into();
-        if self.is_dirty() {
-            self.message = Message::info(
-                "This savegame has unsaved changes: save them or press Revert before scanning.",
-            );
+        let Some(request) = self.begin_scan(directory) else {
             return false;
-        }
-        if let Some(problem) = directory_problem(&directory) {
-            self.message = Message::error(problem);
-            return false;
-        }
-        let same = same_directory(&self.directory, &directory);
-        if !same {
-            self.clear_open_save();
-        }
-        self.directory = directory;
-        self.scan();
-        self.persist_directory();
-        true
+        };
+        let outcome = ScanOutcome::run(&request);
+        matches!(self.complete_scan(&request, outcome), ScanApply::Applied(_))
     }
 
     /// Drops the opened savegame but keeps the entry list.
@@ -513,65 +659,151 @@ impl Session {
             .collect()
     }
 
-    /// Scans the directory for savegames and loads the game data.
+    /// Scans the directory for savegames synchronously.
+    ///
+    /// Tests and non-UI callers use this; the desktop UI starts the same work
+    /// with [`Session::begin_scan`] on a worker. The game data is refreshed by
+    /// [`Session::complete_scan`], never here.
     pub fn scan(&mut self) {
-        self.scan_token = self.scan_token.wrapping_add(1);
-        self.load_game_data();
-        let entries = Self::scan_entries(&self.directory);
-        self.apply_entries(entries);
+        let Some(request) = self.begin_scan(self.directory.clone()) else {
+            return;
+        };
+        let outcome = ScanOutcome::run(&request);
+        let _ = self.complete_scan(&request, outcome);
     }
 
-    /// Token identifying the current scan. The GUI captures it before starting
-    /// a worker and uses it to discard a stale result.
+    /// Token identifying the current scan generation.
     #[must_use]
     pub fn scan_token(&self) -> u64 {
         self.scan_token
     }
 
-    /// Applies a worker result only when it still belongs to the current
-    /// directory and scan generation.
-    pub fn apply_entries_for(
-        &mut self,
-        directory: &Path,
-        token: u64,
-        entries: Vec<SaveEntry>,
-    ) -> bool {
-        if self.directory != directory || self.scan_token != token {
+    /// True while a worker scan is in flight.
+    #[must_use]
+    pub fn is_scanning(&self) -> bool {
+        self.scanning.is_some()
+    }
+
+    /// Folder the in-flight scan is reading, when one is running.
+    #[must_use]
+    pub fn scanning_directory(&self) -> Option<&Path> {
+        self.scanning
+            .as_ref()
+            .map(|(directory, _)| directory.as_path())
+    }
+
+    /// Starts a scan of `directory` and returns the request a worker should run.
+    ///
+    /// The current directory, entry list and open savegame are left untouched
+    /// until the matching [`Session::complete_scan`] applies the result, so the
+    /// UI can keep showing the old savegame while the scan is in flight. A
+    /// newer request supersedes an older one and discards its result. No folder
+    /// is persisted here; only a successful scan does that.
+    ///
+    /// `None` means the scan was refused; the status message explains why and
+    /// the previous state is unchanged.
+    pub fn begin_scan(&mut self, directory: impl Into<PathBuf>) -> Option<ScanRequest> {
+        let directory = directory.into();
+        if self.is_dirty() {
+            self.message = Message::info(
+                "This savegame has unsaved changes: save them or press Revert before scanning.",
+            );
+            self.settle_loading_game_data();
+            return None;
+        }
+        if directory.as_os_str().is_empty() {
+            self.message =
+                Message::info("Choose the folder that contains your Jade Empire savegames.");
+            self.settle_loading_game_data();
+            return None;
+        }
+        if let Some(problem) = directory_problem(&directory) {
+            self.message = Message::error(problem);
+            self.settle_loading_game_data();
+            return None;
+        }
+        self.scan_token = self.scan_token.wrapping_add(1);
+        let token = self.scan_token;
+        self.scanning = Some((directory.clone(), token));
+        self.message = Message::info(format!("Scanning {} for savegames…", directory.display()));
+        Some(ScanRequest {
+            directory,
+            token,
+            context: GameDataContext::capture(),
+        })
+    }
+
+    /// Applies the result of [`ScanOutcome::run`] to the session.
+    ///
+    /// Only the request that is still in flight is applied. The directory,
+    /// entries and game data are committed together, an open savegame is kept
+    /// when the folder did not change, and only this successful path persists
+    /// the folder.
+    pub fn complete_scan(&mut self, request: &ScanRequest, outcome: ScanOutcome) -> ScanApply {
+        if !self.is_current_scan(request) {
+            return ScanApply::Stale;
+        }
+        if let Some(problem) = directory_problem(&request.directory) {
+            self.message = Message::error(problem);
+            self.settle_loading_game_data();
+            self.finish_scan();
+            return ScanApply::Failed;
+        }
+        let directory_changed = !same_directory(&self.directory, &request.directory);
+        if directory_changed {
+            self.clear_open_save();
+        }
+        self.directory.clone_from(&request.directory);
+        self.apply_game_data(outcome.game);
+        self.apply_entries(outcome.entries);
+        if self.save.is_some() {
+            // The game data may resolve different names and upgrade tables.
+            self.rebuild_rows();
+        }
+        self.persist_directory();
+        self.finish_scan();
+        ScanApply::Applied(ScanCompletion { directory_changed })
+    }
+
+    /// Reports a worker that could not produce a result.
+    ///
+    /// Returns whether the request was still current. The previous entries,
+    /// savegame and directory are kept and nothing is persisted.
+    pub fn fail_scan(&mut self, request: &ScanRequest) -> bool {
+        if !self.is_current_scan(request) {
             return false;
         }
-        if let Some(problem) = directory_problem(directory) {
-            self.report_scan_problem(problem);
-            return true;
-        }
-        self.apply_entries(entries);
-        true
-    }
-
-    /// Reports a folder that disappeared or cannot be listed between the scan
-    /// and its result, instead of pretending it is empty.
-    fn report_scan_problem(&mut self, problem: String) {
-        self.message = Message::error(problem);
-        self.entries = Rc::new(Vec::new());
-        self.clear_open_save();
-    }
-
-    /// Reports a failed background scan only when it still belongs to the
-    /// current directory and scan generation.
-    pub fn report_scan_failure_for(&mut self, directory: &Path, token: u64) -> bool {
-        if self.directory != directory || self.scan_token != token {
-            return false;
-        }
-        self.report_scan_failure();
-        true
-    }
-
-    /// Reports that the background scan could not be completed.
-    pub fn report_scan_failure(&mut self) {
-        Rc::make_mut(&mut self.entries).clear();
         self.message = Message::error(format!(
             "Could not scan {}: the savegame reader stopped unexpectedly.",
-            self.directory.display()
+            request.directory.display()
         ));
+        self.settle_loading_game_data();
+        self.finish_scan();
+        true
+    }
+
+    /// Cancels the in-flight scan, keeping the entries and savegame on screen.
+    ///
+    /// The matching worker result is discarded through the bumped token. Returns
+    /// whether a scan was actually in flight.
+    pub fn cancel_scan(&mut self) -> bool {
+        if self.scanning.take().is_none() {
+            return false;
+        }
+        self.scan_token = self.scan_token.wrapping_add(1);
+        self.settle_loading_game_data();
+        self.message = Message::info("Scan cancelled; the savegames on screen are unchanged.");
+        true
+    }
+
+    fn is_current_scan(&self, request: &ScanRequest) -> bool {
+        self.scanning.as_ref().is_some_and(|(directory, token)| {
+            directory == &request.directory && *token == request.token
+        })
+    }
+
+    fn finish_scan(&mut self) {
+        self.scanning = None;
     }
 
     /// Remembers the folder for the next start (best effort).
@@ -593,16 +825,19 @@ impl Session {
     }
 
     /// Loads the game installation that belongs to the save folder.
+    ///
+    /// Synchronous callers use this; a worker scan goes through
+    /// [`ScanOutcome::run`] and [`Session::complete_scan`] instead.
     fn load_game_data(&mut self) -> Vec<String> {
-        // A user-chosen installation from Settings is the fallback when the
-        // save folder has none; `JADEFORGE_GAME_DIR` and a broken discovery
-        // still win, exactly like the gamedata crate documents.
-        let configured = crate::config::Config::load().game_dir;
-        let result = match GameData::discover_result(&self.directory) {
-            Ok(Some(game)) => Ok(Some(game)),
-            Ok(None) => configured.map_or(Ok(None), |root| GameData::open(root).map(Some)),
-            Err(error) => Err(error),
-        };
+        let context = GameDataContext::capture();
+        let result = context
+            .load_game_data(&self.directory)
+            .map_err(|error| error.to_string());
+        self.apply_game_data(result)
+    }
+
+    /// Applies a resolved game installation, or its error, to the session.
+    fn apply_game_data(&mut self, result: Result<Option<GameData>, String>) -> Vec<String> {
         match result {
             Ok(Some(game)) => {
                 self.game_status = GameStatus::Loaded {
@@ -616,22 +851,24 @@ impl Session {
             }
             Ok(None) => {
                 self.game = None;
-                self.game_status = match self.name_index {
-                    Some(names) if names.item_count() > 0 || names.style_count() > 0 => {
-                        GameStatus::NamesOnly {
-                            items: names.item_count(),
-                            styles: names.style_count(),
-                        }
-                    }
-                    _ => GameStatus::Missing,
-                };
+                self.game_status = bundled_game_status(self.name_index);
                 Vec::new()
             }
-            Err(error) => {
+            Err(message) => {
                 self.game = None;
-                self.game_status = GameStatus::Error(error.to_string());
-                vec![format!("game data: {error}")]
+                self.game_status = GameStatus::Error(message.clone());
+                vec![format!("game data: {message}")]
             }
+        }
+    }
+
+    /// Replaces a pending "loading" status with the best state available.
+    ///
+    /// A startup scan that is rejected, cancelled or cannot complete must not
+    /// leave the header claiming that game data is still being read.
+    fn settle_loading_game_data(&mut self) {
+        if matches!(self.game_status, GameStatus::Loading) {
+            self.game_status = bundled_game_status(self.name_index);
         }
     }
 
@@ -1886,6 +2123,17 @@ fn describe_effect(game: &GameData, effect: &jadeforge_core::GemEffect) -> Strin
     }
 }
 
+/// Status to show when no installation is available.
+fn bundled_game_status(name_index: Option<&'static NameIndex>) -> GameStatus {
+    match name_index {
+        Some(names) if names.item_count() > 0 || names.style_count() > 0 => GameStatus::NamesOnly {
+            items: names.item_count(),
+            styles: names.style_count(),
+        },
+        _ => GameStatus::Missing,
+    }
+}
+
 /// Describes why `directory` cannot be scanned as a save folder.
 ///
 /// An existing but empty folder is not a problem: the scan reports that it
@@ -2305,10 +2553,14 @@ mod tests {
     }
 
     #[test]
-    fn empty_session_has_a_message() {
+    fn a_missing_startup_folder_is_reported_as_missing() {
         let session = Session::with_directory("/definitely/not/a/save/directory");
         assert_eq!(session.entries.len(), 0, "no savegames expected here");
-        assert!(session.message.text.contains("No savegames"));
+        assert!(
+            session.message.text.contains("does not exist"),
+            "{}",
+            session.message.text
+        );
     }
 
     #[test]
@@ -2413,18 +2665,189 @@ mod tests {
     }
     #[test]
     fn background_scan_results_can_be_applied() {
-        let directory =
-            std::env::temp_dir().join(format!("jadeforge-empty-session-{}", std::process::id()));
-        std::fs::create_dir_all(&directory).expect("temp dir");
-        let mut session = Session::empty(&directory);
-        assert_eq!(session.entries.len(), 0);
-        let entries = Session::scan_entries(&directory);
-        assert_eq!(entries.len(), 0);
-        session.apply_entries(entries);
+        let directory = TempDir::new("empty-scan");
+        let mut session = Session::pending(directory.path());
+        assert!(matches!(session.game_status(), GameStatus::Loading));
+        let request = session.begin_scan(directory.path()).expect("begin");
+        assert!(session.is_scanning());
+        let outcome = ScanOutcome::run(&request);
+        assert!(matches!(
+            session.complete_scan(&request, outcome),
+            ScanApply::Applied(ScanCompletion {
+                directory_changed: false
+            })
+        ));
+        assert!(!session.is_scanning());
         assert!(session.message.text.contains("No savegames found"));
-        session.report_scan_failure();
-        assert!(session.message.text.contains("Could not scan"));
-        let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn a_worker_scan_keeps_the_save_for_the_same_folder() {
+        let (directory, mut session) = fixture();
+        let path = session.current_path();
+        let request = session.begin_scan(directory.path()).expect("begin");
+        assert!(session.save.is_some(), "the save disappears while scanning");
+        let applied = session.complete_scan(&request, ScanOutcome::run(&request));
+        let ScanApply::Applied(completion) = applied else {
+            panic!("the scan was not applied: {applied:?}");
+        };
+        assert!(!completion.directory_changed);
+        assert_eq!(session.selected(), Some(0));
+        assert_eq!(session.current_path(), path);
+        assert!(session.character.is_some());
+    }
+
+    #[test]
+    fn a_new_folder_scan_clears_the_save_only_when_it_completes() {
+        let (_directory, mut session) = fixture();
+        let other = TempDir::new("new-folder");
+        let request = session.begin_scan(other.path()).expect("begin");
+        assert!(
+            session.save.is_some(),
+            "the old save must stay visible while the scan runs"
+        );
+        let applied = session.complete_scan(&request, ScanOutcome::run(&request));
+        let ScanApply::Applied(completion) = applied else {
+            panic!("the scan was not applied: {applied:?}");
+        };
+        assert!(completion.directory_changed);
+        assert_eq!(session.directory(), other.path());
+        assert!(session.save.is_none());
+        assert!(session.selected.is_none());
+    }
+
+    #[test]
+    fn a_cancelled_scan_keeps_the_previous_entries_and_save() {
+        let (directory, mut session) = fixture();
+        let other = TempDir::new("cancel-other");
+        fs::copy(
+            directory.path().join("save.sac"),
+            other.path().join("save.sac"),
+        )
+        .expect("copy save");
+        let request = session.begin_scan(other.path()).expect("begin");
+        assert!(session.is_scanning());
+        assert!(session.cancel_scan());
+        assert!(!session.is_scanning());
+        assert_eq!(session.directory(), directory.path());
+        assert_eq!(session.selected(), Some(0));
+        assert_eq!(session.entries().len(), 1);
+        assert!(session.message().text.contains("cancelled"));
+
+        // The worker result that arrives afterwards must be discarded.
+        let applied = session.complete_scan(&request, ScanOutcome::run(&request));
+        assert_eq!(applied, ScanApply::Stale);
+        assert_eq!(session.directory(), directory.path());
+        assert!(session.save.is_some());
+        assert!(!session.is_scanning());
+    }
+
+    #[test]
+    fn a_failed_scan_keeps_the_previous_entries_and_save() {
+        let (directory, mut session) = fixture();
+        let other = TempDir::new("failed-other");
+        fs::copy(
+            directory.path().join("save.sac"),
+            other.path().join("save.sac"),
+        )
+        .expect("copy save");
+        let request = session.begin_scan(other.path()).expect("begin");
+        fs::remove_dir_all(other.path()).expect("remove folder");
+        let applied = session.complete_scan(&request, ScanOutcome::run(&request));
+        assert_eq!(applied, ScanApply::Failed);
+        assert!(!session.is_scanning());
+        assert_eq!(session.directory(), directory.path());
+        assert_eq!(session.selected(), Some(0));
+        assert_eq!(session.entries().len(), 1);
+        assert!(
+            session.message().text.contains("does not exist"),
+            "{}",
+            session.message().text
+        );
+    }
+
+    #[test]
+    fn a_worker_failure_reports_without_clearing() {
+        let (directory, mut session) = fixture();
+        let other = TempDir::new("panic-other");
+        let request = session.begin_scan(other.path()).expect("begin");
+        assert!(session.fail_scan(&request));
+        assert!(!session.is_scanning());
+        assert_eq!(session.directory(), directory.path());
+        assert!(session.save.is_some());
+        assert!(
+            session.message().text.contains("Could not scan"),
+            "{}",
+            session.message().text
+        );
+        // The request is no longer current.
+        assert!(!session.fail_scan(&request));
+    }
+
+    #[test]
+    fn a_scan_persists_the_folder_only_when_it_completes() {
+        crate::config::ensure_test_path();
+        let (directory, mut session) = fixture();
+        let mut config = crate::config::Config::load();
+        config.save_dir = Some(directory.path().to_path_buf());
+        config.store().expect("store settings");
+
+        let other = TempDir::new("persist-other");
+        let request = session.begin_scan(other.path()).expect("begin");
+        assert_eq!(
+            crate::config::Config::load().save_dir,
+            Some(directory.path().to_path_buf()),
+            "beginning a scan must not replace the remembered folder"
+        );
+        let applied = session.complete_scan(&request, ScanOutcome::run(&request));
+        assert!(matches!(applied, ScanApply::Applied(_)));
+        assert_eq!(
+            crate::config::Config::load().save_dir,
+            Some(other.path().to_path_buf())
+        );
+    }
+
+    #[test]
+    fn begin_scan_rejects_dirty_and_unreadable_folders() {
+        let (directory, mut session) = fixture();
+        let index = session.items[0].struct_index;
+        session.adjust_item_count(index, 1);
+        assert!(session.begin_scan(directory.path()).is_none());
+        assert!(
+            session.message().text.contains("unsaved"),
+            "{}",
+            session.message().text
+        );
+        assert!(!session.is_scanning());
+
+        let mut clean = Session::empty("/definitely/not/here");
+        assert!(clean.begin_scan("/definitely/not/here").is_none());
+        assert!(
+            clean.message().text.contains("does not exist"),
+            "{}",
+            clean.message().text
+        );
+        assert!(
+            clean.begin_scan("").is_none(),
+            "an empty path is not a scan"
+        );
+        assert!(
+            clean.message().text.contains("Choose the folder"),
+            "{}",
+            clean.message().text
+        );
+        assert!(!clean.is_scanning());
+    }
+
+    #[test]
+    fn pending_without_a_folder_asks_for_one() {
+        let session = Session::pending("");
+        assert!(matches!(session.game_status(), GameStatus::Missing));
+        assert!(
+            session.message().text.contains("Choose the folder"),
+            "{}",
+            session.message().text
+        );
     }
 
     #[test]
@@ -2917,11 +3340,20 @@ mod tests {
     #[test]
     fn stale_scan_results_are_discarded() {
         let (directory, mut session) = fixture();
-        let token = session.scan_token();
-        let entries = Session::scan_entries(directory.path());
-        session.scan();
-        assert!(!session.apply_entries_for(directory.path(), token, entries));
-        assert!(!session.report_scan_failure_for(directory.path(), token));
+        let first = session.begin_scan(directory.path()).expect("first");
+        let second = session.begin_scan(directory.path()).expect("second");
+        assert_ne!(first.token(), second.token());
+        assert_eq!(
+            session.complete_scan(&first, ScanOutcome::run(&first)),
+            ScanApply::Stale
+        );
+        assert!(
+            matches!(
+                session.complete_scan(&second, ScanOutcome::run(&second)),
+                ScanApply::Applied(_)
+            ),
+            "the newest request should have been applied"
+        );
     }
 
     #[test]
@@ -3197,6 +3629,34 @@ mod tests {
         assert_eq!(
             format::timestamp(UNIX_EPOCH + Duration::from_secs(1_700_000_000)),
             "2023-11-14 22:13 UTC"
+        );
+    }
+    #[test]
+    fn a_rejected_startup_scan_does_not_stay_loading() {
+        let mut session = Session::pending("/definitely/not/here");
+        assert!(matches!(session.game_status(), GameStatus::Loading));
+        assert!(session.begin_scan("/definitely/not/here").is_none());
+        assert!(
+            !matches!(session.game_status(), GameStatus::Loading),
+            "a rejected startup scan left the loading state behind"
+        );
+    }
+
+    #[test]
+    fn a_cancelled_startup_scan_does_not_stay_loading() {
+        let directory = TempDir::new("cancel-startup");
+        let mut session = Session::pending(directory.path());
+        assert!(matches!(session.game_status(), GameStatus::Loading));
+        let request = session.begin_scan(directory.path()).expect("begin");
+        assert!(session.cancel_scan());
+        assert!(!session.is_scanning());
+        assert!(
+            !matches!(session.game_status(), GameStatus::Loading),
+            "a cancelled startup scan left the loading state behind"
+        );
+        assert_eq!(
+            session.complete_scan(&request, ScanOutcome::run(&request)),
+            ScanApply::Stale
         );
     }
 }

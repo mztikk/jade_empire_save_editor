@@ -22,8 +22,7 @@ use super::Ctx;
 pub(super) fn choose_folder(
     ctx: &Ctx,
     mut directory: State<String>,
-    reset: &Rc<dyn Fn()>,
-    sync: &Rc<dyn Fn()>,
+    start_scan: &Rc<dyn Fn(PathBuf) -> bool>,
 ) -> bool {
     if ctx.session.borrow().is_dirty() {
         ctx.run(|session| {
@@ -38,10 +37,8 @@ pub(super) fn choose_folder(
         return false;
     };
     let folder_label = folder.display().to_string();
-    if ctx.run(|session| session.set_directory(folder)) {
+    if start_scan(folder) {
         *directory.write() = folder_label;
-        reset();
-        sync();
         true
     } else {
         let real = ctx.session.borrow().directory().display().to_string();
@@ -75,8 +72,9 @@ pub(super) fn header(
     dirty: bool,
     has_save: bool,
     form_errors: &[FieldError],
-    reset: Rc<dyn Fn()>,
-    sync: Rc<dyn Fn()>,
+    scanning: bool,
+    start_scan: Rc<dyn Fn(PathBuf) -> bool>,
+    cancel_scan: Rc<dyn Fn()>,
 ) -> Element {
     let status_color = match message.kind {
         MessageKind::Info => theme::MUTED,
@@ -88,6 +86,7 @@ pub(super) fn header(
         MessageKind::Info | MessageKind::Success => accesskit::Live::Polite,
     };
     let game_text = match game_status {
+        GameStatus::Loading => "loading game data…".to_owned(),
         GameStatus::Loaded { items, .. } => {
             crate::widgets::plural(*items, "item", "items") + " loaded"
         }
@@ -97,22 +96,18 @@ pub(super) fn header(
     };
     let game_color = match game_status {
         GameStatus::Loaded { .. } | GameStatus::NamesOnly { .. } => theme::JADE,
-        GameStatus::Missing => theme::DIM,
+        GameStatus::Loading | GameStatus::Missing => theme::DIM,
         GameStatus::Error(_) => theme::DANGER,
     };
     let game_loaded = matches!(game_status, GameStatus::Loaded { .. });
 
     let scan = Rc::new({
         let ctx = ctx.clone();
-        let reset = reset.clone();
-        let sync = sync.clone();
+        let start_scan = start_scan.clone();
         move || {
             let mut directory = directory;
             let path = PathBuf::from(directory.read().as_str());
-            if ctx.run(|session| session.set_directory(path)) {
-                reset();
-                sync();
-            } else {
+            if !start_scan(path) {
                 // Do not leave a rejected path in the field: show the folder
                 // JadeForge actually has open.
                 let real = ctx.session.borrow().directory().display().to_string();
@@ -122,10 +117,9 @@ pub(super) fn header(
     });
     let browse = {
         let ctx = ctx.clone();
-        let reset = reset.clone();
-        let sync = sync.clone();
+        let start_scan = start_scan.clone();
         move |_| {
-            choose_folder(&ctx, directory, &reset, &sync);
+            choose_folder(&ctx, directory, &start_scan);
         }
     };
     let use_game = {
@@ -239,10 +233,25 @@ pub(super) fn header(
                     }),
             )
             .child(Button::new().outline().child("Browse…").on_press(browse))
-            .child(Button::new().outline().child("Scan").on_press({
-                let scan = scan.clone();
-                move |_| scan()
-            }))
+            .child(
+                Button::new()
+                    .outline()
+                    .enabled(!scanning)
+                    .child(if scanning { "Scanning…" } else { "Scan" })
+                    .on_press({
+                        let scan = scan.clone();
+                        move |_| scan()
+                    }),
+            )
+            .maybe(scanning, |el| {
+                let cancel_scan = cancel_scan.clone();
+                el.child(
+                    Button::new()
+                        .flat()
+                        .child("Cancel scan")
+                        .on_press(move |_| cancel_scan()),
+                )
+            })
             .into_element(),
     ];
 
@@ -488,8 +497,7 @@ pub(super) fn empty_state(
     ctx: &Ctx,
     savegames: usize,
     directory: State<String>,
-    reset: Rc<dyn Fn()>,
-    sync: Rc<dyn Fn()>,
+    start_scan: Rc<dyn Fn(PathBuf) -> bool>,
 ) -> Element {
     let text = if savegames == 0 {
         "Point JadeForge at the folder that contains your Jade Empire savegames and press Scan."
@@ -498,9 +506,8 @@ pub(super) fn empty_state(
     };
     let choose = {
         let ctx = ctx.clone();
-        let sync = sync.clone();
         move |_| {
-            choose_folder(&ctx, directory, &reset, &sync);
+            choose_folder(&ctx, directory, &start_scan);
         }
     };
     rect()

@@ -46,13 +46,10 @@ Addressed on the `fix/ui-p1-followups` branch:
 | Discoverability | Chevron/Details rows, orb hover and focus details with the buy/remove explanation, a read-only style notice, gem effect lines in the picker. |
 | Editing UX | Contextual accessible names, Ctrl+S/O/F, F5, Enter, Escape and tab arrow keys, direct numeric stack/level editing, character name and UTC modification time in save rows. |
 | Accessibility | 28 px row targets, 11 px micro / 14 px body type, 3:1 control borders, tab underline, amber unsaved state, focus restoration after a removal, focusable keyboard scroll view. |
-| Performance | Save filter/sort, item suggestions, learnable styles and the form reparse are memoised; save rows keep stable `Action` objects and paint hover without a rebuild; frame-time instrumentation and an 89-save render test. |
+| Performance | Manual Scan (startup, button, Enter, F5 and Browse) runs on a worker with an in-flight status and cancellation; save filter/sort, item suggestions, learnable styles and the form reparse are memoised; save rows keep stable `Action` objects and paint hover without a rebuild; frame-time instrumentation and an 89-save render test. |
 
 Still open for #7:
 
-- Manual Scan (the header button, `F5` and Enter) still scans on the UI
-  thread; the startup scan is already off-thread. Progress and cancellation
-  need a two-phase scan API.
 - The window-geometry plugin and the scroll-view paging keys are window-path
   behaviour. The headless suite covers the pure geometry and the focus target,
   but the real window and the resulting scroll offset were not run (the

@@ -1422,12 +1422,12 @@ fn the_browse_button_uses_the_folder_dialog() {
     // it with the fixture folder.
     jadeforge_gui::dialog::set_next_pick_for_tests(Some(fixture.save_dir.clone()));
     assert!(click_text(&mut test, "Browse"), "no browse button");
-    assert!(find_label_text(&test, "Found 1 savegame").is_some());
+    wait_for_text(&mut test, "Found 1 savegame");
 
     // Cancelling changes nothing.
     jadeforge_gui::dialog::set_next_pick_for_tests(None);
     assert!(click_text(&mut test, "Browse"));
-    assert!(find_label_text(&test, "Found 1 savegame").is_some());
+    wait_for_text(&mut test, "Found 1 savegame");
 }
 
 #[test]
@@ -2010,10 +2010,7 @@ fn scanning_the_same_folder_keeps_the_savegame_open() {
         "the savegame did not open"
     );
     assert!(click_text(&mut test, "Scan"), "no scan button");
-    assert!(
-        find_label_text(&test, "Found 1 savegame").is_some(),
-        "the scan did not run"
-    );
+    wait_for_text(&mut test, "Found 1 savegame");
     // The same folder was refreshed: the open savegame must survive.
     assert!(click_label_exact(&mut test, "Character"));
     assert!(
@@ -2591,6 +2588,7 @@ fn desktop_shortcuts_drive_the_shell() {
     // F5 rescans the current folder and keeps the savegame open.
     assert!(click_text(&mut test, "Scan"));
     test.press_key(Key::Named(NamedKey::F5));
+    wait_for_text(&mut test, "Found ");
     assert!(
         find_label_text(&test, "Found ").is_some(),
         "F5 did not scan"
@@ -2862,4 +2860,166 @@ fn eighty_nine_saves_render_within_the_frame_budget() {
 
 fn perf_frames() -> u64 {
     jadeforge_gui::perf::frames()
+}
+
+#[test]
+fn the_first_frame_shows_the_scan_in_progress() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let _ = jadeforge_gui::config::ensure_test_path();
+    // Slow the startup worker down so the first frame is observable.
+    jadeforge_gui::session::set_scan_delay_for_tests(std::time::Duration::from_millis(200));
+    let save_dir = fixture.save_dir.clone();
+    let (mut test, ()) = TestingRunner::new(
+        move || app_with_directory(save_dir.clone()),
+        (1180.0_f32, 760.0_f32).into(),
+        |_| {},
+        1.0,
+    );
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "Scanning ").is_some(),
+        "the first frame does not report the scan in progress"
+    );
+    assert!(
+        find_label_text(&test, "SAVEGAMES (1)").is_none(),
+        "the first frame already waited for the scan"
+    );
+
+    // Poll until the worker applies the result.
+    for _ in 0..500 {
+        if find_label_text(&test, "SAVEGAMES (1)").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        test.sync_and_update();
+    }
+    assert!(
+        find_label_text(&test, "SAVEGAMES (1)").is_some(),
+        "the startup scan never settled"
+    );
+    assert!(
+        find_label_text(&test, "Scanning ").is_none(),
+        "the in-flight state stayed after the scan settled"
+    );
+    jadeforge_gui::session::set_scan_delay_for_tests(std::time::Duration::ZERO);
+}
+
+#[test]
+fn a_scan_can_be_cancelled_without_losing_the_save() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1000.0);
+    jadeforge_gui::session::set_scan_delay_for_tests(std::time::Duration::from_millis(250));
+    assert!(click_text(&mut test, "Scan"), "no scan button");
+    assert!(
+        find_label_text(&test, "Scanning ").is_some(),
+        "the Scan action did not enter the in-flight state"
+    );
+    assert!(
+        find_label_text(&test, "Cancel scan").is_some(),
+        "there is no way to cancel the scan"
+    );
+
+    assert!(
+        click_text(&mut test, "Cancel scan"),
+        "the cancel control is not clickable"
+    );
+    assert!(
+        find_label_text(&test, "Scan cancelled").is_some(),
+        "the cancel is not reported"
+    );
+    assert!(
+        find_label_text(&test, "Cancel scan").is_none(),
+        "the cancel control stayed after cancelling"
+    );
+    assert!(
+        find_label_text(&test, "SAVEGAMES (1)").is_some(),
+        "cancelling cleared the save list"
+    );
+    // The open savegame is still open.
+    assert!(click_label_exact(&mut test, "Character"));
+    assert!(find_label_text(&test, "Identity").is_some());
+
+    // The worker result that arrives after the delay must not be applied.
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    test.sync_and_update();
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "SAVEGAMES (1)").is_some(),
+        "a cancelled scan applied its result anyway"
+    );
+    assert!(
+        find_label_text(&test, "Scanning ").is_none(),
+        "a cancelled scan left the in-flight state behind"
+    );
+    jadeforge_gui::session::set_scan_delay_for_tests(std::time::Duration::ZERO);
+}
+
+#[test]
+fn a_scan_settles_after_the_in_flight_state() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1000.0);
+    jadeforge_gui::session::set_scan_delay_for_tests(std::time::Duration::from_millis(200));
+    assert!(click_label_exact(&mut test, "Scan"), "no scan button");
+    assert!(
+        find_label_text(&test, "Scanning ").is_some(),
+        "the Scan action did not report progress"
+    );
+    wait_for_text(&mut test, "Found 1 savegame");
+    assert!(
+        find_label_text(&test, "Cancel scan").is_none(),
+        "the in-flight state did not settle"
+    );
+    assert!(
+        find_label_text(&test, "Scanning ").is_none(),
+        "the progress message did not settle"
+    );
+    jadeforge_gui::session::set_scan_delay_for_tests(std::time::Duration::ZERO);
+}
+
+#[test]
+fn scanning_another_folder_resets_the_filter_after_the_scan() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let second_root = fixture.root.join("second-save-root");
+    let second_folder = second_root.join("Test Save");
+    std::fs::create_dir_all(&second_folder).expect("create second save folder");
+    std::fs::copy(
+        fixture.save_dir.join("Test Save").join("save.sac"),
+        second_folder.join("save.sac"),
+    )
+    .expect("copy savegame");
+
+    let mut test = launch_sized(fixture.save_dir.clone(), 1200.0);
+    let filter = find_paragraph(&test, "Filter by name").expect("save filter");
+    click_node(&mut test, &filter);
+    test.write_text("does-not-match");
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "SAVEGAMES (0 of 1)").is_some(),
+        "the filter did not apply"
+    );
+
+    jadeforge_gui::dialog::set_next_pick_for_tests(Some(second_root));
+    assert!(click_text(&mut test, "Browse"), "no browse button");
+    // The new folder scan is applied and the document reset clears the filter.
+    wait_for_text(&mut test, "SAVEGAMES (1)");
+    assert!(
+        find_label_text(&test, "SAVEGAMES (0 of").is_none(),
+        "the filter survived a folder scan"
+    );
+    assert!(
+        find_paragraph(&test, "does-not-match").is_none(),
+        "the filter input was not cleared"
+    );
 }

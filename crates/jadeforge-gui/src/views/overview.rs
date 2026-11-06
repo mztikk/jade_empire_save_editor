@@ -23,9 +23,14 @@ pub fn view(
     );
     let block_count = ctx.session.borrow().block_count();
     let file_size = ctx.session.borrow().file_size();
+    let game_loading = matches!(ctx.session.borrow().game_status(), GameStatus::Loading);
     let (game_text, game_ok) = {
         let session = ctx.session.borrow();
         match session.game_status() {
+            GameStatus::Loading => (
+                "Reading the game installation and its tables…".to_owned(),
+                false,
+            ),
             GameStatus::Loaded {
                 items,
                 styles,
@@ -279,13 +284,25 @@ pub fn view(
                         .color(theme::MUTED),
                 )
                 .child(widgets::badge(
-                    if game_ok { "linked" } else { "not found" },
+                    if game_ok {
+                        "linked"
+                    } else if game_loading {
+                        "loading"
+                    } else {
+                        "not found"
+                    },
                     if game_ok {
                         theme::SURFACE
                     } else {
                         theme::SURFACE_ACTIVE
                     },
-                    if game_ok { theme::JADE } else { theme::WARNING },
+                    if game_ok {
+                        theme::JADE
+                    } else if game_loading {
+                        theme::DIM
+                    } else {
+                        theme::WARNING
+                    },
                 ))
                 .into_element(),
             widgets::hint(game_text),

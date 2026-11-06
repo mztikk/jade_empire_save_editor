@@ -216,38 +216,18 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     use_init_theme(theme::theme);
 
     let session: Rc<RefCell<Session>> =
-        use_hook(move || Rc::new(RefCell::new(Session::empty(directory))));
+        use_hook(move || Rc::new(RefCell::new(Session::pending(directory))));
     let revision = use_state(|| 0_u32);
-    // Scan savegames on a worker thread; the future applies the result and
-    // bumps the revision, so the first frame never waits for the scan.
-    let scan = use_future({
+    // The scan currently in flight. Startup, the Scan button, Enter on the
+    // folder field and F5 all only set this state; the worker future below does
+    // the reading and applies the result when the request is still current.
+    let scan_job = use_state({
         let session = session.clone();
         move || {
-            let session = session.clone();
-            let mut revision = revision;
-            async move {
-                let directory = session.borrow().directory().to_path_buf();
-                let token = session.borrow().scan_token();
-                let (tx, rx) = futures_channel::oneshot::channel();
-                let worker_directory = directory.clone();
-                std::thread::spawn(move || {
-                    let _ = tx.send(Session::scan_entries(&worker_directory));
-                });
-                let applied = match rx.await {
-                    Ok(entries) => session
-                        .borrow_mut()
-                        .apply_entries_for(&directory, token, entries),
-                    Err(_) => session
-                        .borrow_mut()
-                        .report_scan_failure_for(&directory, token),
-                };
-                if applied {
-                    *revision.write() += 1;
-                }
-            }
+            let directory = session.borrow().directory().to_path_buf();
+            session.borrow_mut().begin_scan(directory)
         }
     });
-    let _ = scan.state();
     let form = Form::new();
     let directory_state = use_state(|| session.borrow().directory().display().to_string());
     let game_directory = use_state(|| match session.borrow().game_status() {
@@ -303,8 +283,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let editor_scroll_id = use_a11y();
     let editor_scroll_focus = use_focus(editor_scroll_id);
 
-    // Subscribe to session changes.
+    // Subscribe to session changes and to the in-flight scan, so starting,
+    // cancelling or settling a scan re-renders the header even though most of
+    // the scan state lives in the session rather than in reactive state.
     let _ = *revision.read();
+    let _ = *scan_job.read();
 
     let ctx = Ctx {
         session: session.clone(),
@@ -412,6 +395,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     };
     let preview_handle = cached_preview(&preview_cache, preview.as_deref());
     let game_ready = matches!(game_status, GameStatus::Loaded { .. });
+    let game_loading = matches!(game_status, GameStatus::Loading);
     let names_ready = session.borrow().has_bundled_names();
     let items_ready = session.borrow().items_ready();
     let total_items = if active_tab == Tab::Inventory {
@@ -468,6 +452,107 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         })
     };
 
+    // One worker scan for every path. The future triggers whenever `scan_job`
+    // changes, starts the filesystem and game-data read on a thread, and
+    // applies the result only while the request is still current. A cancel or a
+    // superseding scan clears the job, which drops this task and discards the
+    // worker result through the session token.
+    let scan = use_future({
+        let session = session.clone();
+        let reset = reset.clone();
+        let sync = sync.clone();
+        move || {
+            // Reading the job subscribes the future to new scan requests.
+            let job = scan_job.read().clone();
+            let session = session.clone();
+            let reset = reset.clone();
+            let sync = sync.clone();
+            let scan_job = scan_job;
+            let mut revision = revision;
+            let directory_state = directory_state;
+            async move {
+                let mut scan_job = scan_job;
+                let mut directory_state = directory_state;
+                let Some(job) = job else {
+                    return;
+                };
+                let (tx, rx) = futures_channel::oneshot::channel();
+                let worker_job = job.clone();
+                std::thread::spawn(move || {
+                    let _ = tx.send(crate::session::ScanOutcome::run(&worker_job));
+                });
+                let result = rx.await;
+                let applied = {
+                    let mut session = session.borrow_mut();
+                    match result {
+                        Ok(outcome) => session.complete_scan(&job, outcome),
+                        Err(_) => {
+                            if session.fail_scan(&job) {
+                                crate::session::ScanApply::Failed
+                            } else {
+                                crate::session::ScanApply::Stale
+                            }
+                        }
+                    }
+                };
+                match applied {
+                    crate::session::ScanApply::Applied(completion) => {
+                        let real = session.borrow().directory().display().to_string();
+                        directory_state.set(real);
+                        if completion.directory_changed {
+                            reset();
+                            sync();
+                        }
+                        *revision.write() += 1;
+                        // Clear the in-flight marker last: changing the state
+                        // this future subscribes to may restart it.
+                        scan_job.set(None);
+                    }
+                    crate::session::ScanApply::Failed => {
+                        let real = session.borrow().directory().display().to_string();
+                        directory_state.set(real);
+                        *revision.write() += 1;
+                        scan_job.set(None);
+                    }
+                    crate::session::ScanApply::Stale => {}
+                }
+            }
+        }
+    });
+    let _ = scan.state();
+
+    // Starts a scan for a path. A rejected folder leaves the previous entries,
+    // savegame and remembered path untouched and only reports why.
+    let start_scan: Rc<dyn Fn(PathBuf) -> bool> = {
+        let session = session.clone();
+        Rc::new(move |path| {
+            let mut scan_job = scan_job;
+            let mut revision = revision;
+            let request = session.borrow_mut().begin_scan(path);
+            let accepted = request.is_some();
+            if let Some(request) = request {
+                scan_job.set(Some(request));
+            }
+            // The rejection message lives in the session, which is not reactive
+            // by itself, so both outcomes refresh the header.
+            *revision.write() += 1;
+            accepted
+        })
+    };
+    // Cancels the in-flight scan; the savegame and entry list stay on screen.
+    let cancel_scan: Rc<dyn Fn()> = {
+        let session = session.clone();
+        Rc::new(move || {
+            let mut scan_job = scan_job;
+            let mut directory_state = directory_state;
+            if session.borrow_mut().cancel_scan() {
+                scan_job.set(None);
+                let real = session.borrow().directory().display().to_string();
+                directory_state.set(real);
+            }
+        })
+    };
+
     let content = match (active_tab, &character) {
         (Tab::Overview, Some(character)) => views::overview::view(
             &ctx,
@@ -485,6 +570,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 style_query,
                 &style_matches,
                 game_ready,
+                game_loading,
                 names_ready,
                 game_ready.then_some(total_missing),
                 style_matches_total,
@@ -502,6 +588,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 item_query,
                 &item_results,
                 items_ready,
+                game_loading,
                 item_matches,
                 total_items,
                 expanded_item,
@@ -527,13 +614,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             )
         }
         (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen, hovered),
-        (_, None) => shell::empty_state(
-            &ctx,
-            entries.len(),
-            directory_state,
-            reset.clone(),
-            sync.clone(),
-        ),
+        (_, None) => shell::empty_state(&ctx, entries.len(), directory_state, start_scan.clone()),
     };
 
     let content = rect()
@@ -542,6 +623,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         .child(content)
         .into_element();
 
+    let scanning = session.borrow().is_scanning();
     let header = shell::header(
         &ctx,
         directory_state,
@@ -551,8 +633,9 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         dirty,
         has_save,
         &form_errors,
-        reset.clone(),
-        sync.clone(),
+        scanning,
+        start_scan.clone(),
+        cancel_scan.clone(),
     );
     let visible = {
         let session = session.clone();
@@ -587,7 +670,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let shortcut = {
         let ctx = ctx.clone();
         let sync = sync.clone();
-        let reset = reset.clone();
+        let start_scan = start_scan.clone();
         let directory = directory_state;
         let active = active_tab;
         let filter_ids = [
@@ -615,7 +698,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         }
                     }
                     "o" => {
-                        shell::choose_folder(&ctx, directory, &reset, &sync);
+                        shell::choose_folder(&ctx, directory, &start_scan);
                     }
                     "f" => {
                         let id = match active {
@@ -631,10 +714,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 Key::Named(NamedKey::F5) => {
                     let mut directory = directory;
                     let path = PathBuf::from(directory.read().as_str());
-                    if ctx.run(|session| session.set_directory(path)) {
-                        reset();
-                        sync();
-                    } else {
+                    if !start_scan(path) {
                         let real = ctx.session.borrow().directory().display().to_string();
                         *directory.write() = real;
                     }
@@ -703,8 +783,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                                             Key::Named(NamedKey::End) => i32::MAX,
                                             _ => return,
                                         };
-                                        let changed = scroll.scroll_to_y(target);
-                                        eprintln!("DEBUG scroll {current} -> {target} changed={changed} now={:?}", scroll.position());
+                                        scroll.scroll_to_y(target);
                                         event.stop_propagation();
                                     }
                                 })
@@ -742,8 +821,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                                                                 &ctx,
                                                                 entries.len(),
                                                                 directory_state,
-                                                                reset.clone(),
-                                                                sync.clone(),
+                                                                start_scan.clone(),
                                                             )
                                                         }),
                                                 ),

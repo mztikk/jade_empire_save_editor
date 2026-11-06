@@ -151,6 +151,9 @@ pub struct SectionError {
 /// State of the optional game data.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GameStatus {
+    /// The installation is being read on a worker; the UI shows a pending
+    /// state instead of claiming the game data is missing.
+    Loading,
     /// Game files are available and resolved.
     Loaded {
         /// Number of named items.
