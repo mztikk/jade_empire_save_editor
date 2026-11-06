@@ -1786,6 +1786,96 @@ fn the_save_list_only_builds_visible_rows_and_still_reaches_the_end() {
 }
 
 #[test]
+fn the_save_list_scrolls_to_the_end_with_the_wheel() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let source = fixture.save_dir.join("Test Save").join("save.sac");
+    for suffix in 2..=41 {
+        let folder = fixture.save_dir.join(format!("Test Save {suffix:02}"));
+        std::fs::create_dir_all(&folder).expect("create extra save folder");
+        std::fs::hard_link(&source, folder.join("save.sac")).expect("link savegame");
+    }
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    settle(&mut test);
+    assert!(
+        find_label_exact(&test, "Test Save").is_some(),
+        "the first row is missing"
+    );
+    // Open a savegame like a real session: the preview shrinks the list and the
+    // selected row is revealed. Scrolling must not keep snapping back to it.
+    assert!(click_text(&mut test, "Level "), "could not open a save");
+    settle(&mut test);
+
+    let list = test
+        .find(|node, _| (a11y_role(&node) == "ListBox").then_some(node))
+        .expect("save list");
+    let area = list.layout().area;
+    let wheel_at = CursorPoint::new(
+        f64::from(area.origin.x) + 20.0,
+        f64::from(area.origin.y) + f64::from(area.size.height) / 2.0,
+    );
+    test.move_cursor(wheel_at);
+    test.sync_and_update();
+
+    for _ in 0..40 {
+        test.scroll(wheel_at, CursorPoint::new(0.0, -200.0));
+    }
+    assert!(
+        scroll_offset(&test) > 0.0,
+        "the save list did not scroll at all"
+    );
+    assert!(
+        find_label_exact(&test, "Test Save 41").is_some(),
+        "the wheel did not reach the last savegame"
+    );
+
+    for _ in 0..40 {
+        test.scroll(wheel_at, CursorPoint::new(0.0, 200.0));
+    }
+    assert!(
+        find_label_exact(&test, "Test Save").is_some(),
+        "the wheel did not return to the first savegame"
+    );
+}
+
+#[test]
+fn the_save_list_scrollbar_reaches_the_end() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let source = fixture.save_dir.join("Test Save").join("save.sac");
+    for suffix in 2..=41 {
+        let folder = fixture.save_dir.join(format!("Test Save {suffix:02}"));
+        std::fs::create_dir_all(&folder).expect("create extra save folder");
+        std::fs::hard_link(&source, folder.join("save.sac")).expect("link savegame");
+    }
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    settle(&mut test);
+    let list = test
+        .find(|node, _| (a11y_role(&node) == "ListBox").then_some(node))
+        .expect("save list");
+    let area = list.layout().area;
+    let x = f64::from(area.origin.x + area.size.width) - 10.0;
+    let top = f64::from(area.origin.y) + 30.0;
+    let bottom = f64::from(area.origin.y + area.size.height) - 10.0;
+    test.move_cursor(CursorPoint::new(x, top));
+    test.press_cursor(CursorPoint::new(x, top));
+    for step in 1..=10 {
+        let y = top + (bottom - top) * f64::from(step) / 10.0;
+        test.move_cursor(CursorPoint::new(x, y));
+    }
+    test.release_cursor(CursorPoint::new(x, bottom));
+    test.sync_and_update();
+    assert!(
+        find_label_exact(&test, "Test Save 41").is_some(),
+        "dragging the scrollbar did not reach the last savegame"
+    );
+}
+
+#[test]
 fn arrow_keys_move_the_save_list_focus() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
