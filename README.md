@@ -218,6 +218,23 @@ a few milliseconds here and an idle window uses no measurable CPU.
 (case-insensitive), and wins over Freya's own `FREYA_RENDERER`. Unset it (or use
 `auto`) to return to the default renderer for later runs.
 
+The backends are Freya's, not reimplemented here. A backend that cannot
+initialize falls back instead of preventing the editor from starting, and the
+one the window actually got is printed at startup, for example
+`jadeforge: renderer OpenGL (AMD Radeon RX 9070 XT)`. Run the editor from a
+terminal or check the journal to see it.
+
+| platform | `auto` picks | explicit choices |
+| --- | --- | --- |
+| Linux | Vulkan, then OpenGL, then software | `vulkan`, `opengl`, `software` |
+| Windows | OpenGL | `vulkan` (falls back to OpenGL, then software), `opengl`, `software` |
+| macOS | Metal | `software`; `opengl` and `vulkan` still resolve to Metal, because Freya only implements Metal there |
+
+Direct3D is not available. Skia itself can render through D3D12, but Freya 0.5
+has neither a Direct3D driver nor a renderer preference for it, so JadeForge has
+nothing to select. On Windows, `JADEFORGE_RENDERER=vulkan` uses the newer
+graphics API; Direct3D support would have to come from an upstream Freya driver.
+
 For scale: a live 1000x720 window with an opened savegame peaks at about 52 MiB
 with `JADEFORGE_RENDERER=software`. The GPU path adds the graphics driver and
 Skia's GPU resources on top of that, which is what puts the same window into the

@@ -200,10 +200,14 @@ where the graphics driver is too expensive trades GPU acceleration for roughly
 half the resident memory. Every window also gets a 32 MiB Skia GPU resource cache
 limit instead of Skia's 256 MiB default ([Freya's cache option](https://github.com/marc2332/freya/issues/1207)):
 the editor's largest texture is one 512 px screenshot, and an uncapped cache
-keeps GPU resources around after resizes. The savegame sidebar is a
-`VirtualScrollView`, so only the rows inside it are built; each row carries two
-tooltips and two text paragraphs, and building all of them for a few hundred
-saves dominated the idle footprint.
+keeps GPU resources around after resizes. `RendererLogPlugin` listens for
+`WindowCreated`/`GraphicsDriverChanged` and prints the driver Freya actually
+selected, which is the only way to notice that a requested Vulkan backend fell
+back to OpenGL. Freya 0.5 ships OpenGL, Vulkan, Metal and software drivers; it
+has no Direct3D driver, so there is no Windows Direct3D preference to expose.
+The savegame sidebar is a `VirtualScrollView`, so only the rows inside it are
+built; each row carries two tooltips and two text paragraphs, and building all
+of them for a few hundred saves dominated the idle footprint.
 
 There are no hardcoded installation paths anywhere. The folder comes from
 `JADEFORGE_SAVE_DIR`, the settings file or the native folder dialog, in that order.

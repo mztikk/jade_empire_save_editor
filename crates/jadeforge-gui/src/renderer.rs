@@ -14,8 +14,16 @@
 //! Unsetting the variable (or setting it to `auto`) returns to the default GPU
 //! backend. `JADEFORGE_RENDERER` wins over Freya's own `FREYA_RENDERER`; when
 //! this variable is unset, `FREYA_RENDERER` keeps working as before.
+//!
+//! The backends are Freya's, not ours. Linux and Windows ship OpenGL and
+//! Vulkan; macOS only has Metal, so any GPU value there ends up on Metal.
+//! Freya 0.5 has no Direct3D driver, even though Skia itself can render with
+//! D3D12, so there is no value for it here. A backend that fails to initialize
+//! falls back (Vulkan to OpenGL to software), which is why
+//! [`RendererLogPlugin`] prints what the window actually got.
 
 use freya::prelude::{GpuPreference, GpuResourceCacheLimit, RendererPreference};
+use freya_winit::plugins::{FreyaPlugin, PluginEvent, PluginHandle};
 
 /// Environment variable that overrides the renderer for this run.
 ///
@@ -70,6 +78,46 @@ pub fn gpu_resource_cache_limit() -> GpuResourceCacheLimit {
     GpuResourceCacheLimit::from_mb(GPU_RESOURCE_CACHE_LIMIT_MB)
 }
 
+/// Prints the renderer a window actually got, after any fallback.
+///
+/// Asking for a backend is not a guarantee that it is the one drawing: Freya
+/// falls back when initialization fails, most visibly for Vulkan on machines
+/// without a working driver. One line on stderr (`jadeforge: renderer ...`)
+/// makes the real choice visible when the editor is started from a terminal or
+/// its journal is read.
+pub struct RendererLogPlugin;
+
+impl FreyaPlugin for RendererLogPlugin {
+    fn plugin_id(&self) -> &'static str {
+        "jadeforge-renderer-log"
+    }
+
+    fn on_event(&mut self, event: &mut PluginEvent, _handle: PluginHandle) {
+        let (driver, gpu) = match event {
+            PluginEvent::WindowCreated {
+                graphics_driver,
+                gpu_name,
+                ..
+            }
+            | PluginEvent::GraphicsDriverChanged {
+                graphics_driver,
+                gpu_name,
+                ..
+            } => (*graphics_driver, *gpu_name),
+            _ => return,
+        };
+        eprintln!("jadeforge: renderer {}", describe(driver, gpu));
+    }
+}
+
+/// Human readable `driver (gpu)` line.
+fn describe(driver: &str, gpu: Option<&str>) -> String {
+    match gpu.filter(|name| !name.is_empty()) {
+        Some(gpu) => format!("{driver} ({gpu})"),
+        None => driver.to_owned(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,5 +157,15 @@ mod tests {
     #[test]
     fn the_gpu_cache_limit_leaves_room_for_the_screenshot_and_glyphs() {
         assert_eq!(gpu_resource_cache_limit().bytes(), 32 * 1024 * 1024);
+    }
+
+    #[test]
+    fn the_renderer_line_names_the_driver_and_gpu_when_known() {
+        assert_eq!(
+            describe("Vulkan", Some("AMD Radeon RX 9070 XT")),
+            "Vulkan (AMD Radeon RX 9070 XT)"
+        );
+        assert_eq!(describe("Software", None), "Software");
+        assert_eq!(describe("OpenGL", Some("")), "OpenGL");
     }
 }
