@@ -16,14 +16,14 @@ use super::Ctx;
 use super::shell::preview_slot;
 
 #[allow(
-    clippy::too_many_lines, // one declarative sidebar layout keeps the rows together
+    clippy::too_many_lines, // one declarative sidebar layout keeps the preview, filters and list in order
     clippy::needless_pass_by_value, // the closures own the sync handle
     clippy::too_many_arguments // each argument is a distinct reactive handle
 )]
 pub(super) fn sidebar(
     ctx: &Ctx,
-    entries: &[SaveEntry],
-    visible: &[usize],
+    entries: &Rc<Vec<SaveEntry>>,
+    visible: &Rc<Vec<usize>>,
     selected: Option<usize>,
     focus: State<usize>,
     preview: Option<ImageHandle>,
@@ -57,111 +57,6 @@ pub(super) fn sidebar(
     } else {
         visible.first().copied()
     };
-    let mut rows: Vec<Element> = Vec::new();
-    for &index in visible {
-        let entry = &entries[index];
-        let is_selected = selected == Some(index);
-        // The roving list focus is not a DOM focus on the row, so the row
-        // paints it; hover is handled by the button itself and therefore does
-        // not rebuild any row.
-        let is_focused = focused_index == Some(index);
-        let broken = entry.error.is_some();
-        let summary = entry.summary();
-        let title = entry.label.clone();
-        let accessible = format!("{title}, {summary}");
-        let action = {
-            let mut cache = actions.borrow_mut();
-            cache
-                .entry(index)
-                .or_insert_with(|| {
-                    let open_for_row = open.clone();
-                    let mut focus_for_row = focus;
-                    Action::new(move || {
-                        *focus_for_row.write() = index;
-                        open_for_row.call(index);
-                    })
-                })
-                .clone()
-        };
-        rows.push(
-            AccessibleButton::new(
-                accessible,
-                action,
-                rect()
-                    .horizontal()
-                    .width(Size::fill())
-                    .height(Size::px(theme::layout::SAVE_ROW_HEIGHT))
-                    .corner_radius(theme::radius::MEDIUM)
-                    .background(if is_selected {
-                        theme::SURFACE_ACTIVE
-                    } else if is_focused {
-                        theme::SURFACE_HOVER
-                    } else {
-                        theme::SURFACE
-                    })
-                    // The bar is always present, transparent until the row
-                    // is selected, so the row text does not shift by its
-                    // width when the selection moves.
-                    .child(
-                        rect()
-                            .width(Size::px(theme::layout::SELECTION_BAR_WIDTH))
-                            .height(Size::fill())
-                            .background(if is_selected {
-                                theme::ACCENT
-                            } else {
-                                Color::TRANSPARENT
-                            }),
-                    )
-                    .child(
-                        rect()
-                            .vertical()
-                            .width(Size::flex(1.0))
-                            .spacing(theme::space::XXS)
-                            .padding(Gaps::new_symmetric(theme::space::MD, theme::space::LG))
-                            .child(crate::widgets::with_tooltip(
-                                format!("{}, {summary}", entry.label),
-                                crate::widgets::a11y_text(title)
-                                    .font_size(theme::font::LABEL)
-                                    .max_lines(1)
-                                    .text_overflow(TextOverflow::Ellipsis)
-                                    .color(if broken { theme::DANGER } else { theme::TEXT }),
-                            ))
-                            .child(crate::widgets::with_tooltip(
-                                format!("{}, {summary}", entry.label),
-                                crate::widgets::a11y_text(summary)
-                                    .font_size(theme::font::MICRO)
-                                    .max_lines(1)
-                                    .text_overflow(TextOverflow::Ellipsis)
-                                    .color(theme::DIM),
-                            )),
-                    )
-                    .into_element(),
-            )
-            .role(AccessibilityRole::ListBoxOption)
-            .selected(is_selected)
-            .focusable(false)
-            .hover_background(theme::SURFACE_HOVER)
-            .fill_width()
-            .key(index)
-            .into_element(),
-        );
-    }
-    if rows.is_empty() {
-        rows.push(
-            rect()
-                .padding(Gaps::new_all(theme::space::XL))
-                .child(
-                    crate::widgets::a11y_text(if entries.is_empty() {
-                        "No savegames in this folder."
-                    } else {
-                        "No savegame matches this filter."
-                    })
-                    .font_size(theme::font::CAPTION)
-                    .color(theme::DIM),
-                )
-                .into_element(),
-        );
-    }
 
     let preview_block = preview_slot(preview, selected.is_some());
 
@@ -234,22 +129,20 @@ pub(super) fn sidebar(
         ))
         .child(sort_bar(ctx, sort, *sort.read()))
         .child(
-            ScrollView::new()
-                .show_scrollbar(true)
-                .auto_hide_scrollbars(false)
-                .width(Size::fill())
-                .height(Size::flex(1.0))
-                .child(
-                    SaveList {
-                        rows,
-                        visible: Rc::new(visible.to_vec()),
-                        focus,
-                        open,
-                        key: DiffKey::None,
-                    }
-                    .key("save-list")
-                    .into_element(),
-                ),
+            SaveList {
+                data: SaveRows {
+                    entries: Rc::clone(entries),
+                    visible: Rc::clone(visible),
+                    selected,
+                    focused: focused_index,
+                    focus,
+                    actions: Rc::clone(actions),
+                    open,
+                },
+                key: DiffKey::None,
+            }
+            .key("save-list")
+            .into_element(),
         )
         .into_element()
 }
@@ -274,13 +167,45 @@ impl OpenSave {
     }
 }
 
+/// Height of one savegame row plus the gap before the next row.
+const SAVE_ROW_PITCH: f32 = theme::layout::SAVE_ROW_HEIGHT + theme::space::XS;
+
+/// Everything the virtual save list needs to build one row on demand.
+#[derive(Clone)]
+struct SaveRows {
+    entries: Rc<Vec<SaveEntry>>,
+    visible: Rc<Vec<usize>>,
+    selected: Option<usize>,
+    focused: Option<usize>,
+    focus: State<usize>,
+    actions: Rc<RefCell<HashMap<usize, Action>>>,
+    open: OpenSave,
+}
+
+impl PartialEq for SaveRows {
+    /// Shared collections compare by identity: cloning the data is cheap, and
+    /// comparing every savegame label on each render would make the list pay
+    /// for the rows it no longer builds.
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.entries, &other.entries)
+            && Rc::ptr_eq(&self.visible, &other.visible)
+            && Rc::ptr_eq(&self.actions, &other.actions)
+            && self.selected == other.selected
+            && self.focused == other.focused
+            && self.focus == other.focus
+            && self.open == other.open
+    }
+}
+
 /// The accessible save list: one focusable list box with roving visual focus.
+///
+/// Rows are built by [`VirtualScrollView`], so a folder with hundreds of
+/// savegames costs the same to render as a folder with ten. Before this, every
+/// row (two tooltips and two text paragraphs) was built even when it was far
+/// outside the sidebar, which cost well over a hundred kilobytes per savegame.
 #[derive(PartialEq)]
 struct SaveList {
-    rows: Vec<Element>,
-    visible: Rc<Vec<usize>>,
-    focus: State<usize>,
-    open: OpenSave,
+    data: SaveRows,
     key: DiffKey,
 }
 
@@ -295,15 +220,58 @@ impl Component for SaveList {
         let a11y_id = use_a11y();
         let focus_state = use_focus(a11y_id);
         let is_focused = focus_state() == Focus::Keyboard;
-        let mut focus = self.focus;
-        let visible = self.visible.clone();
-        let open = self.open.clone();
+        let mut focus = self.data.focus;
+        let mut scroll = use_scroll_controller(ScrollConfig::default);
+        let visible = self.data.visible.clone();
+        let open = self.data.open.clone();
         let _ = *focus.read();
+
+        // A savegame can be selected from outside the list (a rescan, opening
+        // another folder); keep the selected row in view then too.
+        let selected_position = self
+            .data
+            .selected
+            .and_then(|selected| visible.iter().position(|index| *index == selected));
+        use_side_effect_with_deps(&selected_position, move |position| {
+            if let Some(position) = *position {
+                reveal_row(&mut scroll, position);
+            }
+        });
+
+        let content = if visible.is_empty() {
+            rect()
+                .padding(Gaps::new_all(theme::space::XL))
+                .child(
+                    crate::widgets::a11y_text(if self.data.entries.is_empty() {
+                        "No savegames in this folder."
+                    } else {
+                        "No savegame matches this filter."
+                    })
+                    .font_size(theme::font::CAPTION)
+                    .color(theme::DIM),
+                )
+                .into_element()
+        } else {
+            let data = self.data.clone();
+            VirtualScrollView::new_with_data(data, |item, data: &SaveRows| {
+                data.visible.get(item.index).map_or_else(
+                    || rect().height(Size::px(item.size)).into_element(),
+                    |index| save_row(data, *index, item.size),
+                )
+            })
+            .length(visible.len())
+            .item_size(SAVE_ROW_PITCH)
+            .show_scrollbar(true)
+            .auto_hide_scrollbars(false)
+            .scroll_controller(scroll)
+            .key("save-rows")
+            .into_element()
+        };
 
         rect()
             .vertical()
             .width(Size::fill())
-            .spacing(theme::space::XS)
+            .height(Size::flex(1.0))
             .a11y_id(a11y_id)
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::ListBox)
@@ -344,10 +312,133 @@ impl Component for SaveList {
                 };
                 if let Some(target) = target {
                     *focus.write() = target;
+                    if let Some(position) =
+                        visible.iter().position(|candidate| *candidate == target)
+                    {
+                        reveal_row(&mut scroll, position);
+                    }
                 }
             })
-            .children(self.rows.clone())
+            .child(content)
             .into_element()
+    }
+}
+
+/// Builds one savegame row for the virtual list.
+///
+/// `size` is the pitch the list reserved for the row; the card takes the
+/// remaining height after the gap.
+fn save_row(data: &SaveRows, index: usize, size: f32) -> Element {
+    let entry = &data.entries[index];
+    let is_selected = data.selected == Some(index);
+    // The roving list focus is not a DOM focus on the row, so the row paints
+    // it; hover is handled by the button itself and therefore does not rebuild
+    // any row.
+    let is_focused = data.focused == Some(index);
+    let broken = entry.error.is_some();
+    let summary = entry.summary();
+    let title = entry.label.clone();
+    let accessible = format!("{title}, {summary}");
+    let action = {
+        let mut cache = data.actions.borrow_mut();
+        cache
+            .entry(index)
+            .or_insert_with(|| {
+                let open = data.open.clone();
+                let mut focus = data.focus;
+                Action::new(move || {
+                    *focus.write() = index;
+                    open.call(index);
+                })
+            })
+            .clone()
+    };
+
+    rect()
+        .width(Size::fill())
+        .height(Size::px(size))
+        .padding(Gaps::new(0.0, 0.0, theme::space::XS, 0.0))
+        .key(index)
+        .child(
+            AccessibleButton::new(
+                accessible,
+                action,
+                rect()
+                    .horizontal()
+                    .width(Size::fill())
+                    .height(Size::px(theme::layout::SAVE_ROW_HEIGHT))
+                    .corner_radius(theme::radius::MEDIUM)
+                    .background(if is_selected {
+                        theme::SURFACE_ACTIVE
+                    } else if is_focused {
+                        theme::SURFACE_HOVER
+                    } else {
+                        theme::SURFACE
+                    })
+                    // The bar is always present, transparent until the row
+                    // is selected, so the row text does not shift by its
+                    // width when the selection moves.
+                    .child(
+                        rect()
+                            .width(Size::px(theme::layout::SELECTION_BAR_WIDTH))
+                            .height(Size::fill())
+                            .background(if is_selected {
+                                theme::ACCENT
+                            } else {
+                                Color::TRANSPARENT
+                            }),
+                    )
+                    .child(
+                        rect()
+                            .vertical()
+                            .width(Size::flex(1.0))
+                            .spacing(theme::space::XXS)
+                            .padding(Gaps::new_symmetric(theme::space::MD, theme::space::LG))
+                            .child(crate::widgets::with_tooltip(
+                                format!("{}, {summary}", entry.label),
+                                crate::widgets::a11y_text(title)
+                                    .font_size(theme::font::LABEL)
+                                    .max_lines(1)
+                                    .text_overflow(TextOverflow::Ellipsis)
+                                    .color(if broken { theme::DANGER } else { theme::TEXT }),
+                            ))
+                            .child(crate::widgets::with_tooltip(
+                                format!("{}, {summary}", entry.label),
+                                crate::widgets::a11y_text(summary)
+                                    .font_size(theme::font::MICRO)
+                                    .max_lines(1)
+                                    .text_overflow(TextOverflow::Ellipsis)
+                                    .color(theme::DIM),
+                            )),
+                    )
+                    .into_element(),
+            )
+            .role(AccessibilityRole::ListBoxOption)
+            .selected(is_selected)
+            .focusable(false)
+            .hover_background(theme::SURFACE_HOVER)
+            .fill_width()
+            .into_element(),
+        )
+        .into_element()
+}
+
+/// Scrolls the list just enough to show the row at `position` completely.
+fn reveal_row(controller: &mut ScrollController, position: usize) {
+    let Some((_, viewport)) = *controller.bounds.read() else {
+        return;
+    };
+    if viewport.height <= 0.0 {
+        return;
+    }
+    let top = position as f32 * SAVE_ROW_PITCH;
+    let bottom = top + SAVE_ROW_PITCH;
+    let viewport_top = -controller.position().y;
+    let viewport_bottom = viewport_top + viewport.height;
+    if top < viewport_top {
+        controller.scroll_to_y(-(top.round() as i32));
+    } else if bottom > viewport_bottom {
+        controller.scroll_to_y(-((bottom - viewport.height).round() as i32));
     }
 }
 

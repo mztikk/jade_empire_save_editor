@@ -660,7 +660,14 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             let _ = *revision.read();
             let entries = session.borrow().entries();
             let (sort, descending) = *save_sort.read();
-            crate::session::visible_entries(&entries, &save_query.read(), sort, descending)
+            // Shared so the virtual list can compare the filtered rows by
+            // identity instead of rebuilding them on every unrelated render.
+            Rc::new(crate::session::visible_entries(
+                &entries,
+                &save_query.read(),
+                sort,
+                descending,
+            ))
         });
         filtered.read().clone()
     };

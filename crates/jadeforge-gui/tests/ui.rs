@@ -200,6 +200,14 @@ fn wait_for_text(test: &mut TestingRunner, needle: &str) {
     }
 }
 
+/// Runs the extra layout passes a virtual list needs once its viewport has been
+/// measured, so the rows that fit the viewport are actually built.
+fn settle(test: &mut TestingRunner) {
+    for _ in 0..4 {
+        test.sync_and_update();
+    }
+}
+
 fn click_text(test: &mut TestingRunner, needle: &str) -> bool {
     match find_node_with_text(test, needle) {
         Some(node) => {
@@ -405,7 +413,8 @@ fn the_save_browser_stays_usable_at_the_minimum_window_size() {
         .expect("copy savegame");
     }
 
-    let test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    settle(&mut test);
     let fourth = find_label_exact(&test, "Test Save 4").expect("the fourth save row is missing");
     let footer = find_label_exact(&test, "Save to disk").expect("the footer is missing");
     let fourth_area = fourth.layout().area;
@@ -1715,9 +1724,13 @@ fn the_save_list_keeps_one_tab_stop_with_many_saves() {
         )
         .expect("copy savegame");
     }
-    let test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    settle(&mut test);
     let options = test.find_many(|node, _| (a11y_role(&node) == "ListBoxOption").then_some(node));
-    assert_eq!(options.len(), 4);
+    // Only the rows that fit the viewport are built; with four savegames that
+    // still has to include the ones on screen.
+    assert!(!options.is_empty(), "the save list built no rows at all");
+    assert!(options.len() <= 4, "more rows than savegames were built");
     let list_boxes = test.find_many(|node, _| (a11y_role(&node) == "ListBox").then_some(node));
     assert_eq!(list_boxes.len(), 1);
     assert_eq!(
@@ -1732,6 +1745,43 @@ fn the_save_list_keeps_one_tab_stop_with_many_saves() {
         options.iter().filter(|node| a11y_focusable(node)).count(),
         0,
         "a list box must not put every row in the Tab order"
+    );
+}
+
+#[test]
+fn the_save_list_only_builds_visible_rows_and_still_reaches_the_end() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    // Hard links keep this cheap while still giving the scan 41 distinct
+    // savegames. The zero-padded suffix keeps the name sort predictable.
+    let source = fixture.save_dir.join("Test Save").join("save.sac");
+    for suffix in 2..=41 {
+        let folder = fixture.save_dir.join(format!("Test Save {suffix:02}"));
+        std::fs::create_dir_all(&folder).expect("create extra save folder");
+        std::fs::hard_link(&source, folder.join("save.sac")).expect("link savegame");
+    }
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    settle(&mut test);
+    let options = test.find_many(|node, _| (a11y_role(&node) == "ListBoxOption").then_some(node));
+    assert!(!options.is_empty(), "the save list built no rows");
+    assert!(
+        options.len() < 20,
+        "a virtualized list must not build all 41 savegames, built {}",
+        options.len()
+    );
+
+    // End moves the roving focus to the last savegame, scrolls it into view and
+    // Enter opens it, so virtualization did not break keyboard browsing.
+    assert!(click_text(&mut test, "Level "), "clicking a save failed");
+    test.press_key(Key::Named(NamedKey::End));
+    test.sync_and_update();
+    test.press_key(Key::Named(NamedKey::Enter));
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "Opened Test Save 41").is_some(),
+        "End + Enter did not open the last savegame"
     );
 }
 
