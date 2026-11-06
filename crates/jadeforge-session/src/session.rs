@@ -3190,4 +3190,13 @@ mod tests {
             session.message.text
         );
     }
+    #[test]
+    fn timestamps_are_formatted_in_utc() {
+        use std::time::{Duration, UNIX_EPOCH};
+        assert_eq!(format::timestamp(UNIX_EPOCH), "1970-01-01 00:00 UTC");
+        assert_eq!(
+            format::timestamp(UNIX_EPOCH + Duration::from_secs(1_700_000_000)),
+            "2023-11-14 22:13 UTC"
+        );
+    }
 }

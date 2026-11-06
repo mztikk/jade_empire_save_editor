@@ -2805,3 +2805,57 @@ fn the_editor_scroll_view_is_keyboard_focusable() {
     test.press_key(Key::Named(NamedKey::PageDown));
     test.sync_and_update();
 }
+
+#[test]
+fn eighty_nine_saves_render_within_the_frame_budget() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    // The retail corpus has 89 savegames; the fixture copied once per save so
+    // the save list, its scroll view and the sidebar are exercised at that size.
+    for suffix in 2..=89 {
+        let folder = fixture.save_dir.join(format!("Test Save {suffix}"));
+        std::fs::create_dir_all(&folder).expect("create extra save folder");
+        std::fs::copy(
+            fixture.save_dir.join("Test Save").join("save.sac"),
+            folder.join("save.sac"),
+        )
+        .expect("copy savegame");
+    }
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 1180.0, 760.0);
+    for _ in 0..2000 {
+        if find_label_text(&test, "SAVEGAMES (89)").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        test.sync_and_update();
+    }
+    assert!(find_label_text(&test, "SAVEGAMES (89)").is_some());
+
+    let started = std::time::Instant::now();
+    let _ = test.render();
+    let first = started.elapsed();
+    assert!(
+        first < std::time::Duration::from_secs(2),
+        "the first 89-save frame took {first:?}"
+    );
+
+    // Opening a savegame must not become quadratic with the list size.
+    assert!(click_text(&mut test, "Level "), "the savegame did not open");
+    let started = std::time::Instant::now();
+    let _ = test.render();
+    let opened = started.elapsed();
+    assert!(
+        opened < std::time::Duration::from_secs(2),
+        "the opened 89-save frame took {opened:?}"
+    );
+    assert!(
+        crate::perf_frames() > 0,
+        "frame instrumentation did not record a render"
+    );
+}
+
+fn perf_frames() -> u64 {
+    jadeforge_gui::perf::frames()
+}

@@ -1,5 +1,7 @@
 //! Savegame list and sort controls.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use freya::elements::image::ImageHandle;
@@ -10,8 +12,8 @@ use crate::session::{SaveEntry, SaveSort};
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
 
+use super::Ctx;
 use super::shell::preview_slot;
-use super::{Ctx, HoverKey};
 
 #[allow(
     clippy::too_many_lines, // one declarative sidebar layout keeps the rows together
@@ -26,10 +28,10 @@ pub(super) fn sidebar(
     focus: State<usize>,
     preview: Option<ImageHandle>,
     character: Option<&Character>,
+    actions: &Rc<RefCell<HashMap<usize, Action>>>,
     query: State<String>,
     filter_id: AccessibilityId,
     sort: State<(SaveSort, bool)>,
-    hovered: State<Option<HoverKey>>,
     reset: Rc<dyn Fn()>,
     sync: Rc<dyn Fn()>,
 ) -> Element {
@@ -59,18 +61,28 @@ pub(super) fn sidebar(
     for &index in visible {
         let entry = &entries[index];
         let is_selected = selected == Some(index);
+        // The roving list focus is not a DOM focus on the row, so the row
+        // paints it; hover is handled by the button itself and therefore does
+        // not rebuild any row.
         let is_focused = focused_index == Some(index);
-        let is_hovered = *hovered.read() == Some(HoverKey::Save(index));
         let broken = entry.error.is_some();
         let summary = entry.summary();
         let title = entry.label.clone();
         let accessible = format!("{title}, {summary}");
-        let open_for_row = open.clone();
-        let mut focus_for_row = focus;
-        let action = Action::new(move || {
-            *focus_for_row.write() = index;
-            open_for_row.call(index);
-        });
+        let action = {
+            let mut cache = actions.borrow_mut();
+            cache
+                .entry(index)
+                .or_insert_with(|| {
+                    let open_for_row = open.clone();
+                    let mut focus_for_row = focus;
+                    Action::new(move || {
+                        *focus_for_row.write() = index;
+                        open_for_row.call(index);
+                    })
+                })
+                .clone()
+        };
         rows.push(
             AccessibleButton::new(
                 accessible,
@@ -82,22 +94,10 @@ pub(super) fn sidebar(
                     .corner_radius(theme::radius::MEDIUM)
                     .background(if is_selected {
                         theme::SURFACE_ACTIVE
-                    } else if is_hovered || is_focused {
+                    } else if is_focused {
                         theme::SURFACE_HOVER
                     } else {
                         theme::SURFACE
-                    })
-                    .on_pointer_enter({
-                        let mut hovered = hovered;
-                        move |_| *hovered.write() = Some(HoverKey::Save(index))
-                    })
-                    .on_pointer_leave({
-                        let mut hovered = hovered;
-                        move |_| {
-                            if *hovered.read() == Some(HoverKey::Save(index)) {
-                                *hovered.write() = None;
-                            }
-                        }
                     })
                     // The bar is always present, transparent until the row
                     // is selected, so the row text does not shift by its
@@ -137,6 +137,7 @@ pub(super) fn sidebar(
             .role(AccessibilityRole::ListBoxOption)
             .selected(is_selected)
             .focusable(false)
+            .hover_background(theme::SURFACE_HOVER)
             .fill_width()
             .key(index)
             .into_element(),

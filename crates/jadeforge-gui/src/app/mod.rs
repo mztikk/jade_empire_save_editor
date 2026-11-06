@@ -16,6 +16,7 @@ use crate::form::Form;
 use crate::session::{CharacterForm, GameStatus, Preview, Session, default_save_dir};
 use crate::theme;
 use crate::views;
+use crate::widgets::Action;
 use crate::{APP_ID, ICON_PNG};
 
 mod navigation;
@@ -54,8 +55,6 @@ impl Ctx {
 /// Which interactive row is currently hovered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HoverKey {
-    /// A savegame row, by index in `Session::entries`.
-    Save(usize),
     /// An inventory row, by item id.
     Item(usize),
     /// An item-database suggestion, by item id.
@@ -268,6 +267,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let expanded_style = use_state(|| None::<u16>);
     let save_query = use_state(String::new);
     let save_focus = use_state(|| 0_usize);
+    // One press action per savegame row, kept across renders so hovering a row
+    // cannot invalidate it and rebuild every row.
+    let save_actions: Rc<RefCell<std::collections::HashMap<usize, Action>>> =
+        use_hook(|| Rc::new(RefCell::new(std::collections::HashMap::new())));
     let save_sort = use_state(|| {
         let config = crate::config::Config::load();
         let sort = config
@@ -309,10 +312,27 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         form,
     };
 
+    // Record how long a state-changing render took. Reading the revision and
+    // the active tab subscribes the effect to the renders that do real work.
+    {
+        let rendered_at = use_hook(|| std::cell::Cell::new(std::time::Instant::now()));
+        use_side_effect(move || {
+            let _ = *revision.read();
+            let _ = *tab.read();
+            let now = std::time::Instant::now();
+            crate::perf::record_frame(now.duration_since(rendered_at.replace(now)));
+        });
+    }
+
     // Apply valid character edits as they happen, so the form behaves exactly
     // like the item, style and gem edits: everything lives in memory until the
     // user saves. Invalid input stays in the fields for the user to fix.
-    let form_snapshot = form.snapshot();
+    // The snapshot is a dependency of the side effect below; it is memoised so
+    // the 21 inputs are only re-read when one of them changes.
+    let form_snapshot = {
+        let snapshot = use_memo(move || form.snapshot());
+        snapshot.read().clone()
+    };
     {
         let mut ctx = ctx.clone();
         use_side_effect_with_deps(&form_snapshot, move |_| {
@@ -378,10 +398,18 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let has_save = session.borrow().opened_save().is_some();
 
     // The invalid badge comes from parsing the fields, not from "differs":
-    // a field that cannot be parsed is invalid even before it is applied.
-    let form_errors = character.as_ref().map_or_else(Vec::new, |character| {
-        form.read().validate_against(character)
-    });
+    // a field that cannot be parsed is invalid even before it is applied. The
+    // per-field reparse is memoised against the session revision and the form
+    // inputs instead of running on every frame.
+    let form_errors = {
+        let session = session.clone();
+        let errors = use_memo(move || {
+            let _ = *revision.read();
+            let form = form.read();
+            session.borrow().form_errors(&form)
+        });
+        errors.read().clone()
+    };
     let preview_handle = cached_preview(&preview_cache, preview.as_deref());
     let game_ready = matches!(game_status, GameStatus::Loaded { .. });
     let names_ready = session.borrow().has_bundled_names();
@@ -391,33 +419,43 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     } else {
         0
     };
-    let (item_results, item_matches) = if active_tab == Tab::Inventory {
-        let query = item_query.read().clone();
-        session.borrow().search_items(&query, *item_limit.read())
-    } else {
-        (Vec::new(), 0)
+    // Filtering the whole item database and the learnable style list is
+    // derived work: memoise it against the session revision, the filter and the
+    // page limit instead of rebuilding 291 suggestions every frame.
+    let (item_results, item_matches) = {
+        let session = session.clone();
+        let results = use_memo(move || {
+            let _ = *revision.read();
+            let query = item_query.read().clone();
+            let limit = *item_limit.read();
+            session.borrow().search_items(&query, limit)
+        });
+        results.read().clone()
     };
-    let (style_matches, style_matches_total, total_missing) = if active_tab == Tab::Styles {
-        let query = style_query.read().trim().to_lowercase();
-        let limit = *style_limit.read();
-        let missing = session.borrow().missing_styles();
-        let total_missing = missing.len();
-        let matching: Vec<_> = missing
-            .into_iter()
-            .filter(|style| {
-                query.is_empty()
-                    || style.name.to_lowercase().contains(&query)
-                    || style.label.to_lowercase().contains(&query)
-            })
-            .collect();
-        let total = matching.len();
-        (
-            matching.into_iter().take(limit).collect::<Vec<_>>(),
-            total,
-            total_missing,
-        )
-    } else {
-        (Vec::new(), 0, 0)
+    let (style_matches, style_matches_total, total_missing) = {
+        let session = session.clone();
+        let results = use_memo(move || {
+            let _ = *revision.read();
+            let query = style_query.read().trim().to_lowercase();
+            let limit = *style_limit.read();
+            let missing = session.borrow().missing_styles();
+            let total_missing = missing.len();
+            let matching: Vec<_> = missing
+                .into_iter()
+                .filter(|style| {
+                    query.is_empty()
+                        || style.name.to_lowercase().contains(&query)
+                        || style.label.to_lowercase().contains(&query)
+                })
+                .collect();
+            let total = matching.len();
+            (
+                matching.into_iter().take(limit).collect::<Vec<_>>(),
+                total,
+                total_missing,
+            )
+        });
+        results.read().clone()
     };
 
     let sync: Rc<dyn Fn()> = {
@@ -516,9 +554,16 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         reset.clone(),
         sync.clone(),
     );
-    let (sort_key, sort_descending) = *save_sort.read();
-    let visible =
-        crate::session::visible_entries(&entries, &save_query.read(), sort_key, sort_descending);
+    let visible = {
+        let session = session.clone();
+        let filtered = use_memo(move || {
+            let _ = *revision.read();
+            let entries = session.borrow().entries();
+            let (sort, descending) = *save_sort.read();
+            crate::session::visible_entries(&entries, &save_query.read(), sort, descending)
+        });
+        filtered.read().clone()
+    };
     let sidebar = sidebar::sidebar(
         &ctx,
         &entries,
@@ -527,10 +572,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         save_focus,
         preview_handle,
         character.as_ref(),
+        &save_actions,
         save_query,
         save_filter_id,
         save_sort,
-        hovered,
         reset.clone(),
         sync.clone(),
     );
