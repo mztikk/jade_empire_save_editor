@@ -70,7 +70,7 @@ the game does, verifies the result and keeps a backup of the original.
 
 ## Requirements
 
-- Rust 1.88 or newer to build from source.
+- Rust 1.99 or newer to build from source.
 - Linux: an X11 or Wayland session with OpenGL 3.3 (or the equivalent on
   macOS/Windows) and, for the native folder dialog, `xdg-desktop-portal`
   (installed by default on GNOME, KDE and most desktops). The GUI is a native

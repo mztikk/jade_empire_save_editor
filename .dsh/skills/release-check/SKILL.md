@@ -41,7 +41,7 @@ the variables did not reach the tests).
 ## Manual checks
 
 1. `cargo build --release --workspace` succeeds; `cargo check --locked -p ...`
-   also succeeds with the declared MSRV (1.88 in `Cargo.toml` and CI).
+   also succeeds with the declared MSRV (1.99 in `Cargo.toml` and CI).
 2. `cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/ui.png all`
    renders every tab, not the empty state, and the images look sane. Regenerate
    `docs/screenshot*.png` when the layout changed.
