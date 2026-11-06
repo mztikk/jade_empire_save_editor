@@ -295,6 +295,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let item_filter_id = use_a11y();
     let style_filter_id = use_a11y();
     let gem_filter_id = use_a11y();
+    // One focus target for the editor's scroll view: static content below the
+    // fold is reachable with the arrow and paging keys, not only the wheel.
+    let editor_scroll_id = use_a11y();
+    let editor_scroll_focus = use_focus(editor_scroll_id);
 
     // Subscribe to session changes.
     let _ = *revision.read();
@@ -625,43 +629,79 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         .content(Content::Flex)
                         .child(tabs)
                         .child(
-                            ScrollView::new_controlled(scrolls[active_tab.index()])
-                                .show_scrollbar(true)
-                                .auto_hide_scrollbars(false)
+                            rect()
+                                .a11y_id(editor_scroll_id)
+                                .a11y_focusable(true)
+                                .a11y_role(AccessibilityRole::ScrollView)
                                 .width(Size::fill())
                                 .height(Size::flex(1.0))
+                                .content(Content::Flex)
+                                .border(
+                                    Border::new()
+                                        .fill(if editor_scroll_focus() == Focus::Keyboard {
+                                            theme::TEXT
+                                        } else {
+                                            Color::TRANSPARENT
+                                        })
+                                        .width(theme::stroke::FOCUS),
+                                )
+                                .on_key_down({
+                                    let mut scroll = scrolls[active_tab.index()];
+                                    move |event: Event<KeyboardEventData>| {
+                                        let current = scroll.position().y as i32;
+                                        let target = match event.key {
+                                            Key::Named(NamedKey::ArrowDown) => current + 48,
+                                            Key::Named(NamedKey::ArrowUp) => current - 48,
+                                            Key::Named(NamedKey::PageDown) => current + 320,
+                                            Key::Named(NamedKey::PageUp) => current - 320,
+                                            Key::Named(NamedKey::Home) => i32::MIN,
+                                            Key::Named(NamedKey::End) => i32::MAX,
+                                            _ => return,
+                                        };
+                                        let changed = scroll.scroll_to_y(target);
+                                        eprintln!("DEBUG scroll {current} -> {target} changed={changed} now={:?}", scroll.position());
+                                        event.stop_propagation();
+                                    }
+                                })
                                 .child(
-                                    rect()
-                                        .vertical()
+                                    ScrollView::new_controlled(scrolls[active_tab.index()])
+                                        .show_scrollbar(true)
+                                        .auto_hide_scrollbars(false)
                                         .width(Size::fill())
-                                        .cross_align(Alignment::Center)
-                                        .padding(Gaps::new(
-                                            theme::space::XXL,
-                                            theme::space::CARD,
-                                            theme::space::XXL,
-                                            theme::space::CARD,
-                                        ))
-                                        // Wide windows stop stretching the
-                                        // cards: past this width a paragraph
-                                        // becomes a 150-character line.
+                                        .height(Size::fill())
                                         .child(
                                             rect()
                                                 .vertical()
                                                 .width(Size::fill())
-                                                .max_width(Size::px(
-                                                    theme::layout::EDITOR_MAX_WIDTH,
+                                                .cross_align(Alignment::Center)
+                                                .padding(Gaps::new(
+                                                    theme::space::XXL,
+                                                    theme::space::CARD,
+                                                    theme::space::XXL,
+                                                    theme::space::CARD,
                                                 ))
-                                                .child(if has_save {
-                                                    content
-                                                } else {
-                                                    shell::empty_state(
-                                                        &ctx,
-                                                        entries.len(),
-                                                        directory_state,
-                                                        reset.clone(),
-                                                        sync.clone(),
-                                                    )
-                                                }),
+                                                // Wide windows stop stretching the
+                                                // cards: past this width a paragraph
+                                                // becomes a 150-character line.
+                                                .child(
+                                                    rect()
+                                                        .vertical()
+                                                        .width(Size::fill())
+                                                        .max_width(Size::px(
+                                                            theme::layout::EDITOR_MAX_WIDTH,
+                                                        ))
+                                                        .child(if has_save {
+                                                            content
+                                                        } else {
+                                                            shell::empty_state(
+                                                                &ctx,
+                                                                entries.len(),
+                                                                directory_state,
+                                                                reset.clone(),
+                                                                sync.clone(),
+                                                            )
+                                                        }),
+                                                ),
                                         ),
                                 ),
                         ),

@@ -674,7 +674,13 @@ pub fn row_action(
         accessible,
         action,
         rect()
-            .padding(Gaps::new_symmetric(theme::space::XS, theme::space::SM))
+            // 11 px micro type plus 6 px padding on both sides keeps the
+            // target at least 24 px tall; the explicit minimum keeps a single
+            // glyph wide enough to hit.
+            .center()
+            .min_width(Size::px(theme::layout::TARGET_MIN))
+            .min_height(Size::px(theme::layout::TARGET_MIN))
+            .padding(Gaps::new_symmetric(theme::space::SM, theme::space::SM))
             .child(
                 a11y_text(text)
                     .font_size(theme::font::MICRO)

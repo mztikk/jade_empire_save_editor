@@ -32,7 +32,9 @@ pub fn view(
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for style in styles {
-        rows.push(style_row(ctx, style, expanded, hovered, game_ready));
+        rows.push(style_row(
+            ctx, style, expanded, hovered, game_ready, filter_id,
+        ));
     }
     if rows.is_empty() {
         rows.push(match ctx.session.borrow().section_error(Section::Styles) {
@@ -149,6 +151,7 @@ fn style_row(
     expanded: State<Option<u16>>,
     mut hovered: State<Option<crate::app::HoverKey>>,
     game_ready: bool,
+    filter_id: AccessibilityId,
 ) -> Element {
     let key = crate::app::HoverKey::Style(style.struct_index);
     let is_hovered = *hovered.read() == Some(key);
@@ -167,6 +170,7 @@ fn style_row(
                 return;
             }
             ctx.run(|session| session.remove_style(index));
+            filter_id.request_focus();
         })
     };
 

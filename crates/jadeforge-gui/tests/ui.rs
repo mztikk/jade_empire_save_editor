@@ -2681,3 +2681,127 @@ fn hovering_an_upgrade_orb_explains_it() {
         "the orb's accessible name lacks its action: {label}"
     );
 }
+
+#[test]
+fn controls_meet_the_minimum_target_size() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+
+    for label in ["Name", "Level", "Played"] {
+        let node = test
+            .find(|node, _| {
+                a11y_label(&node)
+                    .as_deref()
+                    .is_some_and(|wanted| wanted.starts_with(&format!("Sort by {label}")))
+                    .then_some(node)
+            })
+            .expect("the sort control is missing");
+        assert!(
+            node.layout().area.size.height >= 23.5,
+            "the {label} sort control is only {} px tall",
+            node.layout().area.size.height
+        );
+    }
+
+    let tab = test
+        .find(|node, _| {
+            (a11y_role(&node) == "Tab" && a11y_label(&node).as_deref() == Some("Character"))
+                .then_some(node)
+        })
+        .expect("the Character tab is missing");
+    assert!(
+        tab.layout().area.size.height >= 23.5,
+        "the tab target is only {} px tall",
+        tab.layout().area.size.height
+    );
+
+    assert!(click_label_exact(&mut test, "Inventory"));
+    let plus = test
+        .find(|node, _| {
+            a11y_label(&node)
+                .as_deref()
+                .is_some_and(|label| label.starts_with("Increase ") && label.ends_with(" stack"))
+                .then_some(node)
+        })
+        .expect("the count stepper is missing");
+    let area = plus.layout().area;
+    assert!(
+        area.size.width >= 23.5 && area.size.height >= 23.5,
+        "the stepper target is {}x{} px",
+        area.size.width,
+        area.size.height
+    );
+}
+
+#[test]
+fn removing_a_row_restores_focus_to_the_filter() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(click_label_exact(&mut test, "Inventory"));
+    // The save filter is the first empty text input in the tree; the active
+    // tab's filter comes later.
+    let filters = test.find_many(|node, _| {
+        (a11y_role(&node) == "TextInput" && a11y_value(&node).is_none_or(|value| value.is_empty()))
+            .then_some(node)
+    });
+    let filter = filters.last().expect("the inventory filter is missing");
+    let filter_id = filter
+        .element()
+        .accessibility()
+        .a11y_id
+        .expect("the filter has no accessibility id");
+
+    jadeforge_gui::dialog::set_next_confirm_for_tests(true);
+    assert!(click_label_exact(&mut test, "Remove"), "no remove action");
+    let focused = test.sync_and_update().focus;
+    assert_eq!(
+        focused, filter_id,
+        "removing the focused row left focus nowhere useful"
+    );
+}
+
+#[test]
+fn the_editor_scroll_view_is_keyboard_focusable() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    assert!(click_label_exact(&mut test, "Styles"));
+    let scroll_view = test
+        .find(|node, _| (a11y_role(&node) == "ScrollView" && a11y_focusable(&node)).then_some(node))
+        .expect("the editor scroll view is missing");
+    let target = scroll_view
+        .element()
+        .accessibility()
+        .a11y_id
+        .expect("the scroll view has no accessibility id");
+    assert!(
+        a11y_focusable(&scroll_view),
+        "the scroll view is not focusable"
+    );
+    let request = accesskit::ActionRequest {
+        action: accesskit::Action::Focus,
+        target_tree: accesskit::TreeId::ROOT,
+        target_node: target,
+        data: None,
+    };
+    assert!(
+        test.send_accessibility_action(request),
+        "the scroll view cannot be focused through assistive technology"
+    );
+    let focused = test.sync_and_update().focus;
+    assert_eq!(focused, target, "the Focus action did not move focus");
+    // The paging keys are wired to the active tab's scroll controller. The
+    // headless runner does not report the ScrollView bounds, so the resulting
+    // offset cannot be asserted here; the pointer-wheel test has the same
+    // limitation and skips.
+    test.press_key(Key::Named(NamedKey::PageDown));
+    test.sync_and_update();
+}

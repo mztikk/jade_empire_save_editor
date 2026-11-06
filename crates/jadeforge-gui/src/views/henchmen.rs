@@ -142,7 +142,9 @@ fn henchman_row(
         .child(if available {
             widgets::badge("available", theme::SURFACE_ACTIVE, theme::JADE)
         } else {
-            widgets::badge("hidden", theme::SURFACE_ACTIVE, theme::DANGER)
+            // Hidden is a resting state, not a failure: a calmer colour than
+            // the danger red that made an unavailable companion look broken.
+            widgets::badge("hidden", theme::SURFACE, theme::MUTED)
         })
         .child(widgets::row_action(
             format!("Decrease {name} level"),

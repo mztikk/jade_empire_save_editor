@@ -156,6 +156,12 @@ pub(super) fn header(
             }
         }
     };
+    // A glyph, not only the colour, marks a successful action.
+    let status_text = if message.kind == MessageKind::Success {
+        format!("✓ {}", message.text)
+    } else {
+        message.text.clone()
+    };
     let copy_message = {
         let ctx = ctx.clone();
         let text = message.text.clone();
@@ -286,7 +292,7 @@ pub(super) fn header(
                     .height(Size::px(theme::font::LINE_HEIGHT * 3.0))
                     .main_align(Alignment::Center)
                     .child(
-                        crate::widgets::a11y_text(message.text.clone())
+                        crate::widgets::a11y_text(status_text.clone())
                             .a11y_builder(move |node| {
                                 node.set_role(AccessibilityRole::Status);
                                 node.set_live(status_live);

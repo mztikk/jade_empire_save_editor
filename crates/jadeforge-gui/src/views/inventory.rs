@@ -28,7 +28,7 @@ pub fn view(
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for item in items {
-        rows.push(item_row(ctx, item, expanded, hovered));
+        rows.push(item_row(ctx, item, expanded, hovered, filter_id));
     }
     if rows.is_empty() {
         rows.push(match ctx.session.borrow().section_error(Section::Items) {
@@ -150,6 +150,7 @@ fn item_row(
     item: &ItemRow,
     expanded: State<Option<usize>>,
     mut hovered: State<Option<crate::app::HoverKey>>,
+    filter_id: AccessibilityId,
 ) -> Element {
     let key = crate::app::HoverKey::Item(item.struct_index);
     let is_hovered = *hovered.read() == Some(key);
@@ -177,6 +178,9 @@ fn item_row(
                 return;
             }
             ctx.run(|session| session.remove_item(index));
+            // The focused Remove button just disappeared; keep the keyboard
+            // user inside the list by focusing its filter.
+            filter_id.request_focus();
         })
     };
     let set_count = {

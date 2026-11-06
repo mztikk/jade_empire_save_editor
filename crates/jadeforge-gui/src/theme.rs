@@ -19,6 +19,12 @@ pub const SURFACE_HOVER: Color = Color::from_rgb(34, 39, 49);
 pub const SURFACE_ACTIVE: Color = Color::from_rgb(42, 48, 60);
 /// Borders and dividers.
 pub const BORDER: Color = Color::from_rgb(44, 50, 62);
+/// Border of an interactive control.
+///
+/// Dividers may be subtle, but an input, scrollbar or outline button has to be
+/// identifiable: this colour keeps at least a 3:1 contrast against every
+/// surface it is drawn on.
+pub const CONTROL_BORDER: Color = Color::from_rgb(118, 128, 145);
 /// Primary text.
 pub const TEXT: Color = Color::from_rgb(233, 237, 244);
 /// Secondary text.
@@ -60,15 +66,18 @@ pub mod font {
     /// Card and sidebar title.
     pub const CARD_TITLE: f32 = 15.0;
     /// Default reading size.
-    pub const BODY: f32 = 13.0;
+    pub const BODY: f32 = 14.0;
     /// Form labels and row values.
-    pub const LABEL: f32 = 12.0;
+    pub const LABEL: f32 = 13.0;
     /// Hints, status messages and secondary text.
-    pub const CAPTION: f32 = 11.0;
+    pub const CAPTION: f32 = 12.0;
     /// Uppercase section labels and row metadata.
-    pub const MICRO: f32 = 10.0;
+    ///
+    /// Kept at 11 px: the smallest type is still readable and compact rows
+    /// depend on it.
+    pub const MICRO: f32 = 11.0;
     /// Line box of one line of [`CAPTION`] text.
-    pub const LINE_HEIGHT: f32 = 13.0;
+    pub const LINE_HEIGHT: f32 = 14.0;
 }
 
 /// Shared spacing scale in logical pixels.
@@ -193,6 +202,11 @@ pub mod layout {
     /// Largest width of a run of body text, about 75 characters at
     /// [`font::BODY`].
     pub const TEXT_MEASURE: f32 = 720.0;
+    /// Smallest click target of a row control.
+    ///
+    /// WCAG asks for 24x24; rows prefer a little more room so a stack stepper
+    /// is comfortable to hit.
+    pub const TARGET_MIN: f32 = 28.0;
     /// Width of the disclosure chevron slot on a row.
     pub const CHEVRON_WIDTH: f32 = 12.0;
     /// Width of the fixed sort-direction arrow slot.
@@ -284,7 +298,7 @@ pub fn theme() -> Theme {
         ButtonColorsThemePreference {
             background: Preference::Specific(Color::TRANSPARENT),
             hover_background: Preference::Specific(SURFACE_ACTIVE),
-            border_fill: Preference::Specific(BORDER),
+            border_fill: Preference::Specific(CONTROL_BORDER),
             focus_border_fill: Preference::Specific(ACCENT),
             color: Preference::Specific(TEXT),
         },
@@ -306,7 +320,7 @@ pub fn theme() -> Theme {
             focus_background: Preference::Specific(SURFACE_HOVER),
             color: Preference::Specific(TEXT),
             placeholder_color: Preference::Specific(DIM),
-            border_fill: Preference::Specific(BORDER),
+            border_fill: Preference::Specific(CONTROL_BORDER),
             focus_border_fill: Preference::Specific(ACCENT),
         },
     );
@@ -318,14 +332,14 @@ pub fn theme() -> Theme {
             color: Preference::Specific(TEXT),
             placeholder_color: Preference::Specific(DIM),
             border_fill: Preference::Specific(Color::TRANSPARENT),
-            focus_border_fill: Preference::Specific(BORDER),
+            focus_border_fill: Preference::Specific(CONTROL_BORDER),
         },
     );
     theme.set(
         "scrollbar",
         ScrollBarThemePreference {
             background: Preference::Specific(Color::TRANSPARENT),
-            thumb_background: Preference::Specific(BORDER),
+            thumb_background: Preference::Specific(CONTROL_BORDER),
             hover_thumb_background: Preference::Specific(SURFACE_ACTIVE),
             active_thumb_background: Preference::Specific(ACCENT),
             // Freya 0.5 replaced the single `size` field with a resting and an
@@ -500,6 +514,20 @@ mod tests {
     }
 
     #[test]
+    fn control_borders_meet_the_non_text_contrast_minimum() {
+        for background in [BACKGROUND, PANEL, SURFACE, SURFACE_HOVER, SURFACE_ACTIVE] {
+            assert!(
+                contrast(CONTROL_BORDER, background) >= 3.0,
+                "the control border is not visible on {background:?}"
+            );
+        }
+        assert!(
+            contrast(palette().primary, BACKGROUND) >= 3.0,
+            "the accent focus ring must be visible on the background"
+        );
+    }
+
+    #[test]
     fn no_component_surface_is_white() {
         for color in [
             SURFACE,
@@ -534,6 +562,18 @@ mod tests {
         );
         let line_heights = [font::CAPTION, font::LINE_HEIGHT];
         assert!(line_heights.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn the_smallest_type_stays_readable() {
+        const {
+            assert!(font::BODY >= 12.0, "body text must be at least 12 px");
+            assert!(font::MICRO >= 11.0, "micro labels must be at least 11 px");
+            assert!(
+                font::LINE_HEIGHT >= font::CAPTION,
+                "a caption needs a line box at least as tall as its type"
+            );
+        }
     }
 
     #[test]
@@ -596,6 +636,7 @@ mod tests {
             layout::FIELD_NARROW,
             layout::FIELD_MEDIUM,
             layout::FIELD_WIDE,
+            layout::TARGET_MIN,
             layout::CHEVRON_WIDTH,
             layout::SORT_ARROW_WIDTH,
             layout::SORT_ARROW_HEIGHT,

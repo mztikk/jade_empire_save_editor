@@ -387,10 +387,16 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                 action,
                 rect()
                     .horizontal()
+                    .cross_align(Alignment::Center)
+                    .padding(Gaps::new_symmetric(theme::space::SM, theme::space::NONE))
                     .child(
                         crate::widgets::a11y_text(key.label())
                             .font_size(theme::font::MICRO)
-                            .color(if is_active { theme::ACCENT } else { theme::DIM }),
+                            .color(if is_active {
+                                theme::ACCENT
+                            } else {
+                                theme::MUTED
+                            }),
                     )
                     // The arrow lives in a fixed slot on every button. Its
                     // glyph width differs between platform fonts, so sizing
@@ -410,6 +416,7 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                             }),
                     ),
             )
+            .hover_background(theme::SURFACE_HOVER)
             .key(key.label())
             .into_element(),
         );

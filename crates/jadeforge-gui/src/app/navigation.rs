@@ -59,6 +59,7 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab, enabled: bool) -> Element {
                 AccessibleButton::new(candidate.label(), action, content)
                     .role(AccessibilityRole::Tab)
                     .selected(is_active)
+                    .hover_background(theme::SURFACE_HOVER)
                     // Arrow keys move between tabs while one of them has
                     // keyboard focus; Home and End jump to the ends.
                     .on_key({

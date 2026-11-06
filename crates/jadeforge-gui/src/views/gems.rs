@@ -65,7 +65,7 @@ pub fn view(
     } else {
         amulet_gems
             .into_iter()
-            .map(|gem| gem_row(ctx, gem, true, true, amulet.is_some(), hovered))
+            .map(|gem| gem_row(ctx, gem, true, true, amulet.is_some(), hovered, filter_id))
             .collect()
     };
     let inventory_rows: Vec<Element> = if let Some(error) = &gems_error {
@@ -78,7 +78,17 @@ pub fn view(
     } else {
         inventory
             .into_iter()
-            .map(|gem| gem_row(ctx, gem, false, can_socket, amulet.is_some(), hovered))
+            .map(|gem| {
+                gem_row(
+                    ctx,
+                    gem,
+                    false,
+                    can_socket,
+                    amulet.is_some(),
+                    hovered,
+                    filter_id,
+                )
+            })
             .collect()
     };
 
@@ -245,6 +255,7 @@ fn gem_row(
     can_move: bool,
     has_amulet: bool,
     mut hovered: State<Option<crate::app::HoverKey>>,
+    filter_id: AccessibilityId,
 ) -> Element {
     let ctx = ctx.clone();
     let index = gem.struct_index;
@@ -295,6 +306,7 @@ fn gem_row(
                         return;
                     }
                     remove_ctx.run(|session| session.remove_gem(index));
+                    filter_id.request_focus();
                 }),
             )
             .into_element(),
