@@ -298,7 +298,7 @@ fn upgrade_panel(
         rows.push(upgrade_row(family, chips));
     }
     rows.push(widgets::hint(
-        "Filled gold orbs are owned; an empty ring is available. Clicking tier N buys every          missing tier up to N; clicking an owned tier removes it and everything above it.",
+        "Filled gold orbs are owned; an empty ring is available. Clicking tier N buys every missing tier up to N; clicking an owned tier removes it and everything above it.",
     ));
     // A hovered (or keyboard-focused) orb explains itself under the family:
     // name, effect, cost and what a click would do.
@@ -528,27 +528,43 @@ fn orb_detail(style: &StyleRow, upgrade: &StyleUpgrade) -> Element {
         widgets::plural(usize::from(upgrade.cost), "style point", "style points")
     };
     rect()
-        .horizontal()
+        .vertical()
         .width(Size::fill())
         .key((style.struct_index, upgrade.slot))
-        .spacing(theme::space::MD)
-        .content(Content::wrap_spacing(theme::space::MD))
+        .spacing(theme::space::XXS)
         .padding(Gaps::new_symmetric(theme::space::XS, theme::space::NONE))
-        .child(
-            widgets::a11y_text(format!(
+        .child(orb_detail_line(
+            format!(
                 "{} tier {}: {}",
                 family_title(&upgrade.family),
                 upgrade.tier,
                 upgrade.name
-            ))
-            .font_size(theme::font::CAPTION)
-            .color(theme::TEXT),
-        )
-        .child(
-            widgets::a11y_text(format!("{effect} · {cost} · {action}"))
-                .font_size(theme::font::MICRO)
-                .color(theme::MUTED),
-        )
+            ),
+            theme::font::CAPTION,
+            theme::TEXT,
+        ))
+        .child(orb_detail_line(
+            format!("{effect} · {cost} · {action}"),
+            theme::font::MICRO,
+            theme::MUTED,
+        ))
+        .into_element()
+}
+
+/// One wrapping line of the hover detail.
+///
+/// The title and the effect/cost/action line each get the full width. As a
+/// single wrapping row they competed for space, and the longer title squeezed
+/// the second line into a one-word column on the right.
+fn orb_detail_line(text: String, font_size: f32, color: Color) -> Element {
+    let value = text.clone();
+    paragraph()
+        .width(Size::fill())
+        .max_width(Size::px(theme::layout::TEXT_MEASURE))
+        .font_size(font_size)
+        .color(color)
+        .a11y_builder(move |node| node.set_value(value))
+        .span(text)
         .into_element()
 }
 

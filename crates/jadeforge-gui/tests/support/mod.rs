@@ -18,6 +18,7 @@ const DAMAGE: u32 = 4;
 const GEM: u32 = 5;
 const GEM_DESC: u32 = 6;
 const GENERIC_ITEM: u32 = 7;
+const ADVANCE_DESC: u32 = 8;
 
 /// Builds the installation and one `Test Save` below `root`.
 pub fn synthetic(root: &Path) -> Option<(PathBuf, PathBuf)> {
@@ -37,6 +38,9 @@ pub fn synthetic(root: &Path) -> Option<(PathBuf, PathBuf)> {
         "Test Gem",
         "A test gem.",
         "Item",
+        "This upgrade makes every strike hit harder and adds enough words that \
+         the hover detail wraps like a real upgrade instead of collapsing \
+         into a narrow column.",
     ];
     write_tlk(&game.join("dialog.tlk"), &strings)?;
     write(&override_dir.join("items.2da"), items_2da().as_bytes())?;
@@ -107,10 +111,12 @@ fn test_lv_2da() -> String {
     )
 }
 
+/// Long advance names plus a short first effect word keep the hover detail
+/// wide, which reproduces the squeeze the old single-row layout produced.
 fn advances_2da() -> String {
     let mut table = String::from("2DA V2.0\n\n   Label DescRef CostToLevelUp Effect1 Param1\n");
     for row in 1..=5 {
-        let _ = writeln!(table, "{row} Increase_Damage_{row} {DAMAGE} 1 72 0.25");
+        let _ = writeln!(table, "{row} Increase_Damage_{row} {ADVANCE_DESC} 1 84 0.5");
     }
     table
 }
