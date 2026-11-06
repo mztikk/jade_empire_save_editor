@@ -20,12 +20,23 @@ command -v python3 >/dev/null 2>&1 || {
 
 # Zip one staged target folder with python3 so the script does not depend on a
 # zip binary being installed. Paths stay relative to the dist directory, which
-# puts the target folder at the archive root and preserves the file modes.
+# puts the target folder at the archive root. Artifacts downloaded from
+# actions/upload-artifact lose their Unix modes, so native executables are
+# marked executable again before they are stored.
 zip_folder() {
     python3 - "$1" "$2" <<'PY'
 import os
 import sys
 import zipfile
+
+EXECUTABLE_MAGICS = (
+    b"\x7fELF",          # ELF
+    b"\xcf\xfa\xed\xfe",  # Mach-O 64-bit, little endian
+    b"\xce\xfa\xed\xfe",  # Mach-O 32-bit, little endian
+    b"\xfe\xed\xfa\xcf",  # Mach-O 64-bit, big endian
+    b"\xfe\xed\xfa\xce",  # Mach-O 32-bit, big endian
+    b"\xca\xfe\xba\xbe",  # universal Mach-O
+)
 
 dist, name = sys.argv[1], sys.argv[2]
 base = os.path.join(dist, name)
@@ -34,6 +45,9 @@ with zipfile.ZipFile(os.path.join(dist, name + ".zip"), "w", zipfile.ZIP_DEFLATE
         dirs.sort()
         for filename in sorted(files):
             path = os.path.join(root, filename)
+            with open(path, "rb") as handle:
+                if handle.read(4) in EXECUTABLE_MAGICS:
+                    os.chmod(path, 0o755)
             archive.write(path, os.path.relpath(path, dist))
 PY
 }
