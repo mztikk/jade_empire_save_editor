@@ -98,6 +98,21 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
   keep the substitution exact, review `git diff`, and run the formatters and
   tests.
 
+## Scratch files
+
+- Keep anything that must outlive a single command in `scratch/` at the
+  repository root, including files you want to inspect or show. It is
+  gitignored (`/scratch/`), so it cannot dirty the tree or block `just finish`.
+- Do not put that work in `/tmp`. Sandboxed agent runtimes commonly mount a
+  private, per-call tmpfs there: the write reports success and the file is gone
+  by the next command, which silently breaks any multi-step task. `/tmp` is
+  only safe when the whole lifetime of the file fits inside one command, as
+  with `JADEFORGE_CONFIG_DIR="$(mktemp -d)" cargo nextest run --workspace`.
+- Do not create a `./tmp` directory. It is not ignored, so its contents show up
+  as untracked files and rule 15 fails the hand-over.
+- Scratch content is never a deliverable: do not commit it, and delete what you
+  no longer need rather than leaving it for the next person to wonder about.
+
 ## Non-negotiable rules
 
 1. **No `unsafe` code.** The workspace denies it in `Cargo.toml`. There is no
