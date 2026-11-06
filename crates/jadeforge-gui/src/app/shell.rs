@@ -214,7 +214,7 @@ pub(super) fn header(
                     .color(theme::accent()),
             )
             .child(
-                crate::widgets::a11y_text(t("Jade Empire save editor"))
+                crate::widgets::a11y_text(t("Jade Empire savegame editor"))
                     .font_size(theme::font::caption())
                     .color(theme::dim()),
             )

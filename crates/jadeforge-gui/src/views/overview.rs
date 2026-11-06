@@ -47,8 +47,8 @@ pub fn view(
             } => (
                 format!(
                     "{} and {} resolved from {}",
-                    format::plural(*items, "item", "items"),
-                    format::plural(*styles, "style", "styles"),
+                    crate::i18n::plural(*items, "item", "items"),
+                    crate::i18n::plural(*styles, "style", "styles"),
                     root.display()
                 ),
                 true,
@@ -57,8 +57,8 @@ pub fn view(
                 format!(
                     "No game installation found: using bundled English names for {} and {}. \
                      Descriptions and upgrades still need the game data.",
-                    format::plural(*items, "item", "items"),
-                    format::plural(*styles, "style", "styles")
+                    crate::i18n::plural(*items, "item", "items"),
+                    crate::i18n::plural(*styles, "style", "styles")
                 ),
                 false,
             ),
@@ -121,12 +121,12 @@ pub fn view(
             widgets::a11y_text(format!(
                 "Time played {} · {} · {}",
                 format::duration(character.time_played),
-                format::plural(
+                crate::i18n::plural(
                     usize::try_from(character.kills).unwrap_or(usize::MAX),
                     "kill",
                     "kills"
                 ),
-                format::plural(
+                crate::i18n::plural(
                     usize::try_from(character.experience).unwrap_or(usize::MAX),
                     "experience point",
                     "experience points"
@@ -291,7 +291,7 @@ pub fn view(
                 t("Contents"),
                 widgets::a11y_text(format!(
                     "{} · {}",
-                    format::plural(block_count, "block", "blocks"),
+                    crate::i18n::plural(block_count, "block", "blocks"),
                     file_size.map_or_else(|| "unknown size".to_owned(), format::bytes)
                 ))
                 .font_size(theme::font::label())

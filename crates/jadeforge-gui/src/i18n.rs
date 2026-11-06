@@ -49,6 +49,31 @@ pub fn t(text: &'static str) -> &'static str {
     }
 }
 
+/// Fills `{name}` placeholders in a translated template.
+///
+/// The template must be catalogued; unknown templates fall back to the source
+/// text. Values are inserted verbatim, so a path or a character name is never
+/// translated.
+#[must_use]
+pub fn fill(template: &'static str, arguments: &[(&str, &str)]) -> String {
+    let mut text = t(template).to_owned();
+    for (name, value) in arguments {
+        text = text.replace(&format!("{{{name}}}"), value);
+    }
+    text
+}
+
+/// A count followed by the singular or plural catalogued noun.
+///
+/// English and German both use the one/other distinction, which is why the
+/// catalog stores two source strings for each noun pair. A language with more
+/// plural forms needs a richer helper before it can be added.
+#[must_use]
+pub fn plural(count: usize, singular: &'static str, plural: &'static str) -> String {
+    let noun = if count == 1 { t(singular) } else { t(plural) };
+    format!("{count} {noun}")
+}
+
 fn pseudo(text: &'static str) -> &'static str {
     CATALOG
         .iter()
@@ -163,7 +188,6 @@ const CATALOG: &[(&str, &str)] = &[
     ("HEALTH", "⟦HÉÁLTH⟧"),
     ("Identity", "⟦Ídéñtíty⟧"),
     ("Inventory", "⟦Íñvéñtóry⟧"),
-    ("Jade Empire save editor", "⟦Jádé Émpíré sávé édítór⟧"),
     (
         "Jade Empire savegame editor",
         "⟦Jádé Émpíré sávégámé édítór⟧",
@@ -323,6 +347,45 @@ const CATALOG: &[(&str, &str)] = &[
         "Copy the diagnostics to the clipboard",
         "⟦Çópy thé díágnóstíçs tó thé çlípbóárd⟧",
     ),
+    // Count nouns: singular and plural for the count helper.
+    ("gem", "⟦gém⟧"),
+    ("gems", "⟦géms⟧"),
+    ("carried gem", "⟦cárríéd gém⟧"),
+    ("carried gems", "⟦cárríéd géms⟧"),
+    ("socket", "⟦sóckét⟧"),
+    ("sockets", "⟦sóckéts⟧"),
+    ("companion known", "⟦cómpáníón knówn⟧"),
+    ("companions known", "⟦cómpáníóns knówn⟧"),
+    ("item", "⟦ítém⟧"),
+    ("items", "⟦ítéms⟧"),
+    ("match", "⟦mátch⟧"),
+    ("matches", "⟦mátchés⟧"),
+    ("stack", "⟦stáck⟧"),
+    ("stacks", "⟦stácks⟧"),
+    ("style", "⟦stýlé⟧"),
+    ("styles", "⟦stýlés⟧"),
+    ("style to learn", "⟦stýlé tó léárn⟧"),
+    ("styles to learn", "⟦stýlés tó léárn⟧"),
+    ("style learned", "⟦stýlé léárnéd⟧"),
+    ("styles learned", "⟦stýlés léárnéd⟧"),
+    ("style point", "⟦stýlé póínt⟧"),
+    ("style points", "⟦stýlé póínts⟧"),
+    ("change", "⟦chángé⟧"),
+    ("changes", "⟦chángés⟧"),
+    ("group", "⟦gróúp⟧"),
+    ("groups", "⟦gróúps⟧"),
+    ("backup", "⟦báckúp⟧"),
+    ("backups", "⟦báckúps⟧"),
+    ("SAVEGAME", "⟦SÁVÉGÁMÉ⟧"),
+    ("SAVEGAMES", "⟦SÁVÉGÁMÉS⟧"),
+    ("invalid field", "⟦ínválíd fíéld⟧"),
+    ("invalid fields", "⟦ínválíd fíélds⟧"),
+    ("experience point", "⟦éxpéríéncé póínt⟧"),
+    ("experience points", "⟦éxpéríéncé póínts⟧"),
+    ("block", "⟦blóck⟧"),
+    ("blocks", "⟦blócks⟧"),
+    ("effect", "⟦éfféct⟧"),
+    ("effects", "⟦éffécts⟧"),
 ];
 
 #[cfg(test)]

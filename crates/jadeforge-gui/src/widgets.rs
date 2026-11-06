@@ -295,8 +295,8 @@ pub fn with_tooltip(text: String, content: impl IntoElement) -> Element {
 /// Delegates to the shared session helper so the shell and the session
 /// messages can never disagree about "1 gem" versus "1 gems".
 #[must_use]
-pub fn plural(count: usize, singular: &str, plural: &str) -> String {
-    crate::session::format::plural(count, singular, plural)
+pub fn plural(count: usize, singular: &'static str, plural: &'static str) -> String {
+    crate::i18n::plural(count, singular, plural)
 }
 
 /// Name block that expands a description when pressed.
