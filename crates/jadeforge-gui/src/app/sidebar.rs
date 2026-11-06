@@ -227,15 +227,15 @@ impl Component for SaveList {
         let _ = *focus.read();
 
         // A savegame can be selected from outside the list (a rescan, opening
-        // another folder); keep the selected row in view then too.
+        // another folder); keep the selected row in view then too, but only
+        // once per selection change (see `reveal_selection`).
+        let revealed = use_hook(|| Rc::new(RevealedPosition::default()));
         let selected_position = self
             .data
             .selected
             .and_then(|selected| visible.iter().position(|index| *index == selected));
         use_side_effect_with_deps(&selected_position, move |position| {
-            if let Some(position) = *position {
-                reveal_row(&mut scroll, position);
-            }
+            reveal_selection(&mut scroll, &revealed, *position);
         });
 
         let content = if visible.is_empty() {
@@ -421,6 +421,31 @@ fn save_row(data: &SaveRows, index: usize, size: f32) -> Element {
             .into_element(),
         )
         .into_element()
+}
+
+/// Last selection position that was scrolled into view.
+///
+/// The outer `Option` distinguishes "nothing revealed yet" from "no row is
+/// selected or the selected savegame is filtered out".
+type RevealedPosition = std::cell::Cell<Option<Option<usize>>>;
+
+/// Reveals the selected row once per selection change.
+///
+/// `use_side_effect_with_deps` runs after every render, not only when its
+/// dependency changed. Re-revealing on each scroll tick pulled the list back to
+/// the selected savegame and made everything below it unreachable.
+fn reveal_selection(
+    controller: &mut ScrollController,
+    revealed: &RevealedPosition,
+    position: Option<usize>,
+) {
+    if revealed.get() == Some(position) {
+        return;
+    }
+    revealed.set(Some(position));
+    if let Some(position) = position {
+        reveal_row(controller, position);
+    }
 }
 
 /// Scrolls the list just enough to show the row at `position` completely.
