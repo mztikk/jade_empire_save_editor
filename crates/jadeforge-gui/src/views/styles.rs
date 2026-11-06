@@ -469,6 +469,9 @@ pub fn style_subtitle(style_id: u16, label: &str) -> Option<String> {
 /// player which style it is without guessing a label.
 fn saved_style_subtitle(style: &StyleRow) -> String {
     let mut parts = vec![format!("#{}", style.style_id)];
+    if let Some(icon) = &style.icon {
+        parts.push(format!("icon {icon}"));
+    }
     if style.weapon_count > 0 {
         parts.push(widgets::plural(
             usize::from(style.weapon_count),
@@ -618,9 +621,12 @@ mod tests {
     fn missing_game_data_subtitle_uses_savegame_fields() {
         assert_eq!(
             saved_style_subtitle(&row("", 2, 3439)),
-            "#21 · 2 weapons · 57m used"
+            "#21 · icon I_TCUTS · 2 weapons · 57m used"
         );
-        assert_eq!(saved_style_subtitle(&row("", 0, 12)), "#21");
+        assert_eq!(saved_style_subtitle(&row("", 0, 12)), "#21 · icon I_TCUTS");
+        let mut without_icon = row("", 0, 12);
+        without_icon.icon = None;
+        assert_eq!(saved_style_subtitle(&without_icon), "#21");
     }
 
     #[test]
