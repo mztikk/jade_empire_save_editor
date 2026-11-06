@@ -67,6 +67,10 @@ live:
 clippy:
     cargo clippy --workspace --all-targets -- -D warnings
 
+# Fail when rustdoc would warn about broken intra-doc links or other docs.
+doc-check:
+    RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --no-deps
+
 # Format the workspace.
 fmt:
     cargo fmt --all
@@ -75,8 +79,8 @@ fmt:
 fmt-check:
     cargo fmt --all --check
 
-# The quality gate: formatting, lints and tests.
-check: fmt-check clippy test
+# The quality gate: formatting, lints, rustdoc and tests.
+check: fmt-check clippy doc-check test
 
 # Report the lints that are not gated yet (needs jq).
 strict:

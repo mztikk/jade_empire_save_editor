@@ -21,6 +21,7 @@ cargo build --workspace                       # build everything (MSRV 1.99)
 cargo nextest run --workspace                 # all tests (cargo-nextest)
 cargo test --workspace --doc                  # doctests
 cargo clippy --workspace --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --no-deps
 cargo fmt --all --check
 
 # Task branches: install the hooks once, then start every task on a branch
@@ -43,7 +44,7 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.pn
 ```
 
 The same commands are available through `just` (see the `justfile`): `just
-check` runs formatting, clippy and the tests, `just setup` installs the tracked
+check` runs formatting, clippy, rustdoc and the tests, `just setup` installs the tracked
 git hooks once per clone, `just start <type>/<slug>` creates a task branch from
 the latest `origin/main`, `just finish` is the clean-hand-over guard, `just live`
 runs the opt-in windowed UI suite against the real Wayland desktop (approval-
@@ -68,7 +69,7 @@ branch cut from the latest `origin/main`:
 just setup                  # once per clone: enable the tracked .githooks
 just start fix/save-load    # fetch origin/main, create and switch the branch
 # ... work and commit logical steps with imperative messages ...
-just check                  # the quality gate (fmt, clippy, nextest, doctests)
+just check                  # the quality gate (fmt, clippy, rustdoc, nextest, doctests)
 just finish                 # fails on main, a dirty tree or no commits ahead
 ```
 
@@ -399,10 +400,8 @@ documentation, not ground truth: verify against the game files where possible).
   empty ring when buyable, no numerals (left-to-right order is the tier, the
   a11y label carries it). Do not turn them back into rectangular buttons or add
   text to them.
-- A change is not done until `cargo nextest run --workspace` (+ `cargo test
-  --workspace --doc`), `cargo clippy
-  --workspace --all-targets -- -D warnings` and `cargo fmt --all --check` pass,
-  and `just finish` reports a clean task branch.
+- A change is not done until `just check` (formatting, clippy, rustdoc, nextest
+  and doctests) passes and `just finish` reports a clean task branch.
 
 ## Commits
 
