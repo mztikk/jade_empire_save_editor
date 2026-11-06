@@ -26,11 +26,10 @@ pub(crate) fn path_actions(ctx: &Ctx, path: &str, folder: PathBuf, what: &'stati
         let ctx = ctx.clone();
         let path = path.to_owned();
         Action::new(move || {
-            let message = match Clipboard::set(path.clone()) {
-                Ok(()) => format!("Copied the {what} path to the clipboard."),
-                Err(_) => format!(
-                    "Could not copy the {what} path: the system clipboard is not available."
-                ),
+            let message = if crate::clipboard::copy(path.clone()) {
+                format!("Copied the {what} path to the clipboard.")
+            } else {
+                format!("Could not copy the {what} path: the system clipboard is not available.")
             };
             ctx.run(|session| session.notify(&message));
         })

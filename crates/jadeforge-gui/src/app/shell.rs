@@ -55,11 +55,10 @@ pub(super) fn choose_folder(
 
 /// Copies a status message to the system clipboard.
 pub(super) fn copy_status(ctx: &Ctx, text: String) {
-    let message = match Clipboard::set(text) {
-        Ok(()) => "Copied the status message to the clipboard.".to_owned(),
-        Err(_) => {
-            "Could not copy the status message: the system clipboard is not available.".to_owned()
-        }
+    let message = if crate::clipboard::copy(text) {
+        "Copied the status message to the clipboard.".to_owned()
+    } else {
+        "Could not copy the status message: the system clipboard is not available.".to_owned()
     };
     ctx.run(|session| session.notify(&message));
 }

@@ -6,6 +6,7 @@
 //! views keep their `crate::session` paths.
 
 pub mod app;
+pub mod clipboard;
 pub mod dialog;
 pub mod form;
 pub mod geometry;

@@ -2542,9 +2542,15 @@ fn the_about_page_shows_the_version_settings_and_backups() {
         "the remembered save folder is not shown"
     );
 
+    jadeforge_gui::clipboard::capture_next_copy_for_tests();
     assert!(
         click_a11y_label(&mut test, "Copy the settings path"),
         "the settings file has no copy action"
+    );
+    assert_eq!(
+        jadeforge_gui::clipboard::last_copied_for_tests(),
+        Some(settings_path.display().to_string()),
+        "the settings action copied the wrong path"
     );
     assert!(
         find_label_text(&test, "Copied the settings path").is_some(),
@@ -3077,9 +3083,16 @@ fn a_save_surfaces_the_backup_and_opens_the_save_folder() {
         find_text_node(&test, "jadeforge-backup").is_some(),
         "the backup path is not shown"
     );
+    jadeforge_gui::clipboard::capture_next_copy_for_tests();
     assert!(
         click_a11y_label(&mut test, "Copy the backup path"),
         "the backup path has no copy action"
+    );
+    assert!(
+        jadeforge_gui::clipboard::last_copied_for_tests()
+            .as_deref()
+            .is_some_and(|path| path.contains("jadeforge-backup")),
+        "the backup action copied the wrong path"
     );
     assert!(
         find_label_text(&test, "Copied the backup path").is_some(),
