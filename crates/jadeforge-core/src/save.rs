@@ -155,6 +155,11 @@ pub struct SaveGame {
     bytes: Vec<u8>,
     blocks: Vec<Block>,
     source: Option<SourceStamp>,
+    /// Backup written by the most recent [`SaveGame::save`] call.
+    ///
+    /// The path is kept so the desktop UI can show the user which file holds
+    /// the pre-save copy instead of leaving them to search the save folder.
+    last_backup: Option<PathBuf>,
 }
 
 impl SaveGame {
@@ -230,6 +235,7 @@ impl SaveGame {
             bytes,
             blocks,
             source,
+            last_backup: None,
         })
     }
 
@@ -687,9 +693,11 @@ impl SaveGame {
         let bytes = self.verified_bytes()?;
         self.ensure_unchanged(&write_target)?;
 
-        if options.backup && write_target.exists() {
-            create_backup(&write_target)?;
-        }
+        let backup = if options.backup && write_target.exists() {
+            Some(create_backup(&write_target)?)
+        } else {
+            None
+        };
 
         let (temporary, mut file) = create_temporary(&write_target)?;
         let write_result = (|| -> Result<()> {
@@ -720,7 +728,18 @@ impl SaveGame {
         let stamp = SourceStamp::from_metadata(&metadata);
         let reloaded = Self::parse_container(target.to_path_buf(), bytes, Some(stamp))?;
         *self = reloaded;
+        self.last_backup = backup;
         Ok(target.to_path_buf())
+    }
+
+    /// Backup file written by the most recent save, when one was kept.
+    ///
+    /// `None` means the previous save had no backup (a new target or
+    /// [`SaveOptions`] without backups), not that a backup failed: a failed
+    /// backup aborts the save before the savegame is replaced.
+    #[must_use]
+    pub fn last_backup(&self) -> Option<&Path> {
+        self.last_backup.as_deref()
     }
 
     fn ensure_unchanged(&self, target: &Path) -> Result<()> {

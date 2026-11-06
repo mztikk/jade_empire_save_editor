@@ -116,7 +116,7 @@ fn save_opens_and_tabs_switch(driver: &mut Driver) -> Result<(), String> {
         ("Styles", "Fighting styles"),
         ("Inventory", "ADD AN ITEM"),
         ("Gems", "Add a gem"),
-        ("Companions", " known"),
+        ("Companions", "Companion levels follow"),
         ("Overview", "At a glance"),
     ] {
         driver.click_exact(tab, STEP)?;
@@ -139,7 +139,7 @@ fn typing_filters_the_item_database(driver: &mut Driver) -> Result<(), String> {
     driver.click(&filter)?;
     driver.type_text("Viper")?;
     let result = driver
-        .wait_for_text("weapons · #42", STEP)
+        .wait_for_text("Weapons · #42", STEP)
         .map_err(|error| {
             format!("typing \"Viper\" into the real window did not filter the item list: {error}")
         })?;
@@ -150,7 +150,7 @@ fn typing_filters_the_item_database(driver: &mut Driver) -> Result<(), String> {
 fn keyboard_navigates_the_save_list(driver: &mut Driver) -> Result<(), String> {
     // Add a second savegame to the fixture, refresh the real window, then use
     // only the keyboard from the filter field to the list box: Tab x4 reaches
-    // sort Name, Level, Played and the list box; Down selects the second save;
+    // sort Name, Level, Time played and the list box; Down selects the second save;
     // Enter opens it.
     let saves = std::env::var_os("JADEFORGE_SAVE_DIR")
         .map(PathBuf::from)
@@ -164,7 +164,7 @@ fn keyboard_navigates_the_save_list(driver: &mut Driver) -> Result<(), String> {
 
     driver.click_exact("Scan", STEP)?;
     driver.wait_for_text("Test Save 2", STEP)?;
-    driver.click_exact("Filter by name", STEP)?;
+    driver.click_exact("Filter by name or character", STEP)?;
     for _ in 0..4 {
         driver.press_key(&Key::Named(NamedKey::Tab))?;
     }

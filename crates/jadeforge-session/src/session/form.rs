@@ -147,7 +147,7 @@ impl CharacterForm {
             if base.gold.is_some() {
                 errors.push(FieldError::new(
                     CharacterField::Gold,
-                    "gold: a value is required because this savegame has a gold field",
+                    "gold: enter a value; this savegame already has a gold field",
                 ));
             }
         } else {
@@ -396,18 +396,22 @@ impl CharacterField {
     pub fn range(self) -> &'static str {
         match self {
             Self::Name => "at most 64 characters",
-            Self::Level => "1 to 255",
-            Self::Experience | Self::AttributePoints | Self::Kills => "0 to 4294967295",
-            Self::Gold => "empty or 0 to 4294967295",
-            Self::Health | Self::Chi | Self::Focus | Self::FocusMax | Self::Appearance => {
-                "0 to 1000000"
-            }
-            Self::HealthMax | Self::ChiMax => "1 to 1000000",
-            Self::Body | Self::Mind | Self::Spirit => "0 to 1000",
-            Self::Charm | Self::Intuition | Self::Intimidate | Self::Alignment => {
-                "-1000000 to 1000000"
-            }
-            Self::Chapter => "0 to 100",
+            Self::Level => "1 to 255 (level)",
+            Self::Experience => "0 to 4294967295 XP",
+            Self::AttributePoints => "0 to 4294967295 points",
+            Self::Kills => "0 to 4294967295 kills",
+            Self::Gold => "empty or 0 to 4294967295 gold",
+            Self::Health => "0 to 1000000 health points",
+            Self::Chi => "0 to 1000000 chi points",
+            Self::Focus => "0 to 1000000 focus points",
+            Self::HealthMax => "1 to 1000000 health points",
+            Self::ChiMax => "1 to 1000000 chi points",
+            Self::FocusMax => "1 to 1000000 focus points",
+            Self::Appearance => "0 to 1000000 (index)",
+            Self::Body | Self::Mind | Self::Spirit => "0 to 1000 points",
+            Self::Charm | Self::Intuition | Self::Intimidate => "-1000000 to 1000000 points",
+            Self::Alignment => "-1000000 to 1000000, 128 balanced",
+            Self::Chapter => "0 to 100 (chapter)",
         }
     }
 

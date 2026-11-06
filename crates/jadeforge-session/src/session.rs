@@ -131,6 +131,15 @@ pub mod format {
         )
     }
 
+    /// Formats a count with the correct singular or plural noun.
+    ///
+    /// Every count shown to the user goes through this helper so a list can
+    /// never read "1 gems" or a singular row can never read "1 effects".
+    #[must_use]
+    pub fn plural(count: usize, singular: &str, plural: &str) -> String {
+        format!("{count} {}", if count == 1 { singular } else { plural })
+    }
+
     /// Formats a large number with thin separators.
     #[must_use]
     pub fn amount(value: u32) -> String {
@@ -159,12 +168,15 @@ pub enum SaveSort {
 
 impl SaveSort {
     /// Short label for the sort buttons.
+    ///
+    /// The same wording ("Time played") appears in the save rows and the
+    /// character sheet; the settings key stays `played` for compatibility.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::Name => "Name",
             Self::Level => "Level",
-            Self::Played => "Played",
+            Self::Played => "Time played",
         }
     }
 
@@ -188,6 +200,60 @@ impl SaveSort {
             _ => None,
         }
     }
+}
+
+/// Friendly label for an `items.2da` category.
+///
+/// The game table writes lower-case ids (`plot_items`, `improve`, ...); the
+/// interface never shows those raw strings. Unknown categories fall back to a
+/// title-cased copy of the id so new game data still reads sensibly.
+#[must_use]
+pub fn item_category_label(category: &str) -> String {
+    match category.to_lowercase().as_str() {
+        "gems" => "Gems".to_owned(),
+        "powerups" => "Power-ups".to_owned(),
+        "weapons" => "Weapons".to_owned(),
+        "plot_items" => "Plot items".to_owned(),
+        "mgweapons" => "Magic weapons".to_owned(),
+        "improve" => "Improvements".to_owned(),
+        _ => title_case(category),
+    }
+}
+
+/// Friendly label for a style kind.
+///
+/// [`jadeforge_gamedata::StyleKind::label`] deliberately returns lower-case
+/// ids; badges and pickers show the same kind in title case instead.
+#[must_use]
+pub fn style_kind_label(kind: &str) -> String {
+    match kind.to_lowercase().as_str() {
+        "martial" => "Martial".to_owned(),
+        "weapon" => "Weapon".to_owned(),
+        "magic" => "Magic".to_owned(),
+        "support" => "Support".to_owned(),
+        "transformation" => "Transformation".to_owned(),
+        "improvised" => "Improvised".to_owned(),
+        "unique" => "Unique".to_owned(),
+        _ => title_case(kind),
+    }
+}
+
+/// Turns an underscore id into a title-cased label.
+fn title_case(value: &str) -> String {
+    value
+        .split(['_', '-'])
+        .filter(|word| !word.is_empty())
+        .map(|word| {
+            let mut characters = word.chars();
+            characters.next().map_or_else(String::new, |first| {
+                first
+                    .to_uppercase()
+                    .chain(characters.flat_map(char::to_lowercase))
+                    .collect()
+            })
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Compares two strings, treating runs of digits as numbers.
@@ -355,6 +421,10 @@ impl GameDataContext {
     /// user-chosen installation from the settings file is the fallback, so the
     /// worker keeps the documented precedence.
     fn load_game_data(&self, directory: &Path) -> jadeforge_gamedata::Result<Option<GameData>> {
+        // Restore the previous override instead of clearing it: tests point the
+        // whole fixture at a game root, and a probe session must not disarm the
+        // root that the UI session started from.
+        let previous = jadeforge_gamedata::test_game_root();
         jadeforge_gamedata::set_test_game_root(self.test_root.clone());
         let configured = self
             .config_path
@@ -365,7 +435,7 @@ impl GameDataContext {
             Ok(None) => configured.map_or(Ok(None), |root| GameData::open(root).map(Some)),
             Err(error) => Err(error),
         };
-        jadeforge_gamedata::set_test_game_root(None);
+        jadeforge_gamedata::set_test_game_root(previous);
         result
     }
 }
@@ -503,6 +573,8 @@ pub struct Session {
     pub(crate) preview: Option<Rc<Preview>>,
     /// Status of the last action.
     pub(crate) message: Message,
+    /// Backup written by the last successful save of the open savegame.
+    pub(crate) last_backup: Option<PathBuf>,
     /// Fingerprints of the canonical block payloads of the opened savegame.
     ///
     /// Kept as two 64-bit hashes per block instead of the canonical bytes
@@ -600,6 +672,7 @@ impl Session {
             character_error: None,
             preview: None,
             message: Message::info("Scanning for savegames…"),
+            last_backup: None,
             baseline: None,
             dirty: false,
             file_size: None,
@@ -637,6 +710,7 @@ impl Session {
         self.amulet = None;
         self.preview = None;
         self.file_size = None;
+        self.last_backup = None;
         self.baseline = None;
         self.dirty = false;
     }
@@ -661,19 +735,19 @@ impl Session {
                 self.clear_open_save();
             }
         }
-        let plural = if total == 1 { "" } else { "s" };
         let directory = self.directory.display();
+        let savegames = format::plural(total, "savegame", "savegames");
         self.message = if total == 0 {
             Message::info(format!("No savegames found in {directory}."))
         } else if broken == 0 {
-            Message::success(format!("Found {total} savegame{plural} in {directory}."))
+            Message::success(format!("Found {savegames} in {directory}."))
         } else if broken == total {
             Message::error(format!(
-                "Found {total} savegame{plural} in {directory}, but none of them can be read."
+                "Found {savegames} in {directory}, but none of them can be read."
             ))
         } else {
             Message::error(format!(
-                "Found {total} savegame{plural} in {directory}, {broken} of them cannot be read."
+                "Found {savegames} in {directory}; {broken} of them cannot be read."
             ))
         };
     }
@@ -967,8 +1041,8 @@ impl Session {
         };
         if let Some(error) = &entry.error {
             self.message = Message::error(format!(
-                "Cannot open {}: the scan already found it unreadable: {error}",
-                entry.label
+                "Cannot open {label}: the scan found it unreadable ({error}).",
+                label = entry.label
             ));
             return false;
         }
@@ -999,6 +1073,7 @@ impl Session {
                 };
                 self.save = Some(save);
                 self.selected = Some(index);
+                self.last_backup = None;
                 self.accept_as_clean();
                 let mut section_errors = self.rebuild_rows();
                 if let Some(character) = &self.character_error {
@@ -1385,7 +1460,7 @@ impl Session {
             }
         };
         let Some(save) = self.save.as_mut() else {
-            self.message = Message::error("no savegame is open");
+            self.message = Message::error("No savegame is open.");
             return Err(SessionError::NoSavegame);
         };
         match save.apply_character(&character) {
@@ -1395,10 +1470,12 @@ impl Session {
                 self.refresh_entry();
                 self.refresh_dirty();
                 if changes.is_empty() {
-                    self.message = Message::info("Nothing to apply.");
+                    self.message = Message::info("Nothing changed, so there was nothing to apply.");
                 } else {
-                    self.message =
-                        Message::success(format!("Applied {} change(s) in memory.", changes.len()));
+                    self.message = Message::success(format!(
+                        "Applied {} in memory.",
+                        format::plural(changes.len(), "change", "changes")
+                    ));
                 }
                 Ok(changes.len())
             }
@@ -1438,18 +1515,31 @@ impl Session {
     }
 
     /// Writes the opened savegame back to disk.
+    ///
+    /// A successful save records the backup created next to the savegame, so
+    /// the UI can show the exact pre-save file instead of asking the user to
+    /// search the folder.
     pub fn save(&mut self) -> Result<PathBuf, SessionError> {
         let Some(save) = self.save.as_mut() else {
             return Err(SessionError::NoSavegame);
         };
         if !self.dirty {
-            self.message = Message::info("Nothing was changed, not writing a file.");
+            self.message = Message::info("Nothing changed, so there is nothing to write.");
             return Err(SessionError::NothingToSave);
         }
         match save.save(SaveOptions { backup: true }) {
             Ok(path) => {
+                let backup = save.last_backup().map(Path::to_path_buf);
                 self.file_size = std::fs::metadata(&path).ok().map(|meta| meta.len());
-                self.message = Message::success(format!("Saved {}.", path.display()));
+                self.last_backup = backup;
+                self.message = match &self.last_backup {
+                    Some(backup) => Message::success(format!(
+                        "Saved {}. The previous file is kept as {}.",
+                        path.display(),
+                        backup.display()
+                    )),
+                    None => Message::success(format!("Saved {}.", path.display())),
+                };
                 self.refresh_entry();
                 self.accept_as_clean();
                 Ok(path)
@@ -1459,6 +1549,15 @@ impl Session {
                 Err(SessionError::Save(error.to_string()))
             }
         }
+    }
+
+    /// Backup kept by the last successful save of the open savegame.
+    ///
+    /// `None` after opening a savegame, using Revert or saving a new file
+    /// without a previous copy.
+    #[must_use]
+    pub fn last_backup(&self) -> Option<&Path> {
+        self.last_backup.as_deref()
     }
 
     /// Saves every applied edit even when the character form is invalid.
@@ -1473,7 +1572,7 @@ impl Session {
             Ok(path) => {
                 if let Some(first) = invalid.first() {
                     self.message = Message::info(format!(
-                        "Saved {}. The character form was not applied: {}",
+                        "Saved {}. The invalid character field was not applied: {}",
                         path.display(),
                         first.message
                     ));
@@ -1535,7 +1634,14 @@ impl Session {
                 {
                     item.count = new_count as u8;
                 }
-                self.message = Message::success(format!("{name}: {new_count} in the stack."));
+                self.message = Message::success(format!(
+                    "{name}: {} in the stack.",
+                    format::plural(
+                        usize::try_from(new_count).unwrap_or(usize::MAX),
+                        "item",
+                        "items"
+                    )
+                ));
             }
             Err(error) => self.message = Message::error(format!("Cannot change item: {error}")),
         }
@@ -1568,7 +1674,10 @@ impl Session {
                 {
                     item.count = count;
                 }
-                self.message = Message::success(format!("{name}: {count} in the stack."));
+                self.message = Message::success(format!(
+                    "{name}: {} in the stack.",
+                    format::plural(usize::from(count), "item", "items")
+                ));
             }
             Err(error) => self.message = Message::error(format!("Cannot change item: {error}")),
         }
@@ -1644,11 +1753,35 @@ impl Session {
     /// browsable list.
     #[must_use]
     pub fn search_items(&self, query: &str, limit: usize) -> (Vec<ItemSuggestion>, usize) {
+        self.search_items_filtered(query, None, limit)
+    }
+
+    /// Searches the item database, optionally inside one category.
+    ///
+    /// The category is the raw `items.2da` id (`gems`, `plot_items`, ...); the
+    /// picker builds its chips from [`Session::item_categories`] and shows the
+    /// friendly labels from [`item_category_label`].
+    #[must_use]
+    pub fn search_items_filtered(
+        &self,
+        query: &str,
+        category: Option<&str>,
+        limit: usize,
+    ) -> (Vec<ItemSuggestion>, usize) {
+        let wanted = category
+            .map(|category| category.trim().to_lowercase())
+            .filter(|category| !category.is_empty());
+        let in_category = |candidate: Option<&String>| {
+            wanted.as_deref().is_none_or(|wanted| {
+                candidate.is_some_and(|candidate| candidate.eq_ignore_ascii_case(wanted))
+            })
+        };
+
         if let Some(game) = self.game.as_ref() {
             let matches: Vec<&jadeforge_gamedata::ItemInfo> = if query.trim().is_empty() {
                 let mut all: Vec<(&jadeforge_gamedata::ItemInfo, String)> = game
                     .playable_items()
-                    .filter(|item| item.save_type.is_some())
+                    .filter(|item| item.save_type.is_some() && in_category(item.category.as_ref()))
                     .map(|item| (item, item.name.to_lowercase()))
                     .collect();
                 all.sort_by(|(left, left_name), (right, right_name)| {
@@ -1660,7 +1793,7 @@ impl Session {
             } else {
                 game.search_items(query, usize::MAX)
                     .into_iter()
-                    .filter(|item| item.save_type.is_some())
+                    .filter(|item| item.save_type.is_some() && in_category(item.category.as_ref()))
                     .collect()
             };
             let total = matches.len();
@@ -1683,9 +1816,15 @@ impl Session {
         let Some(names) = self.name_index else {
             return (Vec::new(), 0);
         };
-        let (matches, total) = names.search_items(query, limit);
+        let (matches, _) = names.search_items(query, usize::MAX);
+        let matches: Vec<&jadeforge_gamedata::BundledItem> = matches
+            .into_iter()
+            .filter(|item| in_category(item.category.as_ref()))
+            .collect();
+        let total = matches.len();
         let rows = matches
             .into_iter()
+            .take(limit)
             .filter_map(|item| {
                 Some(ItemSuggestion {
                     item_id: item.id,
@@ -1697,6 +1836,30 @@ impl Session {
             })
             .collect();
         (rows, total)
+    }
+
+    /// Categories of the items the picker can add, as raw `items.2da` ids.
+    ///
+    /// Sorted so the chips are stable between renders and launches.
+    #[must_use]
+    pub fn item_categories(&self) -> Vec<String> {
+        let mut categories = std::collections::BTreeSet::new();
+        if let Some(game) = self.game.as_ref() {
+            for item in game.playable_items() {
+                if item.save_type.is_some()
+                    && let Some(category) = &item.category
+                {
+                    categories.insert(category.to_lowercase());
+                }
+            }
+        } else if let Some(names) = self.name_index {
+            for item in names.addable_items() {
+                if let Some(category) = &item.category {
+                    categories.insert(category.to_lowercase());
+                }
+            }
+        }
+        categories.into_iter().collect()
     }
 
     /// Builds the upgrade slots a style offers, marked with what is owned.
@@ -1764,11 +1927,15 @@ impl Session {
                 self.message = if changed == 0 {
                     Message::info("That upgrade is already in the requested state.")
                 } else {
-                    let noun = if changed == 1 { "upgrade" } else { "upgrades" };
+                    let upgrades = format::plural(
+                        usize::try_from(changed).unwrap_or(usize::MAX),
+                        "upgrade",
+                        "upgrades",
+                    );
                     if taken {
-                        Message::success(format!("Bought {changed} {noun}."))
+                        Message::success(format!("Bought {upgrades}."))
                     } else {
-                        Message::success(format!("Removed {changed} {noun}."))
+                        Message::success(format!("Removed {upgrades}."))
                     }
                 };
                 changed > 0
@@ -1826,7 +1993,7 @@ impl Session {
             .map(|gem| {
                 let info = self.game.as_ref().and_then(|game| game.item(gem.item_id));
                 let bundled = self.bundled_item(gem.item_id);
-                let empty = info.is_none() && bundled.is_none() && gem.effects.is_empty();
+                let empty = gem.is_empty();
                 let effects: Vec<String> = gem
                     .effects
                     .iter()
@@ -1837,16 +2004,13 @@ impl Session {
                         )
                     })
                     .collect();
-                let name = info
-                    .map(|item| item.name.clone())
-                    .or_else(|| bundled.map(|item| item.name.clone()))
-                    .unwrap_or_else(|| {
-                        if empty {
-                            "Empty socket".to_owned()
-                        } else {
-                            format!("Gem {}", gem.item_id)
-                        }
-                    });
+                let name = if empty {
+                    "Empty socket".to_owned()
+                } else {
+                    info.map(|item| item.name.clone())
+                        .or_else(|| bundled.map(|item| item.name.clone()))
+                        .unwrap_or_else(|| format!("Gem {}", gem.item_id))
+                };
                 GemRow {
                     struct_index: gem.struct_index,
                     name,
@@ -1986,7 +2150,7 @@ impl Session {
             .and_then(|game| game.style(style_id))
             .cloned()
         else {
-            self.message = Message::error("Unknown style.");
+            self.message = Message::error("That style is not in the game data.");
             return;
         };
         let Some(template) = self.styles.first().map(|style| style.struct_index) else {
@@ -2109,6 +2273,14 @@ impl Session {
     /// Reports a validation problem in the status line.
     pub fn set_error(&mut self, text: &str) {
         self.message = Message::error(text);
+    }
+
+    /// Reports a neutral note in the status line.
+    ///
+    /// Used for things the user should see but that are neither an error nor a
+    /// completed save, for example closing the folder picker without choosing.
+    pub fn inform(&mut self, text: &str) {
+        self.message = Message::info(text);
     }
 
     /// Reports a successful action the session did not perform itself.
@@ -2601,6 +2773,19 @@ mod tests {
     }
 
     #[test]
+    fn loading_game_data_restores_the_previous_test_root() {
+        let root = PathBuf::from("/nonexistent/jadeforge-game-root");
+        jadeforge_gamedata::set_test_game_root(Some(root.clone()));
+        let _ = Session::empty("/definitely/not/a/save/directory");
+        assert_eq!(
+            jadeforge_gamedata::test_game_root(),
+            Some(root),
+            "a probe session cleared the fixture's game root"
+        );
+        jadeforge_gamedata::set_test_game_root(None);
+    }
+
+    #[test]
     fn a_missing_installation_reports_bundled_names() {
         let session = Session::empty("/definitely/not/a/save/directory");
         if session.game.is_some() {
@@ -2978,6 +3163,63 @@ mod tests {
     }
 
     #[test]
+    fn plural_counts_use_the_singular_only_for_one() {
+        assert_eq!(format::plural(0, "gem", "gems"), "0 gems");
+        assert_eq!(format::plural(1, "gem", "gems"), "1 gem");
+        assert_eq!(format::plural(2, "socket", "sockets"), "2 sockets");
+    }
+
+    #[test]
+    fn friendly_labels_never_leak_raw_ids() {
+        assert_eq!(item_category_label("plot_items"), "Plot items");
+        assert_eq!(item_category_label("improve"), "Improvements");
+        assert_eq!(item_category_label("mgweapons"), "Magic weapons");
+        assert_eq!(item_category_label("powerups"), "Power-ups");
+        assert_eq!(item_category_label("some_new_kind"), "Some New Kind");
+        assert_eq!(style_kind_label("martial"), "Martial");
+        assert_eq!(style_kind_label("transformation"), "Transformation");
+        assert_eq!(style_kind_label("other"), "Other");
+    }
+
+    #[test]
+    fn the_sort_labels_use_the_same_time_wording_as_the_rows() {
+        assert_eq!(SaveSort::Played.label(), "Time played");
+        assert_eq!(SaveSort::Played.key(), "played");
+        assert_eq!(SaveSort::from_key("played"), Some(SaveSort::Played));
+    }
+
+    #[test]
+    fn item_categories_filter_the_picker() {
+        let (_directory, session) = fixture();
+        let categories = session.item_categories();
+        assert!(
+            categories.contains(&"gems".to_owned()),
+            "the bundled names have no gem category: {categories:?}"
+        );
+        let (all, all_total) = session.search_items("", 500);
+        let (gems, gems_total) = session.search_items_filtered("", Some("gems"), 500);
+        assert!(all_total >= gems_total);
+        assert_eq!(gems.len(), gems_total);
+        assert!(!gems.is_empty());
+        assert!(gems.iter().all(|item| item.category == "gems"));
+        assert!(all.len() >= gems.len());
+        let (missing, missing_total) =
+            session.search_items_filtered("", Some("not-a-category"), 10);
+        assert!(missing.is_empty());
+        assert_eq!(missing_total, 0);
+        // The unfiltered search is exactly the filtered one without a category.
+        let (unfiltered, unfiltered_total) = session.search_items("", 10);
+        assert_eq!(unfiltered.len(), all.len().min(10));
+        assert_eq!(unfiltered_total, all_total);
+    }
+
+    #[test]
+    fn a_fresh_save_has_no_backup_to_show() {
+        let (_directory, session) = fixture();
+        assert!(session.last_backup().is_none());
+    }
+
+    #[test]
     fn opening_a_fixture_exposes_rows_and_file_state() {
         let (directory, session) = fixture();
         assert_eq!(
@@ -3032,6 +3274,16 @@ mod tests {
             "{}",
             session.message.text
         );
+        let backup = session
+            .last_backup()
+            .expect("a save must surface its backup path")
+            .to_path_buf();
+        assert!(backup.exists(), "the surfaced backup does not exist");
+        assert!(
+            session.message.text.contains("jadeforge-backup"),
+            "the save message does not name the backup: {}",
+            session.message.text
+        );
         let backups = fs::read_dir(directory.path())
             .expect("directory")
             .flatten()
@@ -3066,7 +3318,7 @@ mod tests {
         let (directory, mut session) = fixture();
         let error = session.save().expect_err("nothing to save");
         assert!(error.contains("nothing to save"), "{error}");
-        assert!(session.message.text.contains("Nothing was changed"));
+        assert!(session.message.text.contains("Nothing changed"));
         assert!(!session.is_dirty());
 
         let mut empty = Session::empty(directory.path());
@@ -3080,7 +3332,7 @@ mod tests {
         let form = form_for(&session);
         assert_eq!(session.apply(&form).expect("apply unchanged"), 0);
         assert!(
-            session.message.text.contains("Nothing to apply"),
+            session.message.text.contains("nothing to apply"),
             "{}",
             session.message.text
         );
@@ -3121,7 +3373,7 @@ mod tests {
         assert_eq!(session.items[0].count, 6);
         assert!(!session.items[0].name.is_empty());
         assert!(
-            session.message.text.contains("6 in the stack"),
+            session.message.text.contains("6 items in the stack"),
             "{}",
             session.message.text
         );
@@ -3273,7 +3525,7 @@ mod tests {
         let (_, mut session) = fixture();
         session.add_style(u16::MAX);
         assert_eq!(session.styles.len(), 1);
-        assert!(session.message.text.contains("Unknown style"));
+        assert!(session.message.text.contains("not in the game data"));
 
         let mut empty = Session::empty(directory.path());
         empty.remove_style(0);
@@ -3537,7 +3789,7 @@ mod tests {
             session
                 .message
                 .text
-                .contains("character form was not applied"),
+                .contains("invalid character field was not applied"),
             "{}",
             session.message.text
         );
@@ -3593,8 +3845,18 @@ mod tests {
         assert!(form.to_character(&character).is_err());
         assert_eq!(
             CharacterField::Level.range(),
-            "1 to 255",
-            "the UI shows this range next to the field"
+            "1 to 255 (level)",
+            "the UI shows the range and the unit next to the field"
+        );
+        assert!(
+            CharacterField::HealthMax.range().contains("health points"),
+            "health ranges must carry their unit: {}",
+            CharacterField::HealthMax.range()
+        );
+        assert!(
+            CharacterField::Chapter.range().contains("chapter"),
+            "the chapter range must say what the number counts: {}",
+            CharacterField::Chapter.range()
         );
     }
 

@@ -28,6 +28,7 @@ pub(super) fn sidebar(
     focus: State<usize>,
     preview: Option<ImageHandle>,
     character: Option<&Character>,
+    scanning: bool,
     actions: &Rc<RefCell<HashMap<usize, Action>>>,
     query: State<String>,
     filter_id: AccessibilityId,
@@ -59,6 +60,35 @@ pub(super) fn sidebar(
     };
 
     let preview_block = preview_slot(preview, selected.is_some());
+    let heading = if entries.is_empty() && scanning {
+        "LOADING SAVEGAMES…".to_owned()
+    } else if visible.len() == entries.len() {
+        crate::widgets::plural(entries.len(), "SAVEGAME", "SAVEGAMES")
+    } else {
+        format!(
+            "{} OF {}",
+            visible.len(),
+            crate::widgets::plural(entries.len(), "SAVEGAME", "SAVEGAMES")
+        )
+    };
+    let list = if entries.is_empty() && scanning {
+        loading_rows()
+    } else {
+        SaveList {
+            data: SaveRows {
+                entries: Rc::clone(entries),
+                visible: Rc::clone(visible),
+                selected,
+                focused: focused_index,
+                focus,
+                actions: Rc::clone(actions),
+                open,
+            },
+            key: DiffKey::None,
+        }
+        .key("save-list")
+        .into_element()
+    };
 
     let title = character.as_ref().map_or_else(
         || "No savegame".to_owned(),
@@ -68,7 +98,7 @@ pub(super) fn sidebar(
         || "Select a savegame".to_owned(),
         |character| {
             format!(
-                "Level {} · {}",
+                "Level {} · Time played {}",
                 character.level,
                 crate::session::format::duration(character.time_played)
             )
@@ -94,7 +124,7 @@ pub(super) fn sidebar(
         .child(
             rect()
                 .vertical()
-                .spacing(theme::space::XXS)
+                .spacing(theme::space::XS)
                 .child(crate::widgets::with_tooltip(
                     title.clone(),
                     crate::widgets::a11y_text(title)
@@ -112,38 +142,60 @@ pub(super) fn sidebar(
                 ),
         )
         .child(
-            crate::widgets::a11y_text(if visible.len() == entries.len() {
-                format!("SAVEGAMES ({})", entries.len())
-            } else {
-                format!("SAVEGAMES ({} of {})", visible.len(), entries.len())
-            })
-            .font_size(theme::font::MICRO)
-            .font_weight(FontWeight::BOLD)
-            .color(theme::DIM),
+            crate::widgets::a11y_text(heading)
+                .font_size(theme::font::MICRO)
+                .font_weight(FontWeight::BOLD)
+                .color(if entries.is_empty() && scanning {
+                    theme::WARNING
+                } else {
+                    theme::DIM
+                }),
         )
         .child(crate::widgets::filter_input(
             query,
-            "Filter by name",
+            crate::app::SAVE_FILTER_PLACEHOLDER,
             "Clear the savegame filter",
             filter_id,
         ))
         .child(sort_bar(ctx, sort, *sort.read()))
-        .child(
-            SaveList {
-                data: SaveRows {
-                    entries: Rc::clone(entries),
-                    visible: Rc::clone(visible),
-                    selected,
-                    focused: focused_index,
-                    focus,
-                    actions: Rc::clone(actions),
-                    open,
-                },
-                key: DiffKey::None,
-            }
-            .key("save-list")
-            .into_element(),
-        )
+        .child(list)
+        .into_element()
+}
+
+/// Placeholder rows shown while the first scan is still running.
+///
+/// They occupy the same row pitch as real savegames so selecting the first
+/// save does not move the heading or the filter below it. They have no text,
+/// so the sidebar's status heading and the header carry the accessible state.
+fn loading_rows() -> Element {
+    let mut rows: Vec<Element> = Vec::new();
+    for index in 0..6 {
+        rows.push(
+            rect()
+                .horizontal()
+                .width(Size::fill())
+                .height(Size::px(theme::layout::SAVE_ROW_HEIGHT))
+                .padding(Gaps::new_symmetric(theme::space::MD, theme::space::LG))
+                .cross_align(Alignment::Center)
+                .background(theme::SURFACE)
+                .corner_radius(theme::radius::MEDIUM)
+                .key(index)
+                .child(
+                    rect()
+                        .width(Size::percent(theme::layout::SKELETON_BAR_PERCENT))
+                        .height(Size::px(theme::font::LINE_HEIGHT))
+                        .background(theme::SURFACE_ACTIVE)
+                        .corner_radius(theme::radius::SMALL),
+                )
+                .into_element(),
+        );
+    }
+    rect()
+        .vertical()
+        .width(Size::fill())
+        .height(Size::flex(1.0))
+        .spacing(theme::space::XS)
+        .children(rows)
         .into_element()
 }
 
@@ -508,7 +560,7 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                 rect()
                     .horizontal()
                     .cross_align(Alignment::Center)
-                    .padding(Gaps::new_symmetric(theme::space::SM, theme::space::NONE))
+                    .padding(Gaps::new_symmetric(theme::space::SM, theme::space::XS))
                     .child(
                         crate::widgets::a11y_text(key.label())
                             .font_size(theme::font::MICRO)
@@ -544,14 +596,8 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(theme::space::LG)
-        .content(Content::Flex)
-        .child(
-            crate::widgets::a11y_text("SORT")
-                .font_size(theme::font::MICRO)
-                .font_weight(FontWeight::BOLD)
-                .color(theme::DIM),
-        )
+        .spacing(theme::space::XS)
+        .content(Content::wrap_spacing(theme::space::XS))
         .children(buttons)
         .into_element()
 }

@@ -17,7 +17,7 @@ pub struct SaveEntry {
     pub character: Option<String>,
     /// Character level.
     pub level: Option<u8>,
-    /// Play time in microseconds.
+    /// Time played in microseconds.
     pub time_played: u64,
     /// Last modification time of `save.sac`.
     pub modified: Option<std::time::SystemTime>,
@@ -26,7 +26,7 @@ pub struct SaveEntry {
 }
 
 impl SaveEntry {
-    /// One line summary of the savegame: level, play time, character and the
+    /// One line summary of the savegame: level, time played, character and the
     /// modification time, in that order.
     ///
     /// The game names the folder, not the character, so the folder label stays
@@ -41,7 +41,7 @@ impl SaveEntry {
             .level
             .map_or_else(|| "?".to_owned(), |level| level.to_string());
         let mut parts = vec![format!(
-            "Level {level} · {}",
+            "Level {level} · Time played {}",
             format::duration(self.time_played)
         )];
         if let Some(character) = self.character.as_deref().filter(|name| !name.is_empty()) {

@@ -6,9 +6,11 @@
 //! views keep their `crate::session` paths.
 
 pub mod app;
+pub mod clipboard;
 pub mod dialog;
 pub mod form;
 pub mod geometry;
+pub mod paths;
 pub mod perf;
 pub mod renderer;
 pub mod theme;
@@ -24,6 +26,9 @@ pub use jadeforge_session::{config, session};
 /// The application id: the Wayland app id and the base name of the Linux
 /// desktop entry (`jadeforge.desktop`) and its hicolor icon.
 pub const APP_ID: &str = "jadeforge";
+
+/// Application version, shown in the About surface and window help.
+pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The application icon as a 256 px PNG, embedded so the window can set its
 /// icon without reading a file at startup.

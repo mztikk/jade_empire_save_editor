@@ -65,13 +65,13 @@ pub fn view(
     if game_ready {
         children.push(widgets::filter_input(
             query,
-            "Filter the style list, or leave empty to browse it",
+            crate::app::STYLE_FILTER_PLACEHOLDER,
             "Clear the style filter",
             filter_id,
         ));
         if matches.is_empty() {
             children.push(widgets::hint(if query.read().trim().is_empty() {
-                "Every style of the game is already known."
+                "Every style in the game data is already learned."
             } else {
                 "No styles match this search."
             }));
@@ -84,14 +84,17 @@ pub fn view(
                 .spacing(theme::space::LG)
                 .content(Content::Flex)
                 .child(widgets::section_label(if browsing {
-                    "ALL STYLES"
+                    "STYLES TO LEARN"
                 } else {
                     "SEARCH RESULTS"
                 }))
                 .child(rect().width(Size::flex(1.0)))
                 .child(
                     widgets::a11y_text(match (browsing, shown == matching) {
-                        (true, _) => format!("{shown} of {matching}"),
+                        (true, _) => format!(
+                            "{shown} of {}",
+                            crate::widgets::plural(matching, "style to learn", "styles to learn")
+                        ),
                         (false, true) => crate::widgets::plural(matching, "match", "matches"),
                         (false, false) => format!(
                             "{shown} of {}",
@@ -143,8 +146,12 @@ pub fn view(
     widgets::card(
         "Fighting styles",
         Some(match learnable {
-            Some(learnable) => format!("{} learned · {learnable} learnable", styles.len()),
-            None => format!("{} learned", styles.len()),
+            Some(learnable) => format!(
+                "{} · {}",
+                crate::widgets::plural(styles.len(), "style learned", "styles learned"),
+                crate::widgets::plural(learnable, "style to learn", "styles to learn")
+            ),
+            None => crate::widgets::plural(styles.len(), "style learned", "styles learned"),
         }),
         children,
     )
@@ -216,14 +223,14 @@ fn style_row(
                     theme::font::BODY,
                 ))
                 .child(widgets::badge(
-                    style.kind,
+                    crate::session::style_kind_label(style.kind),
                     theme::SURFACE_ACTIVE,
                     style_badge_color(style.kind),
                 ))
                 .child(
-                    widgets::a11y_text(format!("Lv {level}"))
+                    widgets::a11y_text(format!("Level {level}"))
                         .font_size(theme::font::LABEL)
-                        .width(Size::px(theme::layout::STEPPER_WIDTH))
+                        .width(Size::px(theme::layout::LEVEL_WIDTH))
                         .text_align(TextAlign::Center)
                         .color(theme::ACCENT),
                 )
@@ -699,7 +706,7 @@ fn learn_row(
                     theme::font::LABEL,
                 ))
                 .child(widgets::badge(
-                    suggestion.kind,
+                    crate::session::style_kind_label(suggestion.kind),
                     theme::SURFACE_ACTIVE,
                     style_badge_color(suggestion.kind),
                 ))

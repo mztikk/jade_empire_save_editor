@@ -54,6 +54,18 @@ All notable changes are documented here. The format follows
   savegame's item `Type`, and style rows show the level, weapon count, icon and
   weapon resource names and the time spent from the style struct instead of
   only numeric ids.
+- P2 desktop-UI polish: the successful-save backup path is surfaced on the
+  Overview with copy/open actions and restore instructions, the close guard
+  offers explicit Save / Discard / Cancel, Save and Revert disable themselves
+  when there is nothing to do, and folder-dialog cancellation is reported
+  separately from an unreadable path.
+- An About/help page with the application version, settings file, remembered
+  save folder and sort order, backup rules and keyboard shortcuts; a category
+  filter for the 291-row item picker; field ranges and units (plus the optional
+  Gold field rule) in the character form.
+- The About entry point is an outlined toolbar button instead of plain text,
+  and opening About clears the tab selection so no editor tab appears active
+  while the page is shown.
 
 ### Changed
 
@@ -65,6 +77,21 @@ All notable changes are documented here. The format follows
 - A repository rule now bans putting backticked commands or prose into a
   double-quoted shell argument, after a PR-body quoting mistake executed
   commands.
+- P2 copy and vocabulary: counts carry their noun through the shared `plural()`
+  helper, the style picker heading is `STYLES TO LEARN`, `Lv`/`Played`/`Unlock`/
+  `predefined gems` use the same words as the rest of the UI, raw item
+  categories and style kinds map to friendly labels, and the save filter
+  placeholder names the character name it also matches.
+- The Overview no longer duplicates the sidebar savegame screenshot; the
+  sidebar preview aligns with the identity block at the shared card radius; the
+  glance values are full-width rows instead of fixed cells; the save folder can
+  be opened from the Overview and About pages.
+- Initial scans show sidebar and editor skeletons, manual scans show a reserved
+  busy indicator in the tab bar, and the snapshot example's `--query` targets
+  the active tab's own filter instead of the sidebar save filter.
+- `docs/UI-REVIEW.md` records the P2 results and documents which screenshots are
+  tracked and how to regenerate them; README and CONTRIBUTING link the
+  P1/P2/P3 issues.
 - `just install` now installs `jadeforge-cli` alongside the `jadeforge` GUI
   binary, so a source install provides both tools.
 
@@ -133,6 +160,8 @@ All notable changes are documented here. The format follows
 
 - Gem moves now preserve the fixed seven-entry amulet socket list, keep gems
   visible after a move and reject full or missing amulets.
+- Empty amulet sockets no longer resolve item id 0 to a generic item in modded
+  item tables, which gave empty slots a name and a Remove action.
 - Save writes use exclusive temporary files, unique backups, preserved
   permissions, parent-directory fsync and external-change detection; saving
   through a symlink keeps the link.

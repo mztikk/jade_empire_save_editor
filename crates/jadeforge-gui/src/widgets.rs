@@ -216,8 +216,8 @@ pub fn hint(text: impl Into<String>) -> Element {
 }
 
 /// A section label inside a card.
-pub fn section_label(text: &'static str) -> Element {
-    a11y_text(text)
+pub fn section_label(text: impl Into<String>) -> Element {
+    a11y_text(text.into())
         .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
         .font_size(theme::font::MICRO)
         .font_weight(FontWeight::BOLD)
@@ -282,9 +282,12 @@ pub fn with_tooltip(text: String, content: impl IntoElement) -> Element {
 }
 
 /// Formats a count with the correct singular or plural noun.
+///
+/// Delegates to the shared session helper so the shell and the session
+/// messages can never disagree about "1 gem" versus "1 gems".
 #[must_use]
 pub fn plural(count: usize, singular: &str, plural: &str) -> String {
-    format!("{count} {}", if count == 1 { singular } else { plural })
+    crate::session::format::plural(count, singular, plural)
 }
 
 /// Name block that expands a description when pressed.
@@ -411,40 +414,25 @@ where
     }
 }
 
-/// Two-column key/value grid that collapses to one column in narrow windows.
+/// Full-width label/value rows for the overview glance section.
 ///
-/// Cells take just under half a row, so two share it once the window is wide
-/// enough and a single cell keeps the rest of the row empty at the supported
-/// minimum width. This is a deliberate reflow rather than five fixed 340 px
-/// cells that leave a gap on every window.
+/// A fixed-cell grid left an entire half-row empty once the supported 900 px
+/// window forced one column, so the values now use the whole card at every
+/// width instead of a percentage of it.
 #[must_use]
-pub fn label_grid(rows: Vec<(String, Element)>) -> Element {
-    let cells: Vec<Element> = rows
-        .into_iter()
-        .map(|(name, value)| {
-            rect()
-                .horizontal()
-                .width(Size::percent(theme::layout::LABEL_CELL_PERCENT))
-                .min_width(Size::px(theme::layout::LABEL_CELL_MIN_WIDTH))
-                .spacing(theme::space::XL)
-                .content(Content::Flex)
-                .padding(Gaps::new_symmetric(theme::space::MD, theme::space::NONE))
-                .child(
-                    a11y_text(name)
-                        .font_size(theme::font::LABEL)
-                        .color(theme::MUTED),
-                )
-                .child(rect().width(Size::flex(1.0)))
-                .child(value)
-                .into_element()
-        })
-        .collect();
+pub fn definition_list(rows: Vec<(String, Element)>) -> Element {
+    let mut children: Vec<Element> = Vec::new();
+    for (index, (name, value)) in rows.into_iter().enumerate() {
+        if index > 0 {
+            children.push(divider());
+        }
+        children.push(label_row(name, value));
+    }
     rect()
-        .horizontal()
+        .vertical()
         .width(Size::fill())
-        .content(Content::wrap_spacing(theme::space::XXL))
-        .spacing(theme::space::XXL)
-        .children(cells)
+        .spacing(theme::space::MD)
+        .children(children)
         .into_element()
 }
 
@@ -685,6 +673,38 @@ pub fn row_action(
                 a11y_text(text)
                     .font_size(theme::font::MICRO)
                     .color(theme::MUTED),
+            ),
+    )
+    .hover_background(theme::SURFACE_HOVER)
+}
+
+/// A compact outlined action for a toolbar or page header.
+///
+/// `AccessibleButton` has no visual chrome of its own, so a transparent action
+/// with only a hover state reads like plain text next to status badges. The
+/// border and control padding make the action recognizable as a button while
+/// the explicit accessible name stays on the button node.
+pub fn outline_action(
+    accessible: impl Into<String>,
+    text: impl Into<String>,
+    action: Action,
+) -> AccessibleButton {
+    AccessibleButton::new(
+        accessible,
+        action,
+        rect()
+            .padding(Gaps::new_symmetric(theme::space::MD, theme::space::XL))
+            .border(
+                Border::new()
+                    .fill(theme::CONTROL_BORDER)
+                    .width(theme::stroke::HAIRLINE),
+            )
+            .corner_radius(theme::radius::CONTROL)
+            .child(
+                a11y_text(text)
+                    .font_size(theme::font::CAPTION)
+                    .font_weight(FontWeight::BOLD)
+                    .color(theme::TEXT),
             ),
     )
     .hover_background(theme::SURFACE_HOVER)

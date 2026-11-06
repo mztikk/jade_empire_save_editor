@@ -12,6 +12,7 @@ use freya::elements::image::ImageHandle;
 use freya::engine::prelude::AlphaType;
 use freya::prelude::*;
 
+use crate::dialog::CloseChoice;
 use crate::form::Form;
 use crate::session::{CharacterForm, GameStatus, Preview, Session, default_save_dir};
 use crate::theme;
@@ -88,6 +89,18 @@ impl HoverKey {
 /// Entries a searchable picker renders per page (items, styles, gems).
 pub const PAGE_SIZE: usize = 30;
 
+/// Placeholder of the savegame-list filter.
+///
+/// The filter matches the folder label and the character name, so the
+/// placeholder names both instead of promising a folder-name-only search.
+pub const SAVE_FILTER_PLACEHOLDER: &str = "Filter by name or character";
+/// Placeholder of the item-database filter.
+pub const ITEM_FILTER_PLACEHOLDER: &str = "Filter the item database, or leave empty to browse it";
+/// Placeholder of the learnable-style filter.
+pub const STYLE_FILTER_PLACEHOLDER: &str = "Filter the style list, or leave empty to browse it";
+/// Placeholder of the gem-picker filter.
+pub const GEM_FILTER_PLACEHOLDER: &str = "Filter the gem list, or leave empty to browse it";
+
 /// Title of the main window.
 ///
 /// The windowed UI suite finds the application through this title, so keep the
@@ -96,6 +109,46 @@ pub const WINDOW_TITLE: &str = "JadeForge";
 
 /// Whether the running window currently has unsaved changes.
 static UI_DIRTY: AtomicBool = AtomicBool::new(false);
+
+thread_local! {
+    /// Saves the applied edits when the close dialog asks for it.
+    ///
+    /// The window close hook runs outside the component tree and has no access
+    /// to the session, so the root component registers this handler on every
+    /// render. It is thread local because `Session` is a single-threaded
+    /// `Rc<RefCell<..>>`; the close hook runs on the same event-loop thread.
+    static CLOSE_SAVE_HANDLER: RefCell<Option<Rc<dyn Fn() -> bool>>> =
+        const { RefCell::new(None) };
+}
+
+/// Registers the handler that writes the applied edits for the close dialog.
+fn set_close_save_handler(handler: Rc<dyn Fn() -> bool>) {
+    CLOSE_SAVE_HANDLER.with(|slot| *slot.borrow_mut() = Some(handler));
+}
+
+/// Runs the registered close-time save, if the app has one.
+fn save_before_close() -> bool {
+    CLOSE_SAVE_HANDLER.with(|slot| slot.borrow().as_ref().is_some_and(|handler| handler()))
+}
+
+/// Turns the close-dialog choice into a window decision.
+///
+/// Kept pure so the decision table can be tested without a window. The save
+/// callback is only invoked for [`CloseChoice::Save`]; a failed save keeps the
+/// window open with the error in the status area.
+fn close_decision(choice: CloseChoice, save: impl FnOnce() -> bool) -> CloseDecision {
+    match choice {
+        CloseChoice::Save => {
+            if save() {
+                CloseDecision::Close
+            } else {
+                CloseDecision::KeepOpen
+            }
+        }
+        CloseChoice::Discard => CloseDecision::Close,
+        CloseChoice::Cancel => CloseDecision::KeepOpen,
+    }
+}
 
 /// Returns whether the app currently has unsaved changes.
 ///
@@ -124,7 +177,8 @@ pub enum Tab {
 }
 
 impl Tab {
-    pub(super) const ALL: [Self; 6] = [
+    /// Every tab, in display order.
+    pub const ALL: [Self; 6] = [
         Self::Overview,
         Self::Character,
         Self::Styles,
@@ -145,7 +199,9 @@ impl Tab {
         }
     }
 
-    pub(super) fn label(self) -> &'static str {
+    /// Label shown on the tab and used to identify it in the snapshot example.
+    #[must_use]
+    pub fn label(self) -> &'static str {
         match self {
             Self::Overview => "Overview",
             Self::Character => "Character",
@@ -153,6 +209,22 @@ impl Tab {
             Self::Inventory => "Inventory",
             Self::Gems => "Gems",
             Self::Companions => "Companions",
+        }
+    }
+
+    /// Placeholder of the tab's own picker filter, when it has one.
+    ///
+    /// The savegame-list filter in the sidebar belongs to every tab, so it is
+    /// deliberately not returned here: tooling that types a query into "the
+    /// active tab's filter" must never fall back to the sidebar for Styles,
+    /// Inventory or Gems. Tabs with no picker return `None`.
+    #[must_use]
+    pub fn filter_placeholder(self) -> Option<&'static str> {
+        match self {
+            Self::Inventory => Some(ITEM_FILTER_PLACEHOLDER),
+            Self::Styles => Some(STYLE_FILTER_PLACEHOLDER),
+            Self::Gems => Some(GEM_FILTER_PLACEHOLDER),
+            Self::Overview | Self::Character | Self::Companions => None,
         }
     }
 }
@@ -211,19 +283,7 @@ where
             if !ui_is_dirty() {
                 return CloseDecision::Close;
             }
-            let answer = rfd::MessageDialog::new()
-                .set_title("Unsaved changes")
-                .set_description(
-                    "This savegame has changes that are only in memory. Close JadeForge and discard them?",
-                )
-                .set_buttons(rfd::MessageButtons::YesNo)
-                .set_level(rfd::MessageLevel::Warning)
-                .show();
-            if matches!(answer, rfd::MessageDialogResult::Yes) {
-                CloseDecision::Close
-            } else {
-                CloseDecision::KeepOpen
-            }
+            close_decision(crate::dialog::ask_close_choice(), save_before_close)
         })
 }
 
@@ -253,6 +313,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     });
     let tab = use_state(|| Tab::Overview);
     let item_query = use_state(String::new);
+    let item_category = use_state(|| None::<String>);
+    let show_about = use_state(|| false);
     let style_query = use_state(String::new);
     let item_limit = use_state(|| PAGE_SIZE);
     let style_limit = use_state(|| PAGE_SIZE);
@@ -312,6 +374,22 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         form,
     };
 
+    // The native close dialog cannot reach the component tree, so register the
+    // save half of its Save / Discard / Cancel choice here. The handler applies
+    // the valid form fields and writes the savegame through the normal verified
+    // path; a failure leaves the window open with the error in the status slot.
+    {
+        let ctx = ctx.clone();
+        use_hook(move || {
+            set_close_save_handler(Rc::new(move || {
+                let result = ctx.session.borrow_mut().save_applied(&ctx.form.read());
+                let mut revision = ctx.revision;
+                *revision.write() += 1;
+                result.is_ok()
+            }));
+        });
+    }
+
     // Record how long a state-changing render took. Reading the revision and
     // the active tab subscribes the effect to the renders that do real work.
     {
@@ -362,6 +440,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             reset_pickers(
                 save_query,
                 item_query,
+                item_category,
+                show_about,
                 style_query,
                 gem_query,
                 item_limit,
@@ -428,10 +508,21 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         let results = use_memo(move || {
             let _ = *revision.read();
             let query = item_query.read().clone();
+            let category = item_category.read().clone();
             let limit = *item_limit.read();
-            session.borrow().search_items(&query, limit)
+            session
+                .borrow()
+                .search_items_filtered(&query, category.as_deref(), limit)
         });
         results.read().clone()
+    };
+    let item_categories = {
+        let session = session.clone();
+        let categories = use_memo(move || {
+            let _ = *revision.read();
+            session.borrow().item_categories()
+        });
+        categories.read().clone()
     };
     let (style_matches, style_matches_total, total_missing) = {
         let session = session.clone();
@@ -570,14 +661,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         })
     };
 
-    let content = match (active_tab, &character) {
-        (Tab::Overview, Some(character)) => views::overview::view(
-            &ctx,
-            character,
-            preview_handle.clone(),
-            items.len(),
-            styles.len(),
-        ),
+    let scanning = session.borrow().is_scanning();
+    let tab_content = match (active_tab, &character) {
+        (Tab::Overview, Some(character)) => {
+            views::overview::view(&ctx, character, items.len(), styles.len())
+        }
         (Tab::Character, Some(character)) => views::character::view(&ctx, character, &form_errors),
         (Tab::Styles, _) => {
             let mut style_limit = style_limit;
@@ -603,6 +691,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 &ctx,
                 &items,
                 item_query,
+                item_category,
+                &item_categories,
                 &item_results,
                 items_ready,
                 game_loading,
@@ -631,16 +721,22 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             )
         }
         (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen, hovered),
+        (_, None) if scanning => shell::loading_state(),
         (_, None) => shell::empty_state(&ctx, entries.len(), directory_state, start_scan.clone()),
+    };
+    let show_about_now = *show_about.read();
+    let content = if show_about_now {
+        views::about::view(&ctx, save_sort, show_about)
+    } else {
+        tab_content
     };
 
     let content = rect()
         .width(Size::fill())
-        .key(active_tab.index())
+        .key(active_tab.index() * 2 + usize::from(show_about_now))
         .child(content)
         .into_element();
 
-    let scanning = session.borrow().is_scanning();
     let header = shell::header(
         &ctx,
         directory_state,
@@ -651,6 +747,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         has_save,
         &form_errors,
         scanning,
+        show_about,
         start_scan.clone(),
         cancel_scan.clone(),
     );
@@ -679,6 +776,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         save_focus,
         preview_handle,
         character.as_ref(),
+        scanning,
         &save_actions,
         save_query,
         save_filter_id,
@@ -686,7 +784,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         reset.clone(),
         sync.clone(),
     );
-    let tabs = navigation::tab_bar(tab, active_tab, has_save);
+    let tabs = navigation::tab_bar(tab, active_tab, has_save, scanning, show_about);
     let footer = shell::footer(&ctx, form, dirty, has_save, &form_errors, sync.clone());
 
     // Desktop shortcuts. Save and Scan duplicate the footer/header actions so
@@ -707,11 +805,17 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         let mut item_query = item_query;
         let mut style_query = style_query;
         let mut gem_query = gem_query;
+        let mut show_about = show_about;
         move |event: Event<KeyboardEventData>| {
             let ctrl = event.modifiers.contains(Modifiers::CONTROL);
             match &event.key {
                 Key::Character(character) if ctrl => match character.to_lowercase().as_str() {
                     "s" => {
+                        // Match the disabled footer action: a shortcut must not
+                        // report a save when there is no applied change.
+                        if !ctx.session.borrow().is_dirty() {
+                            return;
+                        }
                         let errors = ctx.run(|session| session.form_errors(&form.read()));
                         if let Some(first) = errors.first() {
                             form.focus(first.field);
@@ -725,6 +829,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         shell::choose_folder(&ctx, directory, &start_scan);
                     }
                     "f" => {
+                        show_about.set(false);
                         let id = match active {
                             Tab::Inventory => filter_ids[1],
                             Tab::Styles => filter_ids[2],
@@ -743,14 +848,20 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         *directory.write() = real;
                     }
                 }
-                Key::Named(NamedKey::Escape) => match active {
-                    Tab::Inventory => item_query.set(String::new()),
-                    Tab::Styles => style_query.set(String::new()),
-                    Tab::Gems => gem_query.set(String::new()),
-                    Tab::Overview | Tab::Character | Tab::Companions => {
-                        save_query.set(String::new());
+                Key::Named(NamedKey::Escape) => {
+                    if *show_about.read() {
+                        show_about.set(false);
+                    } else {
+                        match active {
+                            Tab::Inventory => item_query.set(String::new()),
+                            Tab::Styles => style_query.set(String::new()),
+                            Tab::Gems => gem_query.set(String::new()),
+                            Tab::Overview | Tab::Character | Tab::Companions => {
+                                save_query.set(String::new());
+                            }
+                        }
                     }
-                },
+                }
                 _ => {}
             }
         }
@@ -838,16 +949,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                                                         .max_width(Size::px(
                                                             theme::layout::EDITOR_MAX_WIDTH,
                                                         ))
-                                                        .child(if has_save {
-                                                            content
-                                                        } else {
-                                                            shell::empty_state(
-                                                                &ctx,
-                                                                entries.len(),
-                                                                directory_state,
-                                                                start_scan.clone(),
-                                                            )
-                                                        }),
+                                                        // The content already renders the loading
+                                                        // skeleton, the About page and the empty
+                                                        // state; a second no-save branch here used
+                                                        // to swallow all three.
+                                                        .child(content),
                                                 ),
                                         ),
                                 ),
@@ -866,6 +972,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
 fn reset_pickers(
     save_query: State<String>,
     item_query: State<String>,
+    item_category: State<Option<String>>,
+    show_about: State<bool>,
     style_query: State<String>,
     gem_query: State<String>,
     item_limit: State<usize>,
@@ -883,6 +991,10 @@ fn reset_pickers(
     save_query.set(String::new());
     let mut item_query = item_query;
     item_query.set(String::new());
+    let mut item_category = item_category;
+    item_category.set(None);
+    let mut show_about = show_about;
+    show_about.set(false);
     let mut style_query = style_query;
     style_query.set(String::new());
     let mut gem_query = gem_query;
@@ -937,6 +1049,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_close_dialog_choice_table_never_saves_on_discard_or_cancel() {
+        assert_eq!(
+            close_decision(CloseChoice::Save, || true),
+            CloseDecision::Close
+        );
+        assert_eq!(
+            close_decision(CloseChoice::Discard, || { panic!("Discard must not save") }),
+            CloseDecision::Close
+        );
+        assert_eq!(
+            close_decision(CloseChoice::Cancel, || { panic!("Cancel must not save") }),
+            CloseDecision::KeepOpen
+        );
+    }
+
+    #[test]
+    fn a_failed_save_keeps_the_window_open() {
+        assert_eq!(
+            close_decision(CloseChoice::Save, || false),
+            CloseDecision::KeepOpen
+        );
+    }
+
+    #[test]
     fn tab_positions_match_the_all_array() {
         for (position, tab) in Tab::ALL.into_iter().enumerate() {
             assert_eq!(tab.index(), position, "{}", tab.label());
@@ -949,6 +1085,29 @@ mod tests {
         labels.sort_unstable();
         labels.dedup();
         assert_eq!(labels.len(), Tab::ALL.len());
+    }
+
+    #[test]
+    fn tab_filters_never_fall_back_to_the_savegame_filter() {
+        assert_eq!(
+            Tab::Inventory.filter_placeholder(),
+            Some(ITEM_FILTER_PLACEHOLDER)
+        );
+        assert_eq!(
+            Tab::Styles.filter_placeholder(),
+            Some(STYLE_FILTER_PLACEHOLDER)
+        );
+        assert_eq!(Tab::Gems.filter_placeholder(), Some(GEM_FILTER_PLACEHOLDER));
+        for tab in [Tab::Overview, Tab::Character, Tab::Companions] {
+            assert_eq!(tab.filter_placeholder(), None, "{}", tab.label());
+        }
+        for placeholder in [
+            ITEM_FILTER_PLACEHOLDER,
+            STYLE_FILTER_PLACEHOLDER,
+            GEM_FILTER_PLACEHOLDER,
+        ] {
+            assert_ne!(placeholder, SAVE_FILTER_PLACEHOLDER);
+        }
     }
 
     #[test]

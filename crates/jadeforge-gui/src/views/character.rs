@@ -54,6 +54,10 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
                 checked(&form, CharacterField::Chapter, errors),
                 checked(&form, CharacterField::Kills, errors),
             ]),
+            widgets::hint(
+                "Gold is optional in the savegame: leave it empty to keep the field absent, or \
+                 enter a value to create it when you save.",
+            ),
             widgets::divider(),
             widgets::field_grid(vec![
                 checked(&form, CharacterField::Alignment, errors),
@@ -131,7 +135,7 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
             ),
             widgets::divider(),
             widgets::label_row(
-                "Play time",
+                "Time played",
                 widgets::a11y_text(crate::session::format::duration(character.time_played))
                     .font_size(theme::font::BODY)
                     .color(theme::TEXT),
