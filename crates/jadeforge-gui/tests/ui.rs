@@ -973,11 +973,19 @@ fn the_item_picker_can_filter_by_category() {
         eprintln!("skipping: no game data to browse");
         return;
     }
-    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 1800.0);
+    assert!(click_text(&mut test, "Level "), "the savegame did not open");
     assert!(click_text(&mut test, "Inventory"));
     assert!(
         find_label_text(&test, "CATEGORY").is_some(),
         "the item picker has no category filter"
+    );
+    // The chips wrap as whole labels, never as "Weapon" plus a lone "s".
+    let chip = find_label_exact(&test, "Weapons").expect("the Weapons chip is missing");
+    assert!(
+        chip.layout().area.size.height <= 14.5,
+        "the Weapons chip label wrapped inside its pill ({} px)",
+        chip.layout().area.size.height
     );
     assert!(
         click_a11y_label(&mut test, "Show only Gems"),

@@ -223,6 +223,7 @@ fn category_chip(label: String, accessible: String, selected: bool, action: Acti
             .child(
                 widgets::a11y_text(label)
                     .font_size(theme::font::MICRO)
+                    .max_lines(1)
                     .color(if selected {
                         theme::ACCENT
                     } else {
