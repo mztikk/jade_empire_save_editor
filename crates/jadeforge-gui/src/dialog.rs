@@ -154,9 +154,9 @@ pub fn ask_close_choice() -> CloseChoice {
 /// Maps the native dialog result onto the explicit close choice.
 ///
 /// Every rfd backend returns `Custom(label)` for a custom button rather than
-/// Yes/No/Cancel (the GTK, macOS, TaskDialog and zenity paths all do), so the
+/// Yes/No/Cancel (the GTK, macOS, `TaskDialog` and zenity paths all do), so the
 /// labels are the contract. Yes/No remain accepted for the non-custom fallback
-/// on a Windows build without the ComCtl32 v6 manifest.
+/// on a Windows build without the `ComCtl32` v6 manifest.
 fn close_choice(result: &rfd::MessageDialogResult) -> CloseChoice {
     match result {
         rfd::MessageDialogResult::Yes => CloseChoice::Save,
