@@ -52,8 +52,16 @@ test:
 # Windowed UI tests on the real Wayland desktop; only when a headless UI test
 # cannot cover the issue or the bug is in the real window. Opens real windows
 # and takes focus. See docs/LIVE-UI.md.
+#
+# The approval variable is a second gate against accidental invocation (for
+# example shell command substitution in a quoted argument): plain `just live`
+# now refuses before the test binary can open a window.
 live:
-    JADEFORGE_LIVE=1 cargo test -p jadeforge-gui --test live -- --nocapture
+    if [ "${JADEFORGE_LIVE_APPROVED:-}" != "1" ]; then \
+        echo "refusing the windowed UI suite: obtain explicit permission, then run JADEFORGE_LIVE_APPROVED=1 just live" >&2; \
+        exit 1; \
+    fi
+    JADEFORGE_LIVE=1 JADEFORGE_LIVE_APPROVED=1 cargo test -p jadeforge-gui --test live -- --nocapture
 
 # Lint the whole workspace and deny warnings.
 clippy:

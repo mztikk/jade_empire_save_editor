@@ -11,12 +11,14 @@
 //! it when a headless UI test cannot cover the case or the bug is in the real
 //! window (`AGENTS.md` rule 13).
 //!
-//! The suite is opt-in so the normal headless test run never opens windows:
+//! The suite is opt-in so the normal headless test run never opens windows.
+//! Before running it, obtain explicit permission and pass the second gate:
 //!
 //! ```sh
-//! just live
+//! JADEFORGE_LIVE_APPROVED=1 just live
 //! # or
-//! JADEFORGE_LIVE=1 cargo test -p jadeforge-gui --test live -- --nocapture
+//! JADEFORGE_LIVE=1 JADEFORGE_LIVE_APPROVED=1 \
+//!   cargo test -p jadeforge-gui --test live -- --nocapture
 //! ```
 //!
 //! Run it from a real Wayland desktop session, or from a VM with a real

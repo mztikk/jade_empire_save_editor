@@ -122,7 +122,7 @@ cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/ui.png all
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/inv.png Inventory --height 1900 --query "Drachen"
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/small.png Overview --width 900 --height 600
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" /tmp/wide.png all --width 1600 --height 900
-just live                              # ask first for a window-path change; see the Windowed tests rule
+JADEFORGE_LIVE_APPROVED=1 just live    # ask first for a window-path change; see the Windowed tests rule
 ```
 
 Check narrow windows too: rows with `spacing` overflow silently at 900 px unless
@@ -133,7 +133,7 @@ invisible to the compiler.
 
 ## Windowed tests
 
-**Never run `just live` without asking the user for explicit permission first.**
+**Never run `JADEFORGE_LIVE_APPROVED=1 just live` without asking the user for explicit permission first.** The approval variable is a second gate against accidental invocation, not permission; plain `just live` refuses.
 It opens real windows, takes focus, moves the pointer and types on their
 desktop. A general request to run the tests is not permission. Only run it when
 a headless GUI test genuinely cannot reproduce or verify the problem (window
@@ -149,7 +149,7 @@ for view, layout, text, theme, form or session changes that the headless suite
 and snapshots cover. If the change is borderline, ask. Before `just finish`,
 state whether the suite was run; compiling it is not running it.
 
-Once permission is given: `just live` launches the real application through
+Once permission is given: `JADEFORGE_LIVE_APPROVED=1 just live` launches the real application through
 `freya-winit` and drives a real Wayland window. On KDE it injects pointer and
 key events through KWin's fake-input protocol and captures the window with
 Spectacle; elsewhere it posts the same events through the windowed plugin

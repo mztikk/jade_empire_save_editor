@@ -23,6 +23,12 @@ All notable changes are documented here. The format follows
 
 - The no-game-data rule now names the generated English name index as its only
   exception and forbids growing it beyond item/style names and item categories.
+- The windowed UI suite now requires `JADEFORGE_LIVE_APPROVED=1` in addition to
+  explicit user permission. Plain `just live` and direct `JADEFORGE_LIVE=1`
+  runs are refused before a window is created.
+- A repository rule now bans putting backticked commands or prose into a
+  double-quoted shell argument, after a PR-body quoting mistake executed
+  commands.
 - `just install` now installs `jadeforge-cli` alongside the `jadeforge` GUI
   binary, so a source install provides both tools.
 

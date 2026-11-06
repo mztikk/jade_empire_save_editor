@@ -30,13 +30,25 @@ pub fn run() -> ExitCode {
         return ExitCode::SUCCESS;
     }
     if std::env::var_os("JADEFORGE_LIVE_SCENARIO").is_some() {
+        if !flag("JADEFORGE_LIVE_APPROVED") {
+            eprintln!(
+                "refusing a windowed scenario without JADEFORGE_LIVE_APPROVED=1; obtain explicit permission first"
+            );
+            return ExitCode::FAILURE;
+        }
         return run_child();
     }
     if !flag("JADEFORGE_LIVE") {
         println!(
-            "skipping the windowed UI tests; run `just live` (or set JADEFORGE_LIVE=1) to open real windows"
+            "skipping the windowed UI tests; run `JADEFORGE_LIVE_APPROVED=1 just live` after explicit permission"
         );
         return ExitCode::SUCCESS;
+    }
+    if !flag("JADEFORGE_LIVE_APPROVED") {
+        eprintln!(
+            "refusing the windowed UI suite without JADEFORGE_LIVE_APPROVED=1; obtain explicit permission first"
+        );
+        return ExitCode::FAILURE;
     }
     let display = std::env::var_os("WAYLAND_DISPLAY").filter(|value| !value.is_empty());
     if display.is_none() {
@@ -138,6 +150,7 @@ fn orchestrate() -> ExitCode {
         let mut command = Command::new(&executable);
         command
             .env("JADEFORGE_LIVE", "1")
+            .env("JADEFORGE_LIVE_APPROVED", "1")
             .env("JADEFORGE_LIVE_SCENARIO", name)
             .env("JADEFORGE_SAVE_DIR", &saves)
             .env("JADEFORGE_GAME_DIR", &game)

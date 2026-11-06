@@ -212,8 +212,9 @@ Wayland window with the production `app::window_config`, drives it with KWin's
 fake-input protocol on KDE (or with windowed plugin events on other
 compositors), and captures the presented window with Spectacle. A `Probe` plugin
 publishes the live label/paragraph tree so assertions use text and layout
-rectangles instead of image diffs. The suite is gated by `JADEFORGE_LIVE=1` and
-runs one scenario per child process because winit requires one event loop on the
+rectangles instead of image diffs. The suite is gated by `JADEFORGE_LIVE=1` plus
+`JADEFORGE_LIVE_APPROVED=1` and runs one scenario per child process because winit
+requires one event loop on the
 main thread. It opens real windows, so it is **never run without explicit
 permission** and only when the headless suite cannot cover the case
 ([AGENTS.md](AGENTS.md) rule 13). See [LIVE-UI.md](LIVE-UI.md) for the process
