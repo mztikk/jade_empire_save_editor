@@ -6,7 +6,9 @@
 
 use freya::prelude::*;
 
+use crate::Locale;
 use crate::app::Ctx;
+use crate::i18n::t;
 use crate::preferences::{TEXT_SCALES, ThemeChoice};
 use crate::session::{GameStatus, SaveSort};
 use crate::theme;
@@ -24,6 +26,7 @@ pub fn view(
     mut show_about: State<bool>,
     theme_choice: State<ThemeChoice>,
     text_scale: State<u16>,
+    locale: State<Locale>,
 ) -> Element {
     let (sort, descending) = *sort.read();
     let save_folder = ctx.session.borrow().directory().to_path_buf();
@@ -42,16 +45,16 @@ pub fn view(
     let config_path = crate::config::Config::path();
 
     let close = Action::new(move || show_about.set(false));
-    let close_button = widgets::outline_action("Close the About page", "Close", close);
+    let close_button = widgets::outline_action(t("Close the About page"), t("Close"), close);
 
     let selected_theme = *theme_choice.read();
     let selected_scale = *text_scale.read();
     let mut appearance: Vec<Element> = Vec::new();
-    appearance.push(widgets::hint(
+    appearance.push(widgets::hint(t(
         "The theme and text size apply immediately and are remembered in the settings file. \
          System follows the operating system preference; high contrast can be selected here \
          because the windowing layer does not report the platform's forced-colours setting.",
-    ));
+    )));
     let mut theme_chips: Vec<Element> = Vec::new();
     for choice in ThemeChoice::ALL {
         let mut theme_choice = theme_choice;
@@ -73,7 +76,7 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::sm())
             .content(Content::wrap_spacing(theme::space::sm()))
-            .child(widgets::section_label("THEME"))
+            .child(widgets::section_label(t("THEME")))
             .children(theme_chips)
             .into_element(),
     );
@@ -98,16 +101,41 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::sm())
             .content(Content::wrap_spacing(theme::space::sm()))
-            .child(widgets::section_label("TEXT SIZE"))
+            .child(widgets::section_label(t("TEXT SIZE")))
             .children(scale_chips)
+            .into_element(),
+    );
+    let selected_locale = *locale.read();
+    let mut locale_chips: Vec<Element> = Vec::new();
+    for candidate in Locale::ALL {
+        let mut locale = locale;
+        let selected = selected_locale == candidate;
+        locale_chips.push(appearance_chip(
+            candidate.label(),
+            format!("Use {} for the interface", candidate.label()),
+            selected,
+            Action::new(move || {
+                locale.set(candidate);
+                crate::config::Config::remember_locale(candidate);
+            }),
+        ));
+    }
+    appearance.push(
+        rect()
+            .horizontal()
+            .width(Size::fill())
+            .spacing(theme::space::sm())
+            .content(Content::wrap_spacing(theme::space::sm()))
+            .child(widgets::section_label(t("LANGUAGE")))
+            .children(locale_chips)
             .into_element(),
     );
 
     let mut settings = Vec::new();
     if save_folder.as_os_str().is_empty() {
-        settings.push(widgets::hint(
+        settings.push(widgets::hint(t(
             "No save folder has been chosen yet. Use Browse… or Ctrl+O to pick one.",
-        ));
+        )));
     } else {
         settings.push(path_section(
             ctx,
@@ -119,7 +147,7 @@ pub fn view(
     }
     settings.extend([
         widgets::label_row(
-            "Sort order",
+            t("Sort order"),
             widgets::a11y_text(format!(
                 "{}, {}",
                 sort.label(),
@@ -133,7 +161,7 @@ pub fn view(
             .color(theme::text()),
         ),
         widgets::label_row(
-            "Game data",
+            t("Game data"),
             widgets::a11y_text(game_text)
                 .font_size(theme::font::label())
                 .color(theme::text()),
@@ -152,17 +180,17 @@ pub fn view(
                 "settings",
             ));
         }
-        None => settings.push(widgets::hint(
+        None => settings.push(widgets::hint(t(
             "No config directory is available in this environment. JADEFORGE_CONFIG_DIR can point \
              at one for portable installs.",
-        )),
+        ))),
     }
 
-    let mut backups = vec![widgets::hint(
+    let mut backups = vec![widgets::hint(t(
         "Every save writes a copy of the previous save.sac next to it, named \
              save.sac.jadeforge-backup-<seconds>.<nanos>.<counter>. To undo a save, close \
              JadeForge and copy the backup over save.sac. An earlier backup is never overwritten.",
-    )];
+    ))];
     match &backup {
         Some(backup) => {
             let folder = backup
@@ -176,10 +204,10 @@ pub fn view(
                 "backup",
             ));
         }
-        None => backups.push(widgets::hint(
+        None => backups.push(widgets::hint(t(
             "No backup has been written in this session; saving a change creates one and shows \
              its exact path on the Overview tab.",
-        )),
+        ))),
     }
 
     let mut children = vec![
@@ -189,34 +217,34 @@ pub fn view(
             .content(Content::Flex)
             .cross_align(Alignment::Center)
             .child(
-                widgets::a11y_text("Jade Empire savegame editor")
+                widgets::a11y_text(t("Jade Empire savegame editor"))
                     .font_size(theme::font::body())
                     .color(theme::muted()),
             )
             .child(rect().width(Size::flex(1.0)))
             .child(close_button)
             .into_element(),
-        widgets::hint(
+        widgets::hint(t(
             "JadeForge reads and writes save.sac files directly. Every write is verified by \
              re-reading the produced file and is written atomically, and the game installation \
              is only ever read.",
-        ),
+        )),
         widgets::divider(),
-        widgets::section_label("SETTINGS"),
-        widgets::hint(
+        widgets::section_label(t("SETTINGS")),
+        widgets::hint(t(
             "These preferences live in one TOML file. They are remembered between runs and can \
              be edited while JadeForge is closed.",
-        ),
+        )),
     ];
     children.extend(settings);
     children.push(widgets::divider());
-    children.push(widgets::section_label("APPEARANCE"));
+    children.push(widgets::section_label(t("APPEARANCE")));
     children.extend(appearance);
     children.push(widgets::divider());
-    children.push(widgets::section_label("BACKUPS"));
+    children.push(widgets::section_label(t("BACKUPS")));
     children.extend(backups);
     children.push(widgets::divider());
-    children.push(widgets::section_label("KEYBOARD SHORTCUTS"));
+    children.push(widgets::section_label(t("KEYBOARD SHORTCUTS")));
     for (action, keys) in [
         ("Save", "Ctrl+S"),
         ("Choose save folder", "Ctrl+O"),
@@ -231,7 +259,7 @@ pub fn view(
     }
 
     widgets::card(
-        "About JadeForge",
+        t("About JadeForge"),
         Some(format!("Version {}", crate::APP_VERSION)),
         children,
     )

@@ -7,6 +7,7 @@ use freya::elements::image::ImageHandle;
 use freya::prelude::*;
 
 use crate::form::Form;
+use crate::i18n::t;
 use crate::session::{FieldError, GameStatus, MessageKind, Session};
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
@@ -179,7 +180,7 @@ pub(super) fn header(
     let mut badges: Vec<Element> = Vec::new();
     if dirty {
         badges.push(crate::widgets::badge(
-            "unsaved changes",
+            t("unsaved changes"),
             theme::warning(),
             theme::background(),
         ));
@@ -193,9 +194,9 @@ pub(super) fn header(
     }
     if !dirty && form_errors.is_empty() {
         badges.push(if has_save {
-            crate::widgets::badge("all changes saved", theme::surface(), theme::dim())
+            crate::widgets::badge(t("all changes saved"), theme::surface(), theme::dim())
         } else {
-            crate::widgets::badge("no savegame open", theme::surface(), theme::dim())
+            crate::widgets::badge(t("no savegame open"), theme::surface(), theme::dim())
         });
     }
 
@@ -213,7 +214,7 @@ pub(super) fn header(
                     .color(theme::accent()),
             )
             .child(
-                crate::widgets::a11y_text("Jade Empire save editor")
+                crate::widgets::a11y_text(t("Jade Empire save editor"))
                     .font_size(theme::font::caption())
                     .color(theme::dim()),
             )
@@ -240,21 +241,21 @@ pub(super) fn header(
             .content(Content::Flex)
             .cross_align(Alignment::Center)
             .child(
-                crate::widgets::a11y_text("SAVE FOLDER")
+                crate::widgets::a11y_text(t("SAVE FOLDER"))
                     .font_size(theme::font::micro())
                     .font_weight(FontWeight::BOLD)
                     .color(theme::dim()),
             )
             .child(
                 Input::new(directory)
-                    .placeholder("Path to the Jade Empire Save folder")
+                    .placeholder(t("Path to the Jade Empire Save folder"))
                     .width(Size::flex(1.0))
                     .on_submit({
                         let scan = scan.clone();
                         move |_: String| scan()
                     }),
             )
-            .child(Button::new().outline().child("Browse…").on_press(browse))
+            .child(Button::new().outline().child(t("Browse…")).on_press(browse))
             .child(
                 Button::new()
                     .outline()
@@ -270,7 +271,7 @@ pub(super) fn header(
                 el.child(
                     Button::new()
                         .flat()
-                        .child("Cancel scan")
+                        .child(t("Cancel scan"))
                         .on_press(move |_| cancel_scan()),
                 )
             })
@@ -286,23 +287,23 @@ pub(super) fn header(
                 .content(Content::Flex)
                 .cross_align(Alignment::Center)
                 .child(
-                    crate::widgets::a11y_text("GAME DATA")
+                    crate::widgets::a11y_text(t("GAME DATA"))
                         .font_size(theme::font::micro())
                         .font_weight(FontWeight::BOLD)
                         .color(theme::dim()),
                 )
                 .child(
                     Input::new(game_directory)
-                        .placeholder("Path to the Jade Empire installation (with dialog.tlk)")
+                        .placeholder(t("Path to the Jade Empire installation (with dialog.tlk)"))
                         .width(Size::flex(1.0)),
                 )
                 .child(
                     Button::new()
                         .outline()
-                        .child("Browse…")
+                        .child(t("Browse…"))
                         .on_press(browse_game),
                 )
-                .child(Button::new().outline().child("Use").on_press(use_game))
+                .child(Button::new().outline().child(t("Use")).on_press(use_game))
                 .into_element(),
         );
     }
@@ -335,12 +336,12 @@ pub(super) fn header(
                     ),
             )
             .child(AccessibleButton::new(
-                "Copy the status message",
+                t("Copy the status message"),
                 copy_message,
                 rect()
                     .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
                     .child(
-                        crate::widgets::a11y_text("Copy")
+                        crate::widgets::a11y_text(t("Copy"))
                             .font_size(theme::font::micro())
                             .color(theme::muted()),
                     ),
@@ -370,8 +371,8 @@ fn about_button(
     mut show_review: State<bool>,
 ) -> Element {
     crate::widgets::outline_action(
-        "About JadeForge, version, settings and backups",
-        "About",
+        t("About JadeForge, version, settings and backups"),
+        t("About"),
         Action::new(move || {
             show_about.set(true);
             show_backups.set(false);
@@ -388,8 +389,8 @@ fn backups_button(
     mut show_review: State<bool>,
 ) -> Element {
     crate::widgets::outline_action(
-        "Browse the backups of the open savegame",
-        "Backups",
+        t("Browse the backups of the open savegame"),
+        t("Backups"),
         Action::new(move || {
             show_backups.set(true);
             show_about.set(false);
@@ -568,28 +569,28 @@ pub(super) fn footer(
             Button::new()
                 .flat()
                 .enabled(can_undo)
-                .child("Undo")
+                .child(t("Undo"))
                 .on_press(undo),
         )
         .child(
             Button::new()
                 .flat()
                 .enabled(can_redo)
-                .child("Redo")
+                .child(t("Redo"))
                 .on_press(redo),
         )
         .child(
             Button::new()
                 .filled()
                 .enabled(can_save)
-                .child("Save to disk")
+                .child(t("Save to disk"))
                 .on_press(save),
         )
         .child(
             Button::new()
                 .flat()
                 .enabled(can_revert)
-                .child("Revert")
+                .child(t("Revert"))
                 .on_press(revert),
         )
         .child(rect().width(Size::flex(1.0)))
@@ -613,17 +614,17 @@ pub(super) fn loading_state() -> Element {
         .spacing(theme::space::xxl())
         .padding(Gaps::new_all(theme::space::page()))
         .child(
-            crate::widgets::a11y_text("Loading savegames…")
+            crate::widgets::a11y_text(t("Loading savegames…"))
                 .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
                 .font_size(theme::font::heading())
                 .font_weight(FontWeight::BOLD)
                 .color(theme::text()),
         )
         .child(
-            crate::widgets::a11y_text(
+            crate::widgets::a11y_text(t(
                 "JadeForge is reading the save folder and the game data. \
                  The save list appears as soon as the scan finishes.",
-            )
+            ))
             .font_size(theme::font::label())
             .color(theme::muted()),
         )
@@ -673,7 +674,7 @@ pub(super) fn empty_state(
         .spacing(theme::space::md())
         .padding(Gaps::new_all(theme::space::page()))
         .child(
-            crate::widgets::a11y_text("No savegame selected")
+            crate::widgets::a11y_text(t("No savegame selected"))
                 .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
                 .font_size(theme::font::heading())
                 .font_weight(FontWeight::BOLD)
@@ -687,13 +688,13 @@ pub(super) fn empty_state(
         .child(
             Button::new()
                 .filled()
-                .child("Choose save folder")
+                .child(t("Choose save folder"))
                 .on_press(choose),
         )
         .child(
-            crate::widgets::a11y_text(
+            crate::widgets::a11y_text(t(
                 "JadeForge never writes a savegame without verifying it and keeping a backup.",
-            )
+            ))
             .font_size(theme::font::caption())
             .color(theme::dim()),
         )
@@ -760,7 +761,7 @@ pub(super) fn external_change_banner(ctx: &Ctx, sync: Rc<dyn Fn()>) -> Element {
         .child(
             Button::new()
                 .outline()
-                .child("Reload from disk")
+                .child(t("Reload from disk"))
                 .on_press(reload),
         )
         .into_element()

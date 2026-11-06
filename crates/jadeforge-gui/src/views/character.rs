@@ -4,6 +4,7 @@ use freya::prelude::*;
 
 use crate::app::Ctx;
 use crate::form::Form;
+use crate::i18n::t;
 use crate::session::{CharacterField, FieldError, format};
 use crate::theme;
 use crate::widgets;
@@ -36,8 +37,7 @@ pub fn alignment_hint(value: &str) -> String {
 pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldError]) -> Element {
     let form = ctx.form;
 
-    let identity = widgets::card(
-        "Identity",
+    let identity = widgets::card(t("Identity"),
         Some("Every valid change is applied in memory immediately".to_owned()),
         vec![
             // Three fields per row at every supported width: six narrow fields
@@ -51,15 +51,15 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
             widgets::field_grid(vec![
                 widgets::field_checked(
                     CharacterField::Gold,
-                    input(&form, CharacterField::Gold).placeholder("not set"),
+                    input(&form, CharacterField::Gold).placeholder(t("not set")),
                     widgets::field_error(errors, CharacterField::Gold),
                 ),
                 checked(&form, CharacterField::Chapter, errors),
                 checked(&form, CharacterField::Kills, errors),
             ]),
             widgets::hint(
-                "Gold is optional in the savegame: leave it empty to keep the field absent, or \
-                 enter a value to create it when you save.",
+                t("Gold is optional in the savegame: leave it empty to keep the field absent, or \
+                 enter a value to create it when you save."),
             ),
             widgets::divider(),
             widgets::field_grid(vec![
@@ -73,15 +73,14 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
                 .spacing(theme::space::md())
                 .child(quick_add(ctx, "+1 point", 1))
                 .child(quick_add(ctx, "+5 points", 5))
-                .child(widgets::hint(
-                    "Attribute points you can still spend; the field is created when the savegame does not have it.",
+                .child(widgets::hint(t("Attribute points you can still spend; the field is created when the savegame does not have it."),
                 ))
                 .into_element(),
         ],
     );
 
     let vitals = widgets::card(
-        "Vitals",
+        t("Vitals"),
         None,
         vec![
             widgets::field_grid(vec![
@@ -95,14 +94,14 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
                 checked(&form, CharacterField::Focus, errors),
                 checked(&form, CharacterField::FocusMax, errors),
             ]),
-            widgets::hint(
+            widgets::hint(t(
                 "Current values may stay below the maximum; the game fills them on rest.",
-            ),
+            )),
         ],
     );
 
     let attributes = widgets::card(
-        "Attributes",
+        t("Attributes"),
         None,
         vec![
             widgets::field_grid(vec![
@@ -120,25 +119,25 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
     );
 
     let summary = widgets::card(
-        "Current sheet",
+        t("Current sheet"),
         None,
         vec![
             widgets::label_row(
-                "Name",
+                t("Name"),
                 widgets::a11y_text(character.name.clone())
                     .font_size(theme::font::body())
                     .color(theme::text()),
             ),
             widgets::divider(),
             widgets::label_row(
-                "Level",
+                t("Level"),
                 widgets::a11y_text(character.level.to_string())
                     .font_size(theme::font::body())
                     .color(theme::text()),
             ),
             widgets::divider(),
             widgets::label_row(
-                "Time played",
+                t("Time played"),
                 widgets::a11y_text(crate::session::format::duration(character.time_played))
                     .font_size(theme::font::body())
                     .color(theme::text()),

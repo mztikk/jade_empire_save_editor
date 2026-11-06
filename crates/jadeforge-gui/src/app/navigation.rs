@@ -2,6 +2,7 @@
 
 use freya::prelude::*;
 
+use crate::i18n::t;
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
 
@@ -58,7 +59,7 @@ pub(super) fn tab_bar(
                     }),
             )
             .child(
-                crate::widgets::a11y_text(candidate.label())
+                crate::widgets::a11y_text(t(candidate.label()))
                     .font_size(theme::font::label())
                     .max_lines(1)
                     // Keep the weight constant: bold text is wider,
@@ -75,7 +76,7 @@ pub(super) fn tab_bar(
             .into_element();
         if enabled {
             buttons.push(
-                AccessibleButton::new(candidate.label(), action, content)
+                AccessibleButton::new(t(candidate.label()), action, content)
                     .role(AccessibilityRole::Tab)
                     .selected(is_active)
                     .hover_background(theme::surface_hover())

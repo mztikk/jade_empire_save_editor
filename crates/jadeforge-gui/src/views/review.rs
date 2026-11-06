@@ -15,6 +15,7 @@ use crate::theme;
 use crate::widgets;
 
 use crate::app::Ctx;
+use crate::i18n::t;
 
 /// Renders the review page.
 #[must_use]
@@ -25,11 +26,11 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: Rc<dyn Fn()>) -> E
     let invalid = ctx.session.borrow().form_errors(&form.read());
 
     let mut children: Vec<Element> = Vec::new();
-    children.push(widgets::hint(
+    children.push(widgets::hint(t(
         "Nothing is written until the write button below is pressed. The file is verified by \
          re-reading it, written atomically, and the previous file is kept as a backup. Invalid \
          character fields are not applied; the other edits are.",
-    ));
+    )));
     if !invalid.is_empty() {
         children.push(widgets::hint(format!(
             "{} character field(s) are still invalid and will not be written. Go back to fix them \
@@ -79,14 +80,14 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: Rc<dyn Fn()>) -> E
             .child(
                 Button::new()
                     .outline()
-                    .child("Back to editing")
+                    .child(t("Back to editing"))
                     .on_press(cancel),
             )
             .maybe(dirty, |el| {
                 el.child(
                     Button::new()
                         .filled()
-                        .child("Write savegame")
+                        .child(t("Write savegame"))
                         .on_press(write),
                 )
             })
@@ -94,7 +95,7 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: Rc<dyn Fn()>) -> E
     );
 
     widgets::card(
-        "Review changes",
+        t("Review changes"),
         Some(format!(
             "{} in {}",
             widgets::plural(total, "change", "changes"),

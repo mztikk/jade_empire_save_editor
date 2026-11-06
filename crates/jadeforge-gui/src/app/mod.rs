@@ -290,9 +290,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     // The user's theme and text scale are installed before any child renders.
     // The system preference is a reactive state, so flipping the OS theme while
     // the window is open repaints a System choice without a restart.
-    let saved_preferences = use_hook(|| crate::config::Config::load().ui_preferences());
-    let theme_choice = use_state(|| saved_preferences.0);
-    let text_scale = use_state(|| saved_preferences.1);
+    let saved_config = use_hook(crate::config::Config::load);
+    let theme_choice = use_state(|| saved_config.theme);
+    let text_scale = use_state(|| saved_config.normalized_text_scale());
+    let locale = use_state(|| saved_config.locale);
+    crate::i18n::install(*locale.read());
     let preferred = *Platform::get().current_window().preferred_theme.read();
     let resolved = theme::resolved_choice(*theme_choice.read(), preferred);
     theme::install(theme::UiStyle::new(resolved, *text_scale.read()));
@@ -739,7 +741,14 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     } else if show_backups_now {
         views::backups::view(&ctx, close_backups, sync.clone())
     } else if show_about_now {
-        views::about::view(&ctx, save_sort, show_about, theme_choice, text_scale)
+        views::about::view(
+            &ctx,
+            save_sort,
+            show_about,
+            theme_choice,
+            text_scale,
+            locale,
+        )
     } else {
         tab_content
     };

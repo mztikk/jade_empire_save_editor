@@ -3,6 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
+use crate::i18n::t;
 use crate::session::{ItemRow, ItemSuggestion, Section};
 use crate::theme;
 use crate::widgets::{self, AccessibleButton, Action};
@@ -38,7 +39,7 @@ pub fn view(
                 "The inventory section could not be read: {}",
                 error.message
             )),
-            None => widgets::hint("The inventory is empty."),
+            None => widgets::hint(t("The inventory is empty.")),
         });
     }
 
@@ -50,7 +51,7 @@ pub fn view(
             .children(rows)
             .into_element(),
         widgets::divider(),
-        widgets::section_label("ADD AN ITEM"),
+        widgets::section_label(t("ADD AN ITEM")),
     ];
 
     if game_ready {
@@ -146,18 +147,18 @@ pub fn view(
             }
         }
     } else if game_loading {
-        children.push(widgets::hint(
+        children.push(widgets::hint(t(
             "Reading the game data; existing items can already be edited and removed.",
-        ));
+        )));
     } else {
-        children.push(widgets::hint(
+        children.push(widgets::hint(t(
             "The game data was not found, so items can only be removed, not added. \
              The category comes from the item type stored in the savegame.",
-        ));
+        )));
     }
 
     widgets::card(
-        "Inventory",
+        t("Inventory"),
         Some(widgets::plural(items.len(), "stack", "stacks")),
         children,
     )
@@ -211,7 +212,7 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
         .width(Size::fill())
         .spacing(theme::space::sm())
         .content(Content::wrap_spacing(theme::space::sm()))
-        .child(widgets::section_label("CATEGORY"))
+        .child(widgets::section_label(t("CATEGORY")))
         .children(chips)
         .into_element()
 }

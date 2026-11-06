@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use freya::prelude::*;
 
+use crate::i18n::t;
 use crate::session::{CharacterField, FieldError};
 use crate::theme;
 
@@ -41,7 +42,7 @@ pub fn card(title: &'static str, hint: Option<String>, children: Vec<Element>) -
                 )
                 .child(rect().width(Size::flex(1.0)))
                 .child(hint.map_or_else(
-                    || a11y_text("").font_size(theme::font::caption()),
+                    || a11y_text(t("")).font_size(theme::font::caption()),
                     |hint| {
                         a11y_text(hint)
                             .font_size(theme::font::caption())
@@ -467,18 +468,18 @@ pub fn filter_input(
         .cross_align(Alignment::Center)
         .child(
             Input::new(query)
-                .placeholder(placeholder)
+                .placeholder(t(placeholder))
                 .a11y_id(a11y_id)
                 .width(Size::flex(1.0)),
         )
         .child(
             AccessibleButton::new(
-                clear_name,
+                t(clear_name),
                 clear,
                 rect()
                     .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
                     .child(
-                        a11y_text("Clear")
+                        a11y_text(t("Clear"))
                             .font_size(theme::font::micro())
                             .color(if empty { theme::dim() } else { theme::muted() }),
                     ),

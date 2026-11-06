@@ -3,6 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
+use crate::i18n::t;
 use crate::session::{GameStatus, format};
 use crate::theme;
 use crate::views::path_actions;
@@ -136,13 +137,13 @@ pub fn view(
         )
         .child(widgets::stat_grid(vec![
             widgets::stat(
-                "GOLD",
+                t("GOLD"),
                 character
                     .gold
                     .map_or_else(|| "Not set".to_owned(), format::amount),
             ),
             widgets::stat(
-                "HEALTH",
+                t("HEALTH"),
                 format!(
                     "{} / {}",
                     format::number(character.health),
@@ -150,11 +151,11 @@ pub fn view(
                 ),
             ),
             widgets::stat(
-                "CHI",
+                t("CHI"),
                 format!("{} / {}", format::number(character.chi), character.chi_max),
             ),
             widgets::stat(
-                "FOCUS",
+                t("FOCUS"),
                 format!(
                     "{} / {}",
                     format::number(character.focus),
@@ -165,7 +166,7 @@ pub fn view(
         .into_element();
 
     let quick = widgets::card(
-        "At a glance",
+        t("At a glance"),
         None,
         vec![widgets::definition_list(vec![
             (
@@ -225,9 +226,9 @@ pub fn view(
         .width(Size::fill())
         .spacing(theme::space::xs())
         .child(widgets::label_row(
-            "File",
+            t("File"),
             save_folder.clone().map_or_else(
-                || widgets::a11y_text("").into_element(),
+                || widgets::a11y_text(t("")).into_element(),
                 |folder| path_actions(ctx, &path, folder, "savegame"),
             ),
         ))
@@ -253,7 +254,7 @@ pub fn view(
             .width(Size::fill())
             .spacing(theme::space::xs())
             .child(widgets::label_row(
-                "Backup",
+                t("Backup"),
                 path_actions(ctx, &backup.display().to_string(), folder.clone(), "backup"),
             ))
             .child(
@@ -268,18 +269,18 @@ pub fn view(
                     })
                     .span(backup.display().to_string()),
             )
-            .child(widgets::hint(
+            .child(widgets::hint(t(
                 "This is the file as it was before the last save. To restore it, close JadeForge \
                  and copy the backup over save.sac.",
-            ))
+            )))
             .into_element(),
-        _ => widgets::hint(
+        _ => widgets::hint(t(
             "A timestamped backup is created next to the savegame on every save and shown here.",
-        ),
+        )),
     };
 
     let details = widgets::card(
-        "Savegame",
+        t("Savegame"),
         None,
         vec![
             path_row,
@@ -287,7 +288,7 @@ pub fn view(
             backup_row,
             widgets::divider(),
             widgets::label_row(
-                "Contents",
+                t("Contents"),
                 widgets::a11y_text(format!(
                     "{} · {}",
                     format::plural(block_count, "block", "blocks"),
@@ -329,10 +330,10 @@ pub fn view(
                 .into_element(),
             widgets::hint(game_text),
             widgets::divider(),
-            widgets::hint(
+            widgets::hint(t(
                 "JadeForge verifies every savegame by re-reading it before writing, \
                  writes it atomically and keeps a timestamped backup next to the file.",
-            ),
+            )),
         ],
     );
 

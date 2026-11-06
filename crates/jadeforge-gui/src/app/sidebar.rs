@@ -8,6 +8,7 @@ use freya::elements::image::ImageHandle;
 use freya::prelude::*;
 use jadeforge_core::Character;
 
+use crate::i18n::t;
 use crate::session::{SaveEntry, SaveSort};
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
@@ -598,7 +599,7 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                                     .font_size(theme::font::micro())
                                     .color(theme::accent())
                             } else {
-                                crate::widgets::a11y_text("").font_size(theme::font::micro())
+                                crate::widgets::a11y_text(t("")).font_size(theme::font::micro())
                             }),
                     ),
             )

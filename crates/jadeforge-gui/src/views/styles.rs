@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::app::HoverKey;
+use crate::i18n::t;
 use crate::session::{Section, Session, StyleRow, StyleSuggestion, StyleUpgrade};
 use crate::theme;
 use crate::widgets::{self, Action};
@@ -41,7 +42,7 @@ pub fn view(
                 "The styles section could not be read: {}",
                 error.message
             )),
-            None => widgets::hint("The player has not learned any fighting styles."),
+            None => widgets::hint(t("The player has not learned any fighting styles.")),
         });
     }
 
@@ -53,11 +54,11 @@ pub fn view(
             .children(rows)
             .into_element(),
         widgets::divider(),
-        widgets::section_label("LEARN A STYLE"),
-        widgets::hint(
+        widgets::section_label(t("LEARN A STYLE")),
+        widgets::hint(t(
             "A new style is stored with the same field layout as one the player already owns; \
              the game fills in the remaining data from its own tables.",
-        ),
+        )),
     ];
 
     if game_ready {
@@ -135,23 +136,23 @@ pub fn view(
             }
         }
     } else if game_loading {
-        children.push(widgets::hint(
+        children.push(widgets::hint(t(
             "Reading the game data; learned styles can already be inspected and removed.",
-        ));
+        )));
     } else if names_ready {
-        children.push(widgets::hint(
+        children.push(widgets::hint(t(
             "Bundled English names are loaded, but new styles and upgrade details still need \
              the game data. Levels, weapons and time spent come from the savegame.",
-        ));
+        )));
     } else {
-        children.push(widgets::hint(
+        children.push(widgets::hint(t(
             "The game data was not found, so style names and new styles are unavailable. \
              Levels, weapons and time spent come from the savegame.",
-        ));
+        )));
     }
 
     widgets::card(
-        "Fighting styles",
+        t("Fighting styles"),
         Some(match learnable {
             Some(learnable) => format!(
                 "{} · {}",
@@ -287,7 +288,7 @@ fn upgrade_panel(
             .into_element();
     }
 
-    rows.push(widgets::section_label("UPGRADES"));
+    rows.push(widgets::section_label(t("UPGRADES")));
     let mut family: Option<&str> = None;
     let mut chips: Vec<Element> = Vec::new();
     for upgrade in &style.upgrades {
@@ -311,8 +312,7 @@ fn upgrade_panel(
     if let Some(family) = family {
         rows.push(upgrade_row(family, chips));
     }
-    rows.push(widgets::hint(
-        "Filled gold orbs are owned; an empty ring is available. Clicking tier N buys every missing tier up to N; clicking an owned tier removes it and everything above it.",
+    rows.push(widgets::hint(t("Filled gold orbs are owned; an empty ring is available. Clicking tier N buys every missing tier up to N; clicking an owned tier removes it and everything above it."),
     ));
     // A hovered (or keyboard-focused) orb explains itself under the family:
     // name, effect, cost and what a click would do.

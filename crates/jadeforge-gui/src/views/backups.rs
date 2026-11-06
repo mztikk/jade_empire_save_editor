@@ -12,6 +12,7 @@ use std::rc::Rc;
 use freya::prelude::*;
 
 use crate::app::Ctx;
+use crate::i18n::t;
 use crate::theme;
 use crate::widgets::{self, AccessibleButton, Action};
 
@@ -30,16 +31,16 @@ pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: Rc<dyn Fn()>) -> Element {
          new backup of the file it replaces, and writes atomically. Open savegame: {open}"
     ))];
     if dirty {
-        children.push(widgets::hint(
+        children.push(widgets::hint(t(
             "Save or revert the unsaved changes before restoring a backup: a restore would \
              otherwise silently discard them.",
-        ));
+        )));
     }
     children.push(widgets::divider());
     if backups.is_empty() {
-        children.push(widgets::hint(
+        children.push(widgets::hint(t(
             "No backups were found next to this savegame. The first successful save creates one.",
-        ));
+        )));
     } else {
         let heading = format!("{}", widgets::plural(backups.len(), "backup", "backups"));
         children.push(widgets::section_label(heading.to_uppercase()));
@@ -50,14 +51,18 @@ pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: Rc<dyn Fn()>) -> Element {
     children.push(widgets::divider());
     children.push(
         widgets::outline_action(
-            "Close the backup browser",
-            "Back to editing",
+            t("Close the backup browser"),
+            t("Back to editing"),
             Action::new(move || close()),
         )
         .into_element(),
     );
 
-    widgets::card("Backups", Some("timestamps are UTC".to_owned()), children)
+    widgets::card(
+        t("Backups"),
+        Some("timestamps are UTC".to_owned()),
+        children,
+    )
 }
 
 /// One backup row with its timestamp, original path and restore action.
@@ -102,7 +107,7 @@ fn backup_row(
             )
             .corner_radius(theme::radius::control())
             .child(
-                widgets::a11y_text("Restore")
+                widgets::a11y_text(t("Restore"))
                     .font_size(theme::font::micro())
                     .color(if dirty { theme::dim() } else { theme::text() }),
             ),

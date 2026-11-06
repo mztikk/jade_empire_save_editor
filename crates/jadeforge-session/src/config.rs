@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde::{Deserialize, Serialize};
 
+use crate::locale::Locale;
 use crate::preferences::{ThemeChoice, normalize_text_scale};
 
 /// Distinguishes the temporary settings directories created by tests.
@@ -102,6 +103,9 @@ pub struct Config {
     /// Text and layout scale in percent, see [`Config::normalized_text_scale`].
     #[serde(default = "default_text_scale")]
     pub text_scale: u16,
+    /// Interface language; unsupported languages fall back to English.
+    #[serde(default)]
+    pub locale: Locale,
 }
 
 /// Default text scale in percent.
@@ -120,6 +124,7 @@ impl Default for Config {
             window: None,
             theme: ThemeChoice::default(),
             text_scale: default_text_scale(),
+            locale: Locale::default(),
         }
     }
 }
@@ -135,6 +140,13 @@ impl Config {
     #[must_use]
     pub fn normalized_text_scale(&self) -> u16 {
         normalize_text_scale(self.text_scale)
+    }
+
+    /// Persists the interface language for the next start (best effort).
+    pub fn remember_locale(locale: Locale) {
+        let mut config = Self::load();
+        config.locale = locale;
+        let _ = config.store();
     }
 
     /// Persists the theme and text scale for the next start (best effort).
@@ -375,6 +387,7 @@ mod tests {
 
             theme: ThemeChoice::Light,
             text_scale: 150,
+            locale: Locale::Pseudo,
         };
         let text = config.to_text();
         assert!(text.contains("save_dir = \"/games/Jade Empire/Save\""));
@@ -382,6 +395,7 @@ mod tests {
         assert!(text.contains("sort_descending = true"));
         assert!(text.contains("game_dir = \"/games/Jade Empire\""));
         assert!(text.contains("theme = \"light\""), "{text}");
+        assert!(text.contains("locale = \"pseudo\""), "{text}");
         assert_eq!(Config::parse(&text), config);
     }
 
@@ -478,6 +492,7 @@ mod tests {
             window: None,
             theme: ThemeChoice::Dark,
             text_scale: 100,
+            locale: Locale::English,
         };
         config.store().expect("store settings");
         assert_eq!(Config::load(), config);
@@ -523,6 +538,7 @@ mod tests {
             window: None,
             theme: ThemeChoice::Dark,
             text_scale: 100,
+            locale: Locale::English,
         };
         config.store().expect("store");
         let parent = path.parent().expect("parent");
@@ -551,6 +567,7 @@ mod tests {
             window: None,
             theme: ThemeChoice::Dark,
             text_scale: 100,
+            locale: Locale::English,
         };
         good.store().expect("store good settings");
         let before = std::fs::read(&path).expect("read config");
@@ -563,6 +580,7 @@ mod tests {
             window: None,
             theme: ThemeChoice::Dark,
             text_scale: 100,
+            locale: Locale::English,
         };
         assert!(bad.store().is_err());
         assert_eq!(std::fs::read(&path).expect("read config"), before);

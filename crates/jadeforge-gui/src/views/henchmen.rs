@@ -3,6 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
+use crate::i18n::t;
 use crate::session::{HenchRow, Section};
 use crate::theme;
 use crate::widgets::{self, Action};
@@ -23,14 +24,13 @@ pub fn view(
                 "The companions section could not be read: {}",
                 error.message
             )),
-            None => widgets::hint(
-                "This savegame has no companions yet. They appear here once the story introduces them.",
+            None => widgets::hint(t("This savegame has no companions yet. They appear here once the story introduces them."),
             ),
         });
     }
 
     widgets::card(
-        "Companions",
+        t("Companions"),
         Some(widgets::plural(
             henchmen.len(),
             "companion known",
@@ -44,10 +44,10 @@ pub fn view(
                 .children(rows)
                 .into_element(),
             widgets::divider(),
-            widgets::hint(
+            widgets::hint(t(
                 "Companion levels follow the player through the game; raising them here only \
                  changes what the companion starts with.",
-            ),
+            )),
         ],
     )
 }
@@ -144,11 +144,11 @@ fn henchman_row(
                 ),
         )
         .child(if available {
-            widgets::badge("available", theme::surface_active(), theme::jade())
+            widgets::badge(t("available"), theme::surface_active(), theme::jade())
         } else {
             // Hidden is a resting state, not a failure: a calmer colour than
             // the danger red that made an unavailable companion look broken.
-            widgets::badge("hidden", theme::surface(), theme::muted())
+            widgets::badge(t("hidden"), theme::surface(), theme::muted())
         })
         .child(widgets::row_action(
             format!("Decrease {name} level"),

@@ -10,6 +10,7 @@ pub mod clipboard;
 pub mod dialog;
 pub mod form;
 pub mod geometry;
+pub mod i18n;
 pub mod paths;
 pub mod perf;
 pub mod renderer;
@@ -19,7 +20,7 @@ pub mod widgets;
 
 pub use app::{app, app_with_directory};
 pub use jadeforge_session::{
-    CharacterForm, GameStatus, Message, MessageKind, SaveEntry, Session, ThemeChoice,
+    CharacterForm, GameStatus, Locale, Message, MessageKind, SaveEntry, Session, ThemeChoice,
     default_save_dir, normalize_text_scale,
 };
 pub use jadeforge_session::{config, preferences, session};

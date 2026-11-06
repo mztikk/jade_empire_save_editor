@@ -6,6 +6,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
+use crate::i18n::t;
 use crate::session::{GemRow, GemSuggestion, Section};
 use crate::theme;
 use crate::widgets::{self, Action};
@@ -52,11 +53,11 @@ pub fn view(
             error.message
         ))]
     } else if amulet.is_none() {
-        vec![widgets::hint(
+        vec![widgets::hint(t(
             "The amulet is unlocked early in the story; it has no sockets before that.",
-        )]
+        ))]
     } else if amulet_gems.is_empty() {
-        vec![widgets::hint("No gems socketed into the amulet.")]
+        vec![widgets::hint(t("No gems socketed into the amulet."))]
     } else {
         amulet_gems
             .into_iter()
@@ -69,7 +70,7 @@ pub fn view(
             error.message
         ))]
     } else if inventory.is_empty() {
-        vec![widgets::hint("No gems carried in the inventory.")]
+        vec![widgets::hint(t("No gems carried in the inventory."))]
     } else {
         inventory
             .into_iter()
@@ -142,7 +143,7 @@ pub fn view(
         add_children.push(widgets::picker_list("Gems you can add", picker_rows));
     }
     let add_card = widgets::card(
-        "Add a gem",
+        t("Add a gem"),
         Some("From the game data".to_owned()),
         add_children,
     );
@@ -151,8 +152,7 @@ pub fn view(
         .vertical()
         .width(Size::fill())
         .spacing(theme::space::xxl())
-        .child(widgets::card(
-            "Amulet",
+        .child(widgets::card(t("Amulet"),
             Some(amulet_title),
             {
                 let mut children = vec![rect()
@@ -174,8 +174,7 @@ pub fn view(
         // The carried gems come before the long picker: the owned list is what
         // the player looks at first, and the 95-row add list would otherwise
         // push the inventory card below the fold.
-        .child(widgets::card(
-            "Inventory",
+        .child(widgets::card(t("Inventory"),
             Some(widgets::plural(carried, "carried gem", "carried gems")),
             vec![
                 rect()
@@ -184,8 +183,7 @@ pub fn view(
                     .spacing(theme::space::xs())
                     .children(inventory_rows)
                     .into_element(),
-                widgets::hint(
-                    "Moving a gem keeps its effects; JadeForge only changes which list references it.",
+                widgets::hint(t("Moving a gem keeps its effects; JadeForge only changes which list references it."),
                 ),
             ],
         ))
