@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-06
+
 ### Added
 
 - Repository rules for secrets, unnecessary comments, lint suppressions, the
@@ -41,10 +43,8 @@ All notable changes are documented here. The format follows
 - The savegame and overview placeholders use readable text instead of an em
   dash, and interactive controls use `on_press` so keyboard activation stays
   available.
-
-### Breaking
-
 - Workspace MSRV is 1.99 (was 1.88), matching Freya 0.5.0's pinned toolchain.
+  Prebuilt binaries are unaffected; source builds need Rust 1.99 or newer.
   Updated `Cargo.toml`, `README.md`, `AGENTS.md`, `ci/README.md` and the CI MSRV
   job together.
 
