@@ -313,7 +313,7 @@ cargo nextest run --workspace          # unit, synthetic, real savegame and head
 cargo test --workspace --doc           # doctests, which nextest does not run
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
-just live                              # windowed UI tests; ask first (rule 13)
+JADEFORGE_LIVE_APPROVED=1 just live    # windowed UI tests; ask first (rule 13)
 ```
 
 A branch is ready for review only when the worktree is clean and `just finish`
@@ -358,8 +358,8 @@ they work on CI machines without a display or the retail game.
 The windowed suite is the second feedback loop: it launches the real application
 through `freya-winit`, opens a real Wayland window and drives it with real
 compositor input on KDE (or with events through the windowed plugin handle on
-other compositors). It is opt-in with `just live`, so normal test runs never open
-windows. Run it from a real Wayland desktop session, or from a VM with a real
+other compositors). It is opt-in with `JADEFORGE_LIVE_APPROVED=1 just live`, so
+normal test runs never open windows. Run it from a real Wayland desktop session, or from a VM with a real
 desktop; it is not part of CI. **Never run it without explicit permission**
 ([AGENTS.md](AGENTS.md) rule 13), and only when a headless test cannot cover the
 case or the bug is in the real window. See

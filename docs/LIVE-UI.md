@@ -15,10 +15,13 @@ It does not replace the headless suite; it deliberately covers only the
 window-level path.
 
 > **Hard rule: never run the windowed suite without explicit permission.**
-> `just live` and every `JADEFORGE_LIVE=1` run open real windows, take focus,
-> move the real pointer and type on the machine's desktop. Ask the user first,
-> explain why the headless suite cannot cover the case, and wait for their
-> answer; a general request to run the tests is not permission. Only run it when
+> `JADEFORGE_LIVE_APPROVED=1 just live` and every `JADEFORGE_LIVE=1` run open
+> real windows, take focus, move the real pointer and type on the machine's
+> desktop. The approval variable is a second gate: plain `just live` refuses,
+> and the test binary fails before opening a window unless
+> `JADEFORGE_LIVE_APPROVED=1` is also set. Ask the user first, explain why the
+> headless suite cannot cover the case, and wait for their answer; a general
+> request to run the tests is not permission. Only run it when
 > a headless GUI test genuinely cannot reproduce or verify the behaviour (window
 > creation, compositor input, focus, presentation, HiDPI or window-manager
 > interaction), or when the bug is in the actual windowed GUI or a mismatch
@@ -48,17 +51,19 @@ hand-over. When it is out of scope, say why the headless suite is sufficient.
 ## Running it
 
 ```sh
-just live
+JADEFORGE_LIVE_APPROVED=1 just live
 # or
-JADEFORGE_LIVE=1 cargo test -p jadeforge-gui --test live -- --nocapture
+JADEFORGE_LIVE=1 JADEFORGE_LIVE_APPROVED=1 \
+  cargo test -p jadeforge-gui --test live -- --nocapture
 ```
 
 The commands above are only for use after the explicit permission described in
-the hard rule. The suite is opt-in: without `JADEFORGE_LIVE=1` the test binary
-prints a skip message and exits successfully. That keeps `cargo nextest run
---workspace` from opening windows on a developer's desktop. It requires a
-Wayland session (`WAYLAND_DISPLAY`); `JADEFORGE_LIVE_REQUIRE=1` turns a missing
-display into a failure instead of a skip.
+the hard rule. Plain `just live` is refused, and the test binary also refuses a
+run without `JADEFORGE_LIVE_APPROVED=1`; without `JADEFORGE_LIVE=1` it prints a
+skip message and exits successfully. That keeps `cargo nextest run --workspace`
+from opening windows on a developer's desktop. It requires a Wayland session
+(`WAYLAND_DISPLAY`); `JADEFORGE_LIVE_REQUIRE=1` turns a missing display into a
+failure instead of a skip.
 
 The test windows appear on the real desktop and take focus. They are activated,
 clicked and typed into as part of the scenarios. Run the suite when that is
@@ -105,7 +110,8 @@ not exercise compositor input, which is why the KDE path uses fake input.
 
 A winit event loop must be created on the main thread, and a process can only
 safely run one. The test binary is therefore its own orchestrator
-(`harness = false`): with `JADEFORGE_LIVE=1` it builds a synthetic savegame and
+(`harness = false`): with `JADEFORGE_LIVE=1` and `JADEFORGE_LIVE_APPROVED=1` it
+builds a synthetic savegame and
 game installation, then re-executes itself once per scenario with
 `JADEFORGE_LIVE_SCENARIO` set. Each child launches one window, runs one
 scenario, closes the window through the plugin (bypassing the unsaved-changes

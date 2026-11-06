@@ -58,7 +58,7 @@ the variables did not reach the tests).
 4. Classify the window-path risk. A major Freya/winit/window-stack upgrade, a
    window configuration/close/focus/input/presentation change, a live-probe
    change, or a bug that only reproduces in a real window needs explicit
-   permission to run `just live`. Ask before `just finish`, wait for the answer,
+   permission to run `JADEFORGE_LIVE_APPROVED=1 just live`. Ask before `just finish`, wait for the answer,
    and record the result. View, layout, text, theme, form, session and core
    changes covered by the headless suite and snapshots do not. Compiling the
    live target is not a substitute for running it; a window-path change that

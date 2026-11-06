@@ -46,8 +46,8 @@ The same commands are available through `just` (see the `justfile`): `just
 check` runs formatting, clippy and the tests, `just setup` installs the tracked
 git hooks once per clone, `just start <type>/<slug>` creates a task branch from
 the latest `origin/main`, `just finish` is the clean-hand-over guard, `just live`
-runs the opt-in windowed UI suite against the real Wayland desktop (only with
-explicit permission; see rule 13), `just snapshot …` renders the UI, and `just
+runs the opt-in windowed UI suite against the real Wayland desktop (approval-
+gated and only with explicit permission; see rule 13), `just snapshot …` renders the UI, and `just
 publish` builds the fat-LTO distribution binaries, stages checksums and
 third-party notices, and `just checksums` regenerates `dist/SHA256SUMS`.
 `just publish-linux` builds the SteamOS-compatible Linux binaries (glibc 2.35) in
@@ -154,11 +154,14 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
     user to install or provide it. Normal Cargo dependency resolution into the
     host's cache is fine; bootstrapping a tool that should already exist is not.
 13. **Never run the windowed UI suite without explicit permission.**
-    `just live`, `cargo test -p jadeforge-gui --test live` and anything with
+    `JADEFORGE_LIVE_APPROVED=1 just live`,
+    `cargo test -p jadeforge-gui --test live` and anything with
     `JADEFORGE_LIVE=1` open real windows, take focus, move the real pointer and
-    type on the user's desktop. Ask the user first, explain why the headless
-    suite cannot cover the case, and wait for their answer; a general request to
-    run the tests is not permission. Only run it when a headless GUI test
+    type on the user's desktop. Plain `just live` and a run without
+    `JADEFORGE_LIVE_APPROVED=1` are refused by both the recipe and the test
+    binary; that gate is not permission. Ask the user first, explain why the
+    headless suite cannot cover the case, and wait for their answer; a general
+    request to run the tests is not permission. Only run it when a headless GUI test
     genuinely cannot reproduce or verify the behaviour (window creation,
     compositor input, focus, presentation, HiDPI or window-manager interaction),
     or when the bug is in the actual windowed GUI or a mismatch between the
@@ -182,6 +185,10 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
     file, never in source, tests, fixtures, examples, docs or commit messages.
     CI reads them from repository secrets. A test that needs a credential-shaped
     value uses an obvious placeholder, never a real-looking secret.
+17. **Never interpolate prose into a double-quoted shell argument.** Backticks
+    and `$()` are command substitution, not text. Pass multi-line prose or
+    Markdown through a file (`gh pr create --body-file`, a heredoc) or single
+    quotes. Never put backticked commands in a double-quoted argument.
 
 ## Code style
 
@@ -347,7 +354,8 @@ documentation, not ground truth: verify against the game files where possible).
   the window path works. For a major Freya/winit/window-stack upgrade, a window
   creation/configuration/close/focus/input/presentation change, a live-probe
   change, or a bug that only reproduces in a real window, ask for explicit
-  permission to run `just live` before `just finish` and wait for the answer.
+  permission to run `JADEFORGE_LIVE_APPROVED=1 just live` before `just finish`
+  and wait for the answer.
   View, layout, text, theme, form, session and core changes covered by the
   headless suite and snapshots do not need it. If unsure, ask. If a window-path
   change cannot be run (no permission or no display), say so explicitly in the
