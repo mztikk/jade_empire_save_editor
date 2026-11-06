@@ -9,7 +9,7 @@ use std::rc::Rc;
 use crate::app::HoverKey;
 use crate::session::{Section, Session, StyleRow, StyleSuggestion, StyleUpgrade};
 use crate::theme;
-use crate::widgets;
+use crate::widgets::{self, Action};
 
 /// Renders the styles tab.
 #[allow(
@@ -27,11 +27,12 @@ pub fn view(
     matching: usize,
     expanded: State<Option<u16>>,
     hovered: State<Option<crate::app::HoverKey>>,
+    filter_id: AccessibilityId,
     show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for style in styles {
-        rows.push(style_row(ctx, style, expanded, hovered));
+        rows.push(style_row(ctx, style, expanded, hovered, game_ready));
     }
     if rows.is_empty() {
         rows.push(match ctx.session.borrow().section_error(Section::Styles) {
@@ -63,6 +64,7 @@ pub fn view(
             query,
             "Filter the style list, or leave empty to browse it",
             "Clear the style filter",
+            filter_id,
         ));
         if matches.is_empty() {
             children.push(widgets::hint(if query.read().trim().is_empty() {
@@ -146,6 +148,7 @@ fn style_row(
     style: &StyleRow,
     expanded: State<Option<u16>>,
     mut hovered: State<Option<crate::app::HoverKey>>,
+    game_ready: bool,
 ) -> Element {
     let key = crate::app::HoverKey::Style(style.struct_index);
     let is_hovered = *hovered.read() == Some(key);
@@ -154,7 +157,7 @@ fn style_row(
     let remove = {
         let ctx = ctx.clone();
         let name = style.name.clone();
-        move |_| {
+        Action::new(move || {
             if !crate::dialog::confirm(
                 "Remove style?",
                 &format!(
@@ -164,7 +167,7 @@ fn style_row(
                 return;
             }
             ctx.run(|session| session.remove_style(index));
-        }
+        })
     };
 
     let subtitle =
@@ -215,16 +218,14 @@ fn style_row(
                         .text_align(TextAlign::Center)
                         .color(theme::ACCENT),
                 )
-                .child(
-                    Button::new()
-                        .compact()
-                        .flat()
-                        .child("Remove")
-                        .on_press(remove),
-                ),
+                .child(widgets::row_action(
+                    format!("Remove {} style", style.name),
+                    "Remove",
+                    remove,
+                )),
         )
         .maybe_child(if is_expanded {
-            Some(upgrade_panel(ctx, style, hovered))
+            Some(upgrade_panel(ctx, style, hovered, game_ready))
         } else {
             None
         })
@@ -236,6 +237,7 @@ fn upgrade_panel(
     ctx: &Ctx,
     style: &StyleRow,
     hovered: State<Option<crate::app::HoverKey>>,
+    game_ready: bool,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     if let Some(details) = widgets::details(style.description.as_deref()) {
@@ -245,12 +247,8 @@ fn upgrade_panel(
         rows.push(widgets::hint(fields));
     }
     if style.upgrades.is_empty() {
-        if style.description.is_none() {
-            rows.push(widgets::hint(if style.label.is_empty() {
-                "No upgrade data available: install the game data next to the savegames."
-            } else {
-                "This style has no level-up table, so its upgrades are read-only."
-            }));
+        if let Some(notice) = upgrade_notice(game_ready) {
+            rows.push(widgets::hint(notice));
         }
         return rect()
             .vertical()
@@ -291,8 +289,16 @@ fn upgrade_panel(
         rows.push(upgrade_row(family, chips));
     }
     rows.push(widgets::hint(
-        "Orbs are the level-up options, in order; gold means owned.",
+        "Filled gold orbs are owned; an empty ring is available. Clicking tier N buys every          missing tier up to N; clicking an owned tier removes it and everything above it.",
     ));
+    // A hovered (or keyboard-focused) orb explains itself under the family:
+    // name, effect, cost and what a click would do.
+    if let Some(crate::app::HoverKey::Orb(struct_index, slot)) = *hovered.read()
+        && struct_index == style.struct_index
+        && let Some(upgrade) = style.upgrades.iter().find(|upgrade| upgrade.slot == slot)
+    {
+        rows.push(orb_detail(style, upgrade));
+    }
     rect()
         .vertical()
         .width(Size::fill())
@@ -403,13 +409,7 @@ impl Component for UpgradeOrb {
             .a11y_id(a11y_id)
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::Button)
-            .a11y_alt(format!(
-                "{}, {} tier {}, {}",
-                self.style_name,
-                family_title(&self.upgrade.family),
-                self.upgrade.tier,
-                if taken { "owned" } else { "available" }
-            ))
+            .a11y_alt(orb_accessible_name(&self.style_name, &self.upgrade))
             .a11y_builder(move |node| {
                 node.set_toggled(if taken {
                     accesskit::Toggled::True
@@ -454,6 +454,85 @@ fn upgrade_chip(
     }
     .key((struct_index, upgrade.slot))
     .into_element()
+}
+
+/// Notice shown instead of the orb rows when a style has no upgrade slots.
+///
+/// A style without a `<Style>LV.2da` table is read-only by design; the notice
+/// says so explicitly instead of blaming missing game data.
+#[must_use]
+pub fn upgrade_notice(game_ready: bool) -> Option<&'static str> {
+    Some(if game_ready {
+        "This style has no level-up table in the game data, so its upgrades are read-only here."
+    } else {
+        "Upgrade details need the game data: point JadeForge at the game installation to see them."
+    })
+}
+
+/// Full accessible description of one upgrade orb.
+fn orb_accessible_name(style_name: &str, upgrade: &StyleUpgrade) -> String {
+    let effect = if upgrade.effect.is_empty() {
+        String::new()
+    } else {
+        format!(", {}", upgrade.effect)
+    };
+    if upgrade.taken {
+        format!(
+            "{style_name}, {}, tier {}, {}, owned: removes this tier and every tier above it",
+            family_title(&upgrade.family),
+            upgrade.tier,
+            upgrade.name
+        )
+    } else {
+        format!(
+            "{style_name}, {}, tier {}, {}{effect}, buys every missing tier up to this one",
+            family_title(&upgrade.family),
+            upgrade.tier,
+            upgrade.name
+        )
+    }
+}
+
+/// The detail line shown under a family while an orb is hovered or focused.
+fn orb_detail(style: &StyleRow, upgrade: &StyleUpgrade) -> Element {
+    let action = if upgrade.taken {
+        "owned: clicking removes this tier and every tier above it"
+    } else {
+        "available: clicking buys every missing tier up to this one"
+    };
+    let effect = if upgrade.effect.is_empty() {
+        "no listed effect".to_owned()
+    } else {
+        upgrade.effect.clone()
+    };
+    let cost = if upgrade.cost == 0 {
+        "no style point cost".to_owned()
+    } else {
+        widgets::plural(usize::from(upgrade.cost), "style point", "style points")
+    };
+    rect()
+        .horizontal()
+        .width(Size::fill())
+        .key((style.struct_index, upgrade.slot))
+        .spacing(theme::space::MD)
+        .content(Content::wrap_spacing(theme::space::MD))
+        .padding(Gaps::new_symmetric(theme::space::XS, theme::space::NONE))
+        .child(
+            widgets::a11y_text(format!(
+                "{} tier {}: {}",
+                family_title(&upgrade.family),
+                upgrade.tier,
+                upgrade.name
+            ))
+            .font_size(theme::font::CAPTION)
+            .color(theme::TEXT),
+        )
+        .child(
+            widgets::a11y_text(format!("{effect} · {cost} · {action}"))
+                .font_size(theme::font::MICRO)
+                .color(theme::MUTED),
+        )
+        .into_element()
 }
 
 /// Human readable family name for the upgrade rows.
@@ -548,7 +627,7 @@ fn learn_row(
     let learn = {
         let ctx = ctx.clone();
         let style_id = suggestion.style_id;
-        move |_| ctx.run(|session| session.add_style(style_id))
+        Action::new(move || ctx.run(|session| session.add_style(style_id)))
     };
     let subtitle = style_subtitle(suggestion.style_id, &suggestion.label)
         .unwrap_or_else(|| format!("#{}", suggestion.style_id));
@@ -591,13 +670,11 @@ fn learn_row(
                     theme::SURFACE_ACTIVE,
                     style_badge_color(suggestion.kind),
                 ))
-                .child(
-                    Button::new()
-                        .compact()
-                        .outline()
-                        .child("Learn")
-                        .on_press(learn),
-                ),
+                .child(widgets::row_action(
+                    format!("Learn {} style", suggestion.name),
+                    "Learn",
+                    learn,
+                )),
         )
         .maybe_child(if is_expanded {
             widgets::details(suggestion.description.as_deref())
@@ -627,6 +704,14 @@ mod tests {
             mask: 0,
             upgrades: Vec::new(),
         }
+    }
+
+    #[test]
+    fn a_style_without_a_slot_table_says_it_is_read_only() {
+        let notice = upgrade_notice(true).expect("a notice");
+        assert!(notice.contains("read-only"), "{notice}");
+        let missing = upgrade_notice(false).expect("a notice");
+        assert!(missing.contains("game installation"), "{missing}");
     }
 
     #[test]

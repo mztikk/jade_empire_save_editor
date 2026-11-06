@@ -341,7 +341,7 @@ where
         let id = self.id;
         let is_expanded = *expanded.read() == Some(id);
         let accessible = format!(
-            "{}, {}, {}",
+            "{}, {}, {}, Details",
             self.name,
             self.subtitle,
             if is_expanded { "expanded" } else { "collapsed" }
@@ -372,13 +372,37 @@ where
                 let current = *expanded.read();
                 *expanded.write() = if current == Some(id) { None } else { Some(id) };
             })
-            .child(with_tooltip(self.name.clone(), {
-                a11y_text(self.name.clone())
-                    .font_size(self.font_size)
-                    .max_lines(1)
-                    .text_overflow(TextOverflow::Ellipsis)
-                    .color(theme::TEXT)
-            }))
+            .child(
+                rect()
+                    .horizontal()
+                    .width(Size::fill())
+                    .spacing(theme::space::SM)
+                    .content(Content::Flex)
+                    .cross_align(Alignment::Center)
+                    .child(
+                        rect()
+                            .width(Size::flex(1.0))
+                            .child(with_tooltip(self.name.clone(), {
+                                a11y_text(self.name.clone())
+                                    .font_size(self.font_size)
+                                    .max_lines(1)
+                                    .text_overflow(TextOverflow::Ellipsis)
+                                    .color(theme::TEXT)
+                            })),
+                    )
+                    // The chevron is the visible disclosure affordance; its
+                    // slot is reserved on every row so the name never jumps.
+                    .child(
+                        rect()
+                            .width(Size::px(theme::layout::CHEVRON_WIDTH))
+                            .center()
+                            .child(
+                                a11y_text(if is_expanded { "▾" } else { "▸" })
+                                    .font_size(theme::font::CAPTION)
+                                    .color(theme::ACCENT),
+                            ),
+                    ),
+            )
             .child(
                 a11y_text(self.subtitle.clone())
                     .font_size(theme::font::MICRO)
@@ -432,6 +456,7 @@ pub fn filter_input(
     query: State<String>,
     placeholder: &'static str,
     clear_name: &'static str,
+    a11y_id: AccessibilityId,
 ) -> Element {
     let mut clear_query = query;
     let clear = Action::new(move || {
@@ -447,6 +472,7 @@ pub fn filter_input(
         .child(
             Input::new(query)
                 .placeholder(placeholder)
+                .a11y_id(a11y_id)
                 .width(Size::flex(1.0)),
         )
         .child(
@@ -506,6 +532,8 @@ pub struct AccessibleButton {
     role: AccessibilityRole,
     selected: bool,
     focusable: bool,
+    hover_background: Option<Color>,
+    key_action: Option<EventHandler<Event<KeyboardEventData>>>,
     key: DiffKey,
 }
 
@@ -520,6 +548,8 @@ impl AccessibleButton {
             role: AccessibilityRole::Button,
             selected: false,
             focusable: true,
+            hover_background: None,
+            key_action: None,
             key: DiffKey::None,
         }
     }
@@ -552,6 +582,20 @@ impl AccessibleButton {
         self.focusable = focusable;
         self
     }
+
+    /// Paints a hover background, for controls that would otherwise be flat.
+    #[must_use]
+    pub fn hover_background(mut self, color: Color) -> Self {
+        self.hover_background = Some(color);
+        self
+    }
+
+    /// Handles keys while the button has keyboard focus.
+    #[must_use]
+    pub fn on_key(mut self, handler: impl Into<EventHandler<Event<KeyboardEventData>>>) -> Self {
+        self.key_action = Some(handler.into());
+        self
+    }
 }
 
 impl KeyExt for AccessibleButton {
@@ -567,6 +611,9 @@ impl Component for AccessibleButton {
         let focused = focus() == Focus::Keyboard;
         let action = self.action.clone();
         let selected = self.selected;
+        let mut hovered = use_state(|| false);
+        let hover_background = self.hover_background;
+        let key_action = self.key_action.clone();
         let button = rect()
             .a11y_id(a11y_id)
             .a11y_focusable(self.focusable)
@@ -590,9 +637,51 @@ impl Component for AccessibleButton {
                     .width(theme::stroke::FOCUS),
             )
             .child(self.content.clone())
-            .maybe(self.fill_width, |el| el.width(Size::fill()));
+            .maybe(self.fill_width, |el| el.width(Size::fill()))
+            .maybe(hover_background.is_some(), |el| {
+                el.corner_radius(theme::radius::SMALL).background(
+                    hover_background
+                        .filter(|_| *hovered.read())
+                        .unwrap_or(Color::TRANSPARENT),
+                )
+            })
+            .maybe(hover_background.is_some(), |el| {
+                el.on_pointer_enter(move |_| hovered.set(true))
+                    .on_pointer_leave(move |_| hovered.set(false))
+            })
+            .maybe(key_action.is_some(), |el| {
+                el.on_key_down(move |event| {
+                    if let Some(ref handler) = key_action {
+                        handler.call(event);
+                    }
+                })
+            });
         button.into_element()
     }
+}
+
+/// A compact row action with a contextual accessible name.
+///
+/// The visible text stays short (`Remove`, `+`), while assistive technology
+/// hears what is being removed or increased. The hover background matches the
+/// flat buttons it replaces.
+pub fn row_action(
+    accessible: impl Into<String>,
+    text: &'static str,
+    action: Action,
+) -> AccessibleButton {
+    AccessibleButton::new(
+        accessible,
+        action,
+        rect()
+            .padding(Gaps::new_symmetric(theme::space::XS, theme::space::SM))
+            .child(
+                a11y_text(text)
+                    .font_size(theme::font::MICRO)
+                    .color(theme::MUTED),
+            ),
+    )
+    .hover_background(theme::SURFACE_HOVER)
 }
 
 #[cfg(test)]

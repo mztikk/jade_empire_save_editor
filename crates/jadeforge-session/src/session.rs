@@ -20,8 +20,8 @@ mod model;
 pub use error::SessionError;
 pub use form::{CharacterField, CharacterForm, FieldError, FormError};
 pub use model::{
-    GameStatus, GemRow, HenchRow, ItemRow, ItemSuggestion, Message, MessageKind, Preview,
-    SaveEntry, Section, SectionError, StyleRow, StyleSuggestion, StyleUpgrade,
+    GameStatus, GemRow, GemSuggestion, HenchRow, ItemRow, ItemSuggestion, Message, MessageKind,
+    Preview, SaveEntry, Section, SectionError, StyleRow, StyleSuggestion, StyleUpgrade,
 };
 
 /// Folder to start with: the environment override, the last folder used, or
@@ -109,6 +109,26 @@ pub mod format {
         } else {
             format!("{value:.0} B")
         }
+    }
+
+    /// Formats a file modification time as `YYYY-MM-DD HH:MM` in UTC.
+    ///
+    /// The editor has no time zone database; the savegame list only needs a
+    /// stable, sortable stamp, so the timestamp is documented as UTC.
+    #[must_use]
+    pub fn timestamp(time: std::time::SystemTime) -> String {
+        let Ok(duration) = time.duration_since(std::time::UNIX_EPOCH) else {
+            return "unknown".to_owned();
+        };
+        let seconds = duration.as_secs();
+        let days = (seconds / 86_400) as i64;
+        let rest = seconds % 86_400;
+        let (year, month, day) = super::civil_from_days(days);
+        format!(
+            "{year:04}-{month:02}-{day:02} {:02}:{:02} UTC",
+            rest / 3600,
+            (rest % 3600) / 60
+        )
     }
 
     /// Formats a large number with thin separators.
@@ -213,6 +233,28 @@ pub fn natural_order(left: &str, right: &str) -> std::cmp::Ordering {
         right_index += 1;
     }
     (left.len() - left_index).cmp(&(right.len() - right_index))
+}
+
+/// Converts days since 1970-01-01 to a civil calendar date.
+///
+/// Howard Hinnant's `civil_from_days` algorithm, valid for the whole range of
+/// file timestamps before the year 10000.
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let days = days + 719_468;
+    let era = if days >= 0 { days } else { days - 146_096 } / 146_097;
+    let day_of_era = days - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_piece = (5 * day_of_year + 2) / 153;
+    let day = (day_of_year - (153 * month_piece + 2) / 5 + 1) as u32;
+    let month = if month_piece < 10 {
+        month_piece + 3
+    } else {
+        month_piece - 9
+    } as u32;
+    (year + i64::from(month <= 2), month, day)
 }
 
 fn run_end(text: &[char], start: usize) -> usize {
@@ -1226,6 +1268,39 @@ impl Session {
         self.refresh_dirty();
     }
 
+    /// Sets a stack size directly, so a large count is one edit instead of
+    /// hundreds of stepper clicks.
+    pub fn set_item_count(&mut self, struct_index: usize, count: u8) {
+        let Some(name) = self
+            .items
+            .iter()
+            .find(|item| item.struct_index == struct_index)
+            .map(|item| item.name.clone())
+        else {
+            return;
+        };
+        if count == 0 {
+            self.message = Message::info("A stack needs at least one item; use Remove instead.");
+            return;
+        }
+        let Some(save) = self.save.as_mut() else {
+            return;
+        };
+        match save.set_item_count(struct_index, count) {
+            Ok(()) => {
+                if let Some(item) = Rc::make_mut(&mut self.items)
+                    .iter_mut()
+                    .find(|item| item.struct_index == struct_index)
+                {
+                    item.count = count;
+                }
+                self.message = Message::success(format!("{name}: {count} in the stack."));
+            }
+            Err(error) => self.message = Message::error(format!("Cannot change item: {error}")),
+        }
+        self.refresh_dirty();
+    }
+
     /// Adds an item stack by its `items.2da` row.
     pub fn add_item(&mut self, item_id: u16) -> Result<(), SessionError> {
         let bundled = self.bundled_item(item_id);
@@ -1482,16 +1557,10 @@ impl Session {
                     .effects
                     .iter()
                     .map(|effect| {
-                        let name = self
-                            .game
-                            .as_ref()
-                            .and_then(|game| game.effect_name(u32::try_from(effect.kind).ok()?))
-                            .map_or_else(|| format!("Effect {}", effect.kind), ToOwned::to_owned);
-                        if effect.duration > 0.0 {
-                            format!("{:+} {} ({:.0}s)", effect.value, name, effect.duration)
-                        } else {
-                            format!("{:+} {}", effect.value, name)
-                        }
+                        self.game.as_ref().map_or_else(
+                            || format!("{:+} effect {}", effect.value, effect.kind),
+                            |game| describe_effect(game, effect),
+                        )
                     })
                     .collect();
                 let name = info
@@ -1516,13 +1585,21 @@ impl Session {
         (rows, warnings)
     }
 
-    /// Gems that can be added, as `(item id, name, effect count)`.
+    /// Gems that can be added, with the effect lines shown before adding one.
     #[must_use]
-    pub fn available_gems(&self) -> Vec<(u16, String, usize)> {
+    pub fn available_gems(&self) -> Vec<GemSuggestion> {
         self.game.as_ref().map_or_else(Vec::new, |game| {
             game.gems()
                 .iter()
-                .map(|gem| (gem.item_id, gem.name.clone(), gem.effects.len()))
+                .map(|gem| GemSuggestion {
+                    item_id: gem.item_id,
+                    name: gem.name.clone(),
+                    effects: gem
+                        .effects
+                        .iter()
+                        .map(|(kind, value)| describe_gem_effect(game, *kind, *value, gem.duration))
+                        .collect(),
+                })
                 .collect()
         })
     }
@@ -1784,6 +1861,31 @@ impl Session {
     }
 }
 
+/// Formats one predefined gem effect as `+2 Body` or `+1 Fire (5s)`.
+fn describe_gem_effect(game: &GameData, kind: u32, value: u32, duration: f32) -> String {
+    let name = game
+        .effect_name(kind)
+        .map_or_else(|| format!("Effect {kind}"), ToOwned::to_owned);
+    let signed = i64::from(value);
+    if duration > 0.0 {
+        format!("{signed:+} {name} ({duration:.0}s)")
+    } else {
+        format!("{signed:+} {name}")
+    }
+}
+
+/// Formats one gem effect as `+2 Body` or `-1 Fire (-5s)`.
+fn describe_effect(game: &GameData, effect: &jadeforge_core::GemEffect) -> String {
+    let name = game
+        .effect_name(u32::try_from(effect.kind).unwrap_or(u32::MAX))
+        .map_or_else(|| format!("Effect {}", effect.kind), ToOwned::to_owned);
+    if effect.duration > 0.0 {
+        format!("{:+} {} ({:.0}s)", effect.value, name, effect.duration)
+    } else {
+        format!("{:+} {}", effect.value, name)
+    }
+}
+
 /// Describes why `directory` cannot be scanned as a save folder.
 ///
 /// An existing but empty folder is not a problem: the scan reports that it
@@ -1856,6 +1958,9 @@ fn describe(folder: &Path) -> SaveEntry {
             character: Some(metadata.name),
             level: Some(metadata.level),
             time_played: metadata.time_played,
+            modified: std::fs::metadata(&path)
+                .ok()
+                .and_then(|meta| meta.modified().ok()),
             error: None,
         },
         Err(error) => SaveEntry {
@@ -1864,6 +1969,9 @@ fn describe(folder: &Path) -> SaveEntry {
             character: None,
             level: None,
             time_played: 0,
+            modified: std::fs::metadata(&path)
+                .ok()
+                .and_then(|meta| meta.modified().ok()),
             error: Some(error.to_string()),
         },
     }
@@ -2246,6 +2354,7 @@ mod tests {
             character: Some(format!("{label} hero")),
             level: Some(level),
             time_played: played,
+            modified: None,
             error: None,
         };
         let entries = vec![

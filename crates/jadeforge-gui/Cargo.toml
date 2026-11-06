@@ -47,6 +47,9 @@ workspace = true
 
 [dev-dependencies]
 freya-testing = "0.5.0"
+# Synthetic keyboard events with modifiers (Ctrl+S, Ctrl+F) in the headless
+# suite. Keep in step with `freya` like the windowed-suite pins below.
+freya-core = "0.5.0"
 jadeforge-gamedata.workspace = true
 
 # The windowed suite drives the real Freya window through winit's plugin API

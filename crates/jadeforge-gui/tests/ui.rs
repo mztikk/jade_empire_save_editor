@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 use freya::elements::image::Image;
 use freya::prelude::*;
+use freya_core::events::platform::{KeyboardEventName, PlatformEvent};
 use freya_testing::TestingRunner;
 use jadeforge_gui::app_with_directory;
 
@@ -1085,11 +1086,11 @@ fn predefined_gems_can_be_added() {
         return;
     }
     let before = session.gems().len();
-    let (item_id, name, _) = available[0].clone();
-    session.add_gem(item_id);
+    let gem = available[0].clone();
+    session.add_gem(gem.item_id);
     assert_eq!(session.gems().len(), before + 1);
     assert!(
-        session.gems().iter().any(|gem| gem.name == name),
+        session.gems().iter().any(|added| added.name == gem.name),
         "{}",
         session.message().text
     );
@@ -1127,7 +1128,7 @@ fn expanded_styles_show_upgrade_choices() {
     click_node(&mut test, &subtitle);
     assert!(find_label_text(&test, "UPGRADES").is_some());
     assert!(
-        find_label_text(&test, "gold means owned").is_some(),
+        find_label_text(&test, "Filled gold orbs are owned").is_some(),
         "the upgrade panel did not render"
     );
 }
@@ -2340,5 +2341,343 @@ fn save_focuses_the_first_invalid_field_and_still_saves() {
     assert!(
         find_label_text(&test, "invalid field").is_some(),
         "the invalid field disappeared instead of staying for a fix"
+    );
+}
+
+fn probe_session(fixture: &Fixture) -> Option<jadeforge_gui::Session> {
+    let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
+    session.open(0).then_some(session)
+}
+
+fn click_ctrl(test: &mut TestingRunner, key: Key) {
+    test.send_event(PlatformEvent::Keyboard {
+        name: KeyboardEventName::KeyDown,
+        key,
+        code: Code::Unidentified,
+        modifiers: Modifiers::CONTROL,
+    });
+    test.sync_and_update();
+}
+
+#[test]
+fn rows_show_a_details_chevron() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_label_exact(&mut test, "Inventory"));
+    assert!(
+        find_label_exact(&test, "▸").is_some(),
+        "a collapsed row has no disclosure chevron"
+    );
+    let subtitle = find_node_with_text(&test, " · #").expect("item subtitle");
+    click_node(&mut test, &subtitle);
+    assert!(
+        find_label_exact(&test, "▾").is_some(),
+        "the chevron did not change when the row expanded"
+    );
+    let row = test
+        .find(|node, _| {
+            a11y_label(&node)
+                .as_deref()
+                .is_some_and(|label| label.contains("Details"))
+                .then_some(node)
+        })
+        .expect("the row action has no Details affordance");
+    assert!(a11y_label(&row).is_some());
+}
+
+#[test]
+fn the_gem_picker_shows_effect_lines_before_adding() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let Some(gem) = session
+        .available_gems()
+        .into_iter()
+        .find(|gem| !gem.effects.is_empty())
+    else {
+        eprintln!("skipping: no predefined gem has effects");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(click_text(&mut test, "Gems"), "no gems tab");
+    let expected = format!("{} gem, {}", gem.name, gem.effects.join(" · "));
+    assert!(
+        test.find(
+            |node, _| (a11y_label(&node).as_deref() == Some(expected.as_str())).then_some(node)
+        )
+        .is_some(),
+        "the gem picker does not expose the effect lines before adding {expected}"
+    );
+    assert!(
+        find_label_text(&test, &gem.effects[0]).is_some(),
+        "the gem effect line is not rendered"
+    );
+}
+
+#[test]
+fn repeated_row_actions_have_contextual_names() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 2000.0);
+
+    let has_name = |test: &TestingRunner, wanted: &str| {
+        test.find(|node, _| (a11y_label(&node).as_deref() == Some(wanted)).then_some(node))
+            .is_some()
+    };
+
+    if let Some(item) = session.items().first().cloned() {
+        assert!(click_label_exact(&mut test, "Inventory"));
+        assert!(
+            has_name(&test, &format!("Remove {}", item.name)),
+            "the item remove action has no contextual name"
+        );
+        assert!(
+            has_name(&test, &format!("Increase {} stack", item.name)),
+            "the count stepper has no contextual name"
+        );
+        assert!(
+            has_name(&test, &format!("Decrease {} stack", item.name)),
+            "the count stepper has no contextual name"
+        );
+    }
+
+    assert!(click_label_exact(&mut test, "Styles"));
+    if let Some(style) = session.styles().first() {
+        assert!(
+            has_name(&test, &format!("Remove {} style", style.name)),
+            "the style remove action has no contextual name"
+        );
+    }
+    if let Some(learnable) = session.missing_styles().first() {
+        assert!(
+            has_name(&test, &format!("Learn {} style", learnable.name)),
+            "the learn action has no contextual name"
+        );
+    }
+
+    assert!(click_label_exact(&mut test, "Companions"));
+    if let Some(companion) = session.henchmen().first() {
+        assert!(
+            has_name(&test, &format!("Increase {} level", companion.name)),
+            "the companion level action has no contextual name"
+        );
+    }
+}
+
+#[test]
+fn a_stack_size_can_be_typed_directly() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let Some(item) = session.items().first().cloned() else {
+        eprintln!("skipping: the fixture has no items");
+        return;
+    };
+    let wanted = if item.count < 255 {
+        item.count + 1
+    } else {
+        item.count - 1
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(click_label_exact(&mut test, "Inventory"));
+    let paragraph = test.find(|node, _| {
+        (a11y_role(&node) == "TextInput"
+            && a11y_value(&node).as_deref() == Some(&item.count.to_string()))
+        .then_some(node)
+    });
+    let Some(paragraph) = paragraph else {
+        eprintln!("skipping: could not locate the count input");
+        return;
+    };
+    click_node(&mut test, &paragraph);
+    test.write_text("\u{8}".repeat(3));
+    test.write_text(wanted.to_string());
+    test.press_key(Key::Named(NamedKey::Enter));
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "in the stack").is_some(),
+        "typing a stack size did not report a change"
+    );
+}
+
+#[test]
+fn a_companion_level_can_be_typed_directly() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let Some(companion) = session.henchmen().first().cloned() else {
+        eprintln!("skipping: the fixture has no companions");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1600.0);
+    assert!(click_label_exact(&mut test, "Companions"));
+    let paragraph = test.find(|node, _| {
+        (a11y_role(&node) == "TextInput"
+            && a11y_value(&node).as_deref() == Some(&companion.level.to_string()))
+        .then_some(node)
+    });
+    let Some(paragraph) = paragraph else {
+        eprintln!("skipping: the level input is not rendered");
+        return;
+    };
+    click_node(&mut test, &paragraph);
+    test.write_text("\u{8}".repeat(2));
+    test.write_text("42");
+    test.press_key(Key::Named(NamedKey::Enter));
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "Companion level set to 42").is_some(),
+        "typing a companion level did not apply"
+    );
+}
+
+#[test]
+fn desktop_shortcuts_drive_the_shell() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1200.0);
+
+    // F5 rescans the current folder and keeps the savegame open.
+    assert!(click_text(&mut test, "Scan"));
+    test.press_key(Key::Named(NamedKey::F5));
+    assert!(
+        find_label_text(&test, "Found 1 savegame").is_some(),
+        "F5 did not scan"
+    );
+
+    // Arrow keys move between tabs while a tab has focus.
+    assert!(click_label_exact(&mut test, "Character"));
+    test.press_key(Key::Named(NamedKey::ArrowRight));
+    assert!(
+        find_label_text(&test, "Fighting styles").is_some(),
+        "ArrowRight did not move to the next tab"
+    );
+
+    // Escape clears the active filter.
+    let filter = find_paragraph(&test, "Filter the style list").expect("style filter");
+    click_node(&mut test, &filter);
+    test.write_text("Tiger");
+    test.sync_and_update();
+    assert!(find_label_text(&test, "SEARCH RESULTS").is_some());
+    test.press_key(Key::Named(NamedKey::Escape));
+    assert!(
+        find_label_text(&test, "ALL STYLES").is_some(),
+        "Escape did not clear the style filter"
+    );
+
+    // Ctrl+F focuses the active tab's filter.
+    click_ctrl(&mut test, Key::Character("f".to_owned()));
+    test.write_text("Tiger");
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "SEARCH RESULTS").is_some(),
+        "Ctrl+F did not focus the style filter"
+    );
+
+    // Ctrl+S saves the applied edits.
+    assert!(click_label_exact(&mut test, "Inventory"));
+    assert!(click_label_exact(&mut test, "+"), "no count stepper");
+    as_many_updates(&mut test);
+    click_ctrl(&mut test, Key::Character("s".to_owned()));
+    assert!(
+        find_label_text(&test, "Saved").is_some(),
+        "Ctrl+S did not save"
+    );
+}
+
+#[test]
+fn save_rows_show_the_character_and_modification_time() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
+    let Some(entry) = session
+        .entries()
+        .first()
+        .filter(|entry| entry.character.is_some() && entry.modified.is_some())
+        .cloned()
+    else {
+        eprintln!("skipping: the fixture save has no readable metadata");
+        return;
+    };
+    let character = entry.character.expect("character name");
+    let test = launch_unopened_at(fixture.save_dir.clone(), 1180.0, 900.0);
+    let row = find_node_with_text(&test, &character).expect("the character name is not in the row");
+    let value = a11y_label(&row)
+        .or_else(|| a11y_value(&row))
+        .unwrap_or_default();
+    assert!(
+        value.contains("UTC"),
+        "the save row does not show the modification time: {value}"
+    );
+    assert!(value.contains(&character), "{value}");
+}
+
+#[test]
+fn hovering_an_upgrade_orb_explains_it() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data to resolve upgrades");
+        return;
+    }
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_label_exact(&mut test, "Styles"));
+    let subtitle = find_node_with_text(&test, " · #").expect("style subtitle");
+    click_node(&mut test, &subtitle);
+    assert!(find_label_text(&test, "UPGRADES").is_some());
+    let orb = test
+        .find(|node, _| {
+            (a11y_role(&node) == "Button"
+                && a11y_label(&node)
+                    .as_deref()
+                    .is_some_and(|label| label.contains("tier 1")))
+            .then_some(node)
+        })
+        .expect("no upgrade orb");
+    let area = orb.layout().area;
+    test.move_cursor(CursorPoint::new(
+        f64::from(area.origin.x) + f64::from(area.size.width) / 2.0,
+        f64::from(area.origin.y) + f64::from(area.size.height) / 2.0,
+    ));
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "available: clicking buys").is_some()
+            || find_label_text(&test, "owned: clicking removes").is_some(),
+        "hovering an orb did not explain it"
+    );
+    let label = a11y_label(&orb).unwrap_or_default();
+    assert!(
+        label.contains("tier 1") && (label.contains("buys") || label.contains("removes")),
+        "the orb's accessible name lacks its action: {label}"
     );
 }

@@ -27,6 +27,7 @@ pub(super) fn sidebar(
     preview: Option<ImageHandle>,
     character: Option<&Character>,
     query: State<String>,
+    filter_id: AccessibilityId,
     sort: State<(SaveSort, bool)>,
     hovered: State<Option<HoverKey>>,
     reset: Rc<dyn Fn()>,
@@ -225,6 +226,7 @@ pub(super) fn sidebar(
             query,
             "Filter by name",
             "Clear the savegame filter",
+            filter_id,
         ))
         .child(sort_bar(ctx, sort, *sort.read()))
         .child(

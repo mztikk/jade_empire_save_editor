@@ -193,6 +193,8 @@ pub mod layout {
     /// Largest width of a run of body text, about 75 characters at
     /// [`font::BODY`].
     pub const TEXT_MEASURE: f32 = 720.0;
+    /// Width of the disclosure chevron slot on a row.
+    pub const CHEVRON_WIDTH: f32 = 12.0;
     /// Width of the fixed sort-direction arrow slot.
     ///
     /// Every sort button reserves it, active or not, so changing the sort key
@@ -594,6 +596,7 @@ mod tests {
             layout::FIELD_NARROW,
             layout::FIELD_MEDIUM,
             layout::FIELD_WIDE,
+            layout::CHEVRON_WIDTH,
             layout::SORT_ARROW_WIDTH,
             layout::SORT_ARROW_HEIGHT,
             layout::DIVIDER,

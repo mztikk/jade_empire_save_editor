@@ -64,6 +64,10 @@ pub enum HoverKey {
     Style(usize),
     /// An upgrade orb: style struct index and slot.
     Orb(usize, u16),
+    /// A gem row, by struct index.
+    Gem(usize),
+    /// A companion row, by struct index.
+    Companion(usize),
 }
 
 /// Entries a searchable picker renders per page (items, styles, gems).
@@ -285,6 +289,13 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         use_scroll_controller(ScrollConfig::default),
     ];
 
+    // Stable accessibility ids for the four filter inputs, so Ctrl+F can move
+    // focus to the filter of the active tab.
+    let save_filter_id = use_a11y();
+    let item_filter_id = use_a11y();
+    let style_filter_id = use_a11y();
+    let gem_filter_id = use_a11y();
+
     // Subscribe to session changes.
     let _ = *revision.read();
 
@@ -437,6 +448,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 style_matches_total,
                 expanded_style,
                 hovered,
+                style_filter_id,
                 move |_| *style_limit.write() += PAGE_SIZE,
             )
         }
@@ -453,6 +465,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 expanded_item,
                 expanded_suggestion,
                 hovered,
+                item_filter_id,
                 move |_| *item_limit.write() += PAGE_SIZE,
             )
         }
@@ -460,9 +473,18 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             let available = session.borrow().available_gems();
             let amulet = session.borrow().amulet();
             let gems = session.borrow().gems();
-            views::gems::view(&ctx, &gems, gem_query, &available, amulet, gem_limit)
+            views::gems::view(
+                &ctx,
+                &gems,
+                gem_query,
+                &available,
+                amulet,
+                gem_limit,
+                hovered,
+                gem_filter_id,
+            )
         }
-        (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen),
+        (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen, hovered),
         (_, None) => shell::empty_state(
             &ctx,
             entries.len(),
@@ -502,6 +524,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         preview_handle,
         character.as_ref(),
         save_query,
+        save_filter_id,
         save_sort,
         hovered,
         reset.clone(),
@@ -509,6 +532,76 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     );
     let tabs = navigation::tab_bar(tab, active_tab, has_save);
     let footer = shell::footer(&ctx, form, dirty, has_save, &form_errors, sync.clone());
+
+    // Desktop shortcuts. Save and Scan duplicate the footer/header actions so
+    // they work no matter which control has focus.
+    let shortcut = {
+        let ctx = ctx.clone();
+        let sync = sync.clone();
+        let reset = reset.clone();
+        let directory = directory_state;
+        let active = active_tab;
+        let filter_ids = [
+            save_filter_id,
+            item_filter_id,
+            style_filter_id,
+            gem_filter_id,
+        ];
+        let mut save_query = save_query;
+        let mut item_query = item_query;
+        let mut style_query = style_query;
+        let mut gem_query = gem_query;
+        move |event: Event<KeyboardEventData>| {
+            let ctrl = event.modifiers.contains(Modifiers::CONTROL);
+            match &event.key {
+                Key::Character(character) if ctrl => match character.to_lowercase().as_str() {
+                    "s" => {
+                        let errors = ctx.run(|session| session.form_errors(&form.read()));
+                        if let Some(first) = errors.first() {
+                            form.focus(first.field);
+                        }
+                        let saved = ctx.run(|session| session.save_applied(&form.read()));
+                        if errors.is_empty() && saved.is_ok() {
+                            sync();
+                        }
+                    }
+                    "o" => {
+                        shell::choose_folder(&ctx, directory, &reset, &sync);
+                    }
+                    "f" => {
+                        let id = match active {
+                            Tab::Inventory => filter_ids[1],
+                            Tab::Styles => filter_ids[2],
+                            Tab::Gems => filter_ids[3],
+                            Tab::Overview | Tab::Character | Tab::Companions => filter_ids[0],
+                        };
+                        id.request_focus();
+                    }
+                    _ => {}
+                },
+                Key::Named(NamedKey::F5) => {
+                    let mut directory = directory;
+                    let path = PathBuf::from(directory.read().as_str());
+                    if ctx.run(|session| session.set_directory(path)) {
+                        reset();
+                        sync();
+                    } else {
+                        let real = ctx.session.borrow().directory().display().to_string();
+                        *directory.write() = real;
+                    }
+                }
+                Key::Named(NamedKey::Escape) => match active {
+                    Tab::Inventory => item_query.set(String::new()),
+                    Tab::Styles => style_query.set(String::new()),
+                    Tab::Gems => gem_query.set(String::new()),
+                    Tab::Overview | Tab::Character | Tab::Companions => {
+                        save_query.set(String::new());
+                    }
+                },
+                _ => {}
+            }
+        }
+    };
 
     rect()
         .vertical()
@@ -575,6 +668,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 ),
         )
         .child(footer)
+        .on_global_key_down(shortcut)
 }
 
 /// Clears every per-document picker and scroll state.

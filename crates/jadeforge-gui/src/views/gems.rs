@@ -6,20 +6,25 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
-use crate::session::{GemRow, Section};
+use crate::session::{GemRow, GemSuggestion, Section};
 use crate::theme;
-use crate::widgets;
+use crate::widgets::{self, Action};
 use jadeforge_core::{AmuletInfo, GemLocation};
 
 /// Renders the gems tab.
-#[allow(clippy::too_many_lines)] // one declarative tree keeps the visual order auditable
+#[allow(
+    clippy::too_many_lines, // one declarative tree keeps the visual order auditable
+    clippy::too_many_arguments // one argument per independent tab input
+)]
 pub fn view(
     ctx: &Ctx,
     gems: &[GemRow],
     query: State<String>,
-    available: &[(u16, String, usize)],
+    available: &[GemSuggestion],
     amulet: Option<AmuletInfo>,
     gem_limit: State<usize>,
+    hovered: State<Option<crate::app::HoverKey>>,
+    filter_id: AccessibilityId,
 ) -> Element {
     let amulet_gems: Vec<&GemRow> = gems
         .iter()
@@ -60,7 +65,7 @@ pub fn view(
     } else {
         amulet_gems
             .into_iter()
-            .map(|gem| gem_row(ctx, gem, true, true, amulet.is_some()))
+            .map(|gem| gem_row(ctx, gem, true, true, amulet.is_some(), hovered))
             .collect()
     };
     let inventory_rows: Vec<Element> = if let Some(error) = &gems_error {
@@ -73,52 +78,65 @@ pub fn view(
     } else {
         inventory
             .into_iter()
-            .map(|gem| gem_row(ctx, gem, false, can_socket, amulet.is_some()))
+            .map(|gem| gem_row(ctx, gem, false, can_socket, amulet.is_some(), hovered))
             .collect()
     };
 
     let needle = query.read().trim().to_lowercase();
-    let matching: Vec<&(u16, String, usize)> = available
+    let matching: Vec<&GemSuggestion> = available
         .iter()
-        .filter(|(_, name, _)| needle.is_empty() || name.to_lowercase().contains(&needle))
+        .filter(|gem| needle.is_empty() || gem.name.to_lowercase().contains(&needle))
         .collect();
     let limit = *gem_limit.read();
     let shown = matching.len().min(limit);
     let mut add_rows: Vec<Element> = Vec::new();
-    for (item_id, name, effects) in matching.iter().take(shown) {
+    for gem in matching.iter().take(shown) {
         let ctx = ctx.clone();
-        let item_id = *item_id;
+        let item_id = gem.item_id;
+        let effects = if gem.effects.is_empty() {
+            "no effects".to_owned()
+        } else {
+            gem.effects.join(" · ")
+        };
         add_rows.push(
             rect()
                 .horizontal()
                 .width(Size::fill())
                 .key(item_id)
                 .a11y_role(AccessibilityRole::Group)
-                .a11y_alt(format!("{name} gem"))
+                .a11y_alt(format!("{} gem, {effects}", gem.name))
                 .spacing(theme::space::LG)
                 .content(Content::Flex)
                 .padding(Gaps::new_symmetric(theme::space::XS, theme::space::MD))
-                .child(widgets::with_tooltip(
-                    name.clone(),
-                    widgets::a11y_text(name.clone())
-                        .font_size(theme::font::LABEL)
-                        .max_lines(1)
-                        .text_overflow(TextOverflow::Ellipsis)
-                        .color(theme::TEXT),
+                .child(
+                    rect()
+                        .vertical()
+                        .width(Size::flex(1.0))
+                        .spacing(theme::space::XXS)
+                        .child(widgets::with_tooltip(
+                            gem.name.clone(),
+                            widgets::a11y_text(gem.name.clone())
+                                .font_size(theme::font::LABEL)
+                                .max_lines(1)
+                                .text_overflow(TextOverflow::Ellipsis)
+                                .color(theme::TEXT),
+                        ))
+                        // The effect lines are the reason to add a gem; they
+                        // belong in the picker, not only on the owned rows.
+                        .child(widgets::with_tooltip(
+                            effects.clone(),
+                            widgets::a11y_text(effects.clone())
+                                .font_size(theme::font::MICRO)
+                                .max_lines(1)
+                                .text_overflow(TextOverflow::Ellipsis)
+                                .color(theme::DIM),
+                        )),
+                )
+                .child(widgets::row_action(
+                    format!("Add {}", gem.name),
+                    "Add",
+                    Action::new(move || ctx.run(|session| session.add_gem(item_id))),
                 ))
-                .child(rect().width(Size::flex(1.0)))
-                .child(
-                    widgets::a11y_text(widgets::plural(*effects, "effect", "effects"))
-                        .font_size(theme::font::MICRO)
-                        .color(theme::DIM),
-                )
-                .child(
-                    Button::new()
-                        .compact()
-                        .outline()
-                        .child("Add")
-                        .on_press(move |_| ctx.run(|session| session.add_gem(item_id))),
-                )
                 .into_element(),
         );
     }
@@ -133,6 +151,7 @@ pub fn view(
         query,
         "Filter the gem list, or leave empty to browse it",
         "Clear the gem filter",
+        filter_id,
     )];
     if matching.len() > shown {
         let mut gem_limit = gem_limit;
@@ -218,9 +237,20 @@ pub fn view(
         .into_element()
 }
 
-fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool, can_move: bool, has_amulet: bool) -> Element {
+#[allow(clippy::too_many_lines)] // one declarative row keeps the actions together
+fn gem_row(
+    ctx: &Ctx,
+    gem: &GemRow,
+    socketed: bool,
+    can_move: bool,
+    has_amulet: bool,
+    mut hovered: State<Option<crate::app::HoverKey>>,
+) -> Element {
     let ctx = ctx.clone();
     let index = gem.struct_index;
+    let name = gem.name.clone();
+    let key = crate::app::HoverKey::Gem(index);
+    let is_hovered = *hovered.read() == Some(key);
     let action = if socketed {
         "Move to inventory"
     } else {
@@ -231,13 +261,14 @@ fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool, can_move: bool, has_amulet: 
         let remove_ctx = ctx.clone();
         if can_move {
             let move_ctx = ctx.clone();
+            let move_name = name.clone();
             actions.push(
-                Button::new()
-                    .compact()
-                    .flat()
-                    .child(action)
-                    .on_press(move |_| move_ctx.run(|session| session.move_gem(index)))
-                    .into_element(),
+                widgets::row_action(
+                    format!("{action} ({move_name})"),
+                    action,
+                    Action::new(move || move_ctx.run(|session| session.move_gem(index))),
+                )
+                .into_element(),
             );
         } else {
             actions.push(
@@ -253,11 +284,10 @@ fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool, can_move: bool, has_amulet: 
         }
         let remove_name = gem.name.clone();
         actions.push(
-            Button::new()
-                .compact()
-                .flat()
-                .child("Remove")
-                .on_press(move |_| {
+            widgets::row_action(
+                format!("Remove {remove_name}"),
+                "Remove",
+                Action::new(move || {
                     if !crate::dialog::confirm(
                         "Remove gem?",
                         &format!("Remove {remove_name}? You can still press Revert before saving."),
@@ -265,8 +295,9 @@ fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool, can_move: bool, has_amulet: 
                         return;
                     }
                     remove_ctx.run(|session| session.remove_gem(index));
-                })
-                .into_element(),
+                }),
+            )
+            .into_element(),
         );
     }
     rect()
@@ -278,8 +309,18 @@ fn gem_row(ctx: &Ctx, gem: &GemRow, socketed: bool, can_move: bool, has_amulet: 
         .spacing(theme::space::LG)
         .content(Content::Flex)
         .padding(Gaps::new_symmetric(theme::space::SM, theme::space::LG))
-        .background(theme::SURFACE)
+        .background(if is_hovered {
+            theme::SURFACE_HOVER
+        } else {
+            theme::SURFACE
+        })
         .corner_radius(theme::radius::MEDIUM)
+        .on_pointer_enter(move |_| *hovered.write() = Some(key))
+        .on_pointer_leave(move |_| {
+            if *hovered.read() == Some(key) {
+                *hovered.write() = None;
+            }
+        })
         .child(
             rect()
                 .vertical()

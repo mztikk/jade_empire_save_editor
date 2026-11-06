@@ -19,12 +19,19 @@ pub struct SaveEntry {
     pub level: Option<u8>,
     /// Play time in microseconds.
     pub time_played: u64,
+    /// Last modification time of `save.sac`.
+    pub modified: Option<std::time::SystemTime>,
     /// Set when the savegame could not be read while scanning.
     pub error: Option<String>,
 }
 
 impl SaveEntry {
-    /// One line summary of the savegame.
+    /// One line summary of the savegame: level, play time, character and the
+    /// modification time, in that order.
+    ///
+    /// The game names the folder, not the character, so the folder label stays
+    /// the row title; the character name and when the save was last written are
+    /// what the README promises and were missing from the row.
     #[must_use]
     pub fn summary(&self) -> String {
         if self.error.is_some() {
@@ -33,7 +40,17 @@ impl SaveEntry {
         let level = self
             .level
             .map_or_else(|| "?".to_owned(), |level| level.to_string());
-        format!("Level {level} · {}", format::duration(self.time_played))
+        let mut parts = vec![format!(
+            "Level {level} · {}",
+            format::duration(self.time_played)
+        )];
+        if let Some(character) = self.character.as_deref().filter(|name| !name.is_empty()) {
+            parts.push(character.to_owned());
+        }
+        if let Some(modified) = self.modified {
+            parts.push(format::timestamp(modified));
+        }
+        parts.join(" · ")
     }
 }
 
@@ -271,6 +288,17 @@ pub struct HenchRow {
     pub level: u8,
     /// Whether the companion is selectable.
     pub available: bool,
+}
+
+/// A predefined gem that can be added.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GemSuggestion {
+    /// Item id used in the savegame.
+    pub item_id: u16,
+    /// Display name.
+    pub name: String,
+    /// Readable effect lines, for example `+2 Body`.
+    pub effects: Vec<String>,
 }
 
 /// A search hit for the item picker.

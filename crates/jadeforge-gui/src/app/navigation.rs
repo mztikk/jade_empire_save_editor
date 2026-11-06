@@ -7,6 +7,7 @@ use crate::widgets::{AccessibleButton, Action};
 
 use super::Tab;
 
+#[allow(clippy::too_many_lines)] // one declarative tab bar keeps the states together
 pub(super) fn tab_bar(tab: State<Tab>, active: Tab, enabled: bool) -> Element {
     let mut buttons: Vec<Element> = Vec::new();
     for candidate in Tab::ALL {
@@ -58,6 +59,30 @@ pub(super) fn tab_bar(tab: State<Tab>, active: Tab, enabled: bool) -> Element {
                 AccessibleButton::new(candidate.label(), action, content)
                     .role(AccessibilityRole::Tab)
                     .selected(is_active)
+                    // Arrow keys move between tabs while one of them has
+                    // keyboard focus; Home and End jump to the ends.
+                    .on_key({
+                        let mut tab = tab;
+                        move |event: Event<KeyboardEventData>| {
+                            let target = match event.key {
+                                Key::Named(NamedKey::ArrowLeft) => {
+                                    Some((candidate.index() + Tab::ALL.len() - 1) % Tab::ALL.len())
+                                }
+                                Key::Named(NamedKey::ArrowRight) => {
+                                    Some((candidate.index() + 1) % Tab::ALL.len())
+                                }
+                                Key::Named(NamedKey::Home) => Some(0),
+                                Key::Named(NamedKey::End) => Some(Tab::ALL.len() - 1),
+                                _ => None,
+                            };
+                            if let Some(target) = target
+                                && let Some(next) = Tab::ALL.get(target)
+                            {
+                                *tab.write() = *next;
+                                event.stop_propagation();
+                            }
+                        }
+                    })
                     .key(candidate.index())
                     .into_element(),
             );

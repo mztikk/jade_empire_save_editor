@@ -102,12 +102,12 @@ pub(super) fn header(
     };
     let game_loaded = matches!(game_status, GameStatus::Loaded { .. });
 
-    let scan = {
+    let scan = Rc::new({
         let ctx = ctx.clone();
         let reset = reset.clone();
         let sync = sync.clone();
-        let mut directory = directory;
-        move |_| {
+        move || {
+            let mut directory = directory;
             let path = PathBuf::from(directory.read().as_str());
             if ctx.run(|session| session.set_directory(path)) {
                 reset();
@@ -119,7 +119,7 @@ pub(super) fn header(
                 *directory.write() = real;
             }
         }
-    };
+    });
     let browse = {
         let ctx = ctx.clone();
         let reset = reset.clone();
@@ -226,10 +226,17 @@ pub(super) fn header(
             .child(
                 Input::new(directory)
                     .placeholder("Path to the Jade Empire Save folder")
-                    .width(Size::flex(1.0)),
+                    .width(Size::flex(1.0))
+                    .on_submit({
+                        let scan = scan.clone();
+                        move |_: String| scan()
+                    }),
             )
             .child(Button::new().outline().child("Browse…").on_press(browse))
-            .child(Button::new().outline().child("Scan").on_press(scan))
+            .child(Button::new().outline().child("Scan").on_press({
+                let scan = scan.clone();
+                move |_| scan()
+            }))
             .into_element(),
     ];
 
