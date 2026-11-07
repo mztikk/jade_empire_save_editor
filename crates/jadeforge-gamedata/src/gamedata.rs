@@ -405,15 +405,24 @@ impl GameData {
         }
 
         // Try both files until one parses. A corrupt `dialog.tlk` must not hide
-        // a valid `dialogf.tlk`.
-        let talktable = ["dialog.tlk", "dialogf.tlk"]
-            .iter()
-            .map(|name| root.join(name))
-            .filter(|path| path.is_file())
-            .find_map(|path| TalkTable::open(path).ok());
-
-        let source = TableSource::new(&root);
+        // a valid `dialogf.tlk`, but its error must still be visible.
         let mut warnings = Vec::new();
+        let mut talktable = None;
+        for name in ["dialog.tlk", "dialogf.tlk"] {
+            if talktable.is_some() {
+                break;
+            }
+            let path = root.join(name);
+            if !path.is_file() {
+                continue;
+            }
+            match TalkTable::open(&path) {
+                Ok(table) => talktable = Some(table),
+                Err(error) => warnings.push(format!("{name}: {error}")),
+            }
+        }
+
+        let source = TableSource::new(&root, &mut warnings);
         let items = source.load("items.2da", &mut warnings);
         let styles = source.load("stylesuperlist.2da", &mut warnings);
         let advances = source.load("StyleAdvance.2da", &mut warnings);
@@ -958,7 +967,7 @@ struct TableSource {
 }
 
 impl TableSource {
-    fn new(root: &Path) -> Self {
+    fn new(root: &Path, warnings: &mut Vec<String>) -> Self {
         let mut overrides = HashMap::new();
         if let Ok(entries) = std::fs::read_dir(root.join("override")) {
             for entry in entries.flatten() {
@@ -971,12 +980,17 @@ impl TableSource {
                 }
             }
         }
-        let rims = ["miniglobal-a.rim", "globalunload-a.rim"]
-            .iter()
-            .map(|name| root.join("data").join(name))
-            .filter(|path| path.is_file())
-            .filter_map(|path| RimArchive::open(path).ok())
-            .collect();
+        let mut rims = Vec::new();
+        for name in ["miniglobal-a.rim", "globalunload-a.rim"] {
+            let path = root.join("data").join(name);
+            if !path.is_file() {
+                continue;
+            }
+            match RimArchive::open(&path) {
+                Ok(rim) => rims.push(rim),
+                Err(error) => warnings.push(format!("data/{name}: {error}")),
+            }
+        }
         Self { overrides, rims }
     }
 

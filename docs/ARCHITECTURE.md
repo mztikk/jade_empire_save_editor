@@ -126,8 +126,10 @@ column names the table. Those tables (and `gems.2da`, `effects.2da`) live in
 resources; both archives are searched. `override/` text tables take precedence
 (case-insensitive lookup, lossy decoding), which is what makes mods work. RIM
 and text/binary 2DA versions are validated, row numbers and allocations are
-bounded, and every cell lookup is confined to the declared string pool. Styles
-without a level-up table are read-only in the editor.
+bounded, and every cell lookup is confined to the declared string pool. Talk
+table sections and entry ranges, RIM payload ranges, text row widths and binary
+cell decoding are checked before use. Styles without a level-up table are
+read-only in the editor.
 `tests/modded.rs` builds a small modded installation and asserts the resolution.
 `search_items` powers the item picker, ranking prefix matches first. Every table
 is optional: without the game files the compiled-in English name index fills item

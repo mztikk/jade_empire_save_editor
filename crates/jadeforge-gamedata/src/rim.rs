@@ -94,6 +94,16 @@ impl RimArchive {
             let kind = u32::from_le_bytes([raw[16], raw[17], raw[18], raw[19]]);
             let offset = u32::from_le_bytes([raw[24], raw[25], raw[26], raw[27]]);
             let size = u32::from_le_bytes([raw[28], raw[29], raw[30], raw[31]]);
+            let payload_start = offset as usize;
+            let payload_size = size as usize;
+            let payload_end = payload_start
+                .checked_add(payload_size)
+                .ok_or_else(|| Error::Archive(format!("entry {index} payload overflows")))?;
+            if payload_end > data.len() || (payload_size > 0 && payload_start < table_end) {
+                return Err(Error::Archive(format!(
+                    "entry {index} payload points outside the archive or into its table"
+                )));
+            }
             entries.push(RimEntry {
                 name,
                 kind,

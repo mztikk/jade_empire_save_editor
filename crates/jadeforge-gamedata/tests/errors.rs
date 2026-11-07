@@ -75,10 +75,9 @@ fn rim_archives_are_read_and_checked() {
     let archive = RimArchive::open(&path).expect("open");
     assert!(archive.get_2da("notatable").is_none());
 
-    // A payload offset beyond the archive is accepted at open but unavailable.
+    // Payload offsets are checked when the archive is indexed.
     std::fs::write(&path, rim(&[("x", 2017, 999, b"data")], 20, 1)).expect("write");
-    let archive = RimArchive::open(&path).expect("open broken entry");
-    assert!(archive.get("x").is_none());
+    assert!(RimArchive::open(&path).is_err());
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -132,11 +131,18 @@ fn talk_tables_are_read_and_checked() {
         assert!(TalkTable::parse(PathBuf::from("bad.tlk"), bad).is_err());
     }
 
-    // Entry strings pointing beyond the data section are ignored by `get`.
+    // The string data may not start inside the entry table, and entries may not
+    // point into the header or table.
+    let overlapping = tlk(*b"V4.0", 1, 1, 24, 30);
+    assert!(TalkTable::parse(PathBuf::from("bad.tlk"), overlapping).is_err());
+
     let mut out_of_bounds = tlk(*b"V4.0", 1, 1, 24, 34);
     out_of_bounds.extend_from_slice(&entry(0, 999, 5));
-    let table = TalkTable::parse(PathBuf::from("dialog.tlk"), out_of_bounds).expect("parse");
-    assert!(table.get(0).is_none());
+    assert!(TalkTable::parse(PathBuf::from("bad.tlk"), out_of_bounds).is_err());
+
+    let mut inside_table = tlk(*b"V4.0", 1, 1, 24, 34);
+    inside_table.extend_from_slice(&entry(0, 24, 1));
+    assert!(TalkTable::parse(PathBuf::from("bad.tlk"), inside_table).is_err());
 }
 
 #[test]

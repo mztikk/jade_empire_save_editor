@@ -514,6 +514,66 @@ fn open_reports_missing_and_corrupt_support_files() {
 }
 
 #[test]
+fn malformed_text_rows_report_the_file_and_line() {
+    let dir = TempDir::new("malformed-row");
+    write_tlk(&dir.join("dialog.tlk"), &["Name"]);
+    write_text(
+        &dir.join("override").join("items.2da"),
+        "2DA V2.0\n\n   LABEL STRREF_NAME\nnot-a-row 0\n",
+    );
+    let game = GameData::open(dir.path()).expect("the installation still opens");
+    let warning = game
+        .warnings()
+        .iter()
+        .find(|warning| warning.contains("items.2da"))
+        .expect("items warning");
+    assert!(warning.contains("line 4"), "{warning}");
+    assert!(warning.contains("non-numeric"), "{warning}");
+}
+
+#[test]
+fn corrupt_talk_tables_are_reported_instead_of_looking_empty() {
+    let dir = TempDir::new("corrupt-talk-tables");
+    write(&dir.join("dialog.tlk"), b"not a talk table");
+    write(&dir.join("dialogf.tlk"), b"also not a talk table");
+    let game = GameData::open(dir.path()).expect("the installation still opens");
+    assert_eq!(game.item_count(), 0);
+    assert!(
+        game.warnings()
+            .iter()
+            .any(|warning| warning.contains("dialog.tlk"))
+    );
+    assert!(
+        game.warnings()
+            .iter()
+            .any(|warning| warning.contains("dialogf.tlk"))
+    );
+}
+
+#[test]
+fn corrupt_rim_archives_are_reported_instead_of_looking_empty() {
+    let dir = TempDir::new("corrupt-rims");
+    write_tlk(&dir.join("dialog.tlk"), &["Name"]);
+    write(&dir.join("data").join("miniglobal-a.rim"), b"not a rim");
+    write(
+        &dir.join("data").join("globalunload-a.rim"),
+        b"also not a rim",
+    );
+    let game = GameData::open(dir.path()).expect("the installation still opens");
+    assert_eq!(game.item_count(), 0);
+    assert!(
+        game.warnings()
+            .iter()
+            .any(|warning| warning.contains("miniglobal-a.rim"))
+    );
+    assert!(
+        game.warnings()
+            .iter()
+            .any(|warning| warning.contains("globalunload-a.rim"))
+    );
+}
+
+#[test]
 fn game_root_markers_are_recognised() {
     let dir = TempDir::new("markers");
     assert!(!is_game_root(dir.path()));

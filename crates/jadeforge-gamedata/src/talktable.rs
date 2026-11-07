@@ -27,7 +27,7 @@ const ENTRY_SIZE: usize = 10;
 pub struct TalkTable {
     path: PathBuf,
     data: Vec<u8>,
-    entries: Vec<(u32, u16)>,
+    entries: Vec<(usize, usize)>,
 }
 
 impl TalkTable {
@@ -73,24 +73,47 @@ impl TalkTable {
         let table_offset = word(16)? as usize;
         let data_offset = word(20)? as usize;
 
-        let table_end = table_offset
-            .checked_add(count * ENTRY_SIZE)
+        if table_offset < HEADER_SIZE {
+            return Err(Error::TalkTable(format!(
+                "entry table starts at {table_offset}, inside the {HEADER_SIZE} byte header"
+            )));
+        }
+        let table_bytes = count
+            .checked_mul(ENTRY_SIZE)
             .ok_or_else(|| Error::TalkTable("entry table overflows".to_owned()))?;
-        if table_end > data.len() || data_offset > data.len() {
-            return Err(Error::TalkTable(
-                "entry table or string data is out of bounds".to_owned(),
-            ));
+        let table_end = table_offset
+            .checked_add(table_bytes)
+            .ok_or_else(|| Error::TalkTable("entry table overflows".to_owned()))?;
+        if table_end > data.len() {
+            return Err(Error::TalkTable("entry table is out of bounds".to_owned()));
+        }
+        if data_offset < table_end {
+            return Err(Error::TalkTable(format!(
+                "string data starts at {data_offset}, before the entry table end {table_end}"
+            )));
+        }
+        if data_offset > data.len() {
+            return Err(Error::TalkTable("string data is out of bounds".to_owned()));
         }
 
         let mut entries = Vec::with_capacity(count);
         for index in 0..count {
             let start = table_offset + index * ENTRY_SIZE;
-            let offset = word(start + 4)?;
+            let offset = word(start + 4)? as usize;
             let length = data
                 .get(start + 8..start + 10)
                 .and_then(|slice| slice.try_into().ok())
                 .map(u16::from_le_bytes)
-                .ok_or_else(|| Error::TalkTable("entry table is truncated".to_owned()))?;
+                .ok_or_else(|| Error::TalkTable("entry table is truncated".to_owned()))?
+                as usize;
+            let end = offset
+                .checked_add(length)
+                .ok_or_else(|| Error::TalkTable("string entry overflows".to_owned()))?;
+            if offset < data_offset || end > data.len() {
+                return Err(Error::TalkTable(format!(
+                    "entry {index} points outside the string data"
+                )));
+            }
             entries.push((offset, length));
         }
         Ok(Self {
@@ -122,8 +145,7 @@ impl TalkTable {
     #[must_use]
     pub fn get(&self, strref: u32) -> Option<String> {
         let (offset, length) = *self.entries.get(strref as usize)?;
-        let start = offset as usize;
-        let bytes = self.data.get(start..start + length as usize)?;
+        let bytes = self.data.get(offset..offset + length)?;
         Some(String::from_utf8_lossy(bytes).into_owned())
     }
 
@@ -131,8 +153,7 @@ impl TalkTable {
     #[must_use]
     pub fn get_bytes(&self, strref: u32) -> Option<&[u8]> {
         let (offset, length) = *self.entries.get(strref as usize)?;
-        let start = offset as usize;
-        self.data.get(start..start + length as usize)
+        self.data.get(offset..offset + length)
     }
 }
 

@@ -13,6 +13,7 @@
 //! not have to be contiguous.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::error::{Error, Result};
 
@@ -22,10 +23,17 @@ use crate::error::{Error, Result};
 /// a two line table can ask for a multi-gigabyte `Vec`.
 const MAX_ROW_INDEX: usize = 100_000;
 
+/// Hard cap on text decoded from a binary table's string pool.
+///
+/// Cells share their decoded text by pool offset, so repeated cells cost one
+/// allocation. The cap still stops many distinct, overlapping cells from
+/// scanning or allocating without bound.
+const MAX_DECODED_CELL_BYTES: usize = 16 * 1024 * 1024;
+
 /// One row of a 2DA table.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Row {
-    values: Vec<Option<String>>,
+    values: Vec<Option<Arc<str>>>,
 }
 
 impl Row {
@@ -151,19 +159,59 @@ impl TwoDa {
         for (index, column) in columns.iter().enumerate() {
             column_index.insert(column.to_lowercase(), index);
         }
-        let mut table = Self {
+        let rows = Self::decode_binary_rows(
+            data,
+            &labels,
+            &offsets,
+            cell_base,
+            cells_size,
+            columns.len(),
+        )?;
+        Ok(Self {
             columns,
             column_index,
-            rows: Vec::new(),
-        };
+            rows,
+        })
+    }
+
+    /// Decodes binary rows, interning cell text by string-pool offset.
+    fn decode_binary_rows(
+        data: &[u8],
+        labels: &[String],
+        offsets: &[u16],
+        cell_base: usize,
+        cells_size: usize,
+        width: usize,
+    ) -> Result<Vec<Option<Row>>> {
+        let decoded_limit = data
+            .len()
+            .saturating_mul(8)
+            .clamp(1 << 20, MAX_DECODED_CELL_BYTES);
+        let mut decoded_work = 0_usize;
+        let mut decoded_cells: HashMap<usize, Option<Arc<str>>> = HashMap::new();
+        let mut rows: Vec<Option<Row>> = Vec::new();
         for (row_number, label) in labels.iter().enumerate() {
-            let width = table.columns.len();
-            let mut values: Vec<Option<String>> = Vec::with_capacity(width);
+            let mut values: Vec<Option<Arc<str>>> = Vec::with_capacity(width);
             for column in 0..width {
                 let offset = usize::from(offsets[row_number * width + column]);
-                values.push(binary_cell(data, cell_base, cells_size, offset)?);
+                let value = if let Some(cached) = decoded_cells.get(&offset) {
+                    cached.clone()
+                } else {
+                    let value = binary_cell(data, cell_base, cells_size, offset)?;
+                    let cost = value.as_deref().map_or(0, |text| text.len() + 1);
+                    decoded_work = decoded_work.checked_add(cost).ok_or_else(|| {
+                        Error::TwoDa("decoded 2DA cell size overflows".to_owned())
+                    })?;
+                    if decoded_work > decoded_limit {
+                        return Err(Error::TwoDa(format!(
+                            "decoded 2DA cells exceed the {decoded_limit} byte limit"
+                        )));
+                    }
+                    decoded_cells.insert(offset, value.clone());
+                    value
+                };
+                values.push(value);
             }
-            let row = Row { values };
             let index = match label.parse::<usize>() {
                 Ok(index) => {
                     if index > MAX_ROW_INDEX {
@@ -175,12 +223,12 @@ impl TwoDa {
                 }
                 Err(_) => row_number,
             };
-            if table.rows.len() <= index {
-                table.rows.resize(index + 1, None);
+            if rows.len() <= index {
+                rows.resize(index + 1, None);
             }
-            table.rows[index] = Some(row);
+            rows[index] = Some(Row { values });
         }
-        Ok(table)
+        Ok(rows)
     }
 
     /// Parses a text 2DA file.
@@ -213,7 +261,8 @@ impl TwoDa {
         let header_line = lines
             .next()
             .ok_or_else(|| Error::TwoDa("table ends before the column header".to_owned()))?;
-        let columns = tokenize(header_line);
+        let columns = tokenize(header_line)
+            .map_err(|error| Error::TwoDa(format!("column header at line 3: {error}")))?;
         if columns.is_empty() {
             return Err(Error::TwoDa("table has no columns".to_owned()));
         }
@@ -223,8 +272,10 @@ impl TwoDa {
         }
 
         let mut rows: Vec<Option<Row>> = Vec::new();
-        for line in lines {
-            let tokens = tokenize(line);
+        for (line_index, line) in lines.enumerate() {
+            let line_number = line_index + 4;
+            let tokens = tokenize(line)
+                .map_err(|error| Error::TwoDa(format!("row at line {line_number}: {error}")))?;
             if tokens.is_empty() {
                 continue;
             }
@@ -232,17 +283,28 @@ impl TwoDa {
                 Ok(index) if index <= MAX_ROW_INDEX => index,
                 Ok(index) => {
                     return Err(Error::TwoDa(format!(
-                        "row label {index} is above the {MAX_ROW_INDEX} row limit"
+                        "row label {index} at line {line_number} is above the {MAX_ROW_INDEX} row limit"
                     )));
                 }
-                Err(_) => continue,
+                Err(_) => {
+                    return Err(Error::TwoDa(format!(
+                        "row at line {line_number} has non-numeric label {:?}",
+                        tokens[0]
+                    )));
+                }
             };
-            let mut values: Vec<Option<String>> = tokens
+            let cell_count = tokens.len() - 1;
+            if cell_count != columns.len() {
+                return Err(Error::TwoDa(format!(
+                    "row {index} at line {line_number} has {cell_count} cells, expected {}",
+                    columns.len()
+                )));
+            }
+            let values: Vec<Option<Arc<str>>> = tokens
                 .into_iter()
                 .skip(1)
-                .map(|token| (token != "****").then_some(token))
+                .map(|token| (token != "****").then(|| Arc::from(token)))
                 .collect();
-            values.resize(columns.len(), None);
             if rows.len() <= index {
                 rows.resize(index + 1, None);
             }
@@ -335,7 +397,7 @@ fn binary_cell(
     pool_start: usize,
     pool_size: usize,
     offset: usize,
-) -> Result<Option<String>> {
+) -> Result<Option<Arc<str>>> {
     if offset >= pool_size {
         return Err(Error::TwoDa(format!(
             "cell offset {offset} is outside the {pool_size} byte string pool"
@@ -356,7 +418,7 @@ fn binary_cell(
     if text.is_empty() || text == "****" {
         Ok(None)
     } else {
-        Ok(Some(text.to_owned()))
+        Ok(Some(Arc::from(text)))
     }
 }
 
@@ -376,7 +438,7 @@ fn validate_row_count(row_count: usize, remaining: usize) -> Result<()> {
 }
 
 /// Splits a 2DA line into tokens, honouring double quotes.
-fn tokenize(line: &str) -> Vec<String> {
+fn tokenize(line: &str) -> Result<Vec<String>> {
     let mut tokens = Vec::new();
     let mut current = String::new();
     let mut quoted = false;
@@ -399,10 +461,13 @@ fn tokenize(line: &str) -> Vec<String> {
             }
         }
     }
+    if quoted {
+        return Err(Error::TwoDa("unterminated quote".to_owned()));
+    }
     if in_token {
         tokens.push(current);
     }
-    tokens
+    Ok(tokens)
 }
 
 #[cfg(test)]
@@ -433,17 +498,18 @@ mod tests {
     }
 
     #[test]
-    fn tokenizer_handles_quotes() {
+    fn tokenizer_handles_quotes_and_rejects_unterminated_ones() {
         assert_eq!(
-            tokenize("0  \"two words\"  three"),
+            tokenize("0  \"two words\"  three").expect("tokenize"),
             vec!["0", "two words", "three"]
         );
+        assert!(tokenize("0 \"unterminated").is_err());
     }
 
     #[test]
     fn row_accessors_handle_types_and_empty_cells() {
         let table = TwoDa::parse(
-            "2DA V2.0\n\nA B C D\n0 10 -3 1.5 \"\"\n1 4294967296 9223372036854775808 x\n",
+            "2DA V2.0\n\nA B C D\n0 10 -3 1.5 \"\"\n1 4294967296 9223372036854775808 x ****\n",
         )
         .expect("parse");
         let row = table.row(0).expect("row");
@@ -465,12 +531,18 @@ mod tests {
     }
 
     #[test]
-    fn parser_skips_blank_and_non_numeric_rows() {
-        let table =
-            TwoDa::parse("2DA V2.0\n\nA B\n0 one 1\n\nnot-a-row 2\n1 two 2\n").expect("parse");
+    fn parser_skips_blank_lines_but_rejects_malformed_rows() {
+        let table = TwoDa::parse("2DA V2.0\n\nA B\n0 one 1\n\n1 two 2\n").expect("parse");
         assert_eq!(table.len(), 2);
         assert_eq!(table.cell(0, "A"), Some("one"));
         assert_eq!(table.cell(1, "A"), Some("two"));
+
+        let error = TwoDa::parse("2DA V2.0\n\nA B\nnot-a-row 2\n").expect_err("non-numeric row");
+        assert!(error.to_string().contains("line 4"), "{error}");
+        assert!(error.to_string().contains("non-numeric"), "{error}");
+        assert!(TwoDa::parse("2DA V2.0\n\nA B\n0 one\n").is_err());
+        assert!(TwoDa::parse("2DA V2.0\n\nA B\n0 one 1 extra\n").is_err());
+        assert!(TwoDa::parse("2DA V2.0\n\nA B\n0 \"unterminated 1\n").is_err());
     }
 
     #[test]
@@ -532,5 +604,25 @@ mod binary_tests {
         let offset = sample.len() - 10;
         sample[offset..offset + 2].copy_from_slice(&99_u16.to_le_bytes());
         assert!(TwoDa::parse_binary(&sample).is_err());
+    }
+
+    #[test]
+    fn rejects_amplified_cell_pools() {
+        let mut data = b"2DA V2.b\n".to_vec();
+        for column in 0..20 {
+            data.extend_from_slice(format!("c{column}\t").as_bytes());
+        }
+        data.push(0);
+        data.extend_from_slice(&1_u32.to_le_bytes());
+        data.extend_from_slice(b"0\t");
+        for offset in 0_u16..20 {
+            data.extend_from_slice(&offset.to_le_bytes());
+        }
+        let pool_size = u16::MAX;
+        data.extend_from_slice(&pool_size.to_le_bytes());
+        data.extend(std::iter::repeat_n(b'A', usize::from(pool_size) - 1));
+        data.push(0);
+
+        assert!(TwoDa::parse_binary(&data).is_err());
     }
 }
