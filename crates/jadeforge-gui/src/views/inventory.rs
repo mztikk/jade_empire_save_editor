@@ -2,7 +2,7 @@
 
 use freya::prelude::*;
 
-use crate::app::Ctx;
+use crate::app::{Ctx, RowSession};
 use crate::i18n::{fill, keys, t};
 use crate::message::capitalize;
 use crate::session::{ItemRow, ItemSuggestion, Section};
@@ -32,7 +32,19 @@ pub fn view(
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for item in items {
-        rows.push(item_row(ctx, item, expanded, hovered, filter_id));
+        rows.push(
+            ItemRowView {
+                session: RowSession(ctx.session.clone()),
+                revision: ctx.revision,
+                item: item.clone(),
+                expanded,
+                hovered,
+                filter_id,
+                key: DiffKey::None,
+            }
+            .key(item.struct_index)
+            .into_element(),
+        );
     }
     if rows.is_empty() {
         rows.push(match ctx.session.borrow().section_error(Section::Items) {
@@ -243,123 +255,169 @@ fn category_chip(label: String, accessible: String, selected: bool, action: Acti
     .into_element()
 }
 
-#[allow(clippy::too_many_lines)] // one declarative row keeps the actions together
-fn item_row(
-    ctx: &Ctx,
-    item: &ItemRow,
+/// One inventory row, with a local draft for direct count editing.
+#[derive(PartialEq)]
+struct ItemRowView {
+    session: RowSession,
+    revision: State<u32>,
+    item: ItemRow,
     expanded: State<Option<usize>>,
-    mut hovered: State<Option<crate::app::HoverKey>>,
+    hovered: State<Option<crate::app::HoverKey>>,
     filter_id: AccessibilityId,
-) -> Element {
-    let key = crate::app::HoverKey::Item(item.struct_index);
-    let is_hovered = *hovered.read() == Some(key);
-    let minus = {
-        let ctx = ctx.clone();
-        let index = item.struct_index;
-        Action::new(move || ctx.run(|session| session.adjust_item_count(index, -1)))
-    };
-    let plus = {
-        let ctx = ctx.clone();
-        let index = item.struct_index;
-        Action::new(move || ctx.run(|session| session.adjust_item_count(index, 1)))
-    };
-    let remove = {
-        let ctx = ctx.clone();
-        let index = item.struct_index;
-        let name = item.name.clone();
-        Action::new(move || {
-            if !crate::dialog::confirm(
-                &fill(keys::DIALOG_REMOVE, &[("kind", t(keys::COUNT_ITEM_ONE))]),
-                &fill(keys::INVENTORY_REMOVE_CONFIRM, &[("name", &name)]),
-            ) {
-                return;
-            }
-            ctx.run(|session| session.remove_item(index));
-            // The focused Remove button just disappeared; keep the keyboard
-            // user inside the list by focusing its filter.
-            filter_id.request_focus();
-        })
-    };
-    let set_count = {
-        let ctx = ctx.clone();
-        let index = item.struct_index;
-        let name = item.name.clone();
-        move |text: String| {
-            let Ok(count) = text.trim().parse::<u8>() else {
-                ctx.run(|session| {
-                    session.set_error(&fill(keys::INVENTORY_STACK_ERROR, &[("name", &name)]));
-                });
-                return;
-            };
-            ctx.run(|session| session.set_item_count(index, count));
-        }
-    };
-    let is_expanded = *expanded.read() == Some(item.struct_index);
+    key: DiffKey,
+}
 
-    rect()
-        .vertical()
-        .width(Size::fill())
-        .key(item.struct_index)
-        .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(fill(keys::INVENTORY_ACCESSIBLE, &[("name", &item.name)]))
-        .background(if is_hovered {
-            theme::surface_hover()
-        } else {
-            theme::surface()
-        })
-        .corner_radius(theme::radius::medium())
-        .on_pointer_enter(move |_| *hovered.write() = Some(key))
-        .on_pointer_leave(move |_| {
-            if *hovered.read() == Some(key) {
-                *hovered.write() = None;
+impl KeyExt for ItemRowView {
+    fn key_mut(&mut self) -> &mut DiffKey {
+        &mut self.key
+    }
+}
+
+impl Component for ItemRowView {
+    fn render_key(&self) -> DiffKey {
+        self.key.clone()
+    }
+
+    #[allow(clippy::too_many_lines)] // one declarative row keeps the actions together
+    fn render(&self) -> impl IntoElement {
+        let item = &self.item;
+        let expanded = self.expanded;
+        let mut hovered = self.hovered;
+        let mut draft = use_state(|| item.count.to_string());
+        let mut synced_count = use_state(|| item.count);
+        if *synced_count.peek() != item.count {
+            synced_count.set(item.count);
+            draft.set(item.count.to_string());
+        }
+        let key = crate::app::HoverKey::Item(item.struct_index);
+        let is_hovered = *hovered.read() == Some(key);
+        let minus = {
+            let session = self.session.clone();
+            let revision = self.revision;
+            let index = item.struct_index;
+            Action::new(move || {
+                session.run(revision, |session| session.adjust_item_count(index, -1));
+            })
+        };
+        let plus = {
+            let session = self.session.clone();
+            let revision = self.revision;
+            let index = item.struct_index;
+            Action::new(move || {
+                session.run(revision, |session| session.adjust_item_count(index, 1));
+            })
+        };
+        let remove = {
+            let session = self.session.clone();
+            let revision = self.revision;
+            let index = item.struct_index;
+            let name = item.name.clone();
+            let filter_id = self.filter_id;
+            Action::new(move || {
+                if !crate::dialog::confirm(
+                    &fill(keys::DIALOG_REMOVE, &[("kind", t(keys::COUNT_ITEM_ONE))]),
+                    &fill(keys::INVENTORY_REMOVE_CONFIRM, &[("name", &name)]),
+                ) {
+                    return;
+                }
+                session.run(revision, |session| {
+                    session.remove_item(index);
+                });
+                // The focused Remove button just disappeared; keep the keyboard
+                // user inside the list by focusing its filter.
+                filter_id.request_focus();
+            })
+        };
+        let set_count = {
+            let session = self.session.clone();
+            let revision = self.revision;
+            let index = item.struct_index;
+            let name = item.name.clone();
+            let mut draft = draft;
+            move |text: String| {
+                let Ok(count) = text.trim().parse::<u8>() else {
+                    session.run(revision, |session| {
+                        session.set_error(&fill(keys::INVENTORY_STACK_ERROR, &[("name", &name)]));
+                    });
+                    return;
+                };
+                if count == 0 {
+                    session.run(revision, |session| {
+                        session.set_error(&fill(keys::INVENTORY_STACK_ERROR, &[("name", &name)]));
+                    });
+                    return;
+                }
+                session.run(revision, |session| session.set_item_count(index, count));
+                draft.set(count.to_string());
             }
-        })
-        .child(
-            rect()
-                .horizontal()
-                .width(Size::fill())
-                .spacing(theme::space::sm())
-                .content(Content::Flex)
-                .cross_align(Alignment::Center)
-                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::sm()))
-                .child(widgets::expanding_name(
-                    item.struct_index,
-                    item.name.clone(),
-                    item_subtitle(item.item_id, item.category.as_deref(), item.kind),
-                    expanded,
-                    theme::font::body(),
-                ))
-                .child(widgets::row_action(
-                    fill(keys::INVENTORY_DECREASE, &[("name", &item.name)]),
-                    "−",
-                    minus,
-                ))
-                .child(
-                    // Direct numeric editing: a 254-item stack is one edit,
-                    // not 254 stepper clicks. Enter applies the value.
-                    Input::new(WritableSetter::new(item.count.to_string(), |_: String| {}))
-                        .width(Size::px(theme::layout::item_count_width()))
-                        .text_align(TextAlign::Center)
-                        .compact()
-                        .on_submit(set_count),
-                )
-                .child(widgets::row_action(
-                    fill(keys::INVENTORY_INCREASE, &[("name", &item.name)]),
-                    "+",
-                    plus,
-                ))
-                .child(widgets::row_action(
-                    fill(keys::GEMS_REMOVE_ACTION, &[("name", &item.name)]),
-                    t(keys::GEMS_REMOVE),
-                    remove,
-                )),
-        )
-        .maybe_child(if is_expanded {
-            widgets::details(item.description.as_deref())
-        } else {
-            None
-        })
-        .into_element()
+        };
+        let is_expanded = *self.expanded.read() == Some(item.struct_index);
+
+        rect()
+            .vertical()
+            .width(Size::fill())
+            .key(item.struct_index)
+            .a11y_role(AccessibilityRole::Group)
+            .a11y_alt(fill(keys::INVENTORY_ACCESSIBLE, &[("name", &item.name)]))
+            .background(if is_hovered {
+                theme::surface_hover()
+            } else {
+                theme::surface()
+            })
+            .corner_radius(theme::radius::medium())
+            .on_pointer_enter(move |_| *hovered.write() = Some(key))
+            .on_pointer_leave(move |_| {
+                if *hovered.read() == Some(key) {
+                    *hovered.write() = None;
+                }
+            })
+            .child(
+                rect()
+                    .horizontal()
+                    .width(Size::fill())
+                    .spacing(theme::space::sm())
+                    .content(Content::Flex)
+                    .cross_align(Alignment::Center)
+                    .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::sm()))
+                    .child(widgets::expanding_name(
+                        item.struct_index,
+                        item.name.clone(),
+                        item_subtitle(item.item_id, item.category.as_deref(), item.kind),
+                        expanded,
+                        theme::font::body(),
+                    ))
+                    .child(widgets::row_action(
+                        fill(keys::INVENTORY_DECREASE, &[("name", &item.name)]),
+                        "−",
+                        minus,
+                    ))
+                    .child(
+                        // Direct numeric editing: a 254-item stack is one edit,
+                        // not 254 stepper clicks. Enter applies the value.
+                        Input::new(draft)
+                            .width(Size::px(theme::layout::item_count_width()))
+                            .text_align(TextAlign::Center)
+                            .compact()
+                            .on_submit(set_count),
+                    )
+                    .child(widgets::row_action(
+                        fill(keys::INVENTORY_INCREASE, &[("name", &item.name)]),
+                        "+",
+                        plus,
+                    ))
+                    .child(widgets::row_action(
+                        fill(keys::GEMS_REMOVE_ACTION, &[("name", &item.name)]),
+                        t(keys::GEMS_REMOVE),
+                        remove,
+                    )),
+            )
+            .maybe_child(if is_expanded {
+                widgets::details(item.description.as_deref())
+            } else {
+                None
+            })
+            .into_element()
+    }
 }
 
 #[cfg(test)]

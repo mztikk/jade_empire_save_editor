@@ -54,6 +54,29 @@ impl Ctx {
     }
 }
 
+/// A session handle that compares by pointer for keyed row components.
+#[derive(Clone)]
+pub(crate) struct RowSession(pub(crate) Rc<RefCell<Session>>);
+
+impl PartialEq for RowSession {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl RowSession {
+    /// Runs a row action and requests a re-render.
+    pub(crate) fn run<R>(&self, revision: State<u32>, action: impl FnOnce(&mut Session) -> R) -> R {
+        let result = {
+            let mut session = self.0.borrow_mut();
+            action(&mut session)
+        };
+        let mut revision = revision;
+        *revision.write() += 1;
+        result
+    }
+}
+
 /// Which interactive row is currently hovered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HoverKey {

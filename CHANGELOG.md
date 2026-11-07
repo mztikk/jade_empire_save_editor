@@ -15,6 +15,10 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- The direct item stack and companion level inputs now keep their typed draft
+  across hover and revision renders, sync from committed stepper changes,
+  normalize after a successful submit, and keep the row context for assistive
+  technology.
 - Game data loading now reports corrupt talk tables and RIM archives instead of
   treating them as empty installations. Talk table sections and entry ranges,
   RIM payload ranges, and 2DA row widths are validated; text rows name their
