@@ -92,15 +92,16 @@ its seven slots, socketed gems fit the tier, and a style level matches its mask.
    list of changes so callers can show a diff.
 4. Saving verifies the full round trip and the domain invariants first.
 5. The new file is written to an exclusive temporary sibling with the original
-   permissions, fsynced and moved into place; the parent directory is fsynced
-   too, so an interrupted save cannot truncate the original.
-6. Backups use unique nanosecond/counter names, are written to a temporary file
-   and renamed, and a pre-existing file or symlink is never followed or
-   overwritten.
-7. The file identity (size, mtime, inode on Unix) is recorded at open time; a
-   savegame that changed underneath the editor is reported as a conflict
-   instead of overwritten. Saving through a symlink keeps the link and writes
-   through to its target.
+   permissions applied to the open handle before data is written, fsynced and
+   moved into place; the parent directory is fsynced too, so an interrupted
+   save cannot truncate the original.
+6. Backups use unique nanosecond/counter names, are written completely to a
+   temporary file, and are published without replacing an existing name.
+7. The file identity (size, mtime, inode on Unix, creation time on Windows) is
+   sampled from the same open handle that supplies the bytes; a savegame that
+   changed underneath the editor is reported as a conflict instead of
+   overwritten. Saving through a symlink keeps the link and writes through to
+   its target.
 
 ## `jadeforge-gamedata`
 

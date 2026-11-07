@@ -5,10 +5,10 @@
 //! it. The file name carries the creation instant in UTC, so a backup can be
 //! listed with its timestamp even when the filesystem metadata is unavailable.
 //!
-//! Restoring a backup is itself a save: the current file is read and verified,
-//! a new backup of it is created first, and the chosen backup is verified before
-//! it is written atomically. A restore can therefore always be undone by
-//! restoring the backup that it creates.
+//! Restoring a backup is itself a save: the current file is copied to a new
+//! safety backup first, and the chosen backup is verified before it is written
+//! atomically. A corrupt current file never prevents the restore, and a restore
+//! can therefore always be undone by restoring the safety copy it creates.
 
 use std::fs;
 use std::io::{self, Write as _};
@@ -107,9 +107,10 @@ fn parse_stamp(suffix: &str) -> Option<SystemTime> {
 /// Restores `backup` over `original`.
 ///
 /// The backup is parsed and fully verified first, the current file (when it
-/// exists) is read and verified, and a new backup of it is written before the
-/// rename. The returned path is that safety backup, so the caller can tell the
-/// user how to undo the restore.
+/// exists) is copied to a raw safety backup, and the verified bytes are written
+/// before the rename. The returned path is that safety backup, so the caller
+/// can tell the user how to undo the restore. A corrupt current file does not
+/// prevent the restore.
 ///
 /// A symlinked `original` is written through to its target and the link is
 /// kept. The safety backup stays next to the caller's path so the backup
@@ -123,12 +124,17 @@ fn parse_stamp(suffix: &str) -> Option<SystemTime> {
 pub fn restore_backup(backup: &Path, original: &Path) -> Result<PathBuf> {
     let restored = SaveGame::open(backup)?;
     restored.verify()?;
-    let restored_bytes = fs::read(backup).map_err(|error| Error::io(backup, error))?;
+    let restored_bytes = restored.to_bytes()?;
     let write_target = resolve_write_target(original)?;
+    let target_metadata = match fs::metadata(&write_target) {
+        Ok(metadata) => Some(metadata),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(Error::io(&write_target, error)),
+    };
 
     let safety_backup = if original.exists() {
-        let current = SaveGame::open(original)?;
-        current.verify()?;
+        // The current file may be corrupt; a raw copy is still the best
+        // recovery point and must not require parsing the broken document.
         Some(create_backup(original)?)
     } else {
         None
@@ -136,16 +142,14 @@ pub fn restore_backup(backup: &Path, original: &Path) -> Result<PathBuf> {
 
     let (temporary, mut file) = create_restore_file(&write_target)?;
     let result = (|| -> Result<()> {
+        if let Some(metadata) = &target_metadata {
+            file.set_permissions(metadata.permissions())
+                .map_err(|error| Error::io(&temporary, error))?;
+        }
         file.write_all(&restored_bytes)
             .map_err(|error| Error::io(&temporary, error))?;
         file.sync_all()
             .map_err(|error| Error::io(&temporary, error))?;
-        if let Ok(metadata) = fs::metadata(&write_target) {
-            fs::set_permissions(&temporary, metadata.permissions())
-                .map_err(|error| Error::io(&temporary, error))?;
-            file.sync_all()
-                .map_err(|error| Error::io(&temporary, error))?;
-        }
         drop(file);
         fs::rename(&temporary, &write_target).map_err(|error| Error::io(&write_target, error))?;
         sync_parent(&write_target)?;

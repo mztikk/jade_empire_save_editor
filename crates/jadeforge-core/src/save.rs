@@ -10,7 +10,7 @@
 //! ```
 
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read as _, Write as _};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -117,6 +117,8 @@ struct SourceStamp {
     dev: u64,
     #[cfg(unix)]
     ino: u64,
+    #[cfg(windows)]
+    created: Option<SystemTime>,
 }
 
 impl SourceStamp {
@@ -130,6 +132,8 @@ impl SourceStamp {
             dev: metadata.dev(),
             #[cfg(unix)]
             ino: metadata.ino(),
+            #[cfg(windows)]
+            created: metadata.created().ok(),
         }
     }
 
@@ -141,7 +145,11 @@ impl SourceStamp {
         {
             same && self.dev == metadata.dev() && self.ino == metadata.ino()
         }
-        #[cfg(not(unix))]
+        #[cfg(windows)]
+        {
+            same && self.created == metadata.created().ok()
+        }
+        #[cfg(not(any(unix, windows)))]
         {
             same
         }
@@ -166,8 +174,11 @@ impl SaveGame {
     /// Loads a savegame from disk.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let bytes = fs::read(path).map_err(|error| Error::io(path, error))?;
-        let metadata = fs::metadata(path).map_err(|error| Error::io(path, error))?;
+        let mut file = File::open(path).map_err(|error| Error::io(path, error))?;
+        let metadata = file.metadata().map_err(|error| Error::io(path, error))?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)
+            .map_err(|error| Error::io(path, error))?;
         if metadata.len() != u64::try_from(bytes.len()).unwrap_or(u64::MAX) {
             return Err(Error::Conflict {
                 path: path.to_path_buf(),
@@ -765,43 +776,52 @@ impl SaveGame {
         let write_target = resolve_write_target(target)?;
         let bytes = self.verified_bytes()?;
         self.ensure_unchanged(&write_target)?;
+        let target_metadata = match fs::metadata(&write_target) {
+            Ok(metadata) => Some(metadata),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => return Err(Error::io(&write_target, error)),
+        };
 
         // Keep backups next to the path the caller named, even when that path
         // is a symlink. The backup browser and the reported backup path then
         // use the same visible name as the savegame.
-        let backup = if options.backup && write_target.exists() {
+        let backup = if options.backup && target_metadata.is_some() {
             Some(create_backup(target)?)
         } else {
             None
         };
 
         let (temporary, mut file) = create_temporary(&write_target)?;
-        let write_result = (|| -> Result<()> {
+        let write_result = (|| -> Result<SourceStamp> {
+            if let Some(metadata) = &target_metadata {
+                file.set_permissions(metadata.permissions())
+                    .map_err(|error| Error::io(&temporary, error))?;
+            }
             file.write_all(&bytes)
                 .map_err(|error| Error::io(&temporary, error))?;
             file.sync_all()
                 .map_err(|error| Error::io(&temporary, error))?;
-            if let Ok(metadata) = fs::metadata(&write_target) {
-                fs::set_permissions(&temporary, metadata.permissions())
-                    .map_err(|error| Error::io(&temporary, error))?;
-                file.sync_all()
-                    .map_err(|error| Error::io(&temporary, error))?;
-            }
+            let stamp = SourceStamp::from_metadata(
+                &file
+                    .metadata()
+                    .map_err(|error| Error::io(&temporary, error))?,
+            );
             drop(file);
             self.ensure_unchanged(&write_target)?;
             fs::rename(&temporary, &write_target)
                 .map_err(|error| Error::io(&write_target, error))?;
             sync_parent(&write_target)?;
-            Ok(())
+            Ok(stamp)
         })();
 
-        if let Err(error) = write_result {
-            let _ = fs::remove_file(&temporary);
-            return Err(error);
-        }
+        let stamp = match write_result {
+            Ok(stamp) => stamp,
+            Err(error) => {
+                let _ = fs::remove_file(&temporary);
+                return Err(error);
+            }
+        };
 
-        let metadata = fs::metadata(&write_target).map_err(|error| Error::io(target, error))?;
-        let stamp = SourceStamp::from_metadata(&metadata);
         let reloaded = Self::parse_container(target.to_path_buf(), bytes, Some(stamp))?;
         *self = reloaded;
         self.last_backup = backup;
@@ -901,35 +921,17 @@ pub(crate) fn create_backup(target: &Path) -> Result<PathBuf> {
     let metadata = fs::metadata(target).map_err(|error| Error::io(target, error))?;
     let (temporary, temporary_file) = create_temporary_named(target, "backup")?;
     let result = (|| -> Result<PathBuf> {
-        let mut source = File::open(target).map_err(|error| Error::io(target, error))?;
         let mut destination = temporary_file;
+        destination
+            .set_permissions(metadata.permissions())
+            .map_err(|error| Error::io(&temporary, error))?;
+        let mut source = File::open(target).map_err(|error| Error::io(target, error))?;
         io::copy(&mut source, &mut destination).map_err(|error| Error::io(&temporary, error))?;
         destination
             .sync_all()
             .map_err(|error| Error::io(&temporary, error))?;
-        fs::set_permissions(&temporary, metadata.permissions())
-            .map_err(|error| Error::io(&temporary, error))?;
-        destination
-            .sync_all()
-            .map_err(|error| Error::io(&temporary, error))?;
         drop(destination);
-        for _ in 0..64 {
-            let backup = backup_path(target);
-            if backup.exists() {
-                continue;
-            }
-            match fs::rename(&temporary, &backup) {
-                Ok(()) => {
-                    sync_parent(&backup)?;
-                    return Ok(backup);
-                }
-                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
-                Err(error) => return Err(Error::io(&backup, error)),
-            }
-        }
-        Err(Error::Corrupt(
-            "could not find a free backup name".to_owned(),
-        ))
+        publish_backup(&temporary, target)
     })();
     match result {
         Ok(backup) => Ok(backup),
@@ -938,6 +940,48 @@ pub(crate) fn create_backup(target: &Path) -> Result<PathBuf> {
             Err(error)
         }
     }
+}
+
+/// Publishes a complete temporary backup without replacing an existing one.
+fn publish_backup(temporary: &Path, target: &Path) -> Result<PathBuf> {
+    for _ in 0..64 {
+        let backup = backup_path(target);
+        if publish_backup_at(temporary, &backup)? {
+            return Ok(backup);
+        }
+    }
+    Err(Error::Corrupt(
+        "could not find a free backup name".to_owned(),
+    ))
+}
+
+/// Publishes `temporary` at `backup`, returning whether the name was free.
+///
+/// A hard link is the primary no-replace operation. Filesystems without hard
+/// links fall back to reserving the name with `create_new` and renaming the
+/// complete temporary file over that reservation.
+fn publish_backup_at(temporary: &Path, backup: &Path) -> Result<bool> {
+    match fs::hard_link(temporary, backup) {
+        Ok(()) => {
+            let _ = fs::remove_file(temporary);
+            sync_parent(backup)?;
+            return Ok(true);
+        }
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => return Ok(false),
+        Err(_) => {}
+    }
+
+    match OpenOptions::new().write(true).create_new(true).open(backup) {
+        Ok(file) => drop(file),
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => return Ok(false),
+        Err(error) => return Err(Error::io(backup, error)),
+    }
+    if let Err(error) = fs::rename(temporary, backup) {
+        let _ = fs::remove_file(backup);
+        return Err(Error::io(backup, error));
+    }
+    sync_parent(backup)?;
+    Ok(true)
 }
 
 /// Creates an exclusive temporary sibling and returns it with an open handle.
@@ -1050,8 +1094,21 @@ impl<'a> Reader<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::parent_directory;
-    use std::path::Path;
+    use super::{parent_directory, publish_backup_at};
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    fn test_directory(tag: &str) -> PathBuf {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        let path = std::env::temp_dir().join(format!(
+            "jadeforge-save-test-{tag}-{}-{stamp}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&path).expect("create test directory");
+        path
+    }
 
     #[test]
     fn a_bare_relative_path_uses_the_current_directory() {
@@ -1067,5 +1124,34 @@ mod tests {
             parent_directory(Path::new("/games/Jade Empire/Save/save.sac")),
             Some(Path::new("/games/Jade Empire/Save"))
         );
+    }
+
+    #[test]
+    fn a_preexisting_backup_name_is_never_replaced() {
+        let directory = test_directory("backup-publish");
+        let temporary = directory.join("temporary");
+        let backup = directory.join("backup");
+        fs::write(&temporary, b"new").expect("write temporary");
+        fs::write(&backup, b"old").expect("write existing backup");
+
+        assert!(
+            !publish_backup_at(&temporary, &backup).expect("attempt publication"),
+            "an existing backup was treated as free"
+        );
+        assert_eq!(fs::read(&backup).expect("read backup"), b"old");
+        assert!(
+            temporary.exists(),
+            "the occupied publication removed its input"
+        );
+
+        fs::remove_file(&backup).expect("remove existing backup");
+        assert!(
+            publish_backup_at(&temporary, &backup).expect("publish free name"),
+            "a free backup name was not published"
+        );
+        assert_eq!(fs::read(&backup).expect("read published backup"), b"new");
+        assert!(!temporary.exists(), "the published temporary was not moved");
+
+        fs::remove_dir_all(directory).expect("remove test directory");
     }
 }
