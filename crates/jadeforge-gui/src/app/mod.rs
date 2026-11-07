@@ -438,6 +438,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let show_review = use_state(|| false);
     let style_query = use_state(String::new);
     let hovered = use_state(|| None::<HoverKey>);
+    let focused_orb = use_state(|| None::<HoverKey>);
     let gem_query = use_state(String::new);
     let gem_inventory_query = use_state(String::new);
     let expanded_item = use_state(|| None::<usize>);
@@ -571,6 +572,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 expanded_suggestion,
                 expanded_style,
                 hovered,
+                focused_orb,
                 directory_state,
                 &session,
                 &scrolls,
@@ -581,6 +583,12 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     // Snapshot everything the shell needs so the borrow stays short.
     let disk_changed = session.borrow_mut().check_disk_state();
     let active_tab = *tab.read();
+    if active_tab != Tab::Styles {
+        let mut focused = focused_orb;
+        if focused.peek().is_some() {
+            focused.set(None);
+        }
+    }
     let entries = session.borrow().entries();
     // The filter indices must belong to this exact entry list; see
     // `SaveFilter`. Reading the filter state here also subscribes the shell to
@@ -871,6 +879,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             game_ready.then_some(total_missing),
             expanded_style,
             hovered,
+            focused_orb,
             style_filter_id,
         ),
         (Tab::Inventory, _) => views::inventory::view(
@@ -1229,6 +1238,7 @@ fn reset_pickers(
     expanded_suggestion: State<Option<u16>>,
     expanded_style: State<Option<u16>>,
     hovered: State<Option<HoverKey>>,
+    focused_orb: State<Option<HoverKey>>,
     directory_state: State<String>,
     session: &Rc<RefCell<Session>>,
     scrolls: &[ScrollController; 6],
@@ -1259,6 +1269,8 @@ fn reset_pickers(
     expanded_style.set(None);
     let mut hovered = hovered;
     hovered.set(None);
+    let mut focused_orb = focused_orb;
+    focused_orb.set(None);
     let mut directory_state = directory_state;
     directory_state.set(session.borrow().directory().display().to_string());
     for scroll in scrolls {

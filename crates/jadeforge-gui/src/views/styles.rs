@@ -28,12 +28,19 @@ pub fn view(
     learnable: Option<usize>,
     expanded: State<Option<u16>>,
     hovered: State<Option<crate::app::HoverKey>>,
+    focused_orb: State<Option<crate::app::HoverKey>>,
     filter_id: AccessibilityId,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for style in styles {
         rows.push(style_row(
-            ctx, style, expanded, hovered, game_ready, filter_id,
+            ctx,
+            style,
+            expanded,
+            hovered,
+            focused_orb,
+            game_ready,
+            filter_id,
         ));
     }
     if rows.is_empty() {
@@ -177,6 +184,7 @@ fn style_row(
     style: &StyleRow,
     expanded: State<Option<u16>>,
     mut hovered: State<Option<crate::app::HoverKey>>,
+    focused_orb: State<Option<crate::app::HoverKey>>,
     game_ready: bool,
     filter_id: AccessibilityId,
 ) -> Element {
@@ -254,7 +262,7 @@ fn style_row(
                 )),
         )
         .maybe_child(if is_expanded {
-            Some(upgrade_panel(ctx, style, hovered, game_ready))
+            Some(upgrade_panel(ctx, style, hovered, focused_orb, game_ready))
         } else {
             None
         })
@@ -266,6 +274,7 @@ fn upgrade_panel(
     ctx: &Ctx,
     style: &StyleRow,
     hovered: State<Option<crate::app::HoverKey>>,
+    focused_orb: State<Option<crate::app::HoverKey>>,
     game_ready: bool,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
@@ -312,15 +321,18 @@ fn upgrade_panel(
             &style.name,
             upgrade,
             hovered,
+            focused_orb,
         ));
     }
     if let Some(family) = family {
         rows.push(upgrade_row(family, chips));
     }
     rows.push(widgets::hint(t(keys::STYLES_ORB_HINT)));
-    // A hovered (or keyboard-focused) orb explains itself under the family:
-    // name, effect, cost and what a click would do.
-    if let Some(crate::app::HoverKey::Orb(struct_index, slot)) = *hovered.read()
+    // A hovered or focused orb explains itself under the family: name, effect,
+    // cost and what a click would do. Keyboard focus wins so the detail stays
+    // visible while the pointer rests over the style row.
+    let active_orb = (*focused_orb.read()).or(*hovered.read());
+    if let Some(crate::app::HoverKey::Orb(struct_index, slot)) = active_orb
         && struct_index == style.struct_index
         && let Some(upgrade) = style.upgrades.iter().find(|upgrade| upgrade.slot == slot)
     {
@@ -381,6 +393,7 @@ struct UpgradeOrb {
     style_name: String,
     upgrade: StyleUpgrade,
     hovered: State<Option<HoverKey>>,
+    focused_orb: State<Option<HoverKey>>,
     key: DiffKey,
 }
 
@@ -391,12 +404,25 @@ impl KeyExt for UpgradeOrb {
 }
 
 impl Component for UpgradeOrb {
+    fn render_key(&self) -> DiffKey {
+        self.key.clone()
+    }
+
     fn render(&self) -> impl IntoElement {
         let a11y_id = use_a11y();
         let focus = use_focus(a11y_id);
         let key = HoverKey::Orb(self.struct_index, self.upgrade.slot);
         let is_hovered = *self.hovered.read() == Some(key);
+        let has_focus = focus().is_focused();
         let focused = focus() == Focus::Keyboard;
+        let mut focused_orb = self.focused_orb;
+        if has_focus {
+            if *focused_orb.peek() != Some(key) {
+                focused_orb.set(Some(key));
+            }
+        } else if *focused_orb.peek() == Some(key) {
+            focused_orb.set(None);
+        }
         let taken = self.upgrade.taken;
         let background = if taken {
             if is_hovered || focused {
@@ -480,6 +506,7 @@ fn upgrade_chip(
     style_name: &str,
     upgrade: &StyleUpgrade,
     hovered: State<Option<HoverKey>>,
+    focused_orb: State<Option<HoverKey>>,
 ) -> Element {
     UpgradeOrb {
         session: SharedSession(ctx.session.clone()),
@@ -488,6 +515,7 @@ fn upgrade_chip(
         style_name: style_name.to_owned(),
         upgrade: upgrade.clone(),
         hovered,
+        focused_orb,
         key: DiffKey::None,
     }
     .key((struct_index, upgrade.slot))

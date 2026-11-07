@@ -15,6 +15,10 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- Disabled tabs keep their accessible names, keyboard-focused upgrade orbs
+  expose the same effect, cost and action detail as pointer hover, and a dirty
+  backup browser shows a disabled, non-focusable Restore control instead of an
+  action that the session would refuse.
 - Rescanning a folder that lost its last readable savegame no longer crashes the
   save list. The filtered indices are derived from the same entry snapshot the
   rows render, so a stale filter can no longer index an entry list that already

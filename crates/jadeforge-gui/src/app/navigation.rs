@@ -120,6 +120,7 @@ pub(super) fn tab_bar(
                     .key(candidate.index())
                     .child(content)
                     .a11y_role(AccessibilityRole::Tab)
+                    .a11y_alt(capitalize(t(candidate.label())))
                     .a11y_builder(accesskit::Node::set_disabled)
                     .into_element(),
             );
