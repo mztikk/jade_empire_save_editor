@@ -643,7 +643,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         // this future subscribes to may restart it.
                         scan_job.set(None);
                     }
-                    crate::session::ScanApply::Failed => {
+                    crate::session::ScanApply::Failed | crate::session::ScanApply::Blocked => {
                         let real = session.borrow().directory().display().to_string();
                         directory_state.set(real);
                         *revision.write() += 1;

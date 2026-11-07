@@ -4283,6 +4283,57 @@ fn a_scan_settles_after_the_in_flight_state() {
 }
 
 #[test]
+fn a_dirty_save_blocks_a_completed_folder_scan() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let second_root = fixture.root.join("blocked-scan-root");
+    let second_folder = second_root.join("Test Save");
+    std::fs::create_dir_all(&second_folder).expect("create second save folder");
+    std::fs::copy(
+        fixture.save_dir.join("Test Save").join("save.sac"),
+        second_folder.join("save.sac"),
+    )
+    .expect("copy savegame");
+
+    let mut test = launch_sized(fixture.save_dir.clone(), 1200.0);
+    assert!(click_text(&mut test, "Level "), "the savegame did not open");
+    assert!(click_label_exact(&mut test, "Character"));
+    assert!(
+        find_label_text(&test, "Identity").is_some(),
+        "the Character tab has no identity card"
+    );
+
+    jadeforge_gui::session::set_scan_delay_for_tests(std::time::Duration::from_millis(500));
+    jadeforge_gui::dialog::set_next_pick_for_tests(Some(second_root));
+    assert!(click_text(&mut test, "Browse"), "no browse button");
+    // The request captured the delay; reset the test seam immediately so a
+    // failed assertion cannot slow later tests.
+    jadeforge_gui::session::set_scan_delay_for_tests(std::time::Duration::ZERO);
+
+    assert!(click_text(&mut test, "+1 point"), "no quick-add button");
+    as_many_updates(&mut test);
+    wait_for_text(&mut test, "Save or revert the unsaved changes first");
+    assert!(
+        find_label_text(&test, "Identity").is_some(),
+        "the blocked scan closed the dirty savegame"
+    );
+    assert!(
+        find_label_text(&test, "1 SAVEGAME").is_some(),
+        "the blocked scan replaced the save list"
+    );
+    assert!(
+        find_label_text(&test, "Save or revert the unsaved changes first").is_some(),
+        "the blocked scan did not explain why it was not applied"
+    );
+    assert!(
+        find_label_text(&test, "Scanning ").is_none(),
+        "the blocked scan left the in-flight state behind"
+    );
+}
+
+#[test]
 fn scanning_another_folder_resets_the_filter_after_the_scan() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");

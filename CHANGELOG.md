@@ -13,6 +13,13 @@ All notable changes are documented here. The format follows
   tabs, save rows, footer buttons and row actions. A manual screen-reader
   checklist covers the audible Orca, NVDA and VoiceOver pass.
 
+### Fixed
+
+- A scan that finishes after the open savegame becomes dirty no longer replaces
+  the folder or clears the document. The result is blocked with the unsaved
+  changes message until the user saves or reverts; same-folder refreshes still
+  apply when the open entry remains.
+
 ## [0.3.1] - 2026-11-07
 
 ### Fixed
