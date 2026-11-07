@@ -53,7 +53,9 @@ gated and only with explicit permission; see rule 13), `just snapshot …` rende
 publish` builds the fat-LTO distribution binaries, stages checksums and
 third-party notices, and `just checksums` regenerates `dist/SHA256SUMS`.
 `just publish-linux` builds the SteamOS-compatible Linux binaries (glibc 2.35) in
-a rootless Podman container. Linux/Windows x86-64 releases ship both the
+a rootless Podman container. `just publish-windows-cross` builds and stages the
+Windows release on Linux with cargo-xwin, which is a local prerequisite rather
+than a workspace dependency. Linux/Windows x86-64 releases ship both the
 `x86-64-v3` binaries (`jadeforge`, `jadeforge-cli`) and baseline fallbacks
 (`jadeforge-generic-cpu`, `jadeforge-cli-generic-cpu`) in the same folder. `just coverage` runs
 `cargo llvm-cov nextest` and writes `coverage/lcov.info` and `coverage/html` (see

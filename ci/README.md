@@ -30,9 +30,10 @@ pushes to `main`, pull requests, tags and manual dispatches.
   checks the glibc baseline on Linux, writes `THIRD_PARTY_NOTICES.txt`, the
   dependency inventory, a CycloneDX `sbom.cdx.json` and, for public
   repositories, a GitHub build-provenance attestation, and uploads the staged
-  folders as per-OS artifacts. macOS is not in the release matrix yet and the published binaries
-  are unsigned; see [Release signing](#release-signing). Windows also runs the
-  headless UI tests.
+  folders as per-OS artifacts. Windows can also be cross-built on Linux with
+  `just publish-windows-cross` and cargo-xwin (see below). macOS is not in the
+  release matrix yet and the published binaries are unsigned; see
+  [Release signing](#release-signing). Windows also runs the headless UI tests.
 - `release` (tags only): downloads the per-OS artifacts, zips every staged
   folder (the Linux `share/` tree travels inside the Linux archive), writes one
   `SHA256SUMS` over the uploaded assets and `RELEASE_NOTES.md` from the
@@ -53,12 +54,15 @@ just check           # fmt, clippy, nextest, doctests
 just strict         # non-gating audit of the strict lints
 just coverage       # cargo llvm-cov summary, lcov and html
 just publish        # fat-LTO binaries, macOS .app/Linux share, notices under dist/
+just publish-linux  # SteamOS-compatible Linux binaries in a glibc 2.35 container
+just publish-windows-cross  # Windows binaries on Linux with cargo-xwin
 ci/assemble-release.sh dist vX.Y.Z  # zip the folders, write SHA256SUMS and notes
 just checksums      # dist/SHA256SUMS for the staged (unzipped) files
 just sbom           # dist/sbom.cdx.json
 just icons          # regenerate the icon PNG/ICO/ICNS assets from icon.svg
 just install-desktop # Linux GUI + CLI + launcher entry + hicolor icons
 ci/test-icon-staging.sh # smoke-test the macOS bundle and Linux share staging
+ci/test-stage-windows-cross.sh # test the Windows cross-build staging
 cargo bench -p jadeforge-core --bench save_corpus
 cargo +nightly fuzz run gff   # long local run; see fuzz/README.md
 ```
@@ -68,6 +72,40 @@ cargo +nightly fuzz run gff   # long local run; see fuzz/README.md
 the UI tests use the synthetic fixture. Work happens on task branches; a branch
 is ready for review when `just finish` passes, and pull requests run CI before a
 merge.
+
+## Windows cross build
+
+`just publish-windows-cross` builds and stages the Windows x86-64 release from
+Linux. It uses [cargo-xwin](https://github.com/rust-cross/cargo-xwin) to supply
+the Microsoft CRT, SDK and linker paths. The Freya GUI links the prebuilt
+Windows Skia libraries, so no Windows host or C++ rebuild is needed.
+
+Install the tool once, in a normal user shell:
+
+```sh
+cargo install --locked cargo-xwin@0.23.1
+```
+
+The first build downloads the Microsoft CRT and SDK into `~/.cache/cargo-xwin`
+and accepts the Microsoft license linked from the cargo-xwin README. Clang,
+`lld-link`, `llvm-rc` and the `x86_64-pc-windows-msvc` Rust target must be
+available. Wine is optional and only used to smoke-test the result:
+
+```sh
+wine dist/jadeforge-<version>-x86_64-pc-windows-msvc/jadeforge-cli.exe --help
+```
+
+The recipe builds the x86-64-v3 binaries with `target/x86_64-pc-windows-msvc`
+and the baseline fallbacks with `target/baseline`, then runs
+`ci/stage-windows-cross.sh` to stage the four `.exe` files. If the linker
+reports undefined `__std_*` symbols, use the clang backend, which downloads the
+newer `windows-msvc-sysroot` STL:
+
+```sh
+XWIN_CROSS_COMPILER=clang just publish-windows-cross
+```
+
+`ci/test-stage-windows-cross.sh` covers the staging step without cargo-xwin.
 
 ## Release signing
 
@@ -106,6 +144,10 @@ exercised against the real credentials.
    the `release` job creates and publishes the GitHub release:
    `git fetch origin && git tag -a vMAJOR.MINOR.PATCH origin/main -m "..." &&
    git push origin vMAJOR.MINOR.PATCH`.
+   When GitHub Actions is unavailable, build the same assets locally instead:
+   `just publish-linux`, `just publish-windows-cross`, then
+   `ci/assemble-release.sh dist vX.Y.Z` and
+   `ci/publish-release.sh vX.Y.Z dist`.
 4. Verify the four Linux binaries with `ci/check-glibc.sh` against 2.35.
 5. Verify the release contains one `.zip` per platform (the Linux `share/`
    tree is inside the Linux archive), one `SHA256SUMS`, `THIRD_PARTY_NOTICES.txt`,
