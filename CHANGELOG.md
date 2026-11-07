@@ -15,6 +15,9 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- GFF parsing now rejects duplicate label names, multiple root structs, and
+  localized strings with trailing bytes. A bounded baseline keeps compact,
+  de-duplicated writer output parseable without removing the decoded-data guard.
 - Save, backup, restore and backup listing now work with bare relative paths
   and symlinked savegames. Backups stay next to the visible savegame path, and
   restoring through a symlink writes its target while keeping the link.

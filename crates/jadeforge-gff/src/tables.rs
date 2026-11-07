@@ -189,6 +189,7 @@ impl Tables {
         };
 
         let mut labels = Vec::with_capacity(label_count);
+        let mut seen_labels = HashSet::with_capacity(label_count);
         for index in 0..label_count {
             let start = label_offset + index * LABEL_SIZE;
             let slot = &bytes[start..start + LABEL_SIZE];
@@ -199,6 +200,9 @@ impl Tables {
             let name = std::str::from_utf8(&slot[..end])
                 .map_err(|_| err(format!("label {index} is not valid UTF-8")))?
                 .to_owned();
+            if !seen_labels.insert(name.clone()) {
+                return Err(err(format!("label table contains {name:?} twice")));
+            }
             labels.push(name);
         }
 
@@ -347,10 +351,19 @@ impl Tables {
             }
         }
 
-        let root = structs
+        let mut roots = structs
             .iter()
-            .position(|structure| structure.type_id == u32::MAX)
+            .enumerate()
+            .filter(|(_, structure)| structure.type_id == u32::MAX);
+        let root = roots
+            .next()
+            .map(|(index, _)| index)
             .ok_or_else(|| err("block has no root struct (type 0xffff_ffff)".to_owned()))?;
+        if roots.next().is_some() {
+            return Err(err(
+                "block has more than one root struct (type 0xffff_ffff)".to_owned(),
+            ));
+        }
 
         Ok(Self {
             version,

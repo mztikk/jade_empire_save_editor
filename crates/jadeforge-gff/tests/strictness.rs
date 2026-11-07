@@ -165,9 +165,83 @@ fn selected_fields_still_validates_list_targets() {
 }
 
 #[test]
-fn a_block_that_decodes_into_too_much_data_is_rejected() {
+fn parse_rejects_duplicate_label_names() {
+    let mut gff = empty_block();
+    gff.labels = vec!["Same".to_owned(), "Other".to_owned()];
+    gff.structs[0].fields.push(Field {
+        label: 0,
+        type_id: 0,
+        value: Value::Byte(1),
+    });
+    let mut bytes = gff.to_bytes().expect("serialize");
+    let label_offset = u32_at(&bytes, 24) as usize;
+    bytes[label_offset + 16..label_offset + 32].fill(0);
+    bytes[label_offset + 16..label_offset + 20].copy_from_slice(b"Same");
+
+    assert!(matches!(
+        Gff::parse("duplicate-labels", &bytes),
+        Err(Error::Malformed { .. })
+    ));
+}
+
+#[test]
+fn parse_rejects_multiple_root_structs() {
+    let mut gff = empty_block();
+    let child = gff.push_struct(0);
+    gff.add_field(0, "Child", Value::Struct(child))
+        .expect("child field");
+    let mut bytes = gff.to_bytes().expect("serialize");
+    let struct_offset = u32_at(&bytes, 8) as usize;
+    put_u32(&mut bytes, struct_offset + 12, u32::MAX);
+
+    assert!(matches!(
+        Gff::parse("multiple-roots", &bytes),
+        Err(Error::Malformed { .. })
+    ));
+}
+
+#[test]
+fn selected_fields_returns_none_for_missing_or_mistyped_paths() {
+    let mut gff = empty_block();
+    gff.add_field(0, "A", Value::Byte(1)).expect("field");
+    let bytes = gff.to_bytes().expect("serialize");
+
+    let selected = Gff::selected_fields("selected", &bytes, &["Missing", "A.B", "A[0]"])
+        .expect("selected fields");
+    assert_eq!(selected, [None, None, None]);
+}
+
+#[test]
+fn add_field_typed_reports_the_requested_type() {
+    let mut gff = empty_block();
+    let error = gff
+        .add_field_typed(0, "Mismatch", 4, Value::Byte(1))
+        .expect_err("type mismatch was accepted");
+    let message = error.to_string();
+    assert!(message.contains("expected dword"), "{message}");
+    assert!(message.contains("holds byte"), "{message}");
+}
+
+#[test]
+fn writer_output_with_deduplicated_payloads_parses() {
     let mut gff = empty_block();
     for index in 0..100 {
+        gff.add_field(
+            0,
+            &format!("Blob{index}"),
+            Value::Void(vec![0_u8; 64 * 1024]),
+        )
+        .expect("blob");
+    }
+    let bytes = gff.to_bytes().expect("serialize");
+    let parsed = Gff::parse("budget", &bytes).expect("writer output did not parse");
+    assert_eq!(parsed.structs[0].fields.len(), 100);
+}
+
+#[test]
+fn a_block_that_decodes_into_too_much_data_is_rejected() {
+    let mut gff = empty_block();
+    for index in 0..300 {
         gff.add_field(
             0,
             &format!("Blob{index}"),
