@@ -127,6 +127,20 @@ fn styles_ignore_a_non_dword64_mask_when_reading() {
 }
 
 #[test]
+fn style_upgrades_reject_a_foreign_struct() {
+    let mut gff = common::character_gff();
+    let style = push_style(&mut gff, 1, Some(1), Some(0));
+    add_styles(&mut gff, vec![style]);
+    let foreign = gff.push_struct(0);
+    let mut save = common::save(&gff);
+    let before = save.to_bytes().expect("before");
+
+    assert!(save.set_style_family_slot(foreign, &[1], 1).is_err());
+    assert!(!save.is_modified());
+    assert_eq!(save.to_bytes().expect("after"), before);
+}
+
+#[test]
 fn a_family_buys_and_removes_a_gap_free_prefix() {
     let mut gff = common::character_gff();
     let style = push_style(&mut gff, 1, Some(1), Some(0));
@@ -209,6 +223,58 @@ fn family_slot_validation_rejects_bad_arguments() {
         Err(Error::Corrupt(_))
     ));
     assert!(!save.is_modified());
+}
+
+#[test]
+fn adding_a_style_completes_identity_and_clears_resistances() {
+    let mut gff = common::character_gff();
+    let template = push_style(&mut gff, 1, Some(1), Some(0));
+    let resist = gff.push_struct(0);
+    gff.add_field(template, "ResistList", Value::List(vec![resist]))
+        .expect("resist list");
+    add_styles(&mut gff, vec![template]);
+    let mut save = common::save(&gff);
+
+    let added = save.add_style(template, &identity(2)).expect("add style");
+    let gff = save.block("save.sav").expect("block").gff();
+    let added_style = gff.struct_at(added).expect("added style");
+    let field = |name: &str| {
+        added_style
+            .fields
+            .iter()
+            .find(|field| gff.label_name(field.label) == Some(name))
+            .expect(name)
+    };
+    assert_eq!(field("StyleId").type_id, 4);
+    assert_eq!(field("StyleId").value, Value::DWord(2));
+    assert_eq!(field("NameRef").type_id, 5);
+    assert_eq!(field("NameRef").value, Value::Int(42));
+    assert_eq!(field("DescRef").type_id, 5);
+    assert_eq!(field("DescRef").value, Value::Int(99));
+    assert_eq!(field("IconRef").type_id, 10);
+    assert_eq!(field("IconRef").value, Value::String("I_NEW".to_owned()));
+    assert_eq!(field("WeaponRef").type_id, 10);
+    assert_eq!(
+        field("WeaponRef").value,
+        Value::String("J00_NEW_WEAPON".to_owned())
+    );
+    assert_eq!(field("WeaponCount").type_id, 5);
+    assert_eq!(field("WeaponCount").value, Value::Int(2));
+    assert_eq!(
+        field("ResistList").value,
+        Value::List(Vec::new()),
+        "the learned style inherited the template resistances"
+    );
+
+    let style = save
+        .styles()
+        .expect("styles")
+        .into_iter()
+        .find(|style| style.struct_index == added)
+        .expect("new style");
+    assert_eq!(style.weapon.as_deref(), Some("J00_NEW_WEAPON"));
+    assert_eq!(style.weapon_count, 2);
+    save.to_bytes().expect("serialize");
 }
 
 #[test]

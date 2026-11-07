@@ -1035,6 +1035,27 @@ pub(crate) fn parent_directory(path: &Path) -> Option<&Path> {
     })
 }
 
+/// Rejects a struct index that is not a member of the named list.
+///
+/// Typed editors receive struct indices from their row models. Checking list
+/// membership here keeps a stale or external index from editing an unrelated
+/// struct that happens to have the same field name.
+pub(crate) fn require_list_member(gff: &Gff, path: &str, struct_index: usize) -> Result<()> {
+    let field = gff.get(path)?;
+    let elements = field.value.as_list().ok_or_else(|| Error::TypeMismatch {
+        path: path.to_owned(),
+        expected: "a list",
+        actual: field.value.type_name(),
+    })?;
+    if elements.contains(&struct_index) {
+        Ok(())
+    } else {
+        Err(Error::Corrupt(format!(
+            "struct {struct_index} is not a member of {path}"
+        )))
+    }
+}
+
 /// Syncs the containing directory after a rename, on platforms where that is
 /// meaningful.
 // Windows has no directory fsync; keeping the same Result signature lets the

@@ -62,14 +62,7 @@ impl SaveGame {
         }
         let path = self.item_list_path()?;
         let result = self.edit_player_gff(|gff, _prefix| {
-            let list = gff.get(&path)?;
-            if list.value.as_list().is_none() {
-                return Err(Error::TypeMismatch {
-                    path: path.clone(),
-                    expected: "a list",
-                    actual: list.value.type_name(),
-                });
-            }
+            crate::save::require_list_member(gff, &path, struct_index)?;
             let structure = gff
                 .struct_at(struct_index)
                 .ok_or_else(|| Error::Corrupt(format!("struct {struct_index} does not exist")))?;

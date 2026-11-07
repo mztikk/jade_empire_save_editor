@@ -6,6 +6,8 @@
 //! is always derived: `1 + number of set bits` in the mask. The game derives how
 //! many style points are left from the levels of all owned styles.
 
+use std::collections::HashSet;
+
 use crate::error::{Error, Result};
 use crate::gff::{Gff, Value};
 use crate::save::SaveGame;
@@ -204,7 +206,9 @@ impl SaveGame {
             });
         }
 
+        let list_path = self.styles_path()?;
         let changed = self.edit_player_gff(|gff, _prefix| {
+            crate::save::require_list_member(gff, &list_path, struct_index)?;
             let mask = read_style_mask(gff, struct_index)?;
             ensure_family_prefix(mask, &slots)?;
             let taken = mask & bit(clicked) != 0;
@@ -271,25 +275,47 @@ impl SaveGame {
                 .ok_or_else(|| Error::Corrupt(format!("struct {template} does not exist")))?
                 .clone();
             let index = gff.push_struct(source.type_id);
+            let mut seen_identity = HashSet::new();
             for field in source.fields {
                 let name = gff.label_name(field.label).unwrap_or_default().to_owned();
                 let value = match name.as_str() {
-                    "StyleId" => number_value(field.type_id, u64::from(identity.style_id))?,
-                    "NameRef" => number_value(field.type_id, u64::from(identity.name_ref))?,
+                    "StyleId" => {
+                        seen_identity.insert(name.clone());
+                        number_value(field.type_id, u64::from(identity.style_id))?
+                    }
+                    "NameRef" => {
+                        seen_identity.insert(name.clone());
+                        number_value(field.type_id, u64::from(identity.name_ref))?
+                    }
                     "DescRef" => {
+                        seen_identity.insert(name.clone());
                         number_value(field.type_id, u64::from(identity.desc_ref.unwrap_or(0)))?
                     }
-                    "WeaponCount" => number_value(field.type_id, u64::from(identity.weapon_count))?,
+                    "WeaponCount" => {
+                        seen_identity.insert(name.clone());
+                        number_value(field.type_id, u64::from(identity.weapon_count))?
+                    }
                     "FirstLoad" | "StyleLevelInfo" => number_value(field.type_id, 0)?,
                     "StyleLevel" => number_value(field.type_id, 1)?,
-                    "IconRef" => Value::String(identity.icon.clone().unwrap_or_default()),
-                    "WeaponRef" => Value::String(identity.weapon.clone().unwrap_or_default()),
+                    "IconRef" => {
+                        seen_identity.insert(name.clone());
+                        Value::String(identity.icon.clone().unwrap_or_default())
+                    }
+                    "WeaponRef" => {
+                        seen_identity.insert(name.clone());
+                        Value::String(identity.weapon.clone().unwrap_or_default())
+                    }
                     "VisualEffectNode" => Value::String(String::new()),
+                    // A learned style starts without inherited resistances and
+                    // without references into the template's structs.
+                    "ResistList" => Value::List(Vec::new()),
                     "TimeSpentInStyle" => float_value(field.type_id, 0.0)?,
                     _ => field.value,
                 };
                 gff.add_field_typed(index, &name, field.type_id, value)?;
             }
+            add_missing_style_identity(gff, index, identity, &seen_identity)?;
+
             let list = gff.get_mut(&list_path)?;
             let actual = list.value.type_name();
             let list = list
@@ -330,6 +356,46 @@ impl SaveGame {
         })?;
         Ok(removed.unwrap_or(false))
     }
+}
+
+/// Adds identity fields that a sparse template did not carry.
+fn add_missing_style_identity(
+    gff: &mut Gff,
+    index: usize,
+    identity: &StyleIdentity,
+    seen: &HashSet<String>,
+) -> Result<()> {
+    let name_ref = i32::try_from(identity.name_ref)
+        .map_err(|_| Error::Corrupt("style name reference does not fit an int field".to_owned()))?;
+    let desc_ref = i32::try_from(identity.desc_ref.unwrap_or(0)).map_err(|_| {
+        Error::Corrupt("style description reference does not fit an int field".to_owned())
+    })?;
+    let fields = [
+        ("StyleId", 4, Value::DWord(u32::from(identity.style_id))),
+        ("NameRef", 5, Value::Int(name_ref)),
+        ("DescRef", 5, Value::Int(desc_ref)),
+        (
+            "IconRef",
+            10,
+            Value::String(identity.icon.clone().unwrap_or_default()),
+        ),
+        (
+            "WeaponRef",
+            10,
+            Value::String(identity.weapon.clone().unwrap_or_default()),
+        ),
+        (
+            "WeaponCount",
+            5,
+            Value::Int(i32::from(identity.weapon_count)),
+        ),
+    ];
+    for (label, type_id, value) in fields {
+        if !seen.contains(label) {
+            gff.add_field_typed(index, label, type_id, value)?;
+        }
+    }
+    Ok(())
 }
 
 fn bit(slot: u16) -> u64 {

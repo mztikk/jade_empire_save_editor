@@ -644,7 +644,7 @@ impl Character {
             gff,
             "Campaign.Chapter",
             i64::from(self.chapter),
-            false,
+            true,
             &mut changes,
         )?;
         if let Ok(field) = gff.get("Campaign.TimePlayed")

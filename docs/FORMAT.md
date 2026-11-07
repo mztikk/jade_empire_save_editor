@@ -367,7 +367,9 @@ slots exist.
 
 A newly learned style clones the field layout and type tags of an existing
 style and replaces its identity (`StyleId`, `NameRef`, `DescRef`, `IconRef`,
-`WeaponRef`, `WeaponCount`); the level starts at 1 with an empty mask.
+`WeaponRef`, `WeaponCount`); identity fields missing from a sparse template are
+added with the types the retail saves use. `ResistList` starts empty rather than
+sharing the template's structs. The level starts at 1 with an empty mask.
 
 ## Game data files
 

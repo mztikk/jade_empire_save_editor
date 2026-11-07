@@ -15,6 +15,10 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- Chapter edits now create a missing `Campaign.Chapter` field. Learning a style
+  from a sparse template now adds the missing identity fields and clears the
+  copied `ResistList`, and typed item, companion and style setters reject struct
+  indices that are not members of their lists.
 - GFF parsing now validates shared list offsets once under a total work bound,
   moves single-use field values instead of cloning them, and saves reuse the
   verified parse instead of parsing the container a second time. Writer payload
