@@ -50,7 +50,7 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> 
         let ctx = ctx.clone();
         let close = close.clone();
         let sync = sync.clone();
-        move |_| {
+        move || {
             let invalid = ctx.session.borrow().form_errors(&form.read());
             let saved = ctx.run(|session| session.save_applied(&form.read()));
             if saved.is_ok() {
@@ -63,7 +63,7 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> 
             }
         }
     };
-    let cancel = move |_| close();
+    let cancel = move || close();
 
     children.push(widgets::divider());
     children.push(
@@ -73,17 +73,21 @@ pub fn view(ctx: &Ctx, form: Form, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> 
             .spacing(theme::space::md())
             .content(Content::wrap_spacing(theme::space::md()))
             .child(
-                Button::new()
-                    .outline()
-                    .child(t(keys::BACKUPS_BACK))
-                    .on_press(cancel),
+                widgets::ActionButton::new(
+                    t(keys::BACKUPS_BACK),
+                    t(keys::BACKUPS_BACK),
+                    widgets::Action::new(cancel),
+                )
+                .into_element(),
             )
             .maybe(dirty, |el| {
                 el.child(
-                    Button::new()
-                        .filled()
-                        .child(t(keys::REVIEW_WRITE))
-                        .on_press(write),
+                    widgets::ActionButton::new(
+                        t(keys::REVIEW_WRITE),
+                        t(keys::REVIEW_WRITE),
+                        widgets::Action::new(write),
+                    )
+                    .variant(widgets::ActionVariant::Filled),
                 )
             })
             .into_element(),

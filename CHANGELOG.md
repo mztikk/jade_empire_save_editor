@@ -15,6 +15,10 @@ All notable changes are documented here. The format follows
   viewports cap themselves at the window height. A regression matrix covers
   900x700, 1180x760 and 1280x800 at 100/125/150/200 percent in English, plus
   German at 125/150/200 percent.
+- Freya input, select and menu text now follows the application type scale,
+  input padding and radius scale with it, and page and toolbar actions share one
+  ActionButton with filled, outline and flat variants plus a visibly disabled
+  state. The save sort control collapses to one row above 100 percent.
 
 ## [0.4.0] - 2026-11-07
 

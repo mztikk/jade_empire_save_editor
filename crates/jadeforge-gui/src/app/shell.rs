@@ -11,7 +11,7 @@ use crate::i18n::{fill, keys, t};
 use crate::message::capitalize;
 use crate::session::{FieldError, GameStatus, MessageKind, Session};
 use crate::theme;
-use crate::widgets::{AccessibleButton, Action};
+use crate::widgets::{AccessibleButton, Action, ActionButton, ActionVariant};
 
 use super::Ctx;
 
@@ -131,14 +131,14 @@ pub(super) fn header(
     let browse = {
         let ctx = ctx.clone();
         let start_scan = start_scan.clone();
-        move |_| {
+        move || {
             choose_folder(&ctx, directory, &start_scan);
         }
     };
     let use_game = {
         let ctx = ctx.clone();
         let mut game_directory = game_directory;
-        move |_| {
+        move || {
             let path = PathBuf::from(game_directory.read().as_str());
             if ctx.run(|session| session.set_game_directory(path)) {
                 let root = match ctx.session.borrow().game_status() {
@@ -152,7 +152,7 @@ pub(super) fn header(
     let browse_game = {
         let ctx = ctx.clone();
         let mut game_directory = game_directory;
-        move |_| {
+        move || {
             let start = crate::dialog::start_directory(game_directory.read().as_str());
             let folder = match crate::dialog::pick_folder(start.as_deref()) {
                 crate::dialog::PickOutcome::Picked(folder) => folder,
@@ -278,33 +278,35 @@ pub(super) fn header(
                         move |_: String| scan()
                     }),
             )
+            .child(ActionButton::new(
+                t(keys::SHELL_BROWSE),
+                t(keys::SHELL_BROWSE),
+                Action::new(browse),
+            ))
             .child(
-                Button::new()
-                    .outline()
-                    .child(t(keys::SHELL_BROWSE))
-                    .on_press(browse),
-            )
-            .child(
-                Button::new()
-                    .outline()
-                    .enabled(!scanning)
-                    .child(if scanning {
+                ActionButton::new(
+                    t(keys::SHELL_SCAN),
+                    if scanning {
                         t(keys::SHELL_SCANNING)
                     } else {
                         t(keys::SHELL_SCAN)
-                    })
-                    .on_press({
+                    },
+                    Action::new({
                         let scan = scan.clone();
-                        move |_| scan()
+                        move || scan()
                     }),
+                )
+                .enabled(!scanning),
             )
             .maybe(scanning, |el| {
                 let cancel_scan = cancel_scan.clone();
                 el.child(
-                    Button::new()
-                        .flat()
-                        .child(t(keys::SHELL_CANCEL_SCAN))
-                        .on_press(move |_| cancel_scan()),
+                    ActionButton::new(
+                        t(keys::SHELL_CANCEL_SCAN),
+                        t(keys::SHELL_CANCEL_SCAN),
+                        Action::new(move || cancel_scan()),
+                    )
+                    .variant(ActionVariant::Flat),
                 )
             })
             .into_element(),
@@ -329,18 +331,16 @@ pub(super) fn header(
                         .placeholder(t(keys::SHELL_GAME_DATA_PATH))
                         .width(Size::flex(1.0)),
                 )
-                .child(
-                    Button::new()
-                        .outline()
-                        .child(t(keys::SHELL_BROWSE))
-                        .on_press(browse_game),
-                )
-                .child(
-                    Button::new()
-                        .outline()
-                        .child(t(keys::SHELL_USE))
-                        .on_press(use_game),
-                )
+                .child(ActionButton::new(
+                    t(keys::SHELL_BROWSE),
+                    t(keys::SHELL_BROWSE),
+                    Action::new(browse_game),
+                ))
+                .child(ActionButton::new(
+                    t(keys::SHELL_USE),
+                    t(keys::SHELL_USE),
+                    Action::new(use_game),
+                ))
                 .into_element(),
         );
     }
@@ -424,7 +424,7 @@ fn about_button(
     mut show_backups: State<bool>,
     mut show_review: State<bool>,
 ) -> Element {
-    crate::widgets::outline_action(
+    crate::widgets::ActionButton::new(
         t(keys::SHELL_ABOUT_DETAILS),
         t(keys::SHELL_ABOUT),
         Action::new(move || {
@@ -442,7 +442,7 @@ fn backups_button(
     mut show_about: State<bool>,
     mut show_review: State<bool>,
 ) -> Element {
-    crate::widgets::outline_action(
+    crate::widgets::ActionButton::new(
         t(keys::SHELL_BROWSE_BACKUPS),
         capitalize(t(keys::COUNT_BACKUP_OTHER)),
         Action::new(move || {
@@ -528,7 +528,7 @@ pub(super) fn footer(
 ) -> Element {
     let save = {
         let ctx = ctx.clone();
-        move |_| {
+        move || {
             let errors = ctx.run(|session| session.form_errors(&form.read()));
             if let Some(first) = errors.first() {
                 form.focus(first.field);
@@ -544,7 +544,7 @@ pub(super) fn footer(
     let undo = {
         let ctx = ctx.clone();
         let sync = sync.clone();
-        move |_| {
+        move || {
             if ctx.run(Session::undo) {
                 sync();
             }
@@ -553,7 +553,7 @@ pub(super) fn footer(
     let redo = {
         let ctx = ctx.clone();
         let sync = sync.clone();
-        move |_| {
+        move || {
             if ctx.run(Session::redo) {
                 sync();
             }
@@ -564,7 +564,7 @@ pub(super) fn footer(
     let revert = {
         let ctx = ctx.clone();
         let sync = sync.clone();
-        move |_| {
+        move || {
             if dirty
                 && !crate::dialog::confirm(
                     t(keys::SHELL_DISCARD_CHANGES),
@@ -608,37 +608,35 @@ pub(super) fn footer(
         ))
         .background(theme::panel())
         .child(
-            Button::new()
-                .flat()
-                .enabled(can_undo)
-                .child(t(keys::SHELL_UNDO))
-                .on_press(undo),
+            ActionButton::new(t(keys::SHELL_UNDO), t(keys::SHELL_UNDO), Action::new(undo))
+                .variant(ActionVariant::Flat)
+                .enabled(can_undo),
         )
         .child(
-            Button::new()
-                .flat()
-                .enabled(can_redo)
-                .child(t(keys::SHELL_REDO))
-                .on_press(redo),
+            ActionButton::new(t(keys::SHELL_REDO), t(keys::SHELL_REDO), Action::new(redo))
+                .variant(ActionVariant::Flat)
+                .enabled(can_redo),
         )
         .child(
-            Button::new()
-                .filled()
-                .enabled(can_save)
-                .child(t(keys::SHELL_SAVE))
-                .on_press(save),
+            ActionButton::new(t(keys::SHELL_SAVE), t(keys::SHELL_SAVE), Action::new(save))
+                .variant(ActionVariant::Filled)
+                .enabled(can_save),
         )
         .child(
-            Button::new()
-                .flat()
-                .enabled(can_revert)
-                .child(t(keys::SHELL_REVERT))
-                .on_press(revert),
+            ActionButton::new(
+                t(keys::SHELL_REVERT),
+                t(keys::SHELL_REVERT),
+                Action::new(revert),
+            )
+            .variant(ActionVariant::Flat)
+            .enabled(can_revert),
         )
         .child(rect().width(Size::flex(1.0)))
         .child(
             crate::widgets::a11y_text(hint_text)
                 .font_size(theme::font::micro())
+                .max_lines(2)
+                .text_overflow(TextOverflow::Ellipsis)
                 .color(hint_color),
         )
         .into_element()
@@ -703,7 +701,7 @@ pub(super) fn empty_state(
     };
     let choose = {
         let ctx = ctx.clone();
-        move |_| {
+        move || {
             choose_folder(&ctx, directory, &start_scan);
         }
     };
@@ -725,10 +723,12 @@ pub(super) fn empty_state(
                 .color(theme::muted()),
         )
         .child(
-            Button::new()
-                .filled()
-                .child(t(keys::SHELL_CHOOSE_SAVE_FOLDER))
-                .on_press(choose),
+            ActionButton::new(
+                t(keys::SHELL_CHOOSE_SAVE_FOLDER),
+                t(keys::SHELL_CHOOSE_SAVE_FOLDER),
+                Action::new(choose),
+            )
+            .variant(ActionVariant::Filled),
         )
         .child(
             crate::widgets::a11y_text(t(keys::SHELL_SAVEGAME_SAFETY))
@@ -753,7 +753,7 @@ pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element 
     let reload = {
         let ctx = ctx.clone();
         let sync = sync.clone();
-        move |_| {
+        move || {
             if dirty
                 && !crate::dialog::confirm(
                     &format!("{}?", t(keys::SHELL_RELOAD)),
@@ -793,11 +793,10 @@ pub(super) fn external_change_banner(ctx: &Ctx, sync: &Rc<dyn Fn()>) -> Element 
                 .color(theme::warning())
                 .width(Size::flex(1.0)),
         )
-        .child(
-            Button::new()
-                .outline()
-                .child(t(keys::SHELL_RELOAD))
-                .on_press(reload),
-        )
+        .child(ActionButton::new(
+            t(keys::SHELL_RELOAD),
+            t(keys::SHELL_RELOAD),
+            Action::new(reload),
+        ))
         .into_element()
 }

@@ -200,7 +200,11 @@ fn appearance_field(ctx: &Ctx, form: &Form, errors: &[FieldError]) -> Element {
             MenuItem::new()
                 .selected(current == Some(option.appearance))
                 .on_press(move |_| state.set(row.to_string()))
-                .child(option.label)
+                .child(
+                    widgets::a11y_text(option.label)
+                        .font_size(theme::font::body())
+                        .color(theme::text()),
+                )
         }));
     widgets::field_checked(
         CharacterField::Appearance,
@@ -229,13 +233,15 @@ fn alignment_note(text: String) -> Element {
 /// A small button that adds attribute points to the form.
 fn quick_add(ctx: &Ctx, text: &'static str, amount: i64) -> Element {
     let ctx = ctx.clone();
-    Button::new()
-        .compact()
-        .child(text)
-        .on_press(move |_| {
+    widgets::ActionButton::new(
+        text,
+        text,
+        widgets::Action::new(move || {
             let mut state = ctx.form.attribute_points;
             let current: i64 = state.read().trim().parse().unwrap_or(0);
             *state.write() = (current + amount).clamp(0, 1000).to_string();
-        })
-        .into_element()
+        }),
+    )
+    .compact()
+    .into_element()
 }

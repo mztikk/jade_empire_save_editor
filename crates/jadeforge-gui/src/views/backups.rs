@@ -50,7 +50,7 @@ pub fn view(ctx: &Ctx, close: Rc<dyn Fn()>, sync: &Rc<dyn Fn()>) -> Element {
     }
     children.push(widgets::divider());
     children.push(
-        widgets::outline_action(
+        widgets::ActionButton::new(
             t(keys::BACKUPS_CLOSE),
             t(keys::BACKUPS_BACK),
             Action::new(move || close()),
