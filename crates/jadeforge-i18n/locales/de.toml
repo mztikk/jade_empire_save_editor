@@ -6,7 +6,7 @@
 #
 # Placeholders such as {name} must match en.toml exactly. Product and technical
 # names stay unchanged; game terms should follow the German game release
-# (Kampfstil, Edelstein, Amulett, Gefährte, Fokus; Chi stays Chi).
+# (Kampfstil, Essenzjuwel, Amulett, Gefährte, Fokus; Chi stays Chi).
 #
 # Verify that every value is present with:
 #   cargo test -p jadeforge-i18n --lib every_german_value_is_filled
@@ -208,18 +208,18 @@ complete = true
 "inventory.increase" = "Anzahl von {name} erhöhen"
 
 # Gems tab
-"gems.add_heading" = "Einen Edelstein hinzufügen"
-"gems.clear_filter" = "Edelstein-Filter löschen"
-"gems.move_hint" = "Das Verschieben eines Edelsteins behält seine Effekte bei; JadeForge ändert nur, welche Liste darauf verweist."
-"gems.empty_inventory" = "Keine Edelsteine im Inventar."
-"gems.empty_amulet" = "Keine Edelsteine im Amulett."
+"gems.add_heading" = "Ein Essenzjuwel hinzufügen"
+"gems.clear_filter" = "Essenzjuwel-Filter löschen"
+"gems.move_hint" = "Das Verschieben eines Essenzjuwels behält seine Effekte bei; JadeForge ändert nur, welche Liste darauf verweist."
+"gems.empty_inventory" = "Keine Essenzjuwelen im Inventar."
+"gems.empty_amulet" = "Keine Essenzjuwelen im Amulett."
 "gems.amulet_locked" = "Das Amulett wird früh im Spielverlauf freigeschaltet; vorher hat es keine Fassungen."
 "gems.no_amulet" = "Noch kein Amulett"
 "gems.no_effects" = "keine Effekte"
 "gems.add" = "Hinzufügen"
-"gems.missing_hint" = "Die Spieldaten mit den Edelsteindefinitionen wurden nicht gefunden."
-"gems.no_match" = "Kein Edelstein entspricht diesem Filter."
-"gems.add_list" = "Verfügbare Edelsteine"
+"gems.missing_hint" = "Die Spieldaten mit den Essenzjuweldefinitionen wurden nicht gefunden."
+"gems.no_match" = "Kein Essenzjuwel entspricht diesem Filter."
+"gems.add_list" = "Verfügbare Essenzjuwelen"
 "gems.from_game_data" = "Aus den Spieldaten"
 "gems.all_sockets" = "Alle sieben Fassungen sind freigeschaltet."
 "gems.more_sockets" = "Weitere Fassungen werden im Laufe der Geschichte freigeschaltet."
@@ -228,7 +228,7 @@ complete = true
 "gems.amulet_full" = "Amulett ist voll"
 "gems.remove" = "Entfernen"
 # args: name, effects
-"gems.accessible" = "Edelstein {name}, {effects}"
+"gems.accessible" = "Essenzjuwel {name}, {effects}"
 # args: name
 "gems.add_action" = "{name} hinzufügen"
 # args: socketed, sockets, tier
@@ -240,7 +240,7 @@ complete = true
 # args: name
 "gems.remove.confirm" = "{name} entfernen? Sie können die Änderung vor dem Speichern noch rückgängig machen."
 # args: name
-"gems.row_accessible" = "Edelstein {name}"
+"gems.row_accessible" = "Essenzjuwel {name}"
 
 # Companions tab
 "companions.level_hint" = "Die Stufen der Gefährten steigen im Spielverlauf mit der Stufe des Spielers; eine Änderung hier beeinflusst nur die Stufe, mit der der Gefährte startet."
@@ -369,10 +369,10 @@ complete = true
 "theme.system.description" = "Dem Hell- oder Dunkelmodus des Betriebssystems folgen"
 
 # Count nouns: singular and plural
-"count.gem.one" = "Edelstein"
-"count.gem.other" = "Edelsteine"
-"count.gem.carried.one" = "mitgeführter Edelstein"
-"count.gem.carried.other" = "mitgeführte Edelsteine"
+"count.gem.one" = "Essenzjuwel"
+"count.gem.other" = "Essenzjuwelen"
+"count.gem.carried.one" = "mitgeführtes Essenzjuwel"
+"count.gem.carried.other" = "mitgeführte Essenzjuwelen"
 "count.socket.one" = "Fassung"
 "count.socket.other" = "Fassungen"
 "count.companion.known.one" = "bekannter Gefährte"
@@ -431,7 +431,7 @@ complete = true
 "filter.savegame" = "Nach Name oder Charakter filtern"
 "filter.items" = "Gegenstandsdatenbank filtern oder leer lassen, um alles anzuzeigen"
 "filter.styles" = "Kampfstile filtern oder leer lassen, um alle anzuzeigen"
-"filter.gems" = "Edelsteine filtern oder leer lassen, um alle anzuzeigen"
+"filter.gems" = "Essenzjuwelen filtern oder leer lassen, um alle anzuzeigen"
 
 # Shared
 # Separator for joining short noun lists in the UI.
@@ -540,8 +540,8 @@ complete = true
 "label.inventory" = "Inventar"
 # context: Card caption and gem location value.
 "label.amulet" = "Amulett"
-"status.gem.moved" = "Edelstein verschoben"
-"status.gem_socketed" = "Edelstein in das Amulett eingesetzt."
+"status.gem.moved" = "Essenzjuwel verschoben"
+"status.gem_socketed" = "Essenzjuwel in das Amulett eingesetzt."
 "status.learn_style_first" = "Lernen Sie zuerst einen Kampfstil, damit JadeForge dessen Feldlayout übernehmen kann."
 "status.keep_one_style" = "Behalten Sie mindestens einen Kampfstil: JadeForge benötigt einen vorhandenen Kampfstil als Vorlage, um einen weiteren zu lernen."
 "status.companion_level_range" = "Gefährtenstufen liegen zwischen 1 und 60."
@@ -619,9 +619,9 @@ complete = true
 # args: upgrades
 "status.bought" = "{upgrades} gekauft."
 # args: item_id
-"status.gem" = "Edelstein {item_id}"
+"status.gem" = "Essenzjuwel {item_id}"
 # args: error
-"status.cannot.move.the.gem" = "Edelstein kann nicht verschoben werden: {error}"
+"status.cannot.move.the.gem" = "Essenzjuwel kann nicht verschoben werden: {error}"
 # args: level
 "status.companion.level.set.to" = "Gefährtenstufe auf {level} gesetzt."
 # args: name, state
@@ -640,7 +640,7 @@ complete = true
 "status.not_a_folder" = "{directory} ist eine Datei und kein Spielstand-Ordner."
 # args: directory, error
 "status.folder_list_failed" = "Der Spielstand-Ordner {directory} kann nicht aufgelistet werden: {error}."
-"status.gem_moved_to_inventory" = "Edelstein ins Inventar verschoben."
+"status.gem_moved_to_inventory" = "Essenzjuwel ins Inventar verschoben."
 "status.unknown" = "unbekannt"
 
 # Shared errors
