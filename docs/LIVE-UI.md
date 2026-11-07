@@ -150,6 +150,39 @@ there. GitHub Actions runners have no real desktop, so the suite stays out of
 `JADEFORGE_LIVE_REQUIRE=1` turns a missing `WAYLAND_DISPLAY` into a failure,
 which is useful when a script must prove that the suite actually ran.
 
+## Manual screen-reader checklist
+
+The headless suite and the AT-SPI probe cover the accessible tree, focus and
+action path. Speech output still needs a real screen reader on each platform.
+Run this checklist with Orca on Linux, NVDA on Windows and VoiceOver on macOS
+after a Freya or accessibility-backend upgrade, and record the result in
+[docs/UI-REVIEW.md](UI-REVIEW.md).
+
+1. Start JadeForge with a folder containing a valid savegame.
+2. Focus the tab bar and Tab through the six tabs. Each tab must announce its
+   name and its selected state.
+3. Activate the Character tab with the screen reader's click action and with
+   Enter or Space. The Identity card must appear.
+4. Focus the save list, move through the rows and open one. The row must
+   announce its name, level, time and character, and opening it must announce
+   `Opened <name>.`
+5. Make one inventory edit with the increase or decrease row action. The
+   screen reader must announce the change, the unsaved-changes badge must
+   appear, and the footer Undo button must be reachable and activatable. Undo
+   must announce `Undid ...` and clear the badge.
+6. Focus a row action such as Remove, activate it and confirm. The result must
+   be announced and the row must disappear.
+7. With one savegame, check that the sidebar announces `1 SAVEGAME` and the
+   status announces `Found 1 savegame ...`.
+8. Move the save folder away, then press Scan or F5. The status must announce
+   `No savegames found ...`, the sidebar count must read `0 SAVEGAMES`, and the
+   empty-list hint must be readable.
+9. Put a broken savegame in the folder and scan again. The status must announce
+   that the savegame cannot be read, the sidebar count must read `1 SAVEGAME`,
+   and the empty-list hint must disappear.
+10. Leave the app idle and confirm the last status and count are still current;
+    no stale count or empty-state text may remain in the accessible tree.
+
 ## Adding a scenario
 
 1. Add a `fn name(driver: &mut Driver) -> Result<(), String>` to

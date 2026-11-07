@@ -6,6 +6,13 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Headless accessibility regressions for the Freya 0.5 follow-up: dynamic save
+  count, status and empty-state updates, plus AccessKit focus and activation of
+  tabs, save rows, footer buttons and row actions. A manual screen-reader
+  checklist covers the audible Orca, NVDA and VoiceOver pass.
+
 ## [0.3.1] - 2026-11-07
 
 ### Fixed
