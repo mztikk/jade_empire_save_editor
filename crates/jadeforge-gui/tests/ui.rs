@@ -1413,10 +1413,8 @@ fn an_empty_carried_gems_list_does_not_report_a_gem() {
         find_label_text(&test, "No gems carried in the inventory.").is_some(),
         "the empty carried-gems list has no empty hint"
     );
-    assert!(
-        find_label_exact(&test, "1 gem").is_none(),
-        "the empty carried-gems hint claims there is a gem"
-    );
+    // The available-gems picker may legitimately show "1 gem" while the
+    // carried list is empty; only the carried-specific label must be absent.
     assert!(
         find_label_exact(&test, "1 carried gem").is_none(),
         "the empty carried-gems hint claims there is a carried gem"

@@ -187,10 +187,12 @@ mod tests {
 
     #[test]
     fn backup_names_carry_a_utc_instant() {
-        let stamp = parse_stamp("1700000000.123456789.7").expect("stamp");
+        // Windows SystemTime has 100 ns resolution; use a value that survives
+        // the round trip on every supported platform.
+        let stamp = parse_stamp("1700000000.123456700.7").expect("stamp");
         assert_eq!(
             stamp.duration_since(UNIX_EPOCH).expect("after epoch"),
-            Duration::new(1_700_000_000, 123_456_789)
+            Duration::new(1_700_000_000, 123_456_700)
         );
         assert!(parse_stamp("not-a-stamp").is_none());
         assert!(parse_stamp("1.2").is_none());
