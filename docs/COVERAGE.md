@@ -144,10 +144,13 @@ Notes:
   view branches.
 - Headless accessibility assertions now cover static text values, headings,
   live status, tab/list roles, selected and expanded states, the single Tab
-  stop of the save list, dynamic scan count/status/empty-state updates, focus
-  on a tab, and activation of a tab, save row, footer button and row action
-  through `TestingRunner::send_accessibility_action`. Remaining: associate
-  labels with `Input`s (still needs a Freya Input label API).
+  stop of the save list and virtualized pickers, announced active save and
+  picker rows with position/set-size metadata, keyboard browsing past the first
+  picker viewport, Enter activation for items/styles/gems/saves, carried-gem
+  keyboard scrolling, dynamic scan count/status/empty-state updates, focus on a
+  tab, and activation of a tab, save row, footer button and row action through
+  `TestingRunner::send_accessibility_action`. Remaining: associate labels with
+  `Input`s (still needs a Freya Input label API).
 
 ### 2. Small error paths
 

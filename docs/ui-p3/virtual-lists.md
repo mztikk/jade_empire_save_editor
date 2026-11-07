@@ -10,8 +10,11 @@ did not scale to a corpus or a modded installation with thousands of rows.
 
 ## Approach
 
-- The save browser keeps its virtual list and arrow-key navigation. Its data,
-  keys and focus semantics did not change.
+- The save browser keeps its virtual list. It is one `ListBox` tab stop with a
+  stable active descendant; its rows are `ListBoxOption` nodes with zero-based
+  position and set size information. Up/Down, Page Up/Page Down, Home/End and
+  Enter operate on the announced row, and focus never moves to an unmounted
+  row.
 - The item, style and gem pickers now hand the **complete** filtered list to a
   shared `widgets::picker_list`. It renders a `VirtualScrollView` with a 56 px
   (scaled) collapsed row height and a viewport of at most seven rows; only the
@@ -31,9 +34,15 @@ did not scale to a corpus or a modded installation with thousands of rows.
   width, so the text is visible before the exact measurement replaces it. The
   estimate and the measurement are kept in the picker's own state, so scrolling
   the row out of view and back does not lose the expanded height.
-- Rows set an accessible group name (`<name> item`, `<name> style`,
-  `<name> gem, <effects>`). The list is one `ListBox` node. Add/Learn buttons
-  keep their contextual accessible names.
+- Rows set an accessible `ListBoxOption` name (`<name> item`, `<name> style`,
+  `<name> gem, <effects>`), position and set size. The picker is one `ListBox`
+  tab stop with an active descendant that follows the keyboard. Add/Learn
+  buttons keep their contextual accessible names but are not extra tab stops:
+  Up/Down, Page Up/Page Down, Home/End move the active row and scroll it into
+  view, Enter runs the row's add/learn action, Space toggles its description,
+  and Escape leaves the list.
+- Stable per-list `AccessibilityId`s survive row recycling, so an active row
+  keeps the same announced target when the virtual list drops and rebuilds it.
 - The nested list disables drag scrolling: the page already scrolls, and a
   press-drag inside the list must not swallow a row click. Its scrollbar stays
   visible.
@@ -57,6 +66,14 @@ Upstream references:
   lists, and an expanded row grows in place with its description inside the row
   bounds; the style and gem pickers show full counts and build fewer rows than
   they list.
+- Keyboard headless tests focus each picker through AccessKit, move beyond the
+  first seven rows, check the announced active `ListBoxOption` and its position,
+  keep focus on the list while rows are recycled, and add an item, learn a style
+  and add a gem with Enter. Page Up/Page Down, Home/End and Escape are covered on
+  the item picker.
+- The save-list test checks the announced active save before and after
+  Page Down/Home/Arrow Down, then opens it with Enter. The carried-gem test
+  focuses the list through AccessKit and scrolls it with Page Down/Home.
 - Adding an item from the virtual list still writes to the session (regression
   test `items_can_be_searched_and_added`).
 - Saving at 200 % text: the collapsed picker row height and the measured
@@ -65,17 +82,23 @@ Upstream references:
 
 ## Accessibility, contrast and reduced motion
 
-- Each row is reachable by Tab while it is built; the inner list scrolls with
-  the wheel or the scrollbar. Off-screen rows are not focus stops until they
-  scroll into view, which is the normal virtual-list contract.
+- Each list is one Tab stop. Arrow, Page Up/Page Down and Home/End move the
+  announced active row; the list scrolls it into view and focus stays on the
+  list while virtual rows mount and unmount. The carried-gem list is focusable
+  and scrolls with the same keys, including when focus is on one of its Remove
+  buttons.
 - Add/Learn targets keep the 28 px minimum at 100 % and scale with the type.
 - No animation; scrolling is immediate.
 
 ## Risk
 
-- A virtualized picker cannot tab through rows that are outside the viewport;
-  the user scrolls the list to reach them. The previous paging had the same
-  property (the next page was a button), but the full list is now browsable.
+- A screen reader reads the active descendant, not every off-screen row. The
+  user arrows or pages through the full list; the previous paging exposed only
+  the next page button, so the keyboard path is strictly larger now.
+- A row action is no longer a per-row tab stop. A screen reader can still
+  activate the active row with Enter or the Click action on its Add/Learn
+  button; keyboard users do not have to tab through every row to reach the
+  page controls.
 - An expanded description does not fit in the seven-row viewport alone, so the
   viewport grows to include it and the page scrolls as a whole; the virtual list
   itself does not gain a nested detail scroll. The row height comes from the

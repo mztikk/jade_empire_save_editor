@@ -12,7 +12,7 @@ use crate::i18n::{fill, keys, t};
 use crate::message::capitalize;
 use crate::session::{SaveEntry, SaveSort};
 use crate::theme;
-use crate::widgets::{AccessibleButton, Action};
+use crate::widgets::{AccessibleButton, Action, RowIds};
 
 use super::Ctx;
 use super::shell::preview_slot;
@@ -310,6 +310,7 @@ impl KeyExt for SaveList {
 }
 
 impl Component for SaveList {
+    #[allow(clippy::too_many_lines)] // the list model, reveal state and key map belong to one virtualized control
     fn render(&self) -> impl IntoElement {
         crate::perf::record_save_list_render();
         let a11y_id = use_a11y();
@@ -320,6 +321,13 @@ impl Component for SaveList {
         let visible = self.data.visible.clone();
         let open = self.data.open.clone();
         let _ = *focus.read();
+        let ids = use_hook(RowIds::default);
+        for index in 0..self.data.entries.len() {
+            let _ = ids.id(index as u64);
+        }
+        let active_id = self.data.focused.map(|index| ids.id(index as u64));
+        let ids_for_rows = ids.clone();
+        let visible_len = visible.len();
 
         // A savegame can be selected from outside the list (a rescan, opening
         // another folder); keep the selected row in view then too, but only
@@ -348,10 +356,19 @@ impl Component for SaveList {
                 .into_element()
         } else {
             let data = self.data.clone();
-            VirtualScrollView::new_with_data(data, |item, data: &SaveRows| {
+            VirtualScrollView::new_with_data(data, move |item, data: &SaveRows| {
                 data.visible.get(item.index).map_or_else(
                     || rect().height(Size::px(item.size)).into_element(),
-                    |index| save_row(data, *index, item.size),
+                    |index| {
+                        save_row(
+                            data,
+                            *index,
+                            item.size,
+                            ids_for_rows.id(*index as u64),
+                            item.index,
+                            visible_len,
+                        )
+                    },
                 )
             })
             .length(visible.len())
@@ -371,6 +388,12 @@ impl Component for SaveList {
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::ListBox)
             .a11y_alt(capitalize(t(keys::COUNT_SAVEGAME_OTHER)))
+            .a11y_builder(move |node| {
+                node.set_size_of_set(visible_len);
+                if let Some(id) = active_id {
+                    node.set_active_descendant(id);
+                }
+            })
             .border(
                 Border::new()
                     .fill(if is_focused {
@@ -382,6 +405,9 @@ impl Component for SaveList {
             )
             .on_press(move |_| a11y_id.request_focus())
             .on_key_down(move |event: Event<KeyboardEventData>| {
+                if visible.is_empty() {
+                    return;
+                }
                 let current = *focus.read();
                 let current = if visible.contains(&current) {
                     current
@@ -389,21 +415,54 @@ impl Component for SaveList {
                     visible.first().copied().unwrap_or(0)
                 };
                 let position = visible.iter().position(|candidate| *candidate == current);
-                let target = match event.key {
-                    Key::Named(NamedKey::ArrowDown) => position.map_or_else(
-                        || visible.first().copied(),
-                        |position| visible.get(position + 1).copied(),
+                let page = scroll
+                    .bounds
+                    .read()
+                    .map_or(3, |(_, viewport)| {
+                        (viewport.height / save_row_pitch()).floor() as usize
+                    })
+                    .max(1);
+                let (target, handled) = match event.key {
+                    Key::Named(NamedKey::ArrowDown) => (
+                        position.map_or_else(
+                            || visible.first().copied(),
+                            |position| visible.get(position + 1).copied(),
+                        ),
+                        true,
                     ),
-                    Key::Named(NamedKey::ArrowUp) => position
-                        .and_then(|position| position.checked_sub(1))
-                        .and_then(|position| visible.get(position).copied()),
-                    Key::Named(NamedKey::Home) => visible.first().copied(),
-                    Key::Named(NamedKey::End) => visible.last().copied(),
+                    Key::Named(NamedKey::ArrowUp) => (
+                        position
+                            .and_then(|position| position.checked_sub(1))
+                            .and_then(|position| visible.get(position).copied()),
+                        true,
+                    ),
+                    Key::Named(NamedKey::PageDown) => (
+                        position
+                            .map(|position| {
+                                position
+                                    .saturating_add(page)
+                                    .min(visible.len().saturating_sub(1))
+                            })
+                            .and_then(|position| visible.get(position).copied()),
+                        true,
+                    ),
+                    Key::Named(NamedKey::PageUp) => (
+                        position
+                            .map(|position| position.saturating_sub(page))
+                            .and_then(|position| visible.get(position).copied()),
+                        true,
+                    ),
+                    Key::Named(NamedKey::Home) => (visible.first().copied(), true),
+                    Key::Named(NamedKey::End) => (visible.last().copied(), true),
                     Key::Named(NamedKey::Enter) => {
                         open.call(current);
-                        None
+                        (None, true)
                     }
-                    _ => None,
+                    Key::Named(NamedKey::Escape) => {
+                        a11y_id.request_unfocus();
+                        (None, true)
+                    }
+                    _ => (None, false),
                 };
                 if let Some(target) = target {
                     *focus.write() = target;
@@ -412,6 +471,10 @@ impl Component for SaveList {
                     {
                         reveal_row(&mut scroll, position);
                     }
+                }
+                if handled {
+                    event.stop_propagation();
+                    event.prevent_default();
                 }
             })
             .child(content)
@@ -425,7 +488,14 @@ impl Component for SaveList {
 /// remaining height after the gap. The filter is derived from the same entry
 /// list, so a missing entry means the two snapshots disagreed; render the
 /// reserved gap instead of panicking on user data.
-fn save_row(data: &SaveRows, index: usize, size: f32) -> Element {
+fn save_row(
+    data: &SaveRows,
+    index: usize,
+    size: f32,
+    a11y_id: AccessibilityId,
+    position: usize,
+    total: usize,
+) -> Element {
     let Some(entry) = data.entries.get(index) else {
         return rect()
             .width(Size::fill())
@@ -520,6 +590,8 @@ fn save_row(data: &SaveRows, index: usize, size: f32) -> Element {
                     .into_element(),
             )
             .role(AccessibilityRole::ListBoxOption)
+            .a11y_id(a11y_id)
+            .position(position, total)
             .selected(is_selected)
             .focusable(false)
             .hover_background(theme::surface_hover())

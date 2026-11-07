@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::rc::Rc;
 
+use freya::prelude::Key as KeyboardKey;
 use freya::prelude::*;
 
 use crate::i18n::{Key, fill, keys, t};
@@ -421,13 +422,15 @@ where
                     .width(theme::stroke::focus())
             })
             .a11y_id(a11y_id)
-            .a11y_focusable(true)
+            // The picker list owns the single tab stop and routes Enter/Space
+            // to the active row, so the per-row details button must not add
+            // another focus stop when a virtual row is recycled.
+            .a11y_focusable(false)
             .a11y_role(AccessibilityRole::Button)
             .a11y_alt(accessible)
             .a11y_builder(move |node| node.set_expanded(is_expanded))
             .cursor(CursorIcon::Pointer)
             .on_press(move |_| {
-                a11y_id.request_focus();
                 let current = *expanded.read();
                 *expanded.write() = if current == Some(id) { None } else { Some(id) };
             })
@@ -566,6 +569,27 @@ impl PartialEq for Action {
     }
 }
 
+/// Stable accessibility ids for virtualized list rows.
+///
+/// A virtual row unmounts when it leaves the viewport. Reusing its id from a
+/// per-list map keeps the active-descendant target stable across recycling,
+/// filtering and reordering, which a fresh `use_a11y()` in every row cannot.
+#[derive(Clone, Default)]
+pub(crate) struct RowIds(Rc<RefCell<HashMap<u64, AccessibilityId>>>);
+
+impl RowIds {
+    /// Returns the id for `key`, creating it once for this list instance.
+    pub(crate) fn id(&self, key: u64) -> AccessibilityId {
+        let mut ids = self.0.borrow_mut();
+        if let Some(id) = ids.get(&key) {
+            return *id;
+        }
+        let id = AccessibilityId::new_unique();
+        ids.insert(key, id);
+        id
+    }
+}
+
 /// A button whose whole surface is a single accessible, focusable node.
 ///
 /// Freya's built-in `Button` does not expose `a11y_alt`, and a label nested in
@@ -582,6 +606,8 @@ pub struct AccessibleButton {
     role: AccessibilityRole,
     selected: bool,
     focusable: bool,
+    a11y_id: Option<AccessibilityId>,
+    position: Option<(usize, usize)>,
     hover_background: Option<Color>,
     key_action: Option<EventHandler<Event<KeyboardEventData>>>,
     key: DiffKey,
@@ -598,10 +624,26 @@ impl AccessibleButton {
             role: AccessibilityRole::Button,
             selected: false,
             focusable: true,
+            a11y_id: None,
+            position: None,
             hover_background: None,
             key_action: None,
             key: DiffKey::None,
         }
+    }
+
+    /// Uses an explicit accessibility id, for active-descendant lists.
+    #[must_use]
+    pub fn a11y_id(mut self, a11y_id: AccessibilityId) -> Self {
+        self.a11y_id = Some(a11y_id);
+        self
+    }
+
+    /// Exposes the zero-based position and set size of a list option.
+    #[must_use]
+    pub fn position(mut self, position: usize, size: usize) -> Self {
+        self.position = Some((position, size));
+        self
     }
 
     /// Makes the wrapper fill its parent, for full-width list rows.
@@ -656,23 +698,34 @@ impl KeyExt for AccessibleButton {
 
 impl Component for AccessibleButton {
     fn render(&self) -> impl IntoElement {
-        let a11y_id = use_a11y();
+        let generated_id = use_a11y();
+        let a11y_id = self.a11y_id.unwrap_or(generated_id);
         let focus = use_focus(a11y_id);
         let focused = focus() == Focus::Keyboard;
         let action = self.action.clone();
         let selected = self.selected;
+        let focusable = self.focusable;
+        let position = self.position;
         let mut hovered = use_state(|| false);
         let hover_background = self.hover_background;
         let key_action = self.key_action.clone();
         let button = rect()
             .a11y_id(a11y_id)
-            .a11y_focusable(self.focusable)
+            .a11y_focusable(focusable)
             .a11y_role(self.role)
             .a11y_alt(self.label.clone())
-            .a11y_builder(move |node| node.set_selected(selected))
+            .a11y_builder(move |node| {
+                node.set_selected(selected);
+                if let Some((position, size)) = position {
+                    node.set_position_in_set(position);
+                    node.set_size_of_set(size);
+                }
+            })
             .cursor(CursorIcon::Pointer)
             .on_press(move |_| {
-                a11y_id.request_focus();
+                if focusable {
+                    a11y_id.request_focus();
+                }
                 action.call();
             })
             // Reserve the focus ring even when unfocused, so tabbing through
@@ -1101,6 +1154,7 @@ impl KeyExt for PickerList {
 }
 
 impl Component for PickerList {
+    #[allow(clippy::too_many_lines)] // the list model, scroll state and key map belong to one virtualized control
     fn render(&self) -> impl IntoElement {
         crate::perf::record_picker_render();
         let rows = self.rows.clone();
@@ -1123,18 +1177,181 @@ impl Component for PickerList {
                 })
             }
         };
+        let active = use_state(|| 0usize);
+        let active_index = if length == 0 {
+            0
+        } else {
+            (*active.read()).min(length - 1)
+        };
+        let ids = use_hook(RowIds::default);
+        for row in rows.iter() {
+            let _ = ids.id(u64::from(row.key));
+        }
+        let active_id = rows.get(active_index).map(|row| ids.id(u64::from(row.key)));
+        let a11y_id = use_a11y();
+        let focus = use_focus(a11y_id);
+        let is_focused = focus() == Focus::Keyboard;
+        let has_focus = focus().is_focused();
+        let page = ((self.height / base).round() as usize).max(1);
+        let scroll = use_scroll_controller(ScrollConfig::default);
+        let active_for_id = active_id;
+        let ids_for_rows = ids;
+        let active_for_rows = active;
+        let mut active_for_keys = active;
+        let rows_for_keys = rows.clone();
+        let measured_for_keys = measured;
+        let mut scroll_for_keys = scroll;
+        let label = self.label;
         rect()
             .width(Size::fill())
             .height(Size::px(self.height + expanded))
+            .a11y_id(a11y_id)
+            .a11y_focusable(true)
             .a11y_role(AccessibilityRole::ListBox)
-            .a11y_alt(self.label)
+            .a11y_alt(label)
+            .a11y_builder(move |node| {
+                node.set_size_of_set(length);
+                if let Some(id) = active_for_id {
+                    node.set_active_descendant(id);
+                }
+            })
+            .border(
+                Border::new()
+                    .fill(if is_focused {
+                        theme::text()
+                    } else {
+                        Color::TRANSPARENT
+                    })
+                    .width(theme::stroke::focus()),
+            )
+            .on_press(move |_| a11y_id.request_focus())
+            .on_key_down(move |event: Event<KeyboardEventData>| {
+                if length == 0 {
+                    return;
+                }
+                let current = (*active_for_keys.read()).min(length - 1);
+                let handled = match &event.key {
+                    KeyboardKey::Named(NamedKey::ArrowDown) => {
+                        let target = (current + 1).min(length - 1);
+                        *active_for_keys.write() = target;
+                        reveal_picker_row(
+                            &mut scroll_for_keys,
+                            &rows_for_keys,
+                            &measured_for_keys.read(),
+                            target,
+                            base,
+                        );
+                        true
+                    }
+                    KeyboardKey::Named(NamedKey::ArrowUp) => {
+                        let target = current.saturating_sub(1);
+                        *active_for_keys.write() = target;
+                        reveal_picker_row(
+                            &mut scroll_for_keys,
+                            &rows_for_keys,
+                            &measured_for_keys.read(),
+                            target,
+                            base,
+                        );
+                        true
+                    }
+                    KeyboardKey::Named(NamedKey::PageDown) => {
+                        let target = (current + page).min(length - 1);
+                        *active_for_keys.write() = target;
+                        reveal_picker_row(
+                            &mut scroll_for_keys,
+                            &rows_for_keys,
+                            &measured_for_keys.read(),
+                            target,
+                            base,
+                        );
+                        true
+                    }
+                    KeyboardKey::Named(NamedKey::PageUp) => {
+                        let target = current.saturating_sub(page);
+                        *active_for_keys.write() = target;
+                        reveal_picker_row(
+                            &mut scroll_for_keys,
+                            &rows_for_keys,
+                            &measured_for_keys.read(),
+                            target,
+                            base,
+                        );
+                        true
+                    }
+                    KeyboardKey::Named(NamedKey::Home) => {
+                        *active_for_keys.write() = 0;
+                        reveal_picker_row(
+                            &mut scroll_for_keys,
+                            &rows_for_keys,
+                            &measured_for_keys.read(),
+                            0,
+                            base,
+                        );
+                        true
+                    }
+                    KeyboardKey::Named(NamedKey::End) => {
+                        let target = length - 1;
+                        *active_for_keys.write() = target;
+                        reveal_picker_row(
+                            &mut scroll_for_keys,
+                            &rows_for_keys,
+                            &measured_for_keys.read(),
+                            target,
+                            base,
+                        );
+                        true
+                    }
+                    KeyboardKey::Named(NamedKey::Enter) => {
+                        if let Some(row) = rows_for_keys.get(current) {
+                            row.action.call();
+                        }
+                        true
+                    }
+                    KeyboardKey::Named(NamedKey::Escape) => {
+                        a11y_id.request_unfocus();
+                        true
+                    }
+                    KeyboardKey::Character(character) if character.as_str() == " " => {
+                        if let Some(row) = rows_for_keys.get(current)
+                            && let Some(mut expanded) = row.select
+                        {
+                            let current = *expanded.read();
+                            *expanded.write() = if current == Some(row.key) {
+                                None
+                            } else {
+                                Some(row.key)
+                            };
+                        }
+                        true
+                    }
+                    _ => false,
+                };
+                if handled {
+                    event.stop_propagation();
+                    event.prevent_default();
+                }
+            })
             .child(
                 VirtualScrollView::new_with_data(
                     PickerData { rows, measured },
-                    |item, data: &PickerData| {
+                    move |item, data: &PickerData| {
                         data.rows.get(item.index).map_or_else(
                             || rect().height(Size::px(item.size)).into_element(),
-                            |row| picker_row(row, item.size, data.measured),
+                            |row| {
+                                picker_row(
+                                    row,
+                                    item.size,
+                                    data.measured,
+                                    PickerRowA11y {
+                                        id: ids_for_rows.id(u64::from(row.key)),
+                                        index: item.index,
+                                        total: length,
+                                        is_active: item.index == active_index && has_focus,
+                                    },
+                                    active_for_rows,
+                                )
+                            },
                         )
                     },
                 )
@@ -1142,12 +1359,49 @@ impl Component for PickerList {
                 .item_size(item_size)
                 .show_scrollbar(true)
                 .auto_hide_scrollbars(false)
+                .scroll_controller(scroll)
+                .scroll_with_arrows(false)
                 // The picker sits inside the page's scroll view; drag scrolling
                 // here would capture the pointer press and swallow row clicks.
                 .drag_scrolling(false)
                 .key("picker-rows"),
             )
             .into_element()
+    }
+}
+
+/// Scrolls the picker just enough to show the active row completely.
+///
+/// The item-size callback uses the same measured description heights, so the
+/// calculation matches the virtual list's own row positions.
+fn reveal_picker_row(
+    controller: &mut ScrollController,
+    rows: &[PickerRow],
+    measured: &HashMap<u16, f32>,
+    position: usize,
+    base: f32,
+) {
+    let mut top = 0.0;
+    for row in rows.iter().take(position) {
+        top += base + picker_details_height(row, measured);
+    }
+    let Some(row) = rows.get(position) else {
+        return;
+    };
+    let bottom = top + base + picker_details_height(row, measured);
+    let Some((_, viewport)) = *controller.bounds.read() else {
+        controller.scroll_to_y(-(top.round() as i32));
+        return;
+    };
+    if viewport.height <= 0.0 {
+        return;
+    }
+    let viewport_top = -controller.position().y;
+    let viewport_bottom = viewport_top + viewport.height;
+    if top < viewport_top {
+        controller.scroll_to_y(-(top.round() as i32));
+    } else if bottom > viewport_bottom {
+        controller.scroll_to_y(-((bottom - viewport.height).round() as i32));
     }
 }
 
@@ -1184,8 +1438,24 @@ fn estimated_details_height(description: &str) -> f32 {
     theme::font::line_height() * lines + theme::space::xxs() + theme::space::sm()
 }
 
+/// Accessibility metadata for one virtualized picker row.
+#[derive(Clone, Copy)]
+struct PickerRowA11y {
+    id: AccessibilityId,
+    index: usize,
+    total: usize,
+    is_active: bool,
+}
+
 /// One compact row inside a virtualized picker.
-fn picker_row(row: &PickerRow, height: f32, measured: State<HashMap<u16, f32>>) -> Element {
+fn picker_row(
+    row: &PickerRow,
+    height: f32,
+    measured: State<HashMap<u16, f32>>,
+    a11y: PickerRowA11y,
+    mut active: State<usize>,
+) -> Element {
+    let index = a11y.index;
     let content = rect()
         .vertical()
         .width(Size::flex(1.0))
@@ -1220,13 +1490,30 @@ fn picker_row(row: &PickerRow, height: f32, measured: State<HashMap<u16, f32>>) 
         .width(Size::fill())
         .height(Size::px(height))
         .key(row.key)
-        .a11y_role(AccessibilityRole::Group)
+        .a11y_id(a11y.id)
+        .a11y_role(AccessibilityRole::ListBoxOption)
         .a11y_alt(row.accessible.clone())
-        .background(if row.selected {
+        .a11y_builder(move |node| {
+            node.set_position_in_set(a11y.index);
+            node.set_size_of_set(a11y.total);
+        })
+        .on_press(move |_| *active.write() = index)
+        .background(if a11y.is_active {
+            theme::surface_active()
+        } else if row.selected {
             theme::surface_hover()
         } else {
             theme::surface()
         })
+        .border(
+            Border::new()
+                .fill(if a11y.is_active {
+                    theme::text()
+                } else {
+                    Color::TRANSPARENT
+                })
+                .width(theme::stroke::focus()),
+        )
         .corner_radius(theme::radius::control())
         .child(
             rect()
@@ -1238,11 +1525,14 @@ fn picker_row(row: &PickerRow, height: f32, measured: State<HashMap<u16, f32>>) 
                 .cross_align(Alignment::Center)
                 .padding(Gaps::new_symmetric(theme::space::xxs(), theme::space::md()))
                 .child(rect().width(Size::flex(1.0)).child(title))
-                .child(row_action(
-                    row.action_label.clone(),
-                    row.action_text.clone(),
-                    row.action.clone(),
-                )),
+                .child(
+                    row_action(
+                        row.action_label.clone(),
+                        row.action_text.clone(),
+                        row.action.clone(),
+                    )
+                    .focusable(false),
+                ),
         )
         .maybe_child(details)
         .into_element()
