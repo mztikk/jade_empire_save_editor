@@ -48,6 +48,8 @@ pub(crate) fn add_character_fields(gff: &mut Gff, player: usize) {
         .expect("level");
     gff.add_field(player, "CurrentXP", Value::DWord(1234))
         .expect("experience");
+    gff.add_field(player, "PlayerOrigApp", Value::Int(4))
+        .expect("original appearance");
     gff.add_field(player, "Stats", Value::Struct(stats))
         .expect("stats");
     gff.add_field(player, "Progress", Value::Struct(progress))

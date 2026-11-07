@@ -242,6 +242,47 @@ fn values_that_crash_the_game_still_open_for_repair() {
 }
 
 #[test]
+fn appearance_updates_the_original_appearance_copy() {
+    let mut save = common::save(&common::character_gff());
+    let mut character = save.character().expect("character");
+    character.appearance = 12;
+
+    save.apply_character(&character)
+        .expect("apply the appearance change");
+
+    let gff = save.block("save.sav").expect("block").gff();
+    assert_eq!(
+        value(gff, "PlayerCreature.Stats.Appearance"),
+        Value::Int(12)
+    );
+    assert_eq!(
+        value(gff, "PlayerCreature.PlayerOrigApp"),
+        Value::Int(12),
+        "the game loads the model from PlayerOrigApp"
+    );
+}
+
+#[test]
+fn appearance_still_writes_when_the_original_copy_is_absent() {
+    let mut gff = common::character_gff();
+    gff.remove("PlayerCreature.PlayerOrigApp")
+        .expect("remove original appearance");
+    let mut save = common::save(&gff);
+    let mut character = save.character().expect("character");
+    character.appearance = 12;
+
+    save.apply_character(&character)
+        .expect("apply without the original copy");
+    assert_eq!(
+        value(
+            save.block("save.sav").expect("block").gff(),
+            "PlayerCreature.Stats.Appearance"
+        ),
+        Value::Int(12)
+    );
+}
+
+#[test]
 fn writes_preserve_existing_field_types() {
     let mut gff = common::character_gff();
     common::replace_field(&mut gff, "PlayerCreature.Level", Value::Word(7));

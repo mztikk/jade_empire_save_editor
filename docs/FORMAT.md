@@ -167,10 +167,16 @@ the level-up screen. JadeForge therefore enforces:
 | `PlayerCreature.CurrentXP` | 0..=1,000,000 | the last `levelxp.2da` threshold, for level 32 |
 | `PlayerCreature.Stats.UnassignedPts` | 0..=97 | four points at character creation plus three for each of the 31 level-ups |
 | `PlayerCreature.Stats.Appearance` | 0..=236 | the shipped `appearance.2da` has 237 rows (`0..=236`) |
+| `PlayerCreature.PlayerOrigApp` | 0..=236 | second copy of the appearance row; written together with `Stats.Appearance` |
 | `Campaign.Chapter` | 0..=8 | internal chapters 1..8; `0` is the absent-field default |
 
 Values above these limits still open for repair, but the editor refuses to
 write them back.
+
+`Stats.Appearance` and `PlayerOrigApp` hold the same row in every retail
+savegame. The engine creates the player model from `PlayerOrigApp`; changing
+only `Stats.Appearance` changes the saved number but not the model the game
+loads. The editor writes both fields.
 
 ### Localized strings (type 12 and 18)
 
@@ -228,6 +234,7 @@ exposes:
 | `PlayerCreature.Stats.Charm/Intuition/Intimidate` | int | skills |
 | `PlayerCreature.Stats.Alignment` | int | alignment |
 | `PlayerCreature.Stats.Appearance` | int | appearance index |
+| `PlayerCreature.PlayerOrigApp` | int | original appearance index; the game builds the player model from this copy |
 | `PlayerCreature.ItemList[]` | list | inventory items |
 | `PlayerCreature.Progress.Kills` | int | kill counter |
 | `PlayerCreature.Gems` | list | carried gems, see below |

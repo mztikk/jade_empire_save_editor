@@ -110,6 +110,10 @@ pub struct Character {
     /// Alignment, from the Closed Fist (`0`) to the Open Palm (`255`).
     pub alignment: i32,
     /// Appearance index into `appearance.2da`, bounded by [`MAX_APPEARANCE`].
+    ///
+    /// The game keeps a second copy in `PlayerOrigApp`; both are written
+    /// together because changing only `Stats.Appearance` does not change the
+    /// model the game loads.
     pub appearance: i32,
     /// Story chapter, bounded by [`MAX_CHAPTER`].
     pub chapter: u32,
@@ -530,6 +534,13 @@ impl Character {
         set_number(
             gff,
             &path("Stats.Appearance"),
+            i64::from(self.appearance),
+            false,
+            &mut changes,
+        )?;
+        set_number(
+            gff,
+            &path("PlayerOrigApp"),
             i64::from(self.appearance),
             false,
             &mut changes,

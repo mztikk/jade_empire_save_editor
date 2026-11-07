@@ -3521,6 +3521,7 @@ mod tests {
         );
         add(&mut gff, player, "Level", Value::Byte(7));
         add(&mut gff, player, "CurrentXP", Value::DWord(1234));
+        add(&mut gff, player, "PlayerOrigApp", Value::Int(4));
         add(&mut gff, player, "Stats", Value::Struct(stats));
         add(&mut gff, player, "Progress", Value::Struct(progress));
         add(&mut gff, stats, "Gold", Value::DWord(99));
