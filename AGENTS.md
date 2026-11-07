@@ -95,12 +95,24 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
   and `write` only for a new file or a deliberate full rewrite. A targeted edit
   fails when the context it expects is gone; a blind rewrite can silently drop
   work.
-- Do not hand-rewrite tracked files through shell one-liners (`sed -i`, shell
-  redirection, `perl` or Python). They hide the change from review and can
-  over-match. Reserve shell-based editing for genuinely bulk or mechanical
-  transformations, such as the same substitution across many files. Even then,
-  keep the substitution exact, review `git diff`, and run the formatters and
-  tests.
+- Every content change starts with `edit`. This is not a judgement call:
+  if you can quote the exact literal text you are replacing, it is a targeted
+  edit and it goes through `edit`, one call per file. If you cannot quote it,
+  you are not making an edit; say what you are doing before you do it.
+- Do not hand-rewrite tracked files through shell one-liners (`sed -i`,
+  shell redirection, `perl` or Python), including when the same command also
+  reads the file. They hide the change from review and can over-match.
+- A shell edit of a tracked file is allowed only for bulk or mechanical work
+  (the same exact substitution across several files, a generated file, a
+  codemod). Announce it in the message before the command runs: which files,
+  the exact old and new text, and why `edit` cannot express it. Keep the
+  substitution exact, review `git diff`, and run the formatters and tests. An
+  edit that cannot be announced in one sentence is a convenience edit.
+- When a shell edit happens anyway, do not apologise and continue: restore
+  the file (`git restore <path>`), make the change with `edit`, and report it
+  in one line. If it happens twice in one task, stop and tell the user rather
+  than apologising a third time; a repeated slip means the tooling is pushing
+  you there.
 
 ## Shell tooling
 
@@ -114,8 +126,9 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
 - Availability is per host, not a build requirement. Use the modern tool when
   it is on `PATH` and fall back to the POSIX equivalent when it is not. Never
   install or bootstrap one (rule 12).
-- `sd` is a shell editor: the "Editing files" rule still applies, so use it only
-  for genuinely bulk, exact substitutions and review `git diff` afterwards.
+- `sd` is a shell editor: the "Editing files" rule applies unchanged, the
+  announcement included, so use it only for bulk, exact substitutions and
+  review `git diff` afterwards.
 - Leave the global git configuration alone. Pipe `git diff`/`git show` through
   `delta` instead of setting `core.pager`.
 
@@ -225,6 +238,10 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
     and `$()` are command substitution, not text. Pass multi-line prose or
     Markdown through a file (`gh pr create --body-file`, a heredoc) or single
     quotes. Never put backticked commands in a double-quoted argument.
+18. **Edit tracked files with the edit tool.** A content change goes through
+    `read`, `edit` or `write`, never a shell one-liner. The only exception is
+    an announced bulk transformation: say which files and which exact
+    substitution before the command runs (see "Editing files").
 
 ## Code style
 
