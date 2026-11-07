@@ -151,8 +151,9 @@ impl Gff {
     /// This is used for the savegame list, which needs a handful of values from
     /// a block that may contain tens of thousands of fields. The header and
     /// tables are validated exactly like [`Gff::parse`], but values for fields
-    /// that are not requested are never decoded. A missing path yields `None`;
-    /// malformed offsets or a bad target type still produce an error.
+    /// that are not requested are never decoded. A missing path, a wrong
+    /// intermediate type, or an indexed leaf yields `None`. Structural table or
+    /// list corruption still produces an error.
     ///
     /// The grammar is [`FieldPath`]'s dotted path grammar. A path whose final
     /// segment has a list index is not a field, so it yields `None`, matching
@@ -478,7 +479,7 @@ impl Gff {
         if !is_compatible(type_id, &value) {
             return Err(Error::TypeMismatch {
                 path: label.to_owned(),
-                expected: value.type_name(),
+                expected: type_name_for_id(type_id),
                 actual: value.type_name(),
             });
         }
@@ -684,6 +685,31 @@ fn is_compatible(type_id: u32, value: &Value) -> bool {
         || (matches!(type_id, 12 | 18) && matches!(value, Value::LocString(_)))
 }
 
+/// Human readable name of an on-disk field type tag.
+fn type_name_for_id(type_id: u32) -> &'static str {
+    match type_id {
+        0 => "byte",
+        1 => "char",
+        2 => "word",
+        3 => "short",
+        4 => "dword",
+        5 => "int",
+        6 => "dword64",
+        7 => "int64",
+        8 => "float",
+        9 => "double",
+        10 => "string",
+        11 => "resref",
+        12 | 18 => "locstring",
+        13 => "void",
+        14 => "struct",
+        15 => "list",
+        16 => "quaternion",
+        17 => "vector3",
+        _ => "unknown type",
+    }
+}
+
 /// True for field types whose payload lives in the field-data section.
 fn is_out_of_line(type_id: u32) -> bool {
     matches!(type_id, 6 | 7 | 9 | 10 | 11 | 12 | 13 | 16 | 17 | 18)
@@ -734,13 +760,24 @@ struct Budget {
     limit: usize,
 }
 
+/// Baseline decoded-data allowance for small blocks.
+///
+/// The writer de-duplicates field payloads, but the parser still materializes
+/// one value per field entry and one clone per struct reference. A small block
+/// can therefore represent several megabytes of decoded values without being
+/// hostile. The per-reference charge still rejects large amplification.
+const MIN_DECODED_BUDGET: usize = 16 * 1024 * 1024;
+
 impl Budget {
     fn new(block_len: usize) -> Self {
-        // Real saves share payloads only modestly; 4x plus one MiB leaves a
-        // wide margin while stopping a few hundred shared blobs from OOMing.
+        // 4x plus one MiB leaves a wide margin for real saves; the baseline
+        // keeps valid, compactly de-duplicated writer output parseable.
         Self {
             used: 0,
-            limit: block_len.saturating_mul(4).saturating_add(1 << 20),
+            limit: block_len
+                .saturating_mul(4)
+                .saturating_add(1 << 20)
+                .max(MIN_DECODED_BUDGET),
         }
     }
 

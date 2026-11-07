@@ -393,6 +393,15 @@ impl Value {
                         block: block.to_owned(),
                         message: format!("localized string text at {start} is truncated"),
                     })?;
+                    if end != inner.len() {
+                        return Err(Error::Malformed {
+                            block: block.to_owned(),
+                            message: format!(
+                                "localized string at {start} has {} trailing bytes",
+                                inner.len() - end
+                            ),
+                        });
+                    }
                     Some(decode_text(bytes, block, start)?)
                 } else {
                     None
@@ -731,6 +740,16 @@ mod tests {
         invalid.extend_from_slice(&[0xff, 0xfe]);
         assert!(matches!(
             decode(18, 0, &invalid),
+            Err(Error::Malformed { .. })
+        ));
+
+        // Trailing bytes after the declared inline text.
+        let mut trailing = 11_u32.to_le_bytes().to_vec();
+        trailing.extend_from_slice(&1_u32.to_le_bytes());
+        trailing.extend_from_slice(&2_u32.to_le_bytes());
+        trailing.extend_from_slice(b"hi!");
+        assert!(matches!(
+            decode(18, 0, &trailing),
             Err(Error::Malformed { .. })
         ));
 
