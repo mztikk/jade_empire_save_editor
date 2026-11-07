@@ -94,6 +94,12 @@ the variables did not reach the tests).
 - When GitHub Actions is unavailable, follow
   [docs/RELEASING.md](../../../docs/RELEASING.md) for the local Linux and
   Windows build, assembly, publishing and verification path.
+- In a workspace-only sandbox, only `just publish-linux` (podman runtime
+  directory and rootless user namespace) and `just publish-windows-cross`
+  (cargo-xwin cache) need a one-shot full-access approval. Run both recipes
+  verbatim, one approval each, after the version bump; keep everything else
+  sandboxed. Do not probe or work around the runtime. If approval is refused,
+  stop and ask. Keep persistent logs in `scratch/`, not `/tmp`.
 - Sign/notarise the macOS and Windows binaries when the platform credentials
   are available (see `ci/README.md`); otherwise mark the release unsigned.
 - Never ship a build whose real-savegame tests were skipped.

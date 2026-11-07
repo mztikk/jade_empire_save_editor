@@ -41,6 +41,27 @@ hosted path and skip the build and publish steps below, or disable the
 workflow first with `gh workflow disable CI`. Do not run both paths for the
 same tag.
 
+## Running inside a sandbox
+
+An automated session that restricts writes to the workspace needs two one-shot
+escalations, one per build recipe:
+
+| command | why the sandbox blocks it |
+| --- | --- |
+| `just publish-linux` | podman needs a writable `/run/user/<uid>/libpod` and a working rootless user namespace |
+| `just publish-windows-cross` | cargo-xwin refreshes `~/.cache/cargo-xwin/clang-cl` |
+
+Run each recipe verbatim and request the escalation for that exact command,
+after the version bump so the artifacts carry the right version. Everything
+else in this runbook (the gate, git, `gh`, notices, SBOM, assembly and
+verification) runs inside a workspace-only sandbox. Do not probe podman with
+separate commands, move its storage into the workspace, use `unshare`, or
+substitute another runtime: those are workarounds, not the release path. If the
+escalation is refused, stop and ask instead of working around it.
+
+Keep persistent logs in `scratch/`, not `/tmp`, which is often a per-command
+tmpfs in a sandboxed session.
+
 ## 1. Prepare the version
 
 ```sh
