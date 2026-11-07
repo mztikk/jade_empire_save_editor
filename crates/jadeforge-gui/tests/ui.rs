@@ -1940,8 +1940,8 @@ fn the_character_form_shows_units_and_the_optional_gold_field() {
         "the chapter field does not say what it counts"
     );
     assert!(
-        find_label_text(&test, "0 to 236 (index)").is_some(),
-        "the appearance field does not say it is an index"
+        find_label_text(&test, "one of the seven player appearances").is_some(),
+        "the appearance field does not say it is a player-model choice"
     );
     assert!(
         find_label_text(&test, "empty or 0 to 2147483647 gold").is_some(),
@@ -1954,6 +1954,67 @@ fn the_character_form_shows_units_and_the_optional_gold_field() {
     assert!(
         find_label_text(&test, "Gold is optional in the savegame").is_some(),
         "the optional Gold field is not explained"
+    );
+}
+
+#[test]
+fn the_appearance_choice_lists_the_seven_player_models() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let options = session.appearance_options();
+    let current = session.character().expect("character").appearance;
+    let current_option = options
+        .iter()
+        .find(|option| option.appearance.row() == current)
+        .expect("the fixture appearance is a player model");
+    let target = options
+        .iter()
+        .find(|option| option.appearance.row() != current)
+        .expect("another player model");
+    let current_label = current_option.label.clone();
+    let target_label = target.label.clone();
+
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_text(&mut test, "Character"));
+    assert!(
+        find_label_text(&test, &current_label).is_some(),
+        "the current player appearance is not shown in the select"
+    );
+
+    let caption = find_label_exact(&test, "APPEARANCE").expect("appearance caption");
+    let area = caption.layout().area;
+    let point = CursorPoint::new(
+        f64::from(area.origin.x) + 20.0,
+        f64::from(area.origin.y) + f64::from(area.size.height) + 24.0,
+    );
+    test.move_cursor(point);
+    test.sync_and_update();
+    test.click_cursor(point);
+    test.sync_and_update();
+    wait_for_text(&mut test, &target_label);
+
+    let menu_item = test
+        .find_many(|node, element| {
+            let label = Label::try_downcast(element)?;
+            (label.text == target_label && node.layout().area.origin.x > 500.0).then_some(node)
+        })
+        .into_iter()
+        .next()
+        .expect("the target appearance is not in the open select");
+    click_node(&mut test, &menu_item);
+    for _ in 0..3 {
+        test.sync_and_update();
+    }
+    assert!(
+        find_label_text(&test, "unsaved changes").is_some()
+            || find_label_text(&test, "in memory").is_some(),
+        "choosing an appearance was not applied"
     );
 }
 

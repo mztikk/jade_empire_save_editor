@@ -8,8 +8,8 @@ mod common;
 
 use jadeforge_core::save::POLYPLAYER_BLOCK;
 use jadeforge_core::{
-    Character, Error, Gff, MAX_ALIGNMENT, MAX_APPEARANCE, MAX_ATTRIBUTE_POINTS, MAX_CHAPTER,
-    MAX_EXPERIENCE, MAX_LEVEL, MAX_STAT, MIN_ALIGNMENT, SaveGame, Value, locate_player,
+    Character, Error, Gff, MAX_ALIGNMENT, MAX_ATTRIBUTE_POINTS, MAX_CHAPTER, MAX_EXPERIENCE,
+    MAX_LEVEL, MAX_STAT, MIN_ALIGNMENT, PlayerAppearance, SaveGame, Value, locate_player,
 };
 
 fn changed(base: &Character, apply: impl FnOnce(&mut Character)) -> Character {
@@ -30,6 +30,23 @@ fn assert_rejected(cases: &[(&str, Character)]) {
             .expect_err("out of range character was accepted");
         assert!(error.to_string().contains(field), "{field}: {error}");
         assert!(!save.is_modified(), "{field} dirtied the savegame");
+    }
+}
+
+#[test]
+fn player_appearances_match_the_players_table_rows() {
+    assert_eq!(
+        PlayerAppearance::ALL.map(PlayerAppearance::row),
+        [0, 5, 7, 2, 3, 6, 8]
+    );
+    for appearance in PlayerAppearance::ALL {
+        assert_eq!(
+            PlayerAppearance::from_row(appearance.row()),
+            Some(appearance)
+        );
+    }
+    for row in [-1, 1, 4, 9, 236] {
+        assert_eq!(PlayerAppearance::from_row(row), None, "row {row}");
     }
 }
 
@@ -72,9 +89,11 @@ fn rejects_out_of_range_progression_values() {
         ),
         (
             "appearance",
-            changed(&base, |character| {
-                character.appearance = MAX_APPEARANCE + 1;
-            }),
+            changed(&base, |character| character.appearance = 9),
+        ),
+        (
+            "appearance",
+            changed(&base, |character| character.appearance = 1_000_000),
         ),
         (
             "chapter",
@@ -152,7 +171,7 @@ fn accepts_the_largest_values_the_game_tables_can_load() {
     character.attribute_points = MAX_ATTRIBUTE_POINTS;
     character.kills = MAX_STAT;
     character.alignment = MAX_ALIGNMENT;
-    character.appearance = MAX_APPEARANCE;
+    character.appearance = PlayerAppearance::Tan.row();
     character.chapter = MAX_CHAPTER;
 
     save.apply_character(&character)
@@ -165,7 +184,7 @@ fn accepts_the_largest_values_the_game_tables_can_load() {
     assert_eq!(reread.attribute_points, MAX_ATTRIBUTE_POINTS);
     assert_eq!(reread.kills, MAX_STAT);
     assert_eq!(reread.alignment, MAX_ALIGNMENT);
-    assert_eq!(reread.appearance, MAX_APPEARANCE);
+    assert_eq!(reread.appearance, PlayerAppearance::Tan.row());
     assert_eq!(reread.chapter, MAX_CHAPTER);
 }
 
@@ -209,18 +228,13 @@ fn values_that_crash_the_game_still_open_for_repair() {
         "PlayerCreature.Stats.UnassignedPts",
         Value::DWord(u32::MAX),
     );
-    common::replace_field(
-        &mut gff,
-        "PlayerCreature.Stats.Appearance",
-        Value::Int(1_000_000),
-    );
-
+    common::replace_field(&mut gff, "PlayerCreature.Stats.Appearance", Value::Int(9));
     let mut save = common::save(&gff);
     let mut character = save.character().expect("character");
     assert_eq!(character.level, 255);
     assert_eq!(character.experience, u32::MAX);
     assert_eq!(character.attribute_points, u32::MAX);
-    assert_eq!(character.appearance, 1_000_000);
+    assert_eq!(character.appearance, 9);
     assert!(
         save.apply_character(&character).is_err(),
         "the crashing values must not be written back unchanged"
@@ -230,7 +244,7 @@ fn values_that_crash_the_game_still_open_for_repair() {
     character.level = MAX_LEVEL;
     character.experience = MAX_EXPERIENCE;
     character.attribute_points = MAX_ATTRIBUTE_POINTS;
-    character.appearance = MAX_APPEARANCE;
+    character.appearance = PlayerAppearance::Tan.row();
     save.apply_character(&character)
         .expect("repair every crashing value");
 
@@ -238,7 +252,50 @@ fn values_that_crash_the_game_still_open_for_repair() {
     assert_eq!(reread.level, MAX_LEVEL);
     assert_eq!(reread.experience, MAX_EXPERIENCE);
     assert_eq!(reread.attribute_points, MAX_ATTRIBUTE_POINTS);
-    assert_eq!(reread.appearance, MAX_APPEARANCE);
+    assert_eq!(reread.appearance, PlayerAppearance::Tan.row());
+}
+
+#[test]
+fn appearance_updates_the_original_appearance_copy() {
+    let mut save = common::save(&common::character_gff());
+    let mut character = save.character().expect("character");
+    let appearance = PlayerAppearance::Shen.row();
+    character.appearance = appearance;
+
+    save.apply_character(&character)
+        .expect("apply the appearance change");
+
+    let gff = save.block("save.sav").expect("block").gff();
+    assert_eq!(
+        value(gff, "PlayerCreature.Stats.Appearance"),
+        Value::Int(appearance)
+    );
+    assert_eq!(
+        value(gff, "PlayerCreature.PlayerOrigApp"),
+        Value::Int(appearance),
+        "the game loads the model from PlayerOrigApp"
+    );
+}
+
+#[test]
+fn appearance_still_writes_when_the_original_copy_is_absent() {
+    let mut gff = common::character_gff();
+    gff.remove("PlayerCreature.PlayerOrigApp")
+        .expect("remove original appearance");
+    let mut save = common::save(&gff);
+    let mut character = save.character().expect("character");
+    let appearance = PlayerAppearance::Shen.row();
+    character.appearance = appearance;
+
+    save.apply_character(&character)
+        .expect("apply without the original copy");
+    assert_eq!(
+        value(
+            save.block("save.sav").expect("block").gff(),
+            "PlayerCreature.Stats.Appearance"
+        ),
+        Value::Int(appearance)
+    );
 }
 
 #[test]

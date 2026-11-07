@@ -45,11 +45,85 @@ pub const MAX_EXPERIENCE: u32 = 1_000_000;
 /// the level 32 cap grants three, for `4 + 3 * 31 = 97`.
 pub const MAX_ATTRIBUTE_POINTS: u32 = 97;
 
-/// Highest row of the shipped `appearance.2da` (rows `0..=236`).
+/// One of the seven player models defined by `players.2da`.
 ///
-/// `Stats.Appearance` is a row index, not a free number. The engine crashes
-/// when the row does not exist.
-pub const MAX_APPEARANCE: i32 = 236;
+/// `appearance.2da` has hundreds of rows, but most of them are NPCs. Using one
+/// of those as the player crashes the game. Only the rows that `players.2da`
+/// assigns to the seven playable characters are safe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum PlayerAppearance {
+    /// Blossom.
+    Blossom,
+    /// Furious Ming.
+    Ming,
+    /// Tiger Shen.
+    Shen,
+    /// Radiant Jen Zi.
+    JenZi,
+    /// Scholar Ling.
+    Ling,
+    /// Lu the Prodigy.
+    Prodigy,
+    /// Monk Zeng.
+    Tan,
+}
+
+impl PlayerAppearance {
+    /// Every player appearance, in the order `players.2da` lists them.
+    pub const ALL: [Self; 7] = [
+        Self::Blossom,
+        Self::Ming,
+        Self::Shen,
+        Self::JenZi,
+        Self::Ling,
+        Self::Prodigy,
+        Self::Tan,
+    ];
+
+    /// Row in `appearance.2da`, the value stored in `Stats.Appearance`.
+    #[must_use]
+    pub const fn row(self) -> i32 {
+        match self {
+            Self::Blossom => 0,
+            Self::Ming => 5,
+            Self::Shen => 7,
+            Self::JenZi => 2,
+            Self::Ling => 3,
+            Self::Prodigy => 6,
+            Self::Tan => 8,
+        }
+    }
+
+    /// Player appearance for an `appearance.2da` row.
+    #[must_use]
+    pub const fn from_row(row: i32) -> Option<Self> {
+        match row {
+            0 => Some(Self::Blossom),
+            5 => Some(Self::Ming),
+            7 => Some(Self::Shen),
+            2 => Some(Self::JenZi),
+            3 => Some(Self::Ling),
+            6 => Some(Self::Prodigy),
+            8 => Some(Self::Tan),
+            _ => None,
+        }
+    }
+
+    /// English name, used when the installation cannot supply the localized
+    /// `players.2da` name.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Blossom => "Blossom",
+            Self::Ming => "Furious Ming",
+            Self::Shen => "Tiger Shen",
+            Self::JenZi => "Radiant Jen Zi",
+            Self::Ling => "Scholar Ling",
+            Self::Prodigy => "Lu the Prodigy",
+            Self::Tan => "Monk Zeng",
+        }
+    }
+}
 
 /// Highest internal story chapter in the shipped campaign.
 ///
@@ -109,7 +183,11 @@ pub struct Character {
     pub intimidate: i32,
     /// Alignment, from the Closed Fist (`0`) to the Open Palm (`255`).
     pub alignment: i32,
-    /// Appearance index into `appearance.2da`, bounded by [`MAX_APPEARANCE`].
+    /// Player appearance, one of [`PlayerAppearance::ALL`].
+    ///
+    /// The game keeps a second copy in `PlayerOrigApp`; both are written
+    /// together because changing only `Stats.Appearance` does not change the
+    /// model the game loads.
     pub appearance: i32,
     /// Story chapter, bounded by [`MAX_CHAPTER`].
     pub chapter: u32,
@@ -409,12 +487,14 @@ impl Character {
             i64::from(MIN_ALIGNMENT),
             i64::from(MAX_ALIGNMENT),
         )?;
-        check_signed(
-            "appearance",
-            i64::from(self.appearance),
-            0,
-            i64::from(MAX_APPEARANCE),
-        )?;
+        if PlayerAppearance::from_row(self.appearance).is_none() {
+            return Err(Error::InvalidValue {
+                path: "appearance".to_owned(),
+                value: self.appearance.to_string(),
+                expected: "one of the seven player appearance rows 0, 2, 3, 5, 6, 7 or 8"
+                    .to_owned(),
+            });
+        }
         check_unsigned("kills", u64::from(self.kills), 0, u64::from(MAX_STAT))?;
         check_unsigned(
             "chapter",
@@ -530,6 +610,13 @@ impl Character {
         set_number(
             gff,
             &path("Stats.Appearance"),
+            i64::from(self.appearance),
+            false,
+            &mut changes,
+        )?;
+        set_number(
+            gff,
+            &path("PlayerOrigApp"),
             i64::from(self.appearance),
             false,
             &mut changes,

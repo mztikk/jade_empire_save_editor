@@ -231,6 +231,7 @@ fn block() -> Gff {
     );
     add(&mut gff, player, "Level", Value::Byte(7));
     add(&mut gff, player, "CurrentXP", Value::DWord(1234));
+    add(&mut gff, player, "PlayerOrigApp", Value::Int(5));
     add(&mut gff, player, "Stats", Value::Struct(stats));
     add(&mut gff, player, "Progress", Value::Struct(progress));
     add(&mut gff, stats, "Gold", Value::DWord(99));
@@ -249,7 +250,7 @@ fn block() -> Gff {
     add(&mut gff, stats, "Intuition", Value::Int(2));
     add(&mut gff, stats, "Intimidate", Value::Int(3));
     add(&mut gff, stats, "Alignment", Value::Int(200));
-    add(&mut gff, stats, "Appearance", Value::Int(4));
+    add(&mut gff, stats, "Appearance", Value::Int(5));
     add(&mut gff, progress, "Kills", Value::DWord(42));
 
     add(

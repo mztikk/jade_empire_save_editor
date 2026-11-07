@@ -118,6 +118,7 @@ complete = true
 
 # Character tab
 "character.attribute_points_hint" = "Attributpunkte, die Sie noch ausgeben können; das Feld wird erstellt, wenn der Spielstand es nicht hat."
+"character.appearance.choose" = "Spielererscheinung wählen"
 "character.attributes" = "Attribute"
 "character.current_sheet" = "Aktuelles Datenblatt"
 "character.current_values_hint" = "Aktuelle Werte können unter dem Maximum bleiben; das Spiel füllt sie beim Ruhen auf."
@@ -455,7 +456,7 @@ complete = true
 "field.name.range" = "höchstens 64 Zeichen"
 "field.level.range" = "1 bis {max} (Stufe)"
 "field.gold.range" = "leer oder 0 bis {max} Gold"
-"field.appearance.range" = "0 bis {max} (Index)"
+"field.appearance.range" = "eine der sieben Spielererscheinungen"
 "field.alignment.range" = "{min} bis {max}, {default} ist ausgeglichen"
 "field.chapter.range" = "0 bis {max} (Kapitel)"
 

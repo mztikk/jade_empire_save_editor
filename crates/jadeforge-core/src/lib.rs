@@ -19,8 +19,9 @@ pub mod styles;
 
 pub use backup::{BackupEntry, list_backups, restore_backup};
 pub use character::{
-    Change, Character, DEFAULT_ALIGNMENT, MAX_ALIGNMENT, MAX_APPEARANCE, MAX_ATTRIBUTE_POINTS,
-    MAX_CHAPTER, MAX_EXPERIENCE, MAX_LEVEL, MAX_STAT, MIN_ALIGNMENT, PlayerLocation, locate_player,
+    Change, Character, DEFAULT_ALIGNMENT, MAX_ALIGNMENT, MAX_ATTRIBUTE_POINTS, MAX_CHAPTER,
+    MAX_EXPERIENCE, MAX_LEVEL, MAX_STAT, MIN_ALIGNMENT, PlayerAppearance, PlayerLocation,
+    locate_player,
 };
 pub use error::{Error, Result};
 pub use gems::{AmuletInfo, Gem, GemEffect, GemLocation, sockets_for_tier};

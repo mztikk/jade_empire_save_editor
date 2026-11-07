@@ -2,11 +2,20 @@
 
 use std::path::PathBuf;
 
-use jadeforge_core::GemLocation;
+use jadeforge_core::{GemLocation, PlayerAppearance};
 use jadeforge_i18n::{Key, keys};
 
 use crate::message;
 use crate::session::format;
+
+/// One selectable player appearance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppearanceOption {
+    /// Player appearance and its `appearance.2da` row.
+    pub appearance: PlayerAppearance,
+    /// Localized name from the game data, or the English fallback.
+    pub label: String,
+}
 
 /// One entry of the savegame list.
 #[derive(Debug, Clone, PartialEq, Eq)]

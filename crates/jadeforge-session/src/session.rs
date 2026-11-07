@@ -9,8 +9,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant, SystemTime};
 
 use jadeforge_core::{
-    AmuletInfo, Change, Character, GemLocation, Henchman, Item, SaveGame, SaveImage, SaveOptions,
-    Style, StyleIdentity, list_backups, restore_backup,
+    AmuletInfo, Change, Character, GemLocation, Henchman, Item, PlayerAppearance, SaveGame,
+    SaveImage, SaveOptions, Style, StyleIdentity, list_backups, restore_backup,
 };
 use jadeforge_gamedata::{BundledItem, GameData, NameIndex};
 use jadeforge_i18n::{Key, keys};
@@ -24,9 +24,9 @@ mod model;
 pub use error::SessionError;
 pub use form::{CharacterField, CharacterForm, FieldError, FormError};
 pub use model::{
-    BackupRow, GameStatus, GemRow, GemSuggestion, HenchRow, ItemRow, ItemSuggestion, Message,
-    MessageKind, PendingChange, PendingChangeGroup, Preview, SaveEntry, Section, SectionError,
-    StyleRow, StyleSuggestion, StyleUpgrade,
+    AppearanceOption, BackupRow, GameStatus, GemRow, GemSuggestion, HenchRow, ItemRow,
+    ItemSuggestion, Message, MessageKind, PendingChange, PendingChangeGroup, Preview, SaveEntry,
+    Section, SectionError, StyleRow, StyleSuggestion, StyleUpgrade,
 };
 
 /// Folder to start with: the environment override, the last folder used, or
@@ -1944,6 +1944,30 @@ impl Session {
         self.game.as_deref()
     }
 
+    /// The seven player appearances, with localized names when the game data
+    /// resolves them.
+    #[must_use]
+    pub fn appearance_options(&self) -> Vec<AppearanceOption> {
+        PlayerAppearance::ALL
+            .iter()
+            .map(|appearance| {
+                let label = self
+                    .game
+                    .as_ref()
+                    .and_then(|game| {
+                        game.player_appearances()
+                            .iter()
+                            .find(|info| info.row == appearance.row())
+                    })
+                    .map_or_else(|| appearance.label().to_owned(), |info| info.name.clone());
+                AppearanceOption {
+                    appearance: *appearance,
+                    label,
+                }
+            })
+            .collect()
+    }
+
     /// Human readable state of the game data.
     #[must_use]
     pub fn game_status(&self) -> &GameStatus {
@@ -3445,8 +3469,8 @@ mod tests {
     use std::path::PathBuf;
 
     use jadeforge_core::{
-        Gff, MAX_ALIGNMENT, MAX_APPEARANCE, MAX_ATTRIBUTE_POINTS, MAX_CHAPTER, MAX_EXPERIENCE,
-        MAX_LEVEL, MAX_STAT, Value,
+        Gff, MAX_ALIGNMENT, MAX_ATTRIBUTE_POINTS, MAX_CHAPTER, MAX_EXPERIENCE, MAX_LEVEL, MAX_STAT,
+        PlayerAppearance, Value,
     };
 
     struct TempDir {
@@ -3521,6 +3545,7 @@ mod tests {
         );
         add(&mut gff, player, "Level", Value::Byte(7));
         add(&mut gff, player, "CurrentXP", Value::DWord(1234));
+        add(&mut gff, player, "PlayerOrigApp", Value::Int(5));
         add(&mut gff, player, "Stats", Value::Struct(stats));
         add(&mut gff, player, "Progress", Value::Struct(progress));
         add(&mut gff, stats, "Gold", Value::DWord(99));
@@ -3539,7 +3564,7 @@ mod tests {
         add(&mut gff, stats, "Intuition", Value::Int(2));
         add(&mut gff, stats, "Intimidate", Value::Int(3));
         add(&mut gff, stats, "Alignment", Value::Int(200));
-        add(&mut gff, stats, "Appearance", Value::Int(4));
+        add(&mut gff, stats, "Appearance", Value::Int(5));
         add(&mut gff, progress, "Kills", Value::DWord(42));
 
         add(&mut gff, player, "ItemList", Value::List(vec![item]));
@@ -3649,7 +3674,7 @@ mod tests {
             intuition: 2,
             intimidate: 3,
             alignment: 200,
-            appearance: 4,
+            appearance: 5,
             chapter: 2,
             time_played: 90_000_000_000,
             kills: 42,
@@ -4949,8 +4974,8 @@ mod tests {
         );
         assert_eq!(
             CharacterField::Appearance.range_text(),
-            "0 to 236 (index)",
-            "appearance is a row of the shipped appearance.2da"
+            "one of the seven player appearances",
+            "appearance is a player model, not an arbitrary appearance.2da row"
         );
         assert_eq!(
             CharacterField::Chapter.range_text(),
@@ -4976,7 +5001,7 @@ mod tests {
         form.attribute_points = (u64::from(MAX_ATTRIBUTE_POINTS) + 1).to_string();
         form.kills = (u64::from(MAX_STAT) + 1).to_string();
         form.alignment = (MAX_ALIGNMENT + 1).to_string();
-        form.appearance = (MAX_APPEARANCE + 1).to_string();
+        form.appearance = "9".to_owned();
         form.chapter = (u64::from(MAX_CHAPTER) + 1).to_string();
 
         let errors = form.validate_against(&character);
@@ -5008,7 +5033,7 @@ mod tests {
         form.attribute_points = MAX_ATTRIBUTE_POINTS.to_string();
         form.kills = MAX_STAT.to_string();
         form.alignment = MAX_ALIGNMENT.to_string();
-        form.appearance = MAX_APPEARANCE.to_string();
+        form.appearance = PlayerAppearance::Tan.row().to_string();
         form.chapter = MAX_CHAPTER.to_string();
 
         let parsed = form.to_character(&character).expect("parse maxima");
@@ -5018,8 +5043,23 @@ mod tests {
         assert_eq!(parsed.attribute_points, MAX_ATTRIBUTE_POINTS);
         assert_eq!(parsed.kills, MAX_STAT);
         assert_eq!(parsed.alignment, MAX_ALIGNMENT);
-        assert_eq!(parsed.appearance, MAX_APPEARANCE);
+        assert_eq!(parsed.appearance, PlayerAppearance::Tan.row());
         assert_eq!(parsed.chapter, MAX_CHAPTER);
+    }
+
+    #[test]
+    fn appearance_options_cover_the_seven_player_models() {
+        let (_directory, session) = fixture();
+        let options = session.appearance_options();
+        assert_eq!(options.len(), 7);
+        assert_eq!(
+            options
+                .iter()
+                .map(|option| option.appearance.row())
+                .collect::<Vec<_>>(),
+            [0, 5, 7, 2, 3, 6, 8]
+        );
+        assert_eq!(options[1].label, "Furious Ming");
     }
 
     #[test]

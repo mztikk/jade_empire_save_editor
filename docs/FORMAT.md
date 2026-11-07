@@ -166,11 +166,23 @@ the level-up screen. JadeForge therefore enforces:
 | `PlayerCreature.Level` | 1..=32 | `levelxp.2da` in `data/miniglobal-a.rim` has thresholds for levels `0..=32` |
 | `PlayerCreature.CurrentXP` | 0..=1,000,000 | the last `levelxp.2da` threshold, for level 32 |
 | `PlayerCreature.Stats.UnassignedPts` | 0..=97 | four points at character creation plus three for each of the 31 level-ups |
-| `PlayerCreature.Stats.Appearance` | 0..=236 | the shipped `appearance.2da` has 237 rows (`0..=236`) |
+| `PlayerCreature.Stats.Appearance` | one of `0, 2, 3, 5, 6, 7, 8` | the `appearanceindex` values that `players.2da` assigns to the seven playable characters |
+| `PlayerCreature.PlayerOrigApp` | one of `0, 2, 3, 5, 6, 7, 8` | second copy of the appearance row; written together with `Stats.Appearance` |
 | `Campaign.Chapter` | 0..=8 | internal chapters 1..8; `0` is the absent-field default |
 
 Values above these limits still open for repair, but the editor refuses to
 write them back.
+
+`Stats.Appearance` and `PlayerOrigApp` hold the same row in every retail
+savegame. The engine creates the player model from `PlayerOrigApp`; changing
+only `Stats.Appearance` changes the saved number but not the model the game
+loads. The editor writes both fields.
+
+`appearance.2da` has 237 rows, but most are NPCs; loading an NPC row as the
+player crashes the game. Only the seven rows that `players.2da` assigns to the
+playable characters are valid, and the editor exposes them as a named choice.
+Rows `1`, `4` and everything from `9` upwards are rejected even though the
+table contains them.
 
 ### Localized strings (type 12 and 18)
 
@@ -227,7 +239,8 @@ exposes:
 | `PlayerCreature.Stats.Body/Mind/Spirit` | dword | attributes |
 | `PlayerCreature.Stats.Charm/Intuition/Intimidate` | int | skills |
 | `PlayerCreature.Stats.Alignment` | int | alignment |
-| `PlayerCreature.Stats.Appearance` | int | appearance index |
+| `PlayerCreature.Stats.Appearance` | int | player appearance row, one of the seven `PlayerAppearance` rows |
+| `PlayerCreature.PlayerOrigApp` | int | original appearance index; the game builds the player model from this copy |
 | `PlayerCreature.ItemList[]` | list | inventory items |
 | `PlayerCreature.Progress.Kills` | int | kill counter |
 | `PlayerCreature.Gems` | list | carried gems, see below |
@@ -530,7 +543,10 @@ Community documentation, used for the semantics of the game data tables:
 * [2DA Files](https://jadeempire-modding.fandom.com/wiki/2DA_Files): index of
   the tables.
 * [Appearance.2da](https://jadeempire-modding.fandom.com/wiki/Appearance.2da):
-  the 237-row table that `Stats.Appearance` indexes.
+  the 237-row table that `Stats.Appearance` indexes; only the player rows are
+  safe.
+* [Players.2da](https://jadeempire-modding.fandom.com/wiki/Players.2da): the
+  `appearanceindex` of each of the seven playable characters.
 * [Chapters](https://jadeempire-modding.fandom.com/wiki/Chapters): the internal
   chapter numbering (1..8).
 * [Nwscript.nss](https://jadeempire-modding.fandom.com/wiki/Nwscript.nss): the

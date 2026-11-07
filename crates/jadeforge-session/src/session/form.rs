@@ -3,8 +3,8 @@
 use std::fmt;
 
 use jadeforge_core::{
-    Character, DEFAULT_ALIGNMENT, MAX_ALIGNMENT, MAX_APPEARANCE, MAX_ATTRIBUTE_POINTS, MAX_CHAPTER,
-    MAX_EXPERIENCE, MAX_LEVEL, MAX_STAT, MIN_ALIGNMENT,
+    Character, DEFAULT_ALIGNMENT, MAX_ALIGNMENT, MAX_ATTRIBUTE_POINTS, MAX_CHAPTER, MAX_EXPERIENCE,
+    MAX_LEVEL, MAX_STAT, MIN_ALIGNMENT, PlayerAppearance,
 };
 use jadeforge_i18n::{Key, keys};
 
@@ -237,12 +237,7 @@ impl CharacterForm {
             Ok(value) => character.alignment = value,
             Err(error) => errors.push(error),
         }
-        match parse_signed_checked(
-            CharacterField::Appearance,
-            &self.appearance,
-            0,
-            i64::from(MAX_APPEARANCE),
-        ) {
+        match parse_player_appearance(&self.appearance) {
             Ok(value) => character.appearance = value,
             Err(error) => errors.push(error),
         }
@@ -463,12 +458,9 @@ impl CharacterField {
     #[must_use]
     pub fn range_text(self) -> String {
         match self {
-            Self::Name => message::tr(self.range()).to_owned(),
+            Self::Name | Self::Appearance => message::tr(self.range()).to_owned(),
             Self::Level => message::fill(self.range(), &[("max", &MAX_LEVEL.to_string())]),
             Self::Gold => message::fill(self.range(), &[("max", &MAX_STAT.to_string())]),
-            Self::Appearance => {
-                message::fill(self.range(), &[("max", &MAX_APPEARANCE.to_string())])
-            }
             Self::Chapter => message::fill(self.range(), &[("max", &MAX_CHAPTER.to_string())]),
             Self::Alignment => message::fill(
                 self.range(),
@@ -607,6 +599,23 @@ fn parse_signed_checked(
     })?;
     if !(min..=max).contains(&i64::from(value)) {
         return Err(FieldError::out_of_range(field, raw));
+    }
+    Ok(value)
+}
+
+fn parse_player_appearance(raw: &str) -> Result<i32, FieldError> {
+    let raw = raw.trim();
+    let value: i32 = raw.parse().map_err(|_| {
+        FieldError::new(
+            CharacterField::Appearance,
+            format!("appearance: {raw:?} is not a number"),
+        )
+    })?;
+    if PlayerAppearance::from_row(value).is_none() {
+        return Err(FieldError::new(
+            CharacterField::Appearance,
+            format!("appearance: {raw:?} is not one of the seven player appearances"),
+        ));
     }
     Ok(value)
 }
