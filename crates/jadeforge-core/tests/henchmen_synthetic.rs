@@ -120,6 +120,20 @@ fn out_of_range_henchman_levels_are_rejected_when_read() {
 }
 
 #[test]
+fn henchman_setters_reject_a_foreign_struct() {
+    let mut gff = common::character_gff();
+    let member = push_henchman(&mut gff, &[("Level", Value::Byte(3))]);
+    add_henchmen(&mut gff, vec![member]);
+    let foreign = push_henchman(&mut gff, &[("Level", Value::Byte(1))]);
+    let mut save = common::save(&gff);
+
+    assert!(save.set_henchman_level(foreign, 12).is_err());
+    assert!(!save.is_modified());
+    assert!(save.set_henchman_available(foreign, true).is_err());
+    assert!(!save.is_modified());
+}
+
+#[test]
 fn set_henchman_level_keeps_field_types() {
     let cases = [
         (Value::Byte(3), Value::Byte(12)),

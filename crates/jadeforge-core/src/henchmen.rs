@@ -98,8 +98,10 @@ impl SaveGame {
 
     /// Makes a companion available or unavailable.
     pub fn set_henchman_available(&mut self, struct_index: usize, available: bool) -> Result<()> {
+        let list_path = self.henchmen_path()?;
         let flag = u64::from(available);
         let changed = self.edit_player_gff(|gff, _prefix| {
+            crate::save::require_list_member(gff, &list_path, struct_index)?;
             let first = write_henchman_number(gff, struct_index, "Available", flag)?;
             let second = write_henchman_number(gff, struct_index, "Available2", flag)?;
             if first || second {
@@ -131,7 +133,9 @@ impl SaveGame {
         label: &str,
         value: u64,
     ) -> Result<()> {
+        let list_path = self.henchmen_path()?;
         let changed = self.edit_player_gff(|gff, _prefix| {
+            crate::save::require_list_member(gff, &list_path, struct_index)?;
             if write_henchman_number(gff, struct_index, label, value)? {
                 Ok(Some(()))
             } else {

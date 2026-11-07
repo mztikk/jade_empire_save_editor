@@ -118,6 +118,23 @@ fn inventory_boundaries() {
 }
 
 #[test]
+fn inventory_rejects_a_foreign_struct_index() {
+    let (mut gff, item) = player_block(true);
+    let item = item.expect("item");
+    let foreign = gff.push_struct(0);
+    gff.add_field(foreign, "Count", Value::Byte(4))
+        .expect("foreign count");
+    let mut save = SaveGame::parse(PathBuf::from("foreign.sac"), container(&gff)).expect("parse");
+    let before = save.to_bytes().expect("before");
+
+    assert!(save.set_item_count(foreign, 9).is_err());
+    assert!(!save.is_modified());
+    assert_eq!(save.items().expect("items")[0].count, 1);
+    assert_eq!(save.to_bytes().expect("after"), before);
+    assert_eq!(save.items().expect("items")[0].struct_index, item);
+}
+
+#[test]
 fn optional_character_fields_are_created_on_write() {
     let (gff, _) = player_block(false);
     let mut save = SaveGame::parse(PathBuf::from("optional.sac"), container(&gff)).expect("parse");

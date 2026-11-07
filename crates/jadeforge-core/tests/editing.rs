@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use jadeforge_core::{SaveGame, SaveOptions};
+use jadeforge_core::{MAX_CHAPTER, SaveGame, SaveOptions, StyleIdentity};
 
 fn save_dir() -> Option<PathBuf> {
     let dir = std::env::var_os("JADEFORGE_SAVE_DIR").map(PathBuf::from)?;
@@ -81,6 +81,104 @@ fn editing_the_character_survives_a_save() {
     // The file must still be a valid savegame with the same block layout.
     assert_eq!(reloaded.blocks().len(), save.blocks().len());
     reloaded.verify().expect("verify");
+}
+
+#[test]
+fn editing_chapter_adds_the_missing_field_on_a_real_save() {
+    let Some(dir) = save_dir() else {
+        eprintln!("skipping: no savegames found (set JADEFORGE_SAVE_DIR)");
+        return;
+    };
+    for source in save_files(&dir) {
+        let Ok(save) = SaveGame::open(&source) else {
+            continue;
+        };
+        let Some(block) = save.block("save.sav") else {
+            continue;
+        };
+        let gff = block.gff();
+        if gff.get("Campaign").is_err() || gff.get("Campaign.Chapter").is_ok() {
+            continue;
+        }
+
+        let temp = temporary_dir();
+        let target = temp.join("save.sac");
+        std::fs::copy(&source, &target).expect("copy savegame");
+        let mut save = SaveGame::open(&target).expect("open copy");
+        let mut character = save.character().expect("character");
+        character.chapter = if character.chapter < MAX_CHAPTER {
+            character.chapter + 1
+        } else {
+            0
+        };
+        save.apply_character(&character).expect("apply chapter");
+        save.save(SaveOptions { backup: false }).expect("save");
+        let reloaded = SaveGame::open(&target).expect("reopen");
+        assert_eq!(
+            reloaded.character().expect("character").chapter,
+            character.chapter
+        );
+        return;
+    }
+    eprintln!("skipping: no real savegame lacks Campaign.Chapter");
+}
+
+#[test]
+fn learning_a_style_from_a_sparse_real_template_keeps_its_identity() {
+    let Some(dir) = save_dir() else {
+        eprintln!("skipping: no savegames found (set JADEFORGE_SAVE_DIR)");
+        return;
+    };
+    for source in save_files(&dir) {
+        let Ok(mut save) = SaveGame::open(&source) else {
+            continue;
+        };
+        let Ok(location) = save.player_location() else {
+            continue;
+        };
+        let Some(template) = ({
+            let Some(block) = save.block(location.block) else {
+                continue;
+            };
+            let gff = block.gff();
+            let Ok(styles) = save.styles() else {
+                continue;
+            };
+            styles
+                .iter()
+                .find(|style| {
+                    gff.get(format!(
+                        "{}Stats.Styles[{}].WeaponRef",
+                        location.prefix, style.struct_index
+                    ))
+                    .is_err()
+                })
+                .map(|style| style.struct_index)
+        }) else {
+            continue;
+        };
+        let identity = StyleIdentity {
+            style_id: 2,
+            name_ref: 42,
+            desc_ref: Some(99),
+            icon: Some("I_REAL".to_owned()),
+            weapon: Some("J00_REAL".to_owned()),
+            weapon_count: 2,
+        };
+        let added = save.add_style(template, &identity).expect("add style");
+        let added_style = save
+            .styles()
+            .expect("styles")
+            .into_iter()
+            .find(|style| style.struct_index == added)
+            .expect("added style");
+        assert_eq!(added_style.weapon.as_deref(), Some("J00_REAL"));
+        assert_eq!(added_style.weapon_count, 2);
+        let bytes = save.to_bytes().expect("serialize");
+        SaveGame::parse("real-style.sac".into(), bytes).expect("reparse");
+        return;
+    }
+    eprintln!("skipping: no real style lacks WeaponRef");
 }
 
 #[test]

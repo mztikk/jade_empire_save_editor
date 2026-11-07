@@ -556,6 +556,36 @@ fn a_missing_gold_field_is_created_when_the_user_edits_it() {
 }
 
 #[test]
+fn a_chapter_edit_creates_the_missing_campaign_field() {
+    let mut gff = common::character_gff();
+    let _ = gff.remove("Campaign.Chapter").expect("chapter field");
+    let mut save = common::save(&gff);
+    let mut character = save.character().expect("character");
+    assert_eq!(character.chapter, 0);
+    character.chapter = 4;
+
+    let changes = save.apply_character(&character).expect("apply chapter");
+    assert!(
+        changes
+            .iter()
+            .any(|change| change.field == "Campaign.Chapter")
+    );
+    assert_eq!(
+        save.block("save.sav")
+            .expect("block")
+            .gff()
+            .get("Campaign.Chapter")
+            .expect("created chapter")
+            .value,
+        Value::DWord(4)
+    );
+
+    let bytes = save.to_bytes().expect("serialize");
+    let reread = SaveGame::parse("chapter.sac".into(), bytes).expect("reparse");
+    assert_eq!(reread.character().expect("character").chapter, 4);
+}
+
+#[test]
 fn a_failing_campaign_write_leaves_the_player_block_untouched() {
     let mut gff = common::character_gff();
     let mut character = Character::read(&gff, "PlayerCreature.").expect("character");
