@@ -438,7 +438,7 @@ complete = true
 "common.list_separator" = " / "
 
 # Character tab and fields
-"character.alignment.fallback" = "Die Ausrichtung ist ein Zahlenwert: Unter 128 steht für die Geschlossene Faust, über 128 für die Offene Hand."
+"character.alignment.fallback" = "Die Gesinnung ist ein Zahlenwert: Unter 128 steht für die Geschlossene Faust, über 128 für die Offene Hand."
 "character.changes_hint" = "Jede gültige Änderung wird sofort im Speicher übernommen."
 "character.quick_add.one" = "+1 Punkt"
 "character.quick_add.five" = "+5 Punkte"
@@ -451,7 +451,7 @@ complete = true
 "field.charm" = "Schmeicheln"
 "field.intuition" = "Intuition"
 "field.intimidate" = "Einschüchterung"
-"field.alignment" = "AUSRICHTUNG"
+"field.alignment" = "GESINNUNG"
 "field.name.range" = "höchstens 64 Zeichen"
 "field.level.range" = "1 bis 255 (Stufe)"
 "field.gold.range" = "leer oder 0 bis 4294967295 Gold"
