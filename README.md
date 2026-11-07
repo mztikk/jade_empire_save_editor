@@ -197,7 +197,8 @@ tag the `release` job zips each platform folder, writes one `SHA256SUMS`, and
 creates the GitHub release from the matching changelog section. When GitHub
 Actions is unavailable, `just publish-linux` and `just publish-windows-cross`
 stage the same folders locally; `ci/assemble-release.sh` and
-`ci/publish-release.sh` then assemble and publish the release. macOS is not in
+`ci/publish-release.sh` then assemble and publish the release. The complete
+manual runbook is in [docs/RELEASING.md](docs/RELEASING.md). macOS is not in
 the release matrix yet, because the bundle has to be signed and notarised
 first, and the published binaries are unsigned for now, so Windows SmartScreen
 warns about an unknown publisher.

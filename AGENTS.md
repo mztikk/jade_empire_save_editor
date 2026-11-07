@@ -446,6 +446,7 @@ documentation, not ground truth: verify against the game files where possible).
 | `docs/FORMAT.md` | savegame format reference |
 | `docs/ARCHITECTURE.md` | crate layout, data flow, safety model |
 | `docs/NAMES.md` | bundled English names: scope, generation and precedence |
+| `docs/RELEASING.md` | manual release runbook: version bump, local Linux and Windows builds, assembly, publishing and verification |
 | `docs/LIVE-UI.md` | windowed UI suite: backends, process model, desktop/VM requirements and how to add scenarios |
 | `.dsh/skills` | task-specific skills for working on this repository |
 | `.githooks` | tracked git hooks; `just setup` enables them (`pre-commit` refuses direct commits on `main`) |

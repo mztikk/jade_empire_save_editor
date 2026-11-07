@@ -132,7 +132,9 @@ called by the workflow:
 
 The workflow also creates a GitHub build-provenance attestation for the staged
 files. Keep the manual checklist below until a signed release has been
-exercised against the real credentials.
+exercised against the real credentials. The complete local runbook, including
+the cargo-xwin prerequisites and the verification steps, is in
+[docs/RELEASING.md](../docs/RELEASING.md).
 
 ## Release checklist
 
