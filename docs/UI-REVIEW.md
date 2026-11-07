@@ -4,10 +4,10 @@
 **Scope:** the Freya 0.5 desktop UI in `crates/jadeforge-gui`, the session state it renders, and the real 89-savegame corpus.
 **Status:** P0 release blockers, the P1 follow-ups and the P2 polish are
 addressed. The P3 strategic work is implemented on `feat/ui-p3-strategic` and
-verified with the headless suite and snapshots; the item-icon reference is
+verified with the headless suite and snapshots; the windowed suite passed all
+six scenarios on KDE Plasma Wayland on 2026-11-07. The item-icon reference is
 blocked on engine BIF/KEY texture data (see
-[docs/ui-p3/icons.md](ui-p3/icons.md)), and the windowed suite was not run
-because permission was not granted. The remaining upstream blocker is the
+[docs/ui-p3/icons.md](ui-p3/icons.md)). The remaining upstream blocker is the
 missing `Input` label association.
 
 ![JadeForge overview](screenshot.png)
@@ -96,12 +96,13 @@ P3 verification caveats:
 - Item icons are blocked on a new KEY/BIF + engine-texture reader; the evidence
   (icon references, RIM resource types and payload samples) is recorded in
   [docs/ui-p3/icons.md](ui-p3/icons.md). No placeholder icon was added.
-- The windowed suite was not run for P3 because permission was not granted.
-  Theme, scaling, localization, page routing and the new banners are covered by
-  the headless suite and the snapshot example; the only window-path behaviour
-  in P3 is the configurable window remembering, whose decision logic is unit
-  tested and whose real-window scenario (`window_geometry_restarts`) remains
-  un-run on this branch.
+- The windowed suite passed all six scenarios on the review desktop (KDE
+  Plasma Wayland, KWin fake input) on 2026-11-07. It covered window creation and
+  presentation, save opening and tab switching, item filtering, keyboard
+  save-list navigation and the two-pass `window_geometry_restarts` (seeded
+  1000x720, remembered rectangle, restored 1000x720). The new Backups, Review
+  and About pages and the theme/scale variants are covered by the headless
+  suite and the snapshot example.
 - Linux has no system theme through winit (X11 unsupported, Wayland only
   overrides). A `System` choice therefore reads the freedesktop appearance
   portal, with KDE's `kdeglobals` as the first-frame fallback, and follows
@@ -156,11 +157,11 @@ breakpoints and the a11y tree, so a screenshot alone is never the test.
 
 ## Verification
 
-- `just check`: the full workspace suite (formatting, clippy, rustdoc, nextest and doctests) passes after the P3 work; the opt-in live suite remains skipped. P3 adds palette/contrast tests for three themes, text-scale token tests, source-scan localization completeness, core backup tests, session undo/diff/backup/reload tests, virtualized-picker tests and headless UI tests for themes, 200 % text, undo/redo, review, backups, external reload, diagnostics and the shortcut sheet.
+- `just check`: the full workspace suite (formatting, clippy, rustdoc, nextest and doctests) passes after the P3 work; the windowed suite passed all six scenarios separately. P3 adds palette/contrast tests for three themes, text-scale token tests, localization catalog/placeholder/completeness tests, core backup tests, session undo/diff/backup/reload tests, virtualized-picker tests and headless UI tests for themes, 200 % text, undo/redo, review, backups, external reload, diagnostics and the shortcut sheet.
 - P2 headless coverage: the empty carried-gems count, amulet summary, `STYLES TO LEARN`, friendly item categories and the category filter, `Level`/`Time played`/available wording, the optional-Gold explanation, field units, the save-filter character match, the About page and its settings, the About entry semantics and tab selection while the page is open, backup surfacing/copy/open actions, no-op Save/Revert, folder-picker cancellation and unreadable paths, loading skeletons and the manual-scan busy slot, full-width overview rows at 900/1280/1600, and the sidebar preview alignment. The snapshot example's filter targeting is covered by the tab-filter unit test and a headless Styles-filter test.
 - Windowed verification for P2: not run, because the user did not grant permission under AGENTS.md rule 13. The native close dialog's Save / Discard / Cancel labels, the actual folder-dialog cancellation backend and the Windows ComCtl32 v6 manifest therefore remain unverified in a real window; the choice mapping and the save-before-close decision table are unit tested, and the manifest is embedded by the existing Windows resource build.
 - Headless coverage of the P1 work: geometry at 1180x760, 900x700 and 1600x900; DPI geometry for 1366x768 at 125 %; scan-keeps-save; dirty content comparison; invalid-form save independence; first-invalid-field focus; focus restoration after removal; target sizes; keyboard scrolling focus; the 89-save render test.
-- `just live`: all six windowed scenarios passed on Wayland with the KWin input backend. The window opened at the configured size, save opening and tab switching, item filtering, keyboard save-list navigation and real frame presentation all worked; the captured frame was written to the ignored `target/live-ui/presented.png`. The two-pass `window_geometry_restarts` scenario opened at the seeded 1000x720, the plugin stored the real rectangle on close, and the relaunch restored 1000x720. Each scenario uses its own settings directory; the two geometry passes deliberately share one.
+- `just live`: all six windowed scenarios passed on Wayland with the KWin input backend. The window opened at the configured size, save opening and tab switching, item filtering, keyboard save-list navigation and real frame presentation all worked; the captured frame was written to the ignored `target/live-ui/presented.png`. The two-pass `window_geometry_restarts` scenario opened at the seeded 1000x720, the plugin stored the real rectangle on close, and the relaunch restored 1000x720. Each scenario uses its own settings directory; the two geometry passes deliberately share one. The P3 branch rerun on 2026-11-07 passed the same six scenarios.
 - Live screen-reader check: Orca 51.1 (Speech Dispatcher 0.12.1, espeak-ng 1.52) announced the polite scan statuses and the assertive folder error in a manual run. The AT-SPI event log showed the full text with politeness level 1 for the scan messages and level 2 for "The save folder … does not exist …". This closes the P1 status live-region check.
 - The P0 work is merged on `main`; the remaining P1 items and #8/#9 are tracked in the issues above.
 

@@ -64,9 +64,9 @@ Upstream references:
 - Headless UI: the About toggle persists both directions.
 - Windowed behaviour (where the compositor places the window and whether it
   restores the rectangle) is window-path behaviour. The existing live scenario
-  `window_geometry_restarts` covers it, but it was **not run** for this branch
-  because permission was not granted; the headless geometry tests cover the
-  decision logic only.
+  `window_geometry_restarts` covers it and passed on 2026-11-07 (seeded
+  1000x720, remembered rectangle, restored 1000x720); the headless geometry
+  tests cover the decision logic.
 
 ## Accessibility, contrast and reduced motion
 
