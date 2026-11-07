@@ -73,48 +73,67 @@ fn backup_row(
     sync: &Rc<dyn Fn()>,
 ) -> Element {
     let path: PathBuf = backup.path.clone();
-    let restore = {
-        let ctx = ctx.clone();
-        let path = path.clone();
-        let sync = sync.clone();
-        Action::new(move || {
-            if !crate::dialog::confirm(
-                t(keys::BACKUPS_RESTORE_TITLE),
-                t(keys::BACKUPS_RESTORE_CONFIRM),
-            ) {
-                return;
-            }
-            let result = ctx.run(|session| session.restore_backup(&path));
-            if result.is_ok() {
-                sync();
-            }
-        })
-    };
-    let restore = AccessibleButton::new(
-        fill(
-            keys::BACKUPS_RESTORE_ACTION,
-            &[("timestamp", &backup.timestamp())],
-        ),
-        restore,
+    let restore = if dirty {
         rect()
             .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
             .border(
                 Border::new()
-                    .fill(if dirty {
-                        theme::dim()
-                    } else {
-                        theme::control_border()
-                    })
+                    .fill(theme::dim())
                     .width(theme::stroke::hairline()),
             )
             .corner_radius(theme::radius::control())
+            .a11y_role(AccessibilityRole::Button)
+            .a11y_alt(fill(
+                keys::BACKUPS_RESTORE_ACTION,
+                &[("timestamp", &backup.timestamp())],
+            ))
+            .a11y_builder(accesskit::Node::set_disabled)
             .child(
                 widgets::a11y_text(t(keys::BACKUPS_RESTORE))
                     .font_size(theme::font::micro())
-                    .color(if dirty { theme::dim() } else { theme::text() }),
+                    .color(theme::dim()),
+            )
+            .into_element()
+    } else {
+        let restore = {
+            let ctx = ctx.clone();
+            let path = path.clone();
+            let sync = sync.clone();
+            Action::new(move || {
+                if !crate::dialog::confirm(
+                    t(keys::BACKUPS_RESTORE_TITLE),
+                    t(keys::BACKUPS_RESTORE_CONFIRM),
+                ) {
+                    return;
+                }
+                let result = ctx.run(|session| session.restore_backup(&path));
+                if result.is_ok() {
+                    sync();
+                }
+            })
+        };
+        AccessibleButton::new(
+            fill(
+                keys::BACKUPS_RESTORE_ACTION,
+                &[("timestamp", &backup.timestamp())],
             ),
-    )
-    .focusable(!dirty);
+            restore,
+            rect()
+                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
+                .border(
+                    Border::new()
+                        .fill(theme::control_border())
+                        .width(theme::stroke::hairline()),
+                )
+                .corner_radius(theme::radius::control())
+                .child(
+                    widgets::a11y_text(t(keys::BACKUPS_RESTORE))
+                        .font_size(theme::font::micro())
+                        .color(theme::text()),
+                ),
+        )
+        .into_element()
+    };
 
     rect()
         .vertical()

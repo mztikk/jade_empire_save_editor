@@ -2365,6 +2365,10 @@ fn a11y_selected(node: &freya_testing::TestingNode) -> bool {
     a11y_node(node).is_selected().unwrap_or(false)
 }
 
+fn a11y_disabled(node: &freya_testing::TestingNode) -> bool {
+    a11y_node(node).is_disabled()
+}
+
 fn selected_tab_labels(test: &TestingRunner) -> Vec<String> {
     test.find_many(|node, _| (a11y_role(&node) == "Tab").then_some(node))
         .iter()
@@ -2639,6 +2643,28 @@ fn assistive_technology_can_activate_a_row_action() {
     assert!(
         find_label_text(&test, "Removed").is_some(),
         "a screen reader Click did not activate the row action"
+    );
+}
+
+#[test]
+fn disabled_tabs_keep_their_accessible_names() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let test = launch_unopened(fixture.save_dir.clone(), 900.0);
+    let tabs = test.find_many(|node, _| (a11y_role(&node) == "Tab").then_some(node));
+    assert_eq!(tabs.len(), 6, "expected all tabs to be present");
+    for tab in &tabs {
+        assert!(
+            a11y_label(tab).is_some_and(|label| !label.is_empty()),
+            "a disabled tab has no accessible name"
+        );
+    }
+    assert!(
+        tabs.iter()
+            .any(|tab| a11y_label(tab).as_deref() == Some("Character")),
+        "the Character tab lost its name"
     );
 }
 
@@ -4429,6 +4455,44 @@ fn hovering_an_upgrade_orb_explains_it() {
 }
 
 #[test]
+fn focusing_an_upgrade_orb_explains_it() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data to resolve upgrades");
+        return;
+    }
+    let mut test = launch_sized(fixture.save_dir.clone(), 1400.0);
+    assert!(click_label_exact(&mut test, "Styles"));
+    let name = expand_first_style(&mut test);
+    let orb = test
+        .find(|node, _| {
+            (a11y_role(&node) == "Button"
+                && a11y_label(&node).as_deref().is_some_and(|label| {
+                    label.starts_with(&format!("{name}, ")) && label.contains(", tier ")
+                }))
+            .then_some(node)
+        })
+        .expect("no upgrade orb");
+    assert!(
+        send_a11y_action(&mut test, &orb, accesskit::Action::Focus),
+        "the orb has no Focus action"
+    );
+    for _ in 0..10 {
+        if orb_detail_is_visible(&test) {
+            break;
+        }
+        test.sync_and_update();
+    }
+    assert!(
+        orb_detail_is_visible(&test),
+        "tab-focusing an orb did not show its detail"
+    );
+}
+
+#[test]
 fn controls_meet_the_minimum_target_size() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
@@ -5147,6 +5211,39 @@ fn the_backup_screen_lists_and_restores_a_backup() {
     assert!(
         find_label_text(&test, "Restored ").is_some(),
         "the restore did not report success"
+    );
+}
+
+#[test]
+fn a_dirty_backup_browser_does_not_offer_an_activating_restore() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 2000.0);
+    assert!(click_text(&mut test, "Character"));
+    assert!(click_text(&mut test, "+1 point"), "no quick-add button");
+    as_many_updates(&mut test);
+    assert!(click_text(&mut test, "Save to disk"));
+    assert!(click_text(&mut test, "Write savegame"));
+    wait_for_text(&mut test, "Saved ");
+    assert!(click_text(&mut test, "+1 point"), "no quick-add button");
+    as_many_updates(&mut test);
+    assert!(click_text(&mut test, "Backups"), "Backups is missing");
+
+    let restore = test
+        .find(|node, _| {
+            (a11y_role(&node) == "Button"
+                && a11y_disabled(&node)
+                && a11y_label(&node)
+                    .as_deref()
+                    .is_some_and(|label| label.starts_with("Restore the backup from")))
+            .then_some(node)
+        })
+        .expect("the dirty backup browser has no disabled restore action");
+    assert!(
+        !a11y_focusable(&restore),
+        "the disabled restore action is still focusable"
     );
 }
 
