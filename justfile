@@ -182,13 +182,18 @@ publish-target target:
 # Build the fat-LTO binaries for every target this host can build.
 [linux]
 publish: (publish-target host)
-    @echo "publish: skipped Windows: it needs a Windows host (Visual C++ for Skia)"
+    @echo "publish: skipped Windows: use publish-windows-cross or a Windows host"
     @echo "publish: skipped macOS: it needs the Apple SDK on a macOS host"
+
+# Build and stage the Windows x86-64 release binaries on Linux with cargo-xwin.
+[linux]
+publish-windows-cross:
+    ci/publish-windows-cross.sh dist
 
 # Build the fat-LTO binaries for every target this host can build.
 [macos]
 publish: (publish-target "aarch64-apple-darwin") (publish-target "x86_64-apple-darwin")
-    @echo "publish: skipped Windows: it needs a Windows host (Visual C++ for Skia)"
+    @echo "publish: skipped Windows: use publish-windows-cross on Linux or a Windows host"
 
 # Build the fat-LTO binaries for every target this host can build.
 [windows]

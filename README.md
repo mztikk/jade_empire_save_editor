@@ -162,15 +162,25 @@ each platform you want to ship:
 
 | host | targets |
 | --- | --- |
-| Linux | the native target |
+| Linux | the native target, and Windows with `cargo-xwin` |
 | macOS | `aarch64-apple-darwin` and `x86_64-apple-darwin` |
 | Windows | the native MSVC target |
 
-Windows and macOS binaries have to be built on their own OS: the Freya GUI links
-prebuilt Skia libraries, and Windows additionally needs Visual C++ while macOS
-needs the Apple SDK. The command skips those targets elsewhere with a notice.
-`just publish-target <triple>` builds and stages a single target, for example
-`aarch64-unknown-linux-gnu` when an ARM64 cross compiler is installed.
+Windows and macOS binaries normally have to be built on their own OS: the Freya
+GUI links prebuilt Skia libraries, and macOS additionally needs the Apple SDK.
+Windows can be cross-built from Linux with `cargo-xwin`; install it with
+`cargo install --locked cargo-xwin@0.23.1`, then run:
+
+```sh
+just publish-windows-cross
+```
+
+The cross recipe supplies the Microsoft CRT and SDK, builds the x86-64-v3 and
+baseline binaries, and stages them in `dist/`. See
+[ci/README.md](ci/README.md#windows-cross-build) for the prerequisites and the
+Wine smoke test. `just publish-target <triple>` builds and stages a single
+target, for example `aarch64-unknown-linux-gnu` when an ARM64 cross compiler is
+installed.
 
 A local macOS build (`just publish` on a Mac) stages `JadeForge.app` next to the
 bare binaries; the bundle carries the `.icns` so Finder and the Dock show the
@@ -184,7 +194,11 @@ Windows, stages third-party notices, an SBOM and (for public repositories)
 build provenance, and uploads the staged folders as per-OS artifacts; pull
 requests skip that job. On a `v*`
 tag the `release` job zips each platform folder, writes one `SHA256SUMS`, and
-creates the GitHub release from the matching changelog section. macOS is not in
+creates the GitHub release from the matching changelog section. When GitHub
+Actions is unavailable, `just publish-linux` and `just publish-windows-cross`
+stage the same folders locally; `ci/assemble-release.sh` and
+`ci/publish-release.sh` then assemble and publish the release. The complete
+manual runbook is in [docs/RELEASING.md](docs/RELEASING.md). macOS is not in
 the release matrix yet, because the bundle has to be signed and notarised
 first, and the published binaries are unsigned for now, so Windows SmartScreen
 warns about an unknown publisher.

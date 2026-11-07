@@ -35,6 +35,8 @@ jobs:
           toolchain: stable
           components: rustfmt
       - run: cargo fmt --all --check
+      - name: Windows cross staging
+        run: ci/test-stage-windows-cross.sh
 
   test:
     name: gff, core, session, gamedata and cli (${{ matrix.os }})

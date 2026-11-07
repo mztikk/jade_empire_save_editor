@@ -103,6 +103,11 @@ All notable changes are documented here. The format follows
 
 ### Changed
 
+- Windows release binaries can be cross-built and staged on Linux with
+  `just publish-windows-cross`. cargo-xwin supplies the Microsoft CRT and SDK,
+  so the prebuilt Windows Skia libraries link without a Windows host; Wine can
+  smoke-test the result. See `docs/RELEASING.md` for the complete local release
+  workflow.
 - The no-game-data rule now names the generated English name index as its only
   exception and forbids growing it beyond item/style names and item categories.
 - The windowed UI suite now requires `JADEFORGE_LIVE_APPROVED=1` in addition to

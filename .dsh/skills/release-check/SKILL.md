@@ -91,6 +91,9 @@ the variables did not reach the tests).
   `THIRD_PARTY_NOTICES.txt`, the dependency inventory, `sbom.cdx.json` and
   the Skia licence;
   attach all of them to the release.
+- When GitHub Actions is unavailable, follow
+  [docs/RELEASING.md](../../../docs/RELEASING.md) for the local Linux and
+  Windows build, assembly, publishing and verification path.
 - Sign/notarise the macOS and Windows binaries when the platform credentials
   are available (see `ci/README.md`); otherwise mark the release unsigned.
 - Never ship a build whose real-savegame tests were skipped.
