@@ -1,6 +1,7 @@
 # JadeForge
 
-A savegame editor for **Jade Empire** for Linux, Windows and macOS.
+A savegame editor for **Jade Empire** on Linux and Windows. macOS is supported
+as a self-build only.
 
 ![JadeForge showing a savegame](docs/screenshot.png)
 
@@ -99,9 +100,11 @@ the game does, verifies the result and keeps a backup of the original.
 
 - Rust 1.99 or newer to build from source.
 - Linux: an X11 or Wayland session with OpenGL 3.3 (or the equivalent on
-  macOS/Windows) and, for the native folder dialog, `xdg-desktop-portal`
+  Windows) and, for the native folder dialog, `xdg-desktop-portal`
   (installed by default on GNOME, KDE and most desktops). The GUI is a native
   window, there is no browser or Electron layer.
+- macOS: supported as a self-build only, with no official binaries. The GUI is
+  compile-checked on macOS in CI but is not exercised in a real window there.
 
 ## Building
 
@@ -156,20 +159,17 @@ Linux and Windows x86-64 releases contain two GUI binaries and two CLI binaries:
 | `jadeforge-generic-cpu`, `jadeforge-cli-generic-cpu` | baseline | every x86-64 CPU |
 
 The fallback is built and staged automatically, so users on pre-2013 CPUs run
-the `jadeforge-generic-cpu` binary and everyone else gets the faster default. macOS builds
-once in baseline mode for both architectures: the Intel binary must also run
-under Rosetta, which has no AVX2. Run it on
-each platform you want to ship:
+the `jadeforge-generic-cpu` binary and everyone else gets the faster default.
+Run it on each platform you want to ship:
 
 | host | targets |
 | --- | --- |
 | Linux | the native target, and Windows with `cargo-xwin` |
-| macOS | `aarch64-apple-darwin` and `x86_64-apple-darwin` |
 | Windows | the native MSVC target |
 
-Windows and macOS binaries normally have to be built on their own OS: the Freya
-GUI links prebuilt Skia libraries, and macOS additionally needs the Apple SDK.
-Windows can be cross-built from Linux with `cargo-xwin`; install it with
+Windows binaries normally have to be built on Windows: the Freya GUI links
+prebuilt Skia libraries. Windows can be cross-built from Linux with
+`cargo-xwin`; install it with
 `cargo install --locked cargo-xwin@0.23.1`, then run:
 
 ```sh
@@ -183,9 +183,10 @@ Wine smoke test. `just publish-target <triple>` builds and stages a single
 target, for example `aarch64-unknown-linux-gnu` when an ARM64 cross compiler is
 installed.
 
-A local macOS build (`just publish` on a Mac) stages `JadeForge.app` next to the
-bare binaries; the bundle carries the `.icns` so Finder and the Dock show the
-icon. Windows executables embed the `.ico`. Linux folders contain
+A self-built macOS binary (`just publish` on a Mac) stages `JadeForge.app` next
+to the bare binaries; the bundle carries the `.icns` so Finder and the Dock show
+the icon. That is the self-build path: there is no official macOS release.
+Windows executables embed the `.ico`. Linux folders contain
 `share/applications/jadeforge.desktop` and `share/icons/hicolor/...`; install
 the CPU-appropriate binary as `jadeforge` in a directory on `PATH`, then copy
 `share/` into `~/.local/share` so Wayland launchers resolve the icon.
@@ -200,9 +201,10 @@ Actions is unavailable, `just publish-linux` and `just publish-windows-cross`
 stage the same folders locally; `ci/assemble-release.sh` and
 `ci/publish-release.sh` then assemble and publish the release. The complete
 manual runbook is in [docs/RELEASING.md](docs/RELEASING.md). macOS is not in
-the release matrix yet, because the bundle has to be signed and notarised
-first, and the published binaries are unsigned for now, so Windows SmartScreen
-warns about an unknown publisher.
+the release matrix: the project has no Mac and no Apple ID, so the bundle
+cannot be built, signed or notarised, and macOS stays a self-build only. The
+published binaries are unsigned for now, so Windows SmartScreen warns about an
+unknown publisher.
 
 The `just` shortcuts are optional; the cargo commands above remain the
 canonical ones. `just check` runs the formatting, clippy and test gate,
