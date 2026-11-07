@@ -64,11 +64,12 @@ pub(super) fn sidebar(
         visible.first().copied()
     };
 
-    // At large text scales the fixed preview square would squeeze the save list
-    // out of the sidebar on a normal-height window. The screenshot is
-    // decorative; the name and level below it carry the same information, so
-    // it is hidden once the type no longer leaves room for at least one row.
-    let show_preview = theme::text_scale() <= 1.25;
+    // Above 100 percent the fixed preview and the duplicate selected-save
+    // block consume the list's height: at 125 percent German the list measured
+    // 21 px. Both are decorative here, so the save browser keeps its rows
+    // instead.
+    let large_text = theme::text_scale() > 1.0;
+    let show_preview = !large_text;
     let preview_block = preview_slot(preview, selected.is_some());
     let heading = if entries.is_empty() && scanning {
         t(keys::SHELL_LOADING_SAVEGAMES).to_uppercase()
@@ -130,6 +131,26 @@ pub(super) fn sidebar(
             )
         },
     );
+    let identity_block = (!large_text).then(|| {
+        rect()
+            .vertical()
+            .spacing(theme::space::xs())
+            .child(crate::widgets::with_tooltip(
+                title.clone(),
+                crate::widgets::a11y_text(title)
+                    .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
+                    .font_size(theme::font::card_title())
+                    .font_weight(FontWeight::BOLD)
+                    .max_lines(1)
+                    .text_overflow(TextOverflow::Ellipsis)
+                    .color(theme::text()),
+            ))
+            .child(
+                crate::widgets::a11y_text(subtitle)
+                    .font_size(theme::font::micro())
+                    .color(theme::dim()),
+            )
+    });
 
     rect()
         .vertical()
@@ -147,26 +168,7 @@ pub(super) fn sidebar(
         .spacing(theme::space::lg())
         .background(theme::background())
         .maybe_child(show_preview.then_some(preview_block))
-        .child(
-            rect()
-                .vertical()
-                .spacing(theme::space::xs())
-                .child(crate::widgets::with_tooltip(
-                    title.clone(),
-                    crate::widgets::a11y_text(title)
-                        .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-                        .font_size(theme::font::card_title())
-                        .font_weight(FontWeight::BOLD)
-                        .max_lines(1)
-                        .text_overflow(TextOverflow::Ellipsis)
-                        .color(theme::text()),
-                ))
-                .child(
-                    crate::widgets::a11y_text(subtitle)
-                        .font_size(theme::font::micro())
-                        .color(theme::dim()),
-                ),
-        )
+        .maybe_child(identity_block)
         .child(
             crate::widgets::a11y_text(heading)
                 .font_size(theme::font::micro())

@@ -19,14 +19,24 @@ steppers) were sized for 11-14 px type and would clip at a larger size.
   image slots (preview and portrait) deliberately do not scale: they describe
   the monitor and the sidebar, not the type. Scaling them would push the
   minimum window off a 1366x768 screen at 200 % without improving legibility.
-- The status slot is `3 * font::line_height()` and therefore grows with the
-  text; `max_lines(3)` keeps it three lines.
+- The status slot is `3 * font::line_height()` at full width and
+  `2 * font::line_height()` in the compact shell, so it grows with the text
+  while the compact header keeps enough room for the editor. `max_lines` keeps
+  the status text inside its slot.
 - Save rows are `layout::save_row_height() * scale`; the row pitch helper is a
   function so the virtual list's item size follows the scale.
-- The sidebar hides its decorative 120 px screenshot once the scale is above
-  125 %. Without that, the scaled header, filter and sort controls left the
-  save list with no height on a 900 px window at 200 %. The character name and
-  level still carry the same information.
+- The sidebar hides its decorative 120 px screenshot and the duplicate
+  selected-save block at any scale above 100 %. The shell also switches to a
+  compact header at the minimum width or above 100 % text: the tagline and
+  badges give way, the status slot uses two lines, the tab strip drops its
+  reserved busy slot, and the save browser keeps a usable list. At 200 % on
+  900x700 the list still shows rows and the editor shows its first card.
+- The character form reduces its column count by available width: three or four
+  fields at 100 %, two or three at larger scales, and one column when even two
+  minimum-width fields cannot fit. Style, item and gem rows stack their actions
+  below the name at 200 % instead of squeezing the name into a letter column.
+- Picker and carried-gem viewports cap themselves at a fraction of the window
+  height, so seven scaled rows can no longer grow taller than a short window.
 
 Freya also supports a global custom scale factor (`WindowConfig::
 with_custom_scale_factor`), which is a DPI-style zoom of the whole logical
@@ -42,17 +52,19 @@ and the About control implement a true type scale instead.
 ## Test plan
 
 - Unit: at 200 %, `font::body() == 28`, spacing and radii double, save row height
-  is 92, the status slot is 84 and the form field minimum is 264. Window,
-  preview, portrait, sidebar and scrollbar tokens stay at their base values.
+  is 92, the base status slot is 84 (the compact shell uses two lines, 56) and
+  the form field minimum is 264. Window, preview, portrait, sidebar and
+  scrollbar tokens stay at their base values.
 - Unit: the type scale is strictly ordered and the smallest type is still 11 px
   at 100 %.
-- Headless UI: launch at `text_scale = 200` in a 900 px-high window, assert the
-  installed scale and that the save row is still built with a text height above
-  the unscaled line, switch through all six tabs, and assert the footer is still
-  inside the window. The About page test switches to 200 % through the real
-  control.
-- Screenshot: `--scale 200 --width 1600 --height 900` renders every tab for
-  visual review.
+- Headless UI matrix: 900x700, 1180x760 and 1280x800 at 100, 125, 150 and
+  200 percent. Every configuration must open a save, keep at least one save
+  row, leave a real editor viewport, render all six tabs, keep every text input
+  inside the window and keep the footer inside the window. A German variant
+  covers 125, 150 and 200 percent at 900x700. The About page test switches to
+  200 % through the real control.
+- Screenshot: `--scale 200 --width 900 --height 700` and the larger sizes render
+  the reflowed shell for visual review.
 
 ## Accessibility, contrast and reduced motion
 
@@ -64,9 +76,13 @@ and the About control implement a true type scale instead.
 
 ## Risk
 
-- At 200 % the default 1180x760 window is cramped. The layout reflows and
-  scrolls, but a taller window is needed to see as much as at 100 %. That is
-  normal zoom behaviour and is documented; the minimum supported logical window
-  stays 900x700 so the window manager can still place it on a 1366x768 screen.
-- The sidebar preview is hidden above 125 %; that is a deliberate responsive
-  trade-off and is called out in the text-scaling test.
+- At 200 % the default 1180x760 window switches to the compact shell and a
+  single-column form at the narrower end of the range. The layout reflows and
+  scrolls; a taller or wider window shows more at once. That is normal zoom
+  behaviour, and the minimum supported logical window stays 900x700 so the
+  window manager can still place it on a 1366x768 screen.
+- The sidebar preview and duplicate selected-save block are hidden above 100 %.
+  That is a deliberate responsive trade-off and is called out in the
+  text-scaling tests.
+- At 200 % on 900x700 the form uses one column and the style and item rows stack
+  their controls. More vertical scrolling is expected; no content is clipped.

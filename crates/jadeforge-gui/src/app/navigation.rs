@@ -19,6 +19,7 @@ pub(super) fn tab_bar(
     mut show_backups: State<bool>,
     mut show_review: State<bool>,
 ) -> Element {
+    let compact = super::compact_shell();
     let mut buttons: Vec<Element> = Vec::new();
     let page_open = *show_about.read() || *show_backups.read() || *show_review.read();
     for candidate in Tab::ALL {
@@ -153,7 +154,7 @@ pub(super) fn tab_bar(
                         .a11y_role(AccessibilityRole::TabList)
                         .children(buttons),
                 )
-                .child(busy_slot(scanning))
+                .maybe_child((!compact).then(|| busy_slot(scanning)))
                 .into_element(),
         )
         .child(
@@ -168,9 +169,10 @@ pub(super) fn tab_bar(
 
 /// Reserved scan-status slot at the end of the tab bar.
 ///
-/// It is always rendered, empty when idle, so starting or cancelling a manual
-/// scan never moves the tab row. The header already has the verbose status;
-/// this is the persistent "work is happening" cue next to the content.
+/// In the full shell it is always rendered, empty when idle, so starting or
+/// cancelling a manual scan never moves the tab row. The compact shell omits
+/// it: the scaled slot would take 236 px at 200 percent and force the tabs into
+/// four rows, while the header status already carries the scan state.
 fn busy_slot(scanning: bool) -> Element {
     rect()
         .width(Size::px(theme::layout::busy_slot()))

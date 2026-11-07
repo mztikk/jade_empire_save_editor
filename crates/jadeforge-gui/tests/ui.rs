@@ -3165,6 +3165,32 @@ fn a_save_without_gold_opens_without_an_invalid_form() {
     );
 }
 
+/// Number of save rows the virtual list actually built.
+fn save_row_count(test: &TestingRunner) -> usize {
+    test.find_many(|node, _| (a11y_role(&node) == "ListBoxOption").then_some(()))
+        .len()
+}
+
+/// Every text input must stay inside the window horizontally.
+///
+/// Page content scrolls vertically, so an input below the fold is fine. An
+/// input beyond the right edge is clipped and unreachable.
+fn assert_text_inputs_inside(test: &TestingRunner, width: f64) {
+    for node in test.find_many(|node, _| (a11y_role(&node) == "TextInput").then_some(node)) {
+        let area = node.layout().area;
+        assert!(
+            area.origin.x >= -0.5,
+            "an input starts at {} px, left of the window",
+            area.origin.x
+        );
+        assert!(
+            area.origin.x + area.size.width <= width as f32 + 0.5,
+            "an input ends at {} px, beyond the {width} px window",
+            area.origin.x + area.size.width
+        );
+    }
+}
+
 /// Layout area of an exact label, which is the visible anchor of its field.
 fn label_area(test: &TestingRunner, wanted: &str) -> freya::prelude::Area {
     find_label_exact(test, wanted)
@@ -3181,6 +3207,18 @@ fn assert_same_row(test: &TestingRunner, left: &str, right: &str) {
         "{left:?} and {right:?} are not on the same row ({} vs {})",
         left.origin.y,
         right.origin.y
+    );
+}
+
+/// Labels with different font sizes share a row when their centres align.
+fn assert_same_center_line(test: &TestingRunner, left: &str, right: &str) {
+    let left = label_area(test, left);
+    let right = label_area(test, right);
+    let left_center = left.origin.y + left.size.height / 2.0;
+    let right_center = right.origin.y + right.size.height / 2.0;
+    assert!(
+        (left_center - right_center).abs() < 1.0,
+        "{left:?} and {right:?} are not vertically centred on the same row ({left_center} vs {right_center})"
     );
 }
 
@@ -3228,6 +3266,159 @@ fn identity_fields_use_three_columns_at_the_default_and_minimum_size() {
             );
         }
     }
+}
+
+#[test]
+fn text_scaling_keeps_navigation_and_fields_usable() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    for (width, height) in [(900.0, 700.0), (1180.0, 760.0), (1280.0, 800.0)] {
+        for scale in [100, 125, 150, 200] {
+            write_ui_preferences(ThemeChoice::Dark, scale);
+            let mut test = launch_unopened_at(fixture.save_dir.clone(), width, height);
+            assert!(
+                click_text(&mut test, "Level "),
+                "the savegame did not open at {width}x{height}, {scale} percent"
+            );
+            settle(&mut test);
+            assert!(
+                save_row_count(&test) > 0,
+                "no save row is visible at {width}x{height}, {scale} percent"
+            );
+            assert_same_center_line(&test, "JadeForge", "About");
+
+            let scroll = test
+                .find(|node, _| {
+                    (a11y_role(&node) == "ScrollView" && a11y_focusable(&node)).then_some(node)
+                })
+                .expect("the editor scroll view is missing");
+            let scroll_height = scroll.layout().area.size.height;
+            assert!(
+                scroll_height >= 100.0,
+                "the editor viewport is only {scroll_height} px at {width}x{height}, {scale} percent"
+            );
+
+            for (tab, heading) in [
+                ("Overview", "At a glance"),
+                ("Character", "Identity"),
+                ("Styles", "Fighting styles"),
+                ("Inventory", "stacks"),
+                ("Gems", "Amulet"),
+                ("Companions", "known"),
+            ] {
+                assert!(
+                    click_label_exact(&mut test, tab),
+                    "tab {tab} is missing at {width}x{height}, {scale} percent"
+                );
+                assert!(
+                    find_label_text(&test, heading).is_some(),
+                    "tab {tab} did not render at {width}x{height}, {scale} percent"
+                );
+                assert_text_inputs_inside(&test, width);
+            }
+
+            let footer = label_area(&test, "Save to disk");
+            assert!(
+                footer.origin.y + footer.size.height <= height as f32 + 0.5,
+                "the footer is below the {height} px window at {scale} percent"
+            );
+        }
+    }
+    write_ui_preferences(ThemeChoice::Dark, 100);
+}
+
+#[test]
+fn german_text_scaling_keeps_the_save_browser_usable() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    set_next_launch_locale(jadeforge_gui::Locale::German);
+    for scale in [125, 150, 200] {
+        write_ui_preferences(ThemeChoice::Dark, scale);
+        let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+        assert!(
+            click_text(&mut test, "Test Save"),
+            "the savegame did not open at 900x700, {scale} percent German"
+        );
+        settle(&mut test);
+        assert!(
+            save_row_count(&test) > 0,
+            "the German save browser has no row at 900x700, {scale} percent"
+        );
+        assert_same_center_line(
+            &test,
+            "JadeForge",
+            jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::SHELL_ABOUT),
+        );
+
+        let character = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::NAV_CHARACTER);
+        assert!(
+            click_label_exact(&mut test, character),
+            "the German Character tab is missing"
+        );
+        let identity = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::CHARACTER_IDENTITY);
+        assert!(
+            find_label_text(&test, identity).is_some(),
+            "the German Character content is missing at {scale} percent"
+        );
+        assert_text_inputs_inside(&test, 900.0);
+
+        let scroll = test
+            .find(|node, _| {
+                (a11y_role(&node) == "ScrollView" && a11y_focusable(&node)).then_some(node)
+            })
+            .expect("the editor scroll view is missing");
+        assert!(
+            scroll.layout().area.size.height >= 100.0,
+            "the German editor viewport is too small at {scale} percent"
+        );
+        let footer = label_area(
+            &test,
+            jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::SHELL_SAVE),
+        );
+        assert!(
+            footer.origin.y + footer.size.height <= 700.5,
+            "the German footer is below the window at {scale} percent"
+        );
+    }
+    write_ui_preferences(ThemeChoice::Dark, 100);
+    set_next_launch_locale(jadeforge_gui::Locale::English);
+}
+
+#[test]
+fn picker_viewport_stays_inside_a_short_window_at_200_percent() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data for the style picker");
+        return;
+    }
+    write_ui_preferences(ThemeChoice::Dark, 200);
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    assert!(click_text(&mut test, "Level "), "the savegame did not open");
+    assert!(click_label_exact(&mut test, "Styles"), "Styles is missing");
+    let label = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::STYLES_LEARN_LIST);
+    let picker = test
+        .find(|node, _| {
+            (a11y_role(&node) == "ListBox" && a11y_label(&node).as_deref() == Some(label))
+                .then_some(node)
+        })
+        .expect("the style picker is missing");
+    let height = picker.layout().area.size.height;
+    assert!(
+        height >= 100.0,
+        "the style picker is only {height} px high at 200 percent"
+    );
+    assert!(
+        height <= 280.5,
+        "the style picker is {height} px high at 200 percent on a 700 px window"
+    );
+    write_ui_preferences(ThemeChoice::Dark, 100);
 }
 
 #[test]

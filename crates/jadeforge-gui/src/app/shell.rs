@@ -84,6 +84,7 @@ pub(super) fn header(
     start_scan: Rc<dyn Fn(PathBuf) -> bool>,
     cancel_scan: Rc<dyn Fn()>,
 ) -> Element {
+    let compact = super::compact_shell();
     let status_color = match message.kind {
         MessageKind::Info => theme::muted(),
         MessageKind::Success => theme::success(),
@@ -215,25 +216,28 @@ pub(super) fn header(
         });
     }
 
-    let mut rows: Vec<Element> = vec![
-        rect()
-            .horizontal()
-            .width(Size::fill())
-            .spacing(theme::space::md())
-            .content(Content::wrap_spacing(theme::space::md()))
-            .cross_align(Alignment::Center)
-            .child(
-                crate::widgets::a11y_text(super::WINDOW_TITLE)
-                    .font_size(theme::font::title())
-                    .font_weight(FontWeight::BOLD)
-                    .color(theme::accent()),
-            )
-            .child(
-                crate::widgets::a11y_text(t(keys::ABOUT_TAGLINE))
-                    .font_size(theme::font::caption())
-                    .color(theme::dim()),
-            )
-            .child(rect().width(Size::flex(1.0)))
+    let mut brand_row = rect()
+        .horizontal()
+        .width(Size::fill())
+        .spacing(theme::space::md())
+        .content(Content::Flex)
+        .cross_align(Alignment::Center)
+        .child(
+            crate::widgets::a11y_text(super::WINDOW_TITLE)
+                .font_size(theme::font::title())
+                .font_weight(FontWeight::BOLD)
+                .color(theme::accent()),
+        );
+    if !compact {
+        brand_row = brand_row.child(
+            crate::widgets::a11y_text(t(keys::ABOUT_TAGLINE))
+                .font_size(theme::font::caption())
+                .color(theme::dim()),
+        );
+    }
+    brand_row = brand_row.child(rect().width(Size::flex(1.0)));
+    if !compact {
+        brand_row = brand_row
             .children(badges)
             .child(crate::widgets::badge(
                 game_text,
@@ -245,10 +249,14 @@ pub(super) fn header(
                     .width(Size::px(theme::layout::divider()))
                     .height(Size::px(theme::font::line_height()))
                     .background(theme::border()),
-            )
-            .child(backups_button(show_backups, show_about, show_review))
-            .child(about_button(show_about, show_backups, show_review))
-            .into_element(),
+            );
+    }
+    brand_row = brand_row
+        .child(backups_button(show_backups, show_about, show_review))
+        .child(about_button(show_about, show_backups, show_review));
+
+    let mut rows: Vec<Element> = vec![
+        brand_row.into_element(),
         rect()
             .horizontal()
             .width(Size::fill())
@@ -337,6 +345,8 @@ pub(super) fn header(
         );
     }
 
+    let status_lines = if compact { 2 } else { 3 };
+    let status_height = theme::font::line_height() * if compact { 2.0 } else { 3.0 };
     rows.push(
         rect()
             .horizontal()
@@ -348,9 +358,10 @@ pub(super) fn header(
                 rect()
                     .vertical()
                     .width(Size::flex(1.0))
-                    // A fixed three-line slot: the status text can be long, but
-                    // growing it must never move the tab bar below the header.
-                    .height(Size::px(theme::font::line_height() * 3.0))
+                    // A fixed status slot: the text can be long, but growing it
+                    // must never move the tab bar below the header. The compact
+                    // shell reserves two lines instead of three.
+                    .height(Size::px(status_height))
                     .main_align(Alignment::Center)
                     .child(
                         crate::widgets::a11y_text(status_text.clone())
@@ -359,7 +370,7 @@ pub(super) fn header(
                                 node.set_live(status_live);
                             })
                             .font_size(theme::font::caption())
-                            .max_lines(3)
+                            .max_lines(status_lines)
                             .text_overflow(TextOverflow::Ellipsis)
                             .color(status_color),
                     ),
@@ -378,16 +389,30 @@ pub(super) fn header(
             .into_element(),
     );
 
-    rect()
-        .vertical()
-        .width(Size::fill())
-        .padding(Gaps::new(
+    let padding = if compact {
+        Gaps::new(
+            theme::space::md(),
+            theme::space::card(),
+            theme::space::md(),
+            theme::space::card(),
+        )
+    } else {
+        Gaps::new(
             theme::space::field(),
             theme::space::card(),
             theme::space::xl(),
             theme::space::card(),
-        ))
-        .spacing(theme::space::xl())
+        )
+    };
+    rect()
+        .vertical()
+        .width(Size::fill())
+        .padding(padding)
+        .spacing(if compact {
+            theme::space::md()
+        } else {
+            theme::space::xl()
+        })
         .background(theme::panel())
         .children(rows)
         .into_element()

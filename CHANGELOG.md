@@ -6,6 +6,16 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Text scaling above 100 percent now keeps the shell usable at 900x700 and the
+  default window sizes. The header and tab strip compact, the sidebar keeps its
+  save rows instead of its decorative preview, form fields reflow by available
+  width, style and item rows stack their actions at 200 percent, and picker
+  viewports cap themselves at the window height. A regression matrix covers
+  900x700, 1180x760 and 1280x800 at 100/125/150/200 percent in English, plus
+  German at 125/150/200 percent.
+
 ## [0.4.0] - 2026-11-07
 
 ### Added

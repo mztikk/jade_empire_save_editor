@@ -28,6 +28,16 @@ mod navigation;
 mod shell;
 mod sidebar;
 
+/// Whether the shell should use its compact header and tab strip.
+///
+/// The minimum window and any text scale above 100 percent drop the tagline,
+/// status badges and reserved tab-bar slot. The root reads the window size once
+/// per render so resizing re-runs this decision.
+fn compact_shell() -> bool {
+    let window_width = Platform::get().current_window().root_size.peek().width;
+    theme::text_scale() > 1.0 || window_width < 1000.0
+}
+
 /// Shared handles that every view needs.
 #[derive(Clone)]
 pub struct Ctx {
@@ -410,6 +420,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     // repaints after a change made on the About page.
     let _ = *theme_choice.read();
     let _ = *text_scale.read();
+    // The shell drops its display-only chrome at the minimum window and at
+    // larger text scales. This read subscribes the root to window resizes; the
+    // header and tab bar consult `compact_shell` while building the tree.
+    let _window_width = Platform::get().current_window().root_size.read().width;
 
     let session: Rc<RefCell<Session>> =
         use_hook(move || Rc::new(RefCell::new(Session::pending(directory))));
