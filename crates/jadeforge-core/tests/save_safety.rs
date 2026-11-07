@@ -9,7 +9,7 @@ mod common;
 use std::fs;
 use std::path::Path;
 
-use jadeforge_core::{Error, SaveGame, SaveOptions};
+use jadeforge_core::{Error, SaveGame, SaveOptions, list_backups};
 
 fn save_with_level(path: &Path, level: u8) {
     let mut save = SaveGame::open(path).expect("open savegame");
@@ -129,6 +129,15 @@ fn saving_through_a_symlink_keeps_the_link() {
     let after = fs::read(&real).expect("read real");
     assert_ne!(before, after, "the symlink target must receive the save");
     SaveGame::open(&real).expect("target parses");
+
+    let backups = list_backups(&link).expect("list link backups");
+    assert_eq!(
+        backups.len(),
+        1,
+        "the backup must be visible next to the savegame link"
+    );
+    assert_eq!(backups[0].original, link);
+    assert_eq!(backups[0].path.parent(), Some(temp.path()));
 }
 
 #[test]

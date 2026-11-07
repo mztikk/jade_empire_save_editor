@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::error::{Error, Result};
-use crate::save::{SaveGame, create_backup, sync_parent};
+use crate::save::{SaveGame, create_backup, parent_directory, resolve_write_target, sync_parent};
 
 /// Marker the editor adds to a backup file name.
 pub const BACKUP_MARKER: &str = ".jadeforge-backup-";
@@ -46,7 +46,7 @@ pub struct BackupEntry {
 /// Returns an I/O error when the folder exists but cannot be read, or when a
 /// matching entry's metadata cannot be read.
 pub fn list_backups(original: &Path) -> Result<Vec<BackupEntry>> {
-    let Some(folder) = original.parent() else {
+    let Some(folder) = parent_directory(original) else {
         return Ok(Vec::new());
     };
     let Some(name) = original.file_name().and_then(std::ffi::OsStr::to_str) else {
@@ -111,6 +111,10 @@ fn parse_stamp(suffix: &str) -> Option<SystemTime> {
 /// rename. The returned path is that safety backup, so the caller can tell the
 /// user how to undo the restore.
 ///
+/// A symlinked `original` is written through to its target and the link is
+/// kept. The safety backup stays next to the caller's path so the backup
+/// browser and the reported path use the same visible name.
+///
 /// # Errors
 ///
 /// Returns an error when the backup is not a valid savegame, when the current
@@ -120,6 +124,7 @@ pub fn restore_backup(backup: &Path, original: &Path) -> Result<PathBuf> {
     let restored = SaveGame::open(backup)?;
     restored.verify()?;
     let restored_bytes = fs::read(backup).map_err(|error| Error::io(backup, error))?;
+    let write_target = resolve_write_target(original)?;
 
     let safety_backup = if original.exists() {
         let current = SaveGame::open(original)?;
@@ -129,21 +134,21 @@ pub fn restore_backup(backup: &Path, original: &Path) -> Result<PathBuf> {
         None
     };
 
-    let (temporary, mut file) = create_restore_file(original)?;
+    let (temporary, mut file) = create_restore_file(&write_target)?;
     let result = (|| -> Result<()> {
         file.write_all(&restored_bytes)
             .map_err(|error| Error::io(&temporary, error))?;
         file.sync_all()
             .map_err(|error| Error::io(&temporary, error))?;
-        if let Ok(metadata) = fs::metadata(original) {
+        if let Ok(metadata) = fs::metadata(&write_target) {
             fs::set_permissions(&temporary, metadata.permissions())
                 .map_err(|error| Error::io(&temporary, error))?;
             file.sync_all()
                 .map_err(|error| Error::io(&temporary, error))?;
         }
         drop(file);
-        fs::rename(&temporary, original).map_err(|error| Error::io(original, error))?;
-        sync_parent(original)?;
+        fs::rename(&temporary, &write_target).map_err(|error| Error::io(&write_target, error))?;
+        sync_parent(&write_target)?;
         Ok(())
     })();
     if let Err(error) = result {

@@ -766,8 +766,11 @@ impl SaveGame {
         let bytes = self.verified_bytes()?;
         self.ensure_unchanged(&write_target)?;
 
+        // Keep backups next to the path the caller named, even when that path
+        // is a symlink. The backup browser and the reported backup path then
+        // use the same visible name as the savegame.
         let backup = if options.backup && write_target.exists() {
-            Some(create_backup(&write_target)?)
+            Some(create_backup(target)?)
         } else {
             None
         };
@@ -961,15 +964,30 @@ fn create_temporary_named(target: &Path, kind: &str) -> Result<(PathBuf, File)> 
     )))
 }
 
-/// Resolves a symlinked target to the file it points at, so saving never
-/// replaces the link with a regular file.
-fn resolve_write_target(target: &Path) -> Result<PathBuf> {
+/// Resolves a symlinked target to the file it points at, so saving and
+/// restoring never replace the link with a regular file.
+pub(crate) fn resolve_write_target(target: &Path) -> Result<PathBuf> {
     match fs::symlink_metadata(target) {
         Ok(metadata) if metadata.file_type().is_symlink() => {
             fs::canonicalize(target).map_err(|error| Error::io(target, error))
         }
         Ok(_) | Err(_) => Ok(target.to_path_buf()),
     }
+}
+
+/// Returns the directory that contains `path`.
+///
+/// A bare relative path has an empty parent. Treating it as the current
+/// directory keeps save, backup and restore operations working for names such
+/// as `save.sac`.
+pub(crate) fn parent_directory(path: &Path) -> Option<&Path> {
+    path.parent().map(|parent| {
+        if parent.as_os_str().is_empty() {
+            Path::new(".")
+        } else {
+            parent
+        }
+    })
 }
 
 /// Syncs the containing directory after a rename, on platforms where that is
@@ -980,7 +998,7 @@ fn resolve_write_target(target: &Path) -> Result<PathBuf> {
 pub(crate) fn sync_parent(path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
-        if let Some(parent) = path.parent() {
+        if let Some(parent) = parent_directory(path) {
             let directory = File::open(parent).map_err(|error| Error::io(parent, error))?;
             directory
                 .sync_all()
@@ -1027,5 +1045,27 @@ impl<'a> Reader<'a> {
         })?;
         self.position = end;
         Ok(slice)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parent_directory;
+    use std::path::Path;
+
+    #[test]
+    fn a_bare_relative_path_uses_the_current_directory() {
+        assert_eq!(
+            parent_directory(Path::new("save.sac")),
+            Some(Path::new("."))
+        );
+    }
+
+    #[test]
+    fn an_absolute_path_keeps_its_directory() {
+        assert_eq!(
+            parent_directory(Path::new("/games/Jade Empire/Save/save.sac")),
+            Some(Path::new("/games/Jade Empire/Save"))
+        );
     }
 }
