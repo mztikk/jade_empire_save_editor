@@ -15,6 +15,11 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- Game data loading now reports corrupt talk tables and RIM archives instead of
+  treating them as empty installations. Talk table sections and entry ranges,
+  RIM payload ranges, and 2DA row widths are validated; text rows name their
+  line on failure, and binary cells are interned by pool offset under a decoded
+  byte budget.
 - Session undo and redo now restore the whole document or nothing, a failed
   reload after a backup restore clears the stale document and reports the
   failure, companion availability diffs show the real before and after values,
