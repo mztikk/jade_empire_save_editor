@@ -91,10 +91,10 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
 ## Editing files
 
 - Read a file before changing it, then make a targeted, literal edit rather than
-  rewriting it. Agent tooling mirrors this: `read` to inspect, `edit` to change,
-  and `write` only for a new file or a deliberate full rewrite. A targeted edit
-  fails when the context it expects is gone; a blind rewrite can silently drop
-  work.
+  rewriting it. Agent tooling mirrors this: `read` to inspect (with `offset`
+  and `limit` for a range), `edit` to change, and `write` only for a new file
+  or a deliberate full rewrite. A targeted edit fails when the context it
+  expects is gone; a blind rewrite can silently drop work.
 - Every content change starts with `edit`. This is not a judgement call:
   if you can quote the exact literal text you are replacing, it is a targeted
   edit and it goes through `edit`, one call per file. If you cannot quote it,
@@ -116,13 +116,30 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
 
 ## Shell tooling
 
+| need | tool |
+| --- | --- |
+| read a text file, or a line range | `read` with `offset`/`limit` |
+| find a file by path | `glob` |
+| match a pattern | `grep`; `rg -n -C` for context |
+| transform, aggregate or pipe data | a shell command |
+
+- A shell reader is correct when the target is outside what `read` can express:
+  binary data (`file`, `xxd`, `od`, `strings`); compressed, encrypted or
+  non-UTF-8 files (`zcat`, `tar -xOf`, `gpg -d`, `iconv`); a revision that is
+  not in the working tree (`git show rev:path`); streams, non-regular files and
+  remote or container paths (`/proc`, FIFOs, `tail -f`, `ssh host cat`); a
+  bounded byte peek at a huge or line-less file (`head -c`, `xxd -l`); archives
+  and comparisons (`tar -tvf`, `unzip -l`, `diff`, `delta`, `comm`).
+- A shell reader may also feed a pipeline that transforms or aggregates, such as
+  `sed -n '100,150p' file | wc -l`, because the output is the aggregate, not the
+  file. Printing lines of a regular text file as the way to read them (`cat
+  file`, `head -50 file`, `sed -n '100,150p' file`) stays out: `read` with
+  `offset`/`limit` produces the same content, with line numbers. If `read`
+  would have produced the same output, use `read`.
 - When a shell command is the right tool, prefer the modern CLI over its classic
-  predecessor: `rg` (not `grep`), `fd` (not `find`), `bat` (not `cat`/`head`),
-  `eza` (not `ls`), `sd` (not `sed -i`), `jq`/`yq` for JSON/YAML, `delta` for
-  diffs on a terminal, `dust` (not `du`), `hyperfine` for timings and `tokei`
-  for line counts. The harness `grep`, `glob` and `read` tools stay the default
-  for structured inspection; the shell replacements are for pipelines,
-  aggregations and bulk work those tools do not express.
+  predecessor: `rg` (not `grep`), `fd` (not `find`), `eza` (not `ls`), `sd`
+  (not `sed -i`), `jq`/`yq` for JSON/YAML, `delta` for diffs on a terminal,
+  `dust` (not `du`), `hyperfine` for timings and `tokei` for line counts.
 - Availability is per host, not a build requirement. Use the modern tool when
   it is on `PATH` and fall back to the POSIX equivalent when it is not. Never
   install or bootstrap one (rule 12).
@@ -238,10 +255,13 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
     and `$()` are command substitution, not text. Pass multi-line prose or
     Markdown through a file (`gh pr create --body-file`, a heredoc) or single
     quotes. Never put backticked commands in a double-quoted argument.
-18. **Edit tracked files with the edit tool.** A content change goes through
-    `read`, `edit` or `write`, never a shell one-liner. The only exception is
-    an announced bulk transformation: say which files and which exact
-    substitution before the command runs (see "Editing files").
+18. **Read and edit tracked files through the harness tools.** A regular UTF-8
+    file in the working tree is read with `read` (`offset`/`limit` for a
+    range), searched with `grep` and found with `glob`. A content change goes
+    through `read`, `edit` or `write`. A shell reader is reserved for the
+    targets listed under "Shell tooling" and for an announced bulk
+    transformation: say which files and which exact substitution before the
+    command runs (see "Editing files").
 
 ## Code style
 
