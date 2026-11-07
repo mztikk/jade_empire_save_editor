@@ -38,17 +38,18 @@ the game does, verifies the result and keeps a backup of the original.
 - **Gems** – amulet sockets and carried gems with their actual effect lines
   (for example `+4 Body · +4 Spirit`). A gem can be moved between the two lists
   or removed without touching its effects. The amulet's tier and socket count
-  are shown (`Amulet.Type`: 3, 5 or 7 sockets; before the amulet is unlocked the
-  tab says so), locked sockets are hidden, empty unlocked sockets are shown as
-  such, and gems from the game data in `gems.2da` can be added to the inventory
-  through a searchable list.
+  are shown. `Amulet.Type` is the tier, not the socket count: tiers 1, 2 and 4
+  unlock 3, 5 and 7 sockets. Before the amulet is unlocked the tab says so,
+  locked sockets are hidden, empty unlocked sockets are shown as such, and gems
+  from the game data in `gems.2da` can be added to the inventory through a
+  searchable list.
 - **Savegame browser** – scans the save folder and shows the game's own
   screenshot, character name, level and time played for every savegame. The
   list can be filtered by folder or character name and sorted by name, level or
   time played, with natural ordering (`Auto 2` before `Auto 10`).
 - **Native folder dialog** – **Browse…** opens the operating system's own folder
-  dialog (GTK/XDG portal on Linux, Win32 on Windows, `NSOpenPanel` on macOS), so
-  the save folder never has to be typed. Cancelling the dialog and picking an
+  dialog (XDG desktop portal on Linux, Win32 on Windows, `NSOpenPanel` on macOS),
+  so the save folder never has to be typed. Cancelling the dialog and picking an
   unreadable path are reported distinctly. The choice is remembered between runs
   and no installation path is baked into the program.
 - **Themes and text size** – the original dark jade theme, a light parchment
@@ -135,8 +136,8 @@ platform's icon files.
 The Linux binaries inside that folder have to be built against an older glibc
 than current distributions ship, otherwise they refuse to start on SteamOS /
 Steam Deck (`GLIBC_2.44 not found`). `just publish-linux` does that in a rootless
-Podman container based on Ubuntu 22.04 (glibc 2.35), stages
-`jadeforge` + `jadeforge-cli` into `dist/` and verifies the result with
+Podman container based on Ubuntu 22.04 (glibc 2.35), stages the v3 and
+generic-CPU GUI and CLI binaries into `dist/` and verifies both with
 `ci/check-glibc.sh`:
 
 ```sh
@@ -232,7 +233,9 @@ coverage` writes a line/function summary plus HTML and lcov reports to
    header shows "unsaved changes" and switching away is blocked until you save
    or revert. A field with invalid text is reported and not applied until it is
    fixed.
-5. Press **Save to disk**. A backup called
+5. Press **Save to disk**. The **Review changes** page opens with the exact
+   fields and rows that will be written; press **Write savegame** to perform the
+   verified write. A backup called
    `save.sac.jadeforge-backup-<seconds>.<nanos>.<counter>` is created next to
    the savegame; the Overview then shows its exact path and a button that opens
    the folder. Copy it back over `save.sac` to undo a change. Repeated saves
@@ -292,17 +295,24 @@ Names are not stored in savegames, they are talk table references in 2DA tables.
 JadeForge looks for the game installation next to the save folder (the parent of
 `Save/`, or `Save/<savegame>` when a savegame folder is selected). The
 `JADEFORGE_GAME_DIR` override wins; if it is unset or does not point at an
-installation, the normal layout is used. It reads only:
+installation, the normal layout is used. It reads these files:
 
 | file | used for |
 | --- | --- |
-| `dialog.tlk` | every localized name and description |
-| `override/items.2da` | item names, categories, icons |
-| `override/stylesuperlist.2da` | fighting style names and weapon data |
+| `dialog.tlk` / `dialogf.tlk` | every localized name and description |
+| `items.2da` | item names and categories; icon references are parsed but not rendered |
+| `stylesuperlist.2da` | fighting style names and weapon data |
+| `StyleAdvance.2da` | upgrade rows behind the style tiers |
+| `styledata.2da` | the style to `<Style>LV.2da` mapping |
+| `gems.2da` | predefined gems |
+| `effects.2da` | effect names |
+| `<Style>LV.2da` | the purchasable upgrade slots of one style |
 
-Most tables are not loose files at all: they ship as binary `2DA V2.b` resources
-inside `data/miniglobal-a.rim`, and the editor reads them from there (for
-example `styledata.2da`, which maps every style to its own level-up table).
+The 2DA tables come from `override/` first and from the shipped RIM archives
+second. Most tables ship as binary `2DA V2.b` resources inside
+`data/miniglobal-a.rim`; the style animation tables are in
+`data/globalunload-a.rim`, and the editor reads both archives (for example
+`styledata.2da`, which maps every style to its own level-up table).
 Files in `override/` take precedence over the archive exactly like the engine
 does, so **mods that add styles or change tables are picked up**: extend
 `stylesuperlist.2da`, add a `styledata.2da` row pointing at the new
@@ -333,7 +343,7 @@ Commands:
   set    <BLOCK> <PATH> <VALUE> [--dry-run] [--no-backup]
   dump   [BLOCK] [--path] [--json]   Dump a block as JSON
   verify                    Verify that a savegame can be parsed and written
-  add-item <ITEM_ID> [--kind 6] [--count 1] [--dry-run]
+  add-item <ITEM_ID> [--kind 6] [--count 1] [--dry-run] [--no-backup]
   export-names --game <DIR> --output <FILE>
                             Regenerate the bundled English name index
 ```
@@ -451,6 +461,7 @@ without a window with the snapshot example:
 ```sh
 cargo run -p jadeforge-gui --example snapshot -- "<SAVE_DIR>" docs/screenshot.png all
 # --width 900 / --height 1800 for narrow or tall layouts
+# --theme dark|light|high-contrast and --scale 100|125|150|200 for variants
 # --query viper types into the active tab's own filter (Items, Styles or Gems)
 ```
 
@@ -473,18 +484,24 @@ See [AGENTS.md](AGENTS.md) for the development guidelines,
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the crate layout. User-visible
 changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
-## UI review and roadmap
+## UI review and follow-ups
 
 The desktop UI review and its evidence live in
 [docs/UI-REVIEW.md](docs/UI-REVIEW.md); the P3 design notes and their progress
-table are in [docs/ui-p3/](docs/ui-p3/README.md). The follow-up work is tracked
-in the issue tracker:
+table are in [docs/ui-p3/](docs/ui-p3/README.md).
 
-- P0 release blockers: [#5](https://github.com/mztikk/jade_empire_save_editor/pull/5) (merged)
-- P1 follow-ups: [#7](https://github.com/mztikk/jade_empire_save_editor/issues/7)
-- P2 polish, including the copy, backup, About/settings and item-category work:
-  [#8](https://github.com/mztikk/jade_empire_save_editor/issues/8)
-- P3 strategic work: [#9](https://github.com/mztikk/jade_empire_save_editor/issues/9)
+P0 ([#5](https://github.com/mztikk/jade_empire_save_editor/pull/5)),
+P1 ([#7](https://github.com/mztikk/jade_empire_save_editor/issues/7)) and
+P2 ([#8](https://github.com/mztikk/jade_empire_save_editor/issues/8)) are
+complete. The P3 work shipped in
+[v0.3.0](https://github.com/mztikk/jade_empire_save_editor/releases/tag/v0.3.0)
+([PR #32](https://github.com/mztikk/jade_empire_save_editor/pull/32)) except for
+the blocked item-icon item
+([#9](https://github.com/mztikk/jade_empire_save_editor/issues/9)). The remaining
+open follow-ups are the platform contrast preference
+([#33](https://github.com/mztikk/jade_empire_save_editor/issues/33)) and the
+upstream `Input` label association
+([#3](https://github.com/mztikk/jade_empire_save_editor/issues/3)).
 
 ## Status
 
