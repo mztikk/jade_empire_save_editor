@@ -211,6 +211,8 @@ complete = true
 # Gems tab
 "gems.add_heading" = "Ein Essenzjuwel hinzufügen"
 "gems.clear_filter" = "Essenzjuwel-Filter löschen"
+"gems.clear_inventory_filter" = "Filter der mitgeführten Essenzjuwelen löschen"
+"gems.inventory_list" = "Mitgeführte Essenzjuwelen"
 "gems.move_hint" = "Das Verschieben eines Essenzjuwels behält seine Effekte bei; JadeForge ändert nur, welche Liste darauf verweist."
 "gems.empty_inventory" = "Keine Essenzjuwelen im Inventar."
 "gems.empty_amulet" = "Keine Essenzjuwelen im Amulett."
@@ -220,6 +222,7 @@ complete = true
 "gems.add" = "Hinzufügen"
 "gems.missing_hint" = "Die Spieldaten mit den Essenzjuweldefinitionen wurden nicht gefunden."
 "gems.no_match" = "Kein Essenzjuwel entspricht diesem Filter."
+"gems.no_inventory_match" = "Kein mitgeführtes Essenzjuwel entspricht diesem Filter."
 "gems.add_list" = "Verfügbare Essenzjuwelen"
 "gems.from_game_data" = "Aus den Spieldaten"
 "gems.all_sockets" = "Alle sieben Fassungen sind freigeschaltet."
@@ -433,6 +436,7 @@ complete = true
 "filter.items" = "Gegenstandsdatenbank filtern oder leer lassen, um alles anzuzeigen"
 "filter.styles" = "Kampfstile filtern oder leer lassen, um alle anzuzeigen"
 "filter.gems" = "Essenzjuwelen filtern oder leer lassen, um alle anzuzeigen"
+"filter.gems.inventory" = "Mitgeführte Essenzjuwelen filtern oder leer lassen, um alle anzuzeigen"
 
 # Shared
 # Separator for joining short noun lists in the UI.

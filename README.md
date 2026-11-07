@@ -43,7 +43,8 @@ the game does, verifies the result and keeps a backup of the original.
   unlock 3, 5 and 7 sockets. Before the amulet is unlocked the tab says so,
   locked sockets are hidden, empty unlocked sockets are shown as such, and gems
   from the game data in `gems.2da` can be added to the inventory through a
-  searchable list.
+  searchable list. The carried list is searchable by name or effect and scrolls
+  after seven rows, so the add-gem list stays within reach.
 - **Savegame browser** – scans the save folder and shows the game's own
   screenshot, character name, level and time played for every savegame. The
   list can be filtered by folder or character name and sorted by name, level or
