@@ -237,24 +237,92 @@ fn carried_list_height(rows: usize, visible_cap: usize) -> f32 {
 
 /// A scrollable carried-gem list capped at the visible rows for this window.
 fn carried_gem_list(label: &str, rows: Vec<Element>) -> Element {
-    let visible = widgets::viewport_rows(CARRIED_VISIBLE_ROWS, theme::layout::gem_row_height());
-    rect()
-        .width(Size::fill())
-        .height(Size::px(carried_list_height(rows.len(), visible)))
-        .a11y_role(AccessibilityRole::ListBox)
-        .a11y_alt(label.to_owned())
-        .child(
-            ScrollView::new()
-                .width(Size::fill())
-                .height(Size::fill())
-                .spacing(theme::space::xs())
-                .show_scrollbar(true)
-                .auto_hide_scrollbars(false)
-                .drag_scrolling(false)
-                .key("carried-gem-rows")
-                .children(rows),
-        )
-        .into_element()
+    CarriedGemList {
+        label: label.to_owned(),
+        rows,
+        key: DiffKey::None,
+    }
+    .key("carried-gem-list")
+    .into_element()
+}
+
+#[derive(PartialEq)]
+struct CarriedGemList {
+    label: String,
+    rows: Vec<Element>,
+    key: DiffKey,
+}
+
+impl KeyExt for CarriedGemList {
+    fn key_mut(&mut self) -> &mut DiffKey {
+        &mut self.key
+    }
+}
+
+impl Component for CarriedGemList {
+    fn render(&self) -> impl IntoElement {
+        let visible = widgets::viewport_rows(CARRIED_VISIBLE_ROWS, theme::layout::gem_row_height());
+        let height = carried_list_height(self.rows.len(), visible);
+        let row_pitch = theme::layout::gem_row_height() + theme::space::xs();
+        let a11y_id = use_a11y();
+        let focus = use_focus(a11y_id);
+        let is_focused = focus() == Focus::Keyboard;
+        let scroll = use_scroll_controller(ScrollConfig::default);
+        let mut scroll_for_keys = scroll;
+        rect()
+            .width(Size::fill())
+            .height(Size::px(height))
+            .a11y_id(a11y_id)
+            .a11y_focusable(true)
+            .a11y_role(AccessibilityRole::ListBox)
+            .a11y_alt(self.label.clone())
+            .border(
+                Border::new()
+                    .fill(if is_focused {
+                        theme::text()
+                    } else {
+                        Color::TRANSPARENT
+                    })
+                    .width(theme::stroke::focus()),
+            )
+            .on_key_down(move |event: Event<KeyboardEventData>| {
+                let current = scroll_for_keys.position().y.round() as i32;
+                let handled = match event.key {
+                    Key::Named(NamedKey::ArrowDown) => {
+                        scroll_for_keys.scroll_to_y(current - row_pitch.round() as i32)
+                    }
+                    Key::Named(NamedKey::ArrowUp) => {
+                        scroll_for_keys.scroll_to_y(current + row_pitch.round() as i32)
+                    }
+                    Key::Named(NamedKey::PageDown) => {
+                        scroll_for_keys.scroll_to_y(current - height.round() as i32)
+                    }
+                    Key::Named(NamedKey::PageUp) => {
+                        scroll_for_keys.scroll_to_y(current + height.round() as i32)
+                    }
+                    Key::Named(NamedKey::Home) => scroll_for_keys.scroll_to_y(0),
+                    Key::Named(NamedKey::End) => scroll_for_keys.scroll_to_y(i32::MAX),
+                    _ => false,
+                };
+                if handled {
+                    event.stop_propagation();
+                    event.prevent_default();
+                }
+            })
+            .child(
+                ScrollView::new_controlled(scroll)
+                    .width(Size::fill())
+                    .height(Size::fill())
+                    .spacing(theme::space::xs())
+                    .show_scrollbar(true)
+                    .auto_hide_scrollbars(false)
+                    .drag_scrolling(false)
+                    .scroll_with_arrows(false)
+                    .key("carried-gem-rows")
+                    .children(self.rows.clone()),
+            )
+            .into_element()
+    }
 }
 
 /// Summary of the amulet state shown in the card hint.

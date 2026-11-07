@@ -16,6 +16,7 @@ use freya_core::events::platform::{KeyboardEventName, PlatformEvent};
 use freya_testing::TestingRunner;
 use jadeforge_gui::ThemeChoice;
 use jadeforge_gui::app_with_directory;
+use jadeforge_gui::i18n::{keys, t};
 use jadeforge_gui::theme;
 
 mod support;
@@ -1844,7 +1845,10 @@ fn the_carried_gems_list_scrolls_after_a_full_viewport() {
         eprintln!("skipping: no gem can be resolved from the game data");
         return;
     };
-    for _ in 0..8 {
+    // Enough rows that the real row heights overflow the nominal seven-row
+    // viewport; eight rows can measure just under it because the rows are
+    // shorter than the token used to cap the viewport.
+    for _ in 0..12 {
         session.add_gem(gem.item_id);
     }
     session.save().expect("fill the carried gem list");
@@ -1878,6 +1882,33 @@ fn the_carried_gems_list_scrolls_after_a_full_viewport() {
         rows.len() > 7,
         "the carried gem list only has {} rows, so it never has to scroll",
         rows.len()
+    );
+
+    let list_id = list
+        .element()
+        .accessibility()
+        .a11y_id
+        .expect("the carried gem list has no accessibility id");
+    assert!(
+        send_a11y_action(&mut test, &list, accesskit::Action::Focus),
+        "the carried gem list cannot be focused"
+    );
+    assert_eq!(
+        test.sync_and_update().focus,
+        list_id,
+        "the carried gem list did not receive focus"
+    );
+    test.press_key(Key::Named(NamedKey::PageDown));
+    settle(&mut test);
+    assert!(
+        scroll_offset(&test) > 20.0,
+        "PageDown did not scroll the carried gem list"
+    );
+    test.press_key(Key::Named(NamedKey::Home));
+    settle(&mut test);
+    assert!(
+        scroll_offset(&test) < 1.0,
+        "Home did not return the carried gem list to the top"
     );
 }
 
@@ -2580,6 +2611,22 @@ fn a11y_disabled(node: &freya_testing::TestingNode) -> bool {
     a11y_node(node).is_disabled()
 }
 
+/// The row currently announced as the active descendant of a list box.
+fn a11y_active_descendant(
+    test: &TestingRunner,
+    list: &freya_testing::TestingNode,
+) -> Option<freya_testing::TestingNode> {
+    let active = a11y_node(list).active_descendant()?;
+    test.find(|node, _| (node.element().accessibility().a11y_id == Some(active)).then_some(node))
+}
+
+fn a11y_active_descendant_label(
+    test: &TestingRunner,
+    list: &freya_testing::TestingNode,
+) -> Option<String> {
+    a11y_active_descendant(test, list).and_then(|node| a11y_label(&node))
+}
+
 fn selected_tab_labels(test: &TestingRunner) -> Vec<String> {
     test.find_many(|node, _| (a11y_role(&node) == "Tab").then_some(node))
         .iter()
@@ -3113,8 +3160,63 @@ fn arrow_keys_move_the_save_list_focus() {
         click_text(&mut test, "Test Save"),
         "could not focus the save list"
     );
+    let list = test
+        .find(|node, _| (a11y_role(&node) == "ListBox").then_some(node))
+        .expect("the save list is missing");
+    let list_id = list
+        .element()
+        .accessibility()
+        .a11y_id
+        .expect("the save list has no accessibility id");
+    assert_eq!(
+        a11y_node(&list).size_of_set(),
+        Some(3),
+        "the save list does not expose its option count"
+    );
+    assert_eq!(
+        test.sync_and_update().focus,
+        list_id,
+        "clicking a savegame did not focus the list"
+    );
+    let first = a11y_active_descendant_label(&test, &list).expect("no active save is announced");
+    assert!(
+        first.starts_with("Test Save"),
+        "the initial active save is {first}"
+    );
+    test.press_key(Key::Named(NamedKey::PageDown));
+    test.sync_and_update();
+    let paged = a11y_active_descendant(&test, &list).expect("no active save is announced");
+    assert_eq!(
+        a11y_node(&paged).position_in_set(),
+        Some(2),
+        "PageDown did not move the save-list active row to the last save"
+    );
+    test.press_key(Key::Named(NamedKey::Home));
+    test.sync_and_update();
+    let home = a11y_active_descendant_label(&test, &list).expect("no active save is announced");
+    assert!(
+        home.starts_with("Test Save,"),
+        "Home announced {home}, not the first save"
+    );
+
     test.press_key(Key::Named(NamedKey::ArrowDown));
     test.sync_and_update();
+    let active = a11y_active_descendant(&test, &list).expect("no active save is announced");
+    assert_eq!(
+        a11y_node(&active).position_in_set(),
+        Some(1),
+        "the active save was not exposed at its list position"
+    );
+    let second = a11y_label(&active).expect("the active save has no name");
+    assert!(
+        second.starts_with("Test Save 2"),
+        "ArrowDown announced {second}, not Test Save 2"
+    );
+    assert_eq!(
+        test.sync_and_update().focus,
+        list_id,
+        "moving the save-list active row moved keyboard focus away"
+    );
 
     test.press_key(Key::Named(NamedKey::Enter));
     test.sync_and_update();
@@ -3122,6 +3224,203 @@ fn arrow_keys_move_the_save_list_focus() {
         find_label_text(&test, "Opened Test Save 2").is_some(),
         "Enter did not open the row that received keyboard focus"
     );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // one end-to-end keyboard sequence documents the full list contract
+fn picker_keyboard_reaches_offscreen_rows_and_keeps_focus() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data for the item picker");
+        return;
+    }
+    let label = t(keys::INVENTORY_ADD_LIST);
+    let mut test = launch_sized(fixture.save_dir.clone(), 1600.0);
+    assert!(click_label_exact(&mut test, "Inventory"));
+    settle(&mut test);
+    let list = test
+        .find(|node, _| {
+            (a11y_role(&node) == "ListBox" && a11y_label(&node).as_deref() == Some(label))
+                .then_some(node)
+        })
+        .expect("the item picker is missing");
+    let list_id = list
+        .element()
+        .accessibility()
+        .a11y_id
+        .expect("the item picker has no accessibility id");
+    assert!(
+        send_a11y_action(&mut test, &list, accesskit::Action::Focus),
+        "the item picker cannot be focused through assistive technology"
+    );
+    assert_eq!(
+        test.sync_and_update().focus,
+        list_id,
+        "the item picker did not receive focus"
+    );
+    let first = a11y_active_descendant_label(&test, &list).expect("no active picker row");
+    let add = test
+        .find(|node, _| {
+            (a11y_role(&node) == "Button"
+                && a11y_label(&node)
+                    .as_deref()
+                    .is_some_and(|label| label.starts_with("Add ")))
+            .then_some(node)
+        })
+        .expect("the picker has no Add action");
+    assert!(
+        !a11y_focusable(&add),
+        "a picker row action added a second tab stop"
+    );
+    let total = a11y_node(&list)
+        .size_of_set()
+        .expect("the picker has no set size");
+    test.press_key(Key::Named(NamedKey::PageDown));
+    settle(&mut test);
+    let paged = a11y_active_descendant(&test, &list).expect("no active picker row");
+    assert!(
+        a11y_node(&paged)
+            .position_in_set()
+            .is_some_and(|position| position > 0),
+        "PageDown did not move the active picker row"
+    );
+    test.press_key(Key::Named(NamedKey::PageUp));
+    test.sync_and_update();
+    let paged_back = a11y_active_descendant(&test, &list).expect("no active picker row");
+    assert_eq!(
+        a11y_node(&paged_back).position_in_set(),
+        Some(0),
+        "PageUp did not return to the first picker row"
+    );
+    test.press_key(Key::Named(NamedKey::End));
+    settle(&mut test);
+    let end = a11y_active_descendant(&test, &list).expect("no active picker row");
+    assert_eq!(
+        a11y_node(&end).position_in_set(),
+        Some(total - 1),
+        "End did not select the last picker row"
+    );
+    test.press_key(Key::Named(NamedKey::Home));
+    test.sync_and_update();
+    let home = a11y_active_descendant(&test, &list).expect("no active picker row");
+    assert_eq!(
+        a11y_node(&home).position_in_set(),
+        Some(0),
+        "Home did not return to the first picker row"
+    );
+    for _ in 0..10 {
+        test.press_key(Key::Named(NamedKey::ArrowDown));
+        test.sync_and_update();
+    }
+    settle(&mut test);
+    assert_eq!(
+        test.sync_and_update().focus,
+        list_id,
+        "scrolling picker rows moved keyboard focus away"
+    );
+    let active = a11y_active_descendant(&test, &list).expect("no active picker row");
+    assert_eq!(
+        a11y_role(&active),
+        "ListBoxOption",
+        "the active picker row has the wrong accessibility role"
+    );
+    assert_eq!(
+        a11y_node(&active).position_in_set(),
+        Some(10),
+        "the active picker row was not exposed at its list position"
+    );
+    assert_eq!(
+        a11y_node(&active).size_of_set(),
+        Some(total),
+        "the active picker row lost its set size"
+    );
+    let tenth = a11y_label(&active).expect("the active picker row has no name");
+    assert_ne!(first, tenth, "arrowing did not move the active picker row");
+    test.press_key(Key::Named(NamedKey::Enter));
+    wait_for_text(&mut test, "Added");
+    assert!(
+        find_label_text(&test, "Added").is_some(),
+        "Enter did not add the active off-screen item"
+    );
+    assert_eq!(
+        test.sync_and_update().focus,
+        list_id,
+        "adding the active item moved keyboard focus away from the list"
+    );
+    test.press_key(Key::Named(NamedKey::Escape));
+    assert_ne!(
+        test.sync_and_update().focus,
+        list_id,
+        "Escape did not leave the picker"
+    );
+}
+
+#[test]
+fn pickers_add_item_style_and_gem_from_the_keyboard() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data for the pickers");
+        return;
+    }
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    let activate = |test: &mut TestingRunner, tab: &str, list_label: &str| {
+        assert!(click_label_exact(test, tab), "could not open {tab}");
+        settle(test);
+        let list = test
+            .find(|node, _| {
+                (a11y_role(&node) == "ListBox" && a11y_label(&node).as_deref() == Some(list_label))
+                    .then_some(node)
+            })
+            .expect("the picker is missing");
+        let list_id = list
+            .element()
+            .accessibility()
+            .a11y_id
+            .expect("the picker has no accessibility id");
+        assert!(
+            send_a11y_action(test, &list, accesskit::Action::Focus),
+            "the {tab} picker cannot be focused"
+        );
+        assert_eq!(
+            test.sync_and_update().focus,
+            list_id,
+            "the {tab} picker did not receive focus"
+        );
+        let before = find_label_text(test, "Added").unwrap_or_default();
+        test.press_key(Key::Named(NamedKey::ArrowDown));
+        test.sync_and_update();
+        test.press_key(Key::Named(NamedKey::Enter));
+        let mut changed = false;
+        for _ in 0..100 {
+            test.sync_and_update();
+            if let Some(status) = find_label_text(test, "Added")
+                && status != before
+            {
+                changed = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(
+            changed,
+            "{tab} keyboard activation did not change the status"
+        );
+        assert_eq!(
+            test.sync_and_update().focus,
+            list_id,
+            "activating the {tab} picker moved keyboard focus away"
+        );
+    };
+
+    activate(&mut test, "Inventory", t(keys::INVENTORY_ADD_LIST));
+    activate(&mut test, "Styles", t(keys::STYLES_LEARN_LIST));
+    activate(&mut test, "Gems", t(keys::GEMS_ADD_LIST));
 }
 
 #[test]
@@ -5845,7 +6144,7 @@ fn a_virtualized_picker_row_expands_its_description_in_place() {
     let row_label = format!("{} item", item.name);
     let picker_row = |test: &TestingRunner| {
         test.find_many(|node, _| {
-            (a11y_role(&node) == "Group"
+            (a11y_role(&node) == "ListBoxOption"
                 && a11y_label(&node).as_deref() == Some(row_label.as_str()))
             .then_some(node)
         })

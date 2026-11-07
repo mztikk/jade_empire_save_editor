@@ -19,6 +19,11 @@ All notable changes are documented here. The format follows
   input padding and radius scale with it, and page and toolbar actions share one
   ActionButton with filled, outline and flat variants plus a visibly disabled
   state. The save sort control collapses to one row above 100 percent.
+- The virtualized pickers and the save browser are now one ListBox tab stop with
+  a stable announced active row. Arrow, Page Up/Page Down and Home/End move the
+  active row and scroll it into view; Enter activates items, styles, gems and
+  saves; Space toggles a picker description. The carried-gem list is reachable
+  and scrollable by keyboard.
 
 ## [0.4.0] - 2026-11-07
 
