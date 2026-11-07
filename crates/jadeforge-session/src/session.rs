@@ -529,6 +529,10 @@ pub enum ScanApply {
     Applied(ScanCompletion),
     /// The result was current but the folder could not be read any more.
     Failed,
+    /// Applying the result would close a savegame with unsaved changes.
+    ///
+    /// The previous entries, savegame, folder and game data were left untouched.
+    Blocked,
     /// A newer scan or a cancellation superseded the result.
     Stale,
 }
@@ -979,7 +983,9 @@ impl Session {
     /// Only the request that is still in flight is applied. The directory,
     /// entries and game data are committed together, an open savegame is kept
     /// when the folder did not change, and only this successful path persists
-    /// the folder.
+    /// the folder. A result that would close a savegame with unsaved changes is
+    /// rejected with [`ScanApply::Blocked`] and leaves the previous state
+    /// untouched.
     pub fn complete_scan(&mut self, request: &ScanRequest, outcome: ScanOutcome) -> ScanApply {
         if !self.is_current_scan(request) {
             return ScanApply::Stale;
@@ -991,6 +997,12 @@ impl Session {
             return ScanApply::Failed;
         }
         let directory_changed = !same_directory(&self.directory, &request.directory);
+        if self.is_dirty() && self.scan_would_close_open_save(&outcome.entries, directory_changed) {
+            self.message = Message::info(message::tr(keys::STATUS_UNSAVED_FIRST));
+            self.settle_loading_game_data();
+            self.finish_scan();
+            return ScanApply::Blocked;
+        }
         if directory_changed {
             self.clear_open_save();
         }
@@ -1004,6 +1016,22 @@ impl Session {
         self.persist_directory();
         self.finish_scan();
         ScanApply::Applied(ScanCompletion { directory_changed })
+    }
+
+    /// True when applying a scan would discard the open savegame.
+    ///
+    /// A same-folder refresh keeps the savegame only while its entry still
+    /// exists. A folder change always replaces it.
+    fn scan_would_close_open_save(&self, entries: &[SaveEntry], directory_changed: bool) -> bool {
+        let Some(save) = self.save.as_ref() else {
+            return false;
+        };
+        if directory_changed {
+            return true;
+        }
+        !entries
+            .iter()
+            .any(|entry| entry.path.join("save.sac") == save.path())
     }
 
     /// Reports a worker that could not produce a result.
@@ -3912,6 +3940,57 @@ mod tests {
         assert_eq!(session.directory(), other.path());
         assert!(session.save.is_none());
         assert!(session.selected.is_none());
+    }
+
+    #[test]
+    fn a_dirty_save_blocks_a_new_folder_scan_result() {
+        let (directory, mut session) = fixture();
+        let other = TempDir::new("dirty-new-folder");
+        let request = session.begin_scan(other.path()).expect("begin");
+
+        let mut form = form_for(&session);
+        form.level = "9".to_owned();
+        session.apply(&form).expect("apply edit");
+        assert!(session.is_dirty());
+
+        let applied = session.complete_scan(&request, ScanOutcome::run(&request));
+        assert_eq!(applied, ScanApply::Blocked);
+        assert_eq!(session.directory(), directory.path());
+        assert_eq!(session.selected(), Some(0));
+        assert!(session.save.is_some());
+        assert!(session.is_dirty());
+        assert!(session.can_undo());
+        assert!(!session.is_scanning());
+        assert!(
+            session.message().text.contains("unsaved"),
+            "{}",
+            session.message().text
+        );
+    }
+
+    #[test]
+    fn a_dirty_save_survives_a_same_folder_refresh() {
+        let (directory, mut session) = fixture();
+        let request = session.begin_scan(directory.path()).expect("begin");
+
+        let mut form = form_for(&session);
+        form.level = "9".to_owned();
+        session.apply(&form).expect("apply edit");
+        assert!(session.is_dirty());
+
+        let applied = session.complete_scan(&request, ScanOutcome::run(&request));
+        assert!(
+            matches!(
+                applied,
+                ScanApply::Applied(ScanCompletion {
+                    directory_changed: false
+                })
+            ),
+            "{applied:?}"
+        );
+        assert_eq!(session.selected(), Some(0));
+        assert!(session.save.is_some());
+        assert!(session.is_dirty());
     }
 
     #[test]
