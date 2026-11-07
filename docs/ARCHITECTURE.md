@@ -236,6 +236,8 @@ The shell renders the session and forwards input. The savegame list has its own
 filter and sort (`session::visible_entries`, natural ordering so `Auto 2` comes
 before `Auto 10`). Its open action, shared collections and virtual row model are
 kept stable so an unrelated hover or page render does not rebuild the list. The
+filtered indices are cached together with the exact entry snapshot they index,
+so a rescan cannot leave the list pointing at rows that are already gone. The
 derived character, form-error and picker data is shared by `Rc`; item and style
 searches run only while their tab is active, and the gems picker reuses one
 memoized row model. The thread-local `perf` counters back the headless render

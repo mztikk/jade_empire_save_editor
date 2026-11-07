@@ -411,9 +411,16 @@ impl Component for SaveList {
 /// Builds one savegame row for the virtual list.
 ///
 /// `size` is the pitch the list reserved for the row; the card takes the
-/// remaining height after the gap.
+/// remaining height after the gap. The filter is derived from the same entry
+/// list, so a missing entry means the two snapshots disagreed; render the
+/// reserved gap instead of panicking on user data.
 fn save_row(data: &SaveRows, index: usize, size: f32) -> Element {
-    let entry = &data.entries[index];
+    let Some(entry) = data.entries.get(index) else {
+        return rect()
+            .width(Size::fill())
+            .height(Size::px(size))
+            .into_element();
+    };
     let is_selected = data.selected == Some(index);
     // The roving list focus is not a DOM focus on the row, so the row paints
     // it; hover is handled by the button itself and therefore does not rebuild

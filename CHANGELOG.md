@@ -15,6 +15,10 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- Rescanning a folder that lost its last readable savegame no longer crashes the
+  save list. The filtered indices are derived from the same entry snapshot the
+  rows render, so a stale filter can no longer index an entry list that already
+  became empty.
 - GUI render work now follows the active tab: inactive item and style searches
   are skipped, derived character/form/picker data is shared instead of cloned,
   the save list keeps one stable open action per document, the gems picker

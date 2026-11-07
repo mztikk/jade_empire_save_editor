@@ -15,7 +15,10 @@ use freya::prelude::*;
 use crate::dialog::CloseChoice;
 use crate::form::Form;
 use crate::i18n::{fill, keys, t};
-use crate::session::{CharacterForm, GameStatus, Preview, Session, default_save_dir};
+use crate::session::{
+    CharacterForm, GameStatus, Preview, SaveEntry, SaveSort, Session, default_save_dir,
+    visible_entries,
+};
 use crate::theme;
 use crate::views;
 use crate::widgets::{Action, PickerRow};
@@ -107,6 +110,64 @@ impl HoverKey {
             Self::Style(index) | Self::Orb(index, _) => index == struct_index,
             _ => false,
         }
+    }
+}
+
+/// Filtered indices for the savegame list, cached until their inputs change.
+///
+/// The indices index the exact entry list they were derived from, so the list
+/// can never point past the end of the entries it renders. Deriving them in a
+/// `use_memo` broke that invariant: the memo updated in its own task, and a
+/// render that already saw the new (empty) entries could still get the previous
+/// filter back. The cache keeps its own `Rc` of the entries, which also makes
+/// pointer equality a sufficient identity check: while it holds the reference,
+/// the session cannot mutate the list in place through `Rc::make_mut`.
+struct SaveFilter {
+    entries: Option<Rc<Vec<SaveEntry>>>,
+    visible: Rc<Vec<usize>>,
+    query: String,
+    sort: SaveSort,
+    descending: bool,
+}
+
+impl Default for SaveFilter {
+    fn default() -> Self {
+        Self {
+            entries: None,
+            visible: Rc::new(Vec::new()),
+            query: String::new(),
+            sort: SaveSort::Name,
+            descending: false,
+        }
+    }
+}
+
+impl SaveFilter {
+    /// Returns the indices to show for `entries`, reusing the last result when
+    /// the entry list, filter and sort are unchanged.
+    fn visible(
+        &mut self,
+        entries: &Rc<Vec<SaveEntry>>,
+        query: &str,
+        sort: SaveSort,
+        descending: bool,
+    ) -> Rc<Vec<usize>> {
+        let unchanged = self
+            .entries
+            .as_ref()
+            .is_some_and(|cached| Rc::ptr_eq(cached, entries))
+            && self.query == query
+            && self.sort == sort
+            && self.descending == descending;
+        if !unchanged {
+            self.visible = Rc::new(visible_entries(entries, query, sort, descending));
+            self.entries = Some(Rc::clone(entries));
+            self.query.clear();
+            self.query.push_str(query);
+            self.sort = sort;
+            self.descending = descending;
+        }
+        Rc::clone(&self.visible)
     }
 }
 
@@ -521,6 +582,17 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let disk_changed = session.borrow_mut().check_disk_state();
     let active_tab = *tab.read();
     let entries = session.borrow().entries();
+    // The filter indices must belong to this exact entry list; see
+    // `SaveFilter`. Reading the filter state here also subscribes the shell to
+    // query and sort changes.
+    let visible = {
+        let filter: Rc<RefCell<SaveFilter>> =
+            use_hook(|| Rc::new(RefCell::new(SaveFilter::default())));
+        let (sort, descending) = *save_sort.read();
+        filter
+            .borrow_mut()
+            .visible(&entries, &save_query.read(), sort, descending)
+    };
     let selected = session.borrow().selected();
     let message = session.borrow().message().clone();
     let character = {
@@ -893,23 +965,6 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         start_scan.clone(),
         cancel_scan.clone(),
     );
-    let visible = {
-        let session = session.clone();
-        let filtered = use_memo(move || {
-            let _ = *revision.read();
-            let entries = session.borrow().entries();
-            let (sort, descending) = *save_sort.read();
-            // Shared so the virtual list can compare the filtered rows by
-            // identity instead of rebuilding them on every unrelated render.
-            Rc::new(crate::session::visible_entries(
-                &entries,
-                &save_query.read(),
-                sort,
-                descending,
-            ))
-        });
-        filtered.read().clone()
-    };
     let sidebar = sidebar::sidebar(
         &ctx,
         &entries,
@@ -1333,5 +1388,70 @@ mod tests {
         assert!(!HoverKey::Style(4).is_style_row(3));
         assert!(!HoverKey::StyleSuggestion(3).is_style_row(3));
         assert!(!HoverKey::Item(3).is_style_row(3));
+    }
+
+    fn save_entry(label: &str) -> SaveEntry {
+        SaveEntry {
+            path: PathBuf::from(label),
+            label: label.to_owned(),
+            character: None,
+            level: Some(1),
+            time_played: 0,
+            modified: None,
+            error: None,
+        }
+    }
+
+    #[test]
+    fn the_save_filter_reuses_unchanged_indices() {
+        let mut filter = SaveFilter::default();
+        let entries = Rc::new(vec![save_entry("b"), save_entry("a")]);
+        let first = filter.visible(&entries, "", SaveSort::Name, false);
+        assert_eq!(*first, vec![1, 0]);
+
+        let again = filter.visible(&entries, "", SaveSort::Name, false);
+        assert!(
+            Rc::ptr_eq(&first, &again),
+            "an unchanged filter produced a new allocation and would rebuild every row"
+        );
+        assert_eq!(
+            *filter.visible(&entries, "a", SaveSort::Name, false),
+            vec![1]
+        );
+    }
+
+    #[test]
+    fn the_save_filter_follows_a_replaced_entry_list() {
+        let mut filter = SaveFilter::default();
+        let entries = Rc::new(vec![save_entry("a")]);
+        assert_eq!(
+            *filter.visible(&entries, "", SaveSort::Name, false),
+            vec![0]
+        );
+
+        let empty = Rc::new(Vec::new());
+        assert!(
+            filter.visible(&empty, "", SaveSort::Name, false).is_empty(),
+            "the filter kept an index into the previous entry list"
+        );
+    }
+
+    #[test]
+    fn the_save_filter_does_not_mutate_a_shared_entry_list_in_place() {
+        let mut filter = SaveFilter::default();
+        let mut entries = Rc::new(vec![save_entry("a")]);
+        assert_eq!(
+            *filter.visible(&entries, "", SaveSort::Name, false),
+            vec![0]
+        );
+
+        // The cache holding the previous `Rc` must force `make_mut` to clone,
+        // so the identity check cannot miss changed entries.
+        Rc::make_mut(&mut entries).clear();
+        assert!(
+            filter
+                .visible(&entries, "", SaveSort::Name, false)
+                .is_empty()
+        );
     }
 }
