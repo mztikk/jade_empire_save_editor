@@ -58,13 +58,18 @@ in the real window. See [AGENTS.md](AGENTS.md) rule 13 and
 ## UI review work
 
 The desktop UI review lives in [docs/UI-REVIEW.md](docs/UI-REVIEW.md); read it
-before changing the shell, sidebar or a tab, and keep its status table and
-screenshots current. The follow-up checklists are tracked as
-[P1](https://github.com/mztikk/jade_empire_save_editor/issues/7),
-[P2](https://github.com/mztikk/jade_empire_save_editor/issues/8) and
-[P3](https://github.com/mztikk/jade_empire_save_editor/issues/9) issues. The P0
-work was merged in
-[#5](https://github.com/mztikk/jade_empire_save_editor/pull/5).
+before changing the shell, sidebar or a tab, and keep its status and screenshots
+current. P0 ([#5](https://github.com/mztikk/jade_empire_save_editor/pull/5)),
+P1 ([#7](https://github.com/mztikk/jade_empire_save_editor/issues/7)) and
+P2 ([#8](https://github.com/mztikk/jade_empire_save_editor/issues/8)) are
+complete, and the P3 work shipped in v0.3.0
+([PR #32](https://github.com/mztikk/jade_empire_save_editor/pull/32)) except for
+the blocked item-icon item
+([#9](https://github.com/mztikk/jade_empire_save_editor/issues/9)). The
+remaining open follow-ups are platform contrast
+([#33](https://github.com/mztikk/jade_empire_save_editor/issues/33)) and the
+upstream `Input` label association
+([#3](https://github.com/mztikk/jade_empire_save_editor/issues/3)).
 
 UI changes are verified with the headless suite and the snapshot example at
 900, 1280 and 1600 px; the windowed suite is never part of the routine

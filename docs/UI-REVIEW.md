@@ -1,14 +1,15 @@
-# Desktop UI review: status and remaining work
+# Desktop UI review: delivered work and open follow-ups
 
-**Reviewed:** 2026-11-05, P1 follow-up 2026-11-06, P2 polish 2026-11-06 · **Base:** `main` at `491163c`
+**Reviewed:** 2026-11-05, P1 follow-up 2026-11-06, P2 polish 2026-11-06, P3 delivery 2026-11-07 · **Base:** `main` at `491163c`
 **Scope:** the Freya 0.5 desktop UI in `crates/jadeforge-gui`, the session state it renders, and the real 89-savegame corpus.
-**Status:** P0 release blockers, the P1 follow-ups and the P2 polish are
-addressed. The P3 strategic work is implemented on `feat/ui-p3-strategic` and
-verified with the headless suite and snapshots; the windowed suite passed all
-six scenarios on KDE Plasma Wayland on 2026-11-07. The item-icon reference is
-blocked on engine BIF/KEY texture data (see
-[docs/ui-p3/icons.md](ui-p3/icons.md)). The remaining upstream blocker is the
-missing `Input` label association.
+**Status:** P0, P1 and P2 are complete, and the P3 work shipped in v0.3.0
+([PR #32](https://github.com/mztikk/jade_empire_save_editor/pull/32)) except for
+the blocked item-icon item
+([#9](https://github.com/mztikk/jade_empire_save_editor/issues/9)). The
+remaining open follow-ups are the platform contrast preference
+([#33](https://github.com/mztikk/jade_empire_save_editor/issues/33)) and the
+upstream `Input` label association
+([#3](https://github.com/mztikk/jade_empire_save_editor/issues/3)).
 
 ![JadeForge overview](screenshot.png)
 
@@ -16,7 +17,7 @@ missing `Input` label association.
 
 The review read the GUI, session and theme code, ran the headless UI suite and rendered all six tabs at 900×700, 1180×760, 1280×900 and 1600×900, plus expanded, empty, Gold-less and invalid-form states. The real window was inspected over AT-SPI, and the windowed suite was run with real KWin input, including a keyboard-navigation scenario.
 
-The strongest parts of the current UI are the coherent jade-on-charcoal palette, the save-safety pipeline (verification, atomic write, backups and close guard), the fixed preview square, and the layout-shift/geometry tests. The main remaining work is responsive composition, state handling around save/folder changes, discoverability of expansion/upgrades, and accessibility outside the app's control.
+The strongest parts of the current UI are the coherent jade-on-charcoal palette, the save-safety pipeline (verification, atomic write, backups and close guard), the fixed preview square, and the layout-shift/geometry tests. The review's main follow-up areas were responsive composition, state handling around save/folder changes, discoverability of expansion/upgrades, and accessibility outside the app's control; the P1-P3 work addressed the app-side items, and the upstream blockers remain.
 
 ## P0: addressed
 
@@ -32,13 +33,14 @@ Merged in [#5](https://github.com/mztikk/jade_empire_save_editor/pull/5) and the
 
 App-side accessibility is in place, but **full screen-reader operation is still blocked upstream**; see the open issues below.
 
-## Remaining work
+## Delivered work and open follow-ups
 
-The GitHub issues are the source of truth for checklists. This section is a short map.
+The GitHub issues remain the historical checklists. This section is a short map
+of what was delivered and what is still open.
 
 ### P1: [#7](https://github.com/mztikk/jade_empire_save_editor/issues/7)
 
-Addressed on the `fix/ui-p1-followups` branch:
+Delivered on `main` in [#24](https://github.com/mztikk/jade_empire_save_editor/pull/24):
 
 | Area | Result |
 | --- | --- |
@@ -67,7 +69,7 @@ Remaining verification caveat for #7:
 
 ### P2: [#8](https://github.com/mztikk/jade_empire_save_editor/issues/8)
 
-Addressed on `fix/ui-p2-polish`:
+Delivered on `main` in [#30](https://github.com/mztikk/jade_empire_save_editor/pull/30):
 
 | Area | Result |
 | --- | --- |
@@ -79,8 +81,10 @@ Addressed on `fix/ui-p2-polish`:
 
 ### P3: [#9](https://github.com/mztikk/jade_empire_save_editor/issues/9)
 
-Addressed on `feat/ui-p3-strategic`; each item has a design note with its test
-plan in [docs/ui-p3/](ui-p3/README.md). Item icons are the one blocked item.
+Delivered in [v0.3.0](https://github.com/mztikk/jade_empire_save_editor/releases/tag/v0.3.0)
+via [#32](https://github.com/mztikk/jade_empire_save_editor/pull/32); each item
+has a design note with its test plan in [docs/ui-p3/](ui-p3/README.md). Item
+icons are the one blocked item.
 
 | Area | Result |
 | --- | --- |
@@ -161,9 +165,11 @@ breakpoints and the a11y tree, so a screenshot alone is never the test.
 - P2 headless coverage: the empty carried-gems count, amulet summary, `STYLES TO LEARN`, friendly item categories and the category filter, `Level`/`Time played`/available wording, the optional-Gold explanation, field units, the save-filter character match, the About page and its settings, the About entry semantics and tab selection while the page is open, backup surfacing/copy/open actions, no-op Save/Revert, folder-picker cancellation and unreadable paths, loading skeletons and the manual-scan busy slot, full-width overview rows at 900/1280/1600, and the sidebar preview alignment. The snapshot example's filter targeting is covered by the tab-filter unit test and a headless Styles-filter test.
 - Windowed verification for P2: not run, because the user did not grant permission under AGENTS.md rule 13. The native close dialog's Save / Discard / Cancel labels, the actual folder-dialog cancellation backend and the Windows ComCtl32 v6 manifest therefore remain unverified in a real window; the choice mapping and the save-before-close decision table are unit tested, and the manifest is embedded by the existing Windows resource build.
 - Headless coverage of the P1 work: geometry at 1180x760, 900x700 and 1600x900; DPI geometry for 1366x768 at 125 %; scan-keeps-save; dirty content comparison; invalid-form save independence; first-invalid-field focus; focus restoration after removal; target sizes; keyboard scrolling focus; the 89-save render test.
-- `just live`: all six windowed scenarios passed on Wayland with the KWin input backend. The window opened at the configured size, save opening and tab switching, item filtering, keyboard save-list navigation and real frame presentation all worked; the captured frame was written to the ignored `target/live-ui/presented.png`. The two-pass `window_geometry_restarts` scenario opened at the seeded 1000x720, the plugin stored the real rectangle on close, and the relaunch restored 1000x720. Each scenario uses its own settings directory; the two geometry passes deliberately share one. The P3 branch rerun on 2026-11-07 passed the same six scenarios.
+- `just live`: all six windowed scenarios passed on Wayland with the KWin input backend. The window opened at the configured size, save opening and tab switching, item filtering, keyboard save-list navigation and real frame presentation all worked; the captured frame was written to the ignored `target/live-ui/presented.png`. The two-pass `window_geometry_restarts` scenario opened at the seeded 1000x720, the plugin stored the real rectangle on close, and the relaunch restored 1000x720. Each scenario uses its own settings directory; the two geometry passes deliberately share one. The P3 verification rerun on 2026-11-07 passed the same six scenarios.
 - Live screen-reader check: Orca 51.1 (Speech Dispatcher 0.12.1, espeak-ng 1.52) announced the polite scan statuses and the assertive folder error in a manual run. The AT-SPI event log showed the full text with politeness level 1 for the scan messages and level 2 for "The save folder … does not exist …". This closes the P1 status live-region check.
-- The P0 work is merged on `main`; the remaining P1 items and #8/#9 are tracked in the issues above.
+- P0, P1 and P2 are merged on `main`; the P3 work shipped in v0.3.0 (PR #32).
+  The only open P3 item is the blocked icon work (#9); #33 tracks platform
+  contrast and #3 the upstream `Input` label.
 
 ## Notes
 
