@@ -24,6 +24,10 @@ All notable changes are documented here. The format follows
   active row and scroll it into view; Enter activates items, styles, gems and
   saves; Space toggles a picker description. The carried-gem list is reachable
   and scrollable by keyboard.
+- The snapshot example now selects tabs by accessibility role and display order,
+  resolves picker filters by their translated placeholder, writes the documented
+  per-tab filenames and exits nonzero when a tab, filter or savegame is missing.
+  A headless regression test renders six distinct tab images and a picker query.
 
 ## [0.4.0] - 2026-11-07
 
