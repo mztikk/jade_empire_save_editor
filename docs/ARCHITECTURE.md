@@ -234,7 +234,12 @@ Freya 0.5 application with a small, explicit structure:
 
 The shell renders the session and forwards input. The savegame list has its own
 filter and sort (`session::visible_entries`, natural ordering so `Auto 2` comes
-before `Auto 10`). The folder dialog is the operating system's own, wrapped in
+before `Auto 10`). Its open action, shared collections and virtual row model are
+kept stable so an unrelated hover or page render does not rebuild the list. The
+derived character, form-error and picker data is shared by `Rc`; item and style
+searches run only while their tab is active, and the gems picker reuses one
+memoized row model. The thread-local `perf` counters back the headless render
+regressions. The folder dialog is the operating system's own, wrapped in
 `dialog` so the headless tests can answer it. The layout is fluid: the sidebar uses a
 percentage width with a minimum, tab labels never wrap, and wide rows wrap
 instead of clipping.

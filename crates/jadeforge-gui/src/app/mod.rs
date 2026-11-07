@@ -14,11 +14,11 @@ use freya::prelude::*;
 
 use crate::dialog::CloseChoice;
 use crate::form::Form;
-use crate::i18n::keys;
+use crate::i18n::{fill, keys, t};
 use crate::session::{CharacterForm, GameStatus, Preview, Session, default_save_dir};
 use crate::theme;
 use crate::views;
-use crate::widgets::Action;
+use crate::widgets::{Action, PickerRow};
 use crate::{APP_ID, ICON_PNG};
 
 mod navigation;
@@ -465,7 +465,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     // The snapshot is a dependency of the side effect below; it is memoised so
     // the 21 inputs are only re-read when one of them changes.
     let form_snapshot = {
-        let snapshot = use_memo(move || form.snapshot());
+        let snapshot = use_memo(move || Rc::new(form.snapshot()));
         snapshot.read().clone()
     };
     {
@@ -520,7 +520,14 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let entries = session.borrow().entries();
     let selected = session.borrow().selected();
     let message = session.borrow().message().clone();
-    let character = session.borrow().character().cloned();
+    let character = {
+        let session = session.clone();
+        let character = use_memo(move || {
+            let _ = *revision.read();
+            session.borrow().character().cloned().map(Rc::new)
+        });
+        character.read().clone()
+    };
     let items = session.borrow().items();
     let styles = session.borrow().styles();
     let henchmen = if active_tab == Tab::Companions {
@@ -543,7 +550,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         let errors = use_memo(move || {
             let _ = *revision.read();
             let form = form.read();
-            session.borrow().form_errors(&form)
+            Rc::new(session.borrow().form_errors(&form))
         });
         errors.read().clone()
     };
@@ -560,31 +567,45 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     // Filtering the whole item database and the learnable style list is
     // derived work: memoise it against the session revision, the filter and the
     // page limit instead of rebuilding 291 suggestions every frame.
-    let (item_results, item_matches) = {
+    let item_results = {
         let session = session.clone();
         let results = use_memo(move || {
             let _ = *revision.read();
+            if *tab.read() != Tab::Inventory {
+                return Rc::new((Vec::new(), 0));
+            }
             let query = item_query.read().clone();
             let category = item_category.read().clone();
-            session
-                .borrow()
-                .search_items_filtered(&query, category.as_deref(), usize::MAX)
+            crate::perf::record_item_search();
+            Rc::new(
+                session
+                    .borrow()
+                    .search_items_filtered(&query, category.as_deref(), usize::MAX),
+            )
         });
         results.read().clone()
     };
+    let item_matches = item_results.1;
     let item_categories = {
         let session = session.clone();
         let categories = use_memo(move || {
             let _ = *revision.read();
-            session.borrow().item_categories()
+            if *tab.read() != Tab::Inventory {
+                return Rc::new(Vec::new());
+            }
+            Rc::new(session.borrow().item_categories())
         });
         categories.read().clone()
     };
-    let (style_matches, total_missing) = {
+    let style_matches = {
         let session = session.clone();
         let results = use_memo(move || {
             let _ = *revision.read();
+            if *tab.read() != Tab::Styles {
+                return Rc::new((Vec::new(), 0));
+            }
             let query = style_query.read().trim().to_lowercase();
+            crate::perf::record_style_search();
             let missing = session.borrow().missing_styles();
             let total_missing = missing.len();
             let matching: Vec<_> = missing
@@ -595,9 +616,56 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         || style.label.to_lowercase().contains(&query)
                 })
                 .collect();
-            (matching, total_missing)
+            Rc::new((matching, total_missing))
         });
         results.read().clone()
+    };
+    let total_missing = style_matches.1;
+    let (gem_picker_rows, gem_database_empty) = {
+        let session = session.clone();
+        let ctx = ctx.clone();
+        let rows = use_memo(move || {
+            let _ = *revision.read();
+            if *tab.read() != Tab::Gems {
+                return Rc::new((Rc::new(Vec::new()), false));
+            }
+            let suggestions = session.borrow().available_gems();
+            let database_empty = suggestions.is_empty();
+            let needle = gem_query.read().trim().to_lowercase();
+            let rows: Vec<PickerRow> = suggestions
+                .into_iter()
+                .filter(|gem| needle.is_empty() || gem.name.to_lowercase().contains(&needle))
+                .map(|gem| {
+                    let item_id = gem.item_id;
+                    let effects = if gem.effects.is_empty() {
+                        t(keys::GEMS_NO_EFFECTS).to_owned()
+                    } else {
+                        gem.effects.join(" · ")
+                    };
+                    let action_ctx = ctx.clone();
+                    PickerRow {
+                        key: item_id,
+                        title: gem.name.clone(),
+                        subtitle: effects.clone(),
+                        accessible: fill(
+                            keys::GEMS_ACCESSIBLE,
+                            &[("name", &gem.name), ("effects", &effects)],
+                        ),
+                        action_label: fill(keys::GEMS_ADD_ACTION, &[("name", &gem.name)]),
+                        action_text: t(keys::GEMS_ADD).to_owned(),
+                        action: Action::new(move || {
+                            action_ctx.run(|session| session.add_gem(item_id));
+                        }),
+                        select: None,
+                        selected: false,
+                        description: None,
+                    }
+                })
+                .collect();
+            Rc::new((Rc::new(rows), database_empty))
+        });
+        let rows = rows.read().clone();
+        (rows.0.clone(), rows.1)
     };
 
     let sync: Rc<dyn Fn()> = {
@@ -721,7 +789,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             &ctx,
             &styles,
             style_query,
-            &style_matches,
+            &style_matches.0,
             game_ready,
             game_loading,
             names_ready,
@@ -736,7 +804,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             item_query,
             item_category,
             &item_categories,
-            &item_results,
+            &item_results.0,
             items_ready,
             game_loading,
             item_matches,
@@ -747,14 +815,14 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             item_filter_id,
         ),
         (Tab::Gems, _) => {
-            let available = session.borrow().available_gems();
             let amulet = session.borrow().amulet();
             let gems = session.borrow().gems();
             views::gems::view(
                 &ctx,
                 &gems,
                 gem_query,
-                &available,
+                &gem_picker_rows,
+                gem_database_empty,
                 amulet,
                 hovered,
                 gem_filter_id,
@@ -844,7 +912,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         selected,
         save_focus,
         preview_handle,
-        character.as_ref(),
+        character.as_deref(),
         scanning,
         &save_actions,
         save_query,

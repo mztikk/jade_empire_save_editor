@@ -889,10 +889,18 @@ const ESTIMATED_DESCRIPTION_WIDTH: f32 = 320.0;
 /// expanded description's height, so the selected row and its text stay
 /// visible without a nested scroll.
 pub fn picker_list(label: &'static str, rows: Vec<PickerRow>) -> Element {
+    picker_list_shared(label, Rc::new(rows))
+}
+
+/// A picker list that reuses an already shared row model.
+///
+/// The gems tab keeps its filtered rows in a memo, so passing the `Rc` here
+/// avoids rebuilding the model and lets the virtual list compare it by pointer.
+pub fn picker_list_shared(label: &'static str, rows: Rc<Vec<PickerRow>>) -> Element {
     let row_count = rows.len();
     let visible = row_count.clamp(1, PICKER_VISIBLE_ROWS);
     PickerList {
-        rows: Rc::new(rows),
+        rows,
         height: theme::layout::picker_row_height() * visible as f32,
         label,
         key: DiffKey::None,
@@ -917,6 +925,7 @@ impl KeyExt for PickerList {
 
 impl Component for PickerList {
     fn render(&self) -> impl IntoElement {
+        crate::perf::record_picker_render();
         let rows = self.rows.clone();
         let length = rows.len();
         let measured = use_state(HashMap::<u16, f32>::new);

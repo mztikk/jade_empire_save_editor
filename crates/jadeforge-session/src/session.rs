@@ -17,6 +17,27 @@ use jadeforge_i18n::{Key, keys};
 
 use crate::message;
 
+#[cfg(test)]
+thread_local! {
+    static BLOCK_SERIALIZATIONS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
+fn record_block_serialization() {
+    #[cfg(test)]
+    BLOCK_SERIALIZATIONS.with(|count| count.set(count.get() + 1));
+}
+
+#[cfg(test)]
+fn reset_block_serializations() {
+    BLOCK_SERIALIZATIONS.with(|count| count.set(0));
+}
+
+#[cfg(test)]
+fn block_serializations() -> usize {
+    BLOCK_SERIALIZATIONS.with(std::cell::Cell::get)
+}
+
 mod error;
 mod form;
 mod model;
@@ -1478,12 +1499,28 @@ impl Session {
         self.dirty = match (self.save.as_ref(), self.baseline.as_ref()) {
             (Some(save), Some(baseline)) => {
                 save.blocks().iter().enumerate().any(|(index, block)| {
-                    block.is_modified()
-                        && block.to_canonical_bytes().is_ok_and(|bytes| {
-                            baseline.get(index) != Some(&ContentFingerprint::of(&bytes))
-                        })
+                    if !block.is_modified() {
+                        return false;
+                    }
+                    record_block_serialization();
+                    block.to_canonical_bytes().is_ok_and(|bytes| {
+                        baseline.get(index) != Some(&ContentFingerprint::of(&bytes))
+                    })
                 })
             }
+            (Some(save), None) => save.is_modified(),
+            (None, _) => false,
+        };
+    }
+
+    /// Recomputes the dirty flag from already-serialized block states.
+    fn refresh_dirty_from_states(&mut self, states: &[Option<Vec<u8>>]) {
+        self.dirty = match (&self.save, &self.baseline) {
+            (Some(_), Some(baseline)) => states.iter().enumerate().any(|(index, state)| {
+                state.as_ref().is_some_and(|bytes| {
+                    baseline.get(index) != Some(&ContentFingerprint::of(bytes))
+                })
+            }),
             (Some(save), None) => save.is_modified(),
             (None, _) => false,
         };
@@ -1515,6 +1552,7 @@ impl Session {
         let mut states = Vec::with_capacity(save.blocks().len());
         for (index, block) in save.blocks().iter().enumerate() {
             if block.is_modified() {
+                record_block_serialization();
                 states.push(Some(save.block_canonical_payload(index).ok()?));
             } else {
                 states.push(None);
@@ -1563,6 +1601,7 @@ impl Session {
         if before.is_empty() {
             return;
         }
+        self.refresh_dirty_from_states(&states);
         let now = Instant::now();
         let merge = coalesce.as_deref().is_some_and(|key| {
             self.history_cursor == self.history.len()
@@ -2148,7 +2187,6 @@ impl Session {
             Ok(changes) if !changes.is_empty() => {
                 self.character = Some(character);
                 self.refresh_entry();
-                self.refresh_dirty();
                 let pending = pending_from_core(&changes);
                 let key = pending
                     .iter()
@@ -5338,6 +5376,17 @@ mod tests {
         assert_eq!(session.character.as_ref().expect("character").level, 9);
         assert!(session.redo());
         assert_eq!(session.character.as_ref().expect("character").level, 10);
+        assert!(session.is_dirty());
+    }
+
+    #[test]
+    fn a_character_keystroke_serializes_the_block_once() {
+        let (_directory, mut session) = fixture();
+        let mut form = form_for(&session);
+        form.level = "9".to_owned();
+        reset_block_serializations();
+        assert!(session.apply_form_silently(&form));
+        assert_eq!(block_serializations(), 1);
         assert!(session.is_dirty());
     }
 

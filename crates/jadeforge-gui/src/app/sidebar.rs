@@ -38,22 +38,24 @@ pub(super) fn sidebar(
     reset: Rc<dyn Fn()>,
     sync: Rc<dyn Fn()>,
 ) -> Element {
-    let open = OpenSave::new({
+    let open = {
         let ctx = ctx.clone();
         let reset = reset.clone();
         let sync = sync.clone();
-        move |index| {
-            let changed = ctx.run(|session| {
-                let before = session.selected();
-                session.open(index);
-                session.selected() != before
-            });
-            if changed {
-                reset();
-            }
-            sync();
-        }
-    });
+        use_hook(move || {
+            OpenSave::new(move |index| {
+                let changed = ctx.run(|session| {
+                    let before = session.selected();
+                    session.open(index);
+                    session.selected() != before
+                });
+                if changed {
+                    reset();
+                }
+                sync();
+            })
+        })
+    };
 
     let focus_index = *focus.read();
     let focused_index = if visible.contains(&focus_index) {
@@ -298,6 +300,7 @@ impl KeyExt for SaveList {
 
 impl Component for SaveList {
     fn render(&self) -> impl IntoElement {
+        crate::perf::record_save_list_render();
         let a11y_id = use_a11y();
         let focus_state = use_focus(a11y_id);
         let is_focused = focus_state() == Focus::Keyboard;

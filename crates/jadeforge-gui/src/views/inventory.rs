@@ -202,6 +202,7 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
         t(keys::INVENTORY_ALL_CHIP_DESCRIPTION).to_owned(),
         active.is_none(),
         Action::new(move || category.set(None)),
+        "all".to_owned(),
     ));
     for raw in sorted {
         let label = crate::session::item_category_label(raw);
@@ -213,6 +214,7 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
             fill(keys::INVENTORY_CATEGORY_FILTER, &[("label", &label)]),
             selected,
             Action::new(move || category.set(Some(value.clone()))),
+            format!("category:{raw}"),
         ));
     }
     rect()
@@ -226,7 +228,13 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
 }
 
 /// One category chip.
-fn category_chip(label: String, accessible: String, selected: bool, action: Action) -> Element {
+fn category_chip(
+    label: String,
+    accessible: String,
+    selected: bool,
+    action: Action,
+    key: String,
+) -> Element {
     AccessibleButton::new(
         accessible,
         action,
@@ -252,6 +260,7 @@ fn category_chip(label: String, accessible: String, selected: bool, action: Acti
     .role(AccessibilityRole::RadioButton)
     .selected(selected)
     .hover_background(theme::surface_hover())
+    .key(key)
     .into_element()
 }
 

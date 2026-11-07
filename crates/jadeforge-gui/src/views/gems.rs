@@ -3,14 +3,16 @@
 //! Editing is limited to moving a gem between the two lists and removing one:
 //! the gem struct itself is never rewritten, so its effects stay untouched.
 
+use std::rc::Rc;
+
 use freya::prelude::*;
 
 use crate::app::Ctx;
 use crate::i18n::{fill, keys, t};
 use crate::message::capitalize;
-use crate::session::{GemRow, GemSuggestion, Section};
+use crate::session::{GemRow, Section};
 use crate::theme;
-use crate::widgets::{self, Action};
+use crate::widgets::{self, Action, PickerRow};
 use jadeforge_core::{AmuletInfo, GemLocation};
 
 /// Renders the gems tab.
@@ -22,7 +24,8 @@ pub fn view(
     ctx: &Ctx,
     gems: &[GemRow],
     query: State<String>,
-    available: &[GemSuggestion],
+    available: &Rc<Vec<PickerRow>>,
+    database_empty: bool,
     amulet: Option<AmuletInfo>,
     hovered: State<Option<crate::app::HoverKey>>,
     filter_id: AccessibilityId,
@@ -87,36 +90,7 @@ pub fn view(
             .collect()
     };
 
-    let needle = query.read().trim().to_lowercase();
-    let matching: Vec<&GemSuggestion> = available
-        .iter()
-        .filter(|gem| needle.is_empty() || gem.name.to_lowercase().contains(&needle))
-        .collect();
-    let mut picker_rows = Vec::with_capacity(matching.len());
-    for gem in &matching {
-        let ctx = ctx.clone();
-        let item_id = gem.item_id;
-        let effects = if gem.effects.is_empty() {
-            t(keys::GEMS_NO_EFFECTS).to_owned()
-        } else {
-            gem.effects.join(" · ")
-        };
-        picker_rows.push(widgets::PickerRow {
-            key: item_id,
-            accessible: fill(
-                keys::GEMS_ACCESSIBLE,
-                &[("name", &gem.name), ("effects", &effects)],
-            ),
-            title: gem.name.clone(),
-            subtitle: effects.clone(),
-            action_label: fill(keys::GEMS_ADD_ACTION, &[("name", &gem.name)]),
-            action_text: t(keys::GEMS_ADD).to_owned(),
-            action: Action::new(move || ctx.run(|session| session.add_gem(item_id))),
-            select: None,
-            selected: false,
-            description: None,
-        });
-    }
+    let matching = available.len();
     let mut add_children = vec![widgets::filter_input(
         query,
         crate::app::GEM_FILTER_PLACEHOLDER,
@@ -131,7 +105,7 @@ pub fn view(
             .content(Content::Flex)
             .child(
                 widgets::a11y_text(widgets::plural(
-                    matching.len(),
+                    matching,
                     keys::COUNT_GEM_ONE,
                     keys::COUNT_GEM_OTHER,
                 ))
@@ -140,14 +114,17 @@ pub fn view(
             )
             .into_element(),
     );
-    if picker_rows.is_empty() {
-        add_children.push(widgets::hint(if available.is_empty() {
+    if available.is_empty() {
+        add_children.push(widgets::hint(if database_empty {
             t(keys::GEMS_MISSING_HINT)
         } else {
             t(keys::GEMS_NO_MATCH)
         }));
     } else {
-        add_children.push(widgets::picker_list(t(keys::GEMS_ADD_LIST), picker_rows));
+        add_children.push(widgets::picker_list_shared(
+            t(keys::GEMS_ADD_LIST),
+            available.clone(),
+        ));
     }
     let add_card = widgets::card(
         t(keys::GEMS_ADD_HEADING),
