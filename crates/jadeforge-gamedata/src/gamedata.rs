@@ -277,6 +277,8 @@ thread_local! {
     /// Game root installed by the test harness for the current thread.
     static TEST_ROOT: std::cell::RefCell<Option<PathBuf>> =
         const { std::cell::RefCell::new(None) };
+    /// Test harness switch that hides every installation for this thread.
+    static TEST_MISSING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Installs a game root for the current thread (tests only).
@@ -300,6 +302,24 @@ pub fn test_game_root() -> Option<PathBuf> {
     TEST_ROOT.with(|cell| cell.borrow().clone())
 }
 
+/// Forces discovery to report no game installation for the current thread.
+///
+/// The UI tests need the missing-game-data state even on a machine that sets
+/// `JADEFORGE_GAME_DIR`, where the environment override would otherwise supply
+/// an installation. Like [`set_test_game_root`], this never touches the process
+/// environment.
+#[doc(hidden)]
+pub fn set_test_game_data_missing(missing: bool) {
+    TEST_MISSING.with(|cell| cell.set(missing));
+}
+
+/// Returns whether the current thread forces a missing game installation.
+#[doc(hidden)]
+#[must_use]
+pub fn test_game_data_missing() -> bool {
+    TEST_MISSING.with(std::cell::Cell::get)
+}
+
 impl GameData {
     /// Tries to find the game installation that a savegame belongs to.
     ///
@@ -314,6 +334,9 @@ impl GameData {
     /// root that exists and cannot be read. `Ok(None)` means no installation
     /// was found; `Err` means one was found and is broken.
     pub fn discover_result(save_path: &Path) -> Result<Option<Self>> {
+        if test_game_data_missing() {
+            return Ok(None);
+        }
         let mut last_error = None;
         if let Some(root) = TEST_ROOT.with(|cell| cell.borrow().clone()) {
             return Self::open(root).map(Some);
@@ -965,6 +988,28 @@ mod tests {
         assert_eq!(game.root(), root.as_path());
         set_test_game_root(None);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn missing_game_data_override_wins_over_a_game_root() {
+        let root = std::env::temp_dir().join(format!(
+            "jadeforge-missing-root-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_nanos())
+        ));
+        std::fs::create_dir_all(&root).expect("create root");
+        set_test_game_root(Some(root.clone()));
+        set_test_game_data_missing(true);
+        let result = GameData::discover_result(Path::new("/definitely/not/a/save"));
+        set_test_game_data_missing(false);
+        set_test_game_root(None);
+        let _ = std::fs::remove_dir_all(root);
+        assert!(
+            matches!(result, Ok(None)),
+            "the missing override must report no installation"
+        );
     }
 
     #[test]
