@@ -144,10 +144,10 @@ Notes:
   view branches.
 - Headless accessibility assertions now cover static text values, headings,
   live status, tab/list roles, selected and expanded states, the single Tab
-  stop of the save list, and activation of a tab through a synthetic AccessKit
-  `Click` action (`TestingRunner::send_accessibility_action`). Remaining:
-  associate labels with `Input`s (still needs a Freya Input label API) and give
-  every repeated row action a contextual name.
+  stop of the save list, dynamic scan count/status/empty-state updates, focus
+  on a tab, and activation of a tab, save row, footer button and row action
+  through `TestingRunner::send_accessibility_action`. Remaining: associate
+  labels with `Input`s (still needs a Freya Input label API).
 
 ### 2. Small error paths
 

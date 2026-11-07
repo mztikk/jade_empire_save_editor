@@ -693,6 +693,98 @@ fn dynamic_label_text_reaches_the_accessibility_tree() {
 }
 
 #[test]
+fn dynamic_scan_labels_update_when_the_folder_changes() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 1000.0, 900.0);
+    assert!(
+        click_label_exact(&mut test, "Scan"),
+        "the Scan button is missing"
+    );
+    wait_for_text(&mut test, "Found 1 savegame");
+
+    let heading = find_label_exact(&test, "1 SAVEGAME").expect("the save count is missing");
+    assert_eq!(
+        a11y_value(&heading).as_deref(),
+        Some("1 SAVEGAME"),
+        "the save count has no accessible value"
+    );
+    let status =
+        find_node_with_text(&test, "Found 1 savegame").expect("the scan status is missing");
+    assert_eq!(a11y_role(&status), "Status");
+    assert!(
+        a11y_value(&status).is_some_and(|value| value.contains("Found 1 savegame")),
+        "the scan status has no accessible value"
+    );
+
+    std::fs::rename(
+        fixture.save_dir.join("Test Save"),
+        fixture.root.join("moved-test-save"),
+    )
+    .expect("move the savegame out of the scanned folder");
+    test.press_key(Key::Named(NamedKey::F5));
+    wait_for_text(&mut test, "No savegames found");
+    settle(&mut test);
+
+    let heading = find_label_exact(&test, "0 SAVEGAMES").expect("the zero count did not render");
+    assert_eq!(
+        a11y_value(&heading).as_deref(),
+        Some("0 SAVEGAMES"),
+        "the zero count did not reach the accessibility tree"
+    );
+    let status =
+        find_node_with_text(&test, "No savegames found").expect("the empty scan status is missing");
+    assert_eq!(a11y_role(&status), "Status");
+    assert!(
+        a11y_value(&status).is_some_and(|value| value.contains("No savegames found")),
+        "the empty scan status did not reach the accessibility tree"
+    );
+    assert!(
+        find_label_exact(&test, "No savegames in this folder.").is_some(),
+        "the empty list hint did not appear"
+    );
+    assert!(
+        find_label_exact(&test, "1 SAVEGAME").is_none(),
+        "the old save count is still exposed"
+    );
+    assert!(
+        find_label_text(&test, "Found 1 savegame").is_none(),
+        "the old scan status is still exposed"
+    );
+
+    std::fs::create_dir_all(fixture.save_dir.join("Broken Save")).expect("create broken save");
+    std::fs::write(
+        fixture.save_dir.join("Broken Save").join("save.sac"),
+        b"SAV V3.2 not really",
+    )
+    .expect("write broken save");
+    test.press_key(Key::Named(NamedKey::F5));
+    wait_for_text(&mut test, "none of them can be read");
+    settle(&mut test);
+
+    let heading =
+        find_label_exact(&test, "1 SAVEGAME").expect("the unreadable save count did not render");
+    assert_eq!(
+        a11y_value(&heading).as_deref(),
+        Some("1 SAVEGAME"),
+        "the unreadable save count did not reach the accessibility tree"
+    );
+    let status = find_node_with_text(&test, "none of them can be read")
+        .expect("the unreadable status is missing");
+    assert_eq!(a11y_role(&status), "Status");
+    assert!(
+        a11y_value(&status).is_some_and(|value| value.contains("none of them can be read")),
+        "the unreadable status did not reach the accessibility tree"
+    );
+    assert!(
+        find_label_exact(&test, "No savegames in this folder.").is_none(),
+        "the empty list hint is still exposed"
+    );
+}
+
+#[test]
 fn tabs_switch_the_content() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
@@ -1995,6 +2087,45 @@ fn a11y_live(node: &freya_testing::TestingNode) -> String {
     format!("{:?}", a11y_node(node).live())
 }
 
+/// Sends an AccessKit action to the node, as a screen reader would.
+fn send_a11y_action(
+    test: &mut TestingRunner,
+    node: &freya_testing::TestingNode,
+    action: accesskit::Action,
+) -> bool {
+    let target = node
+        .element()
+        .accessibility()
+        .a11y_id
+        .expect("the control has no accessibility id");
+    test.send_accessibility_action(accesskit::ActionRequest {
+        action,
+        target_tree: accesskit::TreeId::ROOT,
+        target_node: target,
+        data: None,
+    })
+}
+
+/// Whether a subtree contains a visible label with exactly this text.
+fn node_contains_text(node: &freya_testing::TestingNode, wanted: &str) -> bool {
+    if Label::try_downcast(&*node.element()).is_some_and(|label| label.text.as_ref() == wanted) {
+        return true;
+    }
+    node.children()
+        .iter()
+        .any(|child| node_contains_text(child, wanted))
+}
+
+/// Finds a button by the visible text inside it.
+///
+/// Freya's built-in `Button` takes its accessible name from the child label,
+/// so the label node, not the button node, carries the text in the test tree.
+fn find_button_with_text(test: &TestingRunner, wanted: &str) -> Option<freya_testing::TestingNode> {
+    test.find_many(|node, _| (a11y_role(&node) == "Button").then_some(node))
+        .into_iter()
+        .find(|node| node_contains_text(node, wanted))
+}
+
 #[test]
 fn static_text_is_exposed_to_assistive_technology() {
     let Some(fixture) = Fixture::create() else {
@@ -2077,6 +2208,142 @@ fn assistive_technology_can_activate_controls() {
     assert!(
         find_label_exact(&test, "Identity").is_some(),
         "a screen reader Click did not activate the Character tab"
+    );
+}
+
+#[test]
+fn assistive_technology_can_focus_a_tab() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1000.0);
+    let tab = test
+        .find(|node, _| {
+            (a11y_role(&node) == "Tab" && a11y_label(&node).as_deref() == Some("Character"))
+                .then_some(node)
+        })
+        .expect("Character tab");
+    let target = tab
+        .element()
+        .accessibility()
+        .a11y_id
+        .expect("the tab has no accessibility id");
+    assert!(
+        send_a11y_action(&mut test, &tab, accesskit::Action::Focus),
+        "the accessible tree does not know the Character tab"
+    );
+    assert_eq!(
+        test.sync_and_update().focus,
+        target,
+        "the Focus action did not move focus to the tab"
+    );
+}
+
+#[test]
+fn assistive_technology_can_open_a_savegame_row() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 1000.0, 900.0);
+    let row = test
+        .find(|node, _| {
+            (a11y_role(&node) == "ListBoxOption"
+                && a11y_label(&node).is_some_and(|label| label.contains("Test Save")))
+            .then_some(node)
+        })
+        .expect("the savegame row is missing");
+    assert!(
+        send_a11y_action(&mut test, &row, accesskit::Action::Click),
+        "the accessible tree does not know the savegame row"
+    );
+    wait_for_text(&mut test, "Opened Test Save");
+    assert!(
+        find_label_text(&test, "Opened Test Save").is_some(),
+        "a screen reader Click did not open the savegame"
+    );
+}
+
+#[test]
+fn assistive_technology_can_press_a_footer_button() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let Some(item) = session.items().first().cloned() else {
+        eprintln!("skipping: the fixture has no items");
+        return;
+    };
+    let stepper = if item.count < 255 { "+" } else { "−" };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(
+        click_label_exact(&mut test, "Inventory"),
+        "no Inventory tab"
+    );
+    assert!(click_label_exact(&mut test, stepper), "no count stepper");
+    as_many_updates(&mut test);
+    assert!(
+        find_label_text(&test, "unsaved changes").is_some(),
+        "the edit did not dirty the form"
+    );
+
+    let undo = find_button_with_text(&test, "Undo").expect("the footer Undo button is missing");
+    assert!(
+        send_a11y_action(&mut test, &undo, accesskit::Action::Click),
+        "the accessible tree does not know the Undo button"
+    );
+    wait_for_text(&mut test, "Undid");
+    assert!(
+        find_label_text(&test, "Undid").is_some(),
+        "a screen reader Click did not press the footer button"
+    );
+    assert!(
+        find_label_text(&test, "unsaved changes").is_none(),
+        "Undo did not clear the only edit"
+    );
+}
+
+#[test]
+fn assistive_technology_can_activate_a_row_action() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    if session.items().is_empty() {
+        eprintln!("skipping: the fixture has no items");
+        return;
+    }
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(
+        click_label_exact(&mut test, "Inventory"),
+        "no Inventory tab"
+    );
+    let remove = test
+        .find(|node, _| {
+            (a11y_role(&node) == "Button"
+                && a11y_label(&node).is_some_and(|label| label.starts_with("Remove ")))
+            .then_some(node)
+        })
+        .expect("the item Remove action is missing");
+
+    jadeforge_gui::dialog::set_next_confirm_for_tests(true);
+    assert!(
+        send_a11y_action(&mut test, &remove, accesskit::Action::Click),
+        "the accessible tree does not know the Remove action"
+    );
+    wait_for_text(&mut test, "Removed");
+    assert!(
+        find_label_text(&test, "Removed").is_some(),
+        "a screen reader Click did not activate the row action"
     );
 }
 
