@@ -179,6 +179,7 @@ pub fn view(
     )
 }
 
+#[allow(clippy::too_many_lines)] // one declarative row keeps the compact and full layouts together
 fn style_row(
     ctx: &Ctx,
     style: &StyleRow,
@@ -207,9 +208,90 @@ fn style_row(
         })
     };
 
-    let subtitle =
-        style_subtitle(style.style_id, &style.label).unwrap_or_else(|| saved_style_subtitle(style));
+    let compact = theme::text_scale() >= 1.5;
+    let subtitle = {
+        let base = style_subtitle(style.style_id, &style.label)
+            .unwrap_or_else(|| saved_style_subtitle(style));
+        if compact {
+            format!("{base} · {}", crate::session::style_kind_label(style.kind))
+        } else {
+            base
+        }
+    };
     let is_expanded = *expanded.read() == Some(style.style_id);
+    // At 200 percent the badge, level slot and Remove action leave too little
+    // width for the name. The badge is folded into the subtitle and the fixed
+    // level slot is dropped; the actions move below the name.
+    let level_label = {
+        let label = widgets::a11y_text(format!("{} {level}", t(keys::CHARACTER_LEVEL)))
+            .font_size(theme::font::label())
+            .color(theme::accent());
+        if compact {
+            label
+        } else {
+            label
+                .width(Size::px(theme::layout::level_width()))
+                .text_align(TextAlign::Center)
+        }
+    };
+
+    let name = widgets::expanding_name(
+        style.style_id,
+        style.name.clone(),
+        subtitle,
+        expanded,
+        theme::font::body(),
+    );
+    let remove_action = widgets::row_action(
+        fill(keys::STYLES_REMOVE_ACTION, &[("name", &style.name)]),
+        t(keys::GEMS_REMOVE),
+        remove,
+    );
+    let row = if compact {
+        rect()
+            .vertical()
+            .width(Size::fill())
+            .spacing(theme::space::xxs())
+            .child(
+                rect()
+                    .horizontal()
+                    .width(Size::fill())
+                    .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::sm()))
+                    .child(name),
+            )
+            .child(
+                rect()
+                    .horizontal()
+                    .width(Size::fill())
+                    .spacing(theme::space::md())
+                    .padding(Gaps::new(
+                        0.0,
+                        theme::space::sm(),
+                        theme::space::xs(),
+                        theme::space::sm(),
+                    ))
+                    .child(level_label)
+                    .child(rect().width(Size::flex(1.0)))
+                    .child(remove_action),
+            )
+            .into_element()
+    } else {
+        rect()
+            .horizontal()
+            .width(Size::fill())
+            .spacing(theme::space::lg())
+            .content(Content::Flex)
+            .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::sm()))
+            .child(name)
+            .child(widgets::badge(
+                crate::session::style_kind_label(style.kind),
+                theme::surface_active(),
+                style_badge_color(style.kind),
+            ))
+            .child(level_label)
+            .child(remove_action)
+            .into_element()
+    };
 
     rect()
         .vertical()
@@ -229,38 +311,7 @@ fn style_row(
                 *hovered.write() = None;
             }
         })
-        .child(
-            rect()
-                .horizontal()
-                .width(Size::fill())
-                .spacing(theme::space::lg())
-                .content(Content::Flex)
-                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::sm()))
-                .child(widgets::expanding_name(
-                    style.style_id,
-                    style.name.clone(),
-                    subtitle,
-                    expanded,
-                    theme::font::body(),
-                ))
-                .child(widgets::badge(
-                    crate::session::style_kind_label(style.kind),
-                    theme::surface_active(),
-                    style_badge_color(style.kind),
-                ))
-                .child(
-                    widgets::a11y_text(format!("{} {level}", t(keys::CHARACTER_LEVEL)))
-                        .font_size(theme::font::label())
-                        .width(Size::px(theme::layout::level_width()))
-                        .text_align(TextAlign::Center)
-                        .color(theme::accent()),
-                )
-                .child(widgets::row_action(
-                    fill(keys::STYLES_REMOVE_ACTION, &[("name", &style.name)]),
-                    t(keys::GEMS_REMOVE),
-                    remove,
-                )),
-        )
+        .child(row)
         .maybe_child(if is_expanded {
             Some(upgrade_panel(ctx, style, hovered, focused_orb, game_ready))
         } else {

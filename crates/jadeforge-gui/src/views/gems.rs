@@ -227,19 +227,20 @@ fn gem_matches_filter(gem: &GemRow, needle: &str) -> bool {
 
 /// Height of the carried gem viewport for a list of `rows` elements.
 ///
-/// Short lists shrink to their own height; longer ones stop at
-/// [`CARRIED_VISIBLE_ROWS`] and scroll inside the card.
-fn carried_list_height(rows: usize) -> f32 {
-    let visible = rows.clamp(1, CARRIED_VISIBLE_ROWS);
+/// Short lists shrink to their own height; longer ones stop at `visible_cap`
+/// rows and scroll inside the card.
+fn carried_list_height(rows: usize, visible_cap: usize) -> f32 {
+    let visible = rows.clamp(1, visible_cap.max(1));
     let gaps = visible.saturating_sub(1);
     theme::layout::gem_row_height() * visible as f32 + theme::space::xs() * gaps as f32
 }
 
-/// A scrollable carried-gem list capped at [`CARRIED_VISIBLE_ROWS`] rows.
+/// A scrollable carried-gem list capped at the visible rows for this window.
 fn carried_gem_list(label: &str, rows: Vec<Element>) -> Element {
+    let visible = widgets::viewport_rows(CARRIED_VISIBLE_ROWS, theme::layout::gem_row_height());
     rect()
         .width(Size::fill())
-        .height(Size::px(carried_list_height(rows.len())))
+        .height(Size::px(carried_list_height(rows.len(), visible)))
         .a11y_role(AccessibilityRole::ListBox)
         .a11y_alt(label.to_owned())
         .child(
@@ -348,15 +349,67 @@ fn gem_row(
             .into_element(),
         );
     }
+    let compact = theme::text_scale() >= 1.5;
+    let name_block = rect()
+        .vertical()
+        .spacing(theme::space::xxs())
+        .width(Size::flex(1.0))
+        .child(widgets::with_tooltip(
+            gem.name.clone(),
+            widgets::a11y_text(gem.name.clone())
+                .font_size(theme::font::body())
+                .max_lines(1)
+                .text_overflow(TextOverflow::Ellipsis)
+                .color(if gem.empty {
+                    theme::dim()
+                } else {
+                    theme::text()
+                }),
+        ))
+        .child(
+            widgets::a11y_text(if gem.effects.is_empty() {
+                t(keys::GEMS_NO_EFFECTS).to_owned()
+            } else {
+                gem.effects.join(" · ")
+            })
+            .font_size(theme::font::micro())
+            .max_lines(2)
+            .color(theme::dim()),
+        );
+    let row = if compact {
+        rect()
+            .vertical()
+            .width(Size::fill())
+            .spacing(theme::space::sm())
+            .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::lg()))
+            .child(rect().width(Size::fill()).child(name_block))
+            .child(
+                rect()
+                    .horizontal()
+                    .width(Size::fill())
+                    .spacing(theme::space::md())
+                    .content(Content::wrap_spacing(theme::space::md()))
+                    .children(actions),
+            )
+            .into_element()
+    } else {
+        rect()
+            .horizontal()
+            .width(Size::fill())
+            .spacing(theme::space::lg())
+            .content(Content::Flex)
+            .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::lg()))
+            .child(name_block)
+            .children(actions)
+            .into_element()
+    };
+
     rect()
-        .horizontal()
+        .vertical()
         .width(Size::fill())
         .key(index)
         .a11y_role(AccessibilityRole::Group)
         .a11y_alt(fill(keys::GEMS_ROW_ACCESSIBLE, &[("name", &gem.name)]))
-        .spacing(theme::space::lg())
-        .content(Content::Flex)
-        .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::lg()))
         .background(if is_hovered {
             theme::surface_hover()
         } else {
@@ -369,35 +422,7 @@ fn gem_row(
                 *hovered.write() = None;
             }
         })
-        .child(
-            rect()
-                .vertical()
-                .spacing(theme::space::xxs())
-                .width(Size::flex(1.0))
-                .child(widgets::with_tooltip(
-                    gem.name.clone(),
-                    widgets::a11y_text(gem.name.clone())
-                        .font_size(theme::font::body())
-                        .max_lines(1)
-                        .text_overflow(TextOverflow::Ellipsis)
-                        .color(if gem.empty {
-                            theme::dim()
-                        } else {
-                            theme::text()
-                        }),
-                ))
-                .child(
-                    widgets::a11y_text(if gem.effects.is_empty() {
-                        t(keys::GEMS_NO_EFFECTS).to_owned()
-                    } else {
-                        gem.effects.join(" · ")
-                    })
-                    .font_size(theme::font::micro())
-                    .max_lines(2)
-                    .color(theme::dim()),
-                ),
-        )
-        .children(actions)
+        .child(row)
         .into_element()
 }
 
@@ -407,11 +432,12 @@ mod tests {
 
     #[test]
     fn the_carried_list_stops_growing_at_the_viewport_cap() {
-        assert!(carried_list_height(2) > carried_list_height(1));
-        assert!(carried_list_height(7) > carried_list_height(6));
+        let cap = CARRIED_VISIBLE_ROWS;
+        assert!(carried_list_height(2, cap) > carried_list_height(1, cap));
+        assert!(carried_list_height(7, cap) > carried_list_height(6, cap));
         assert_eq!(
-            carried_list_height(CARRIED_VISIBLE_ROWS),
-            carried_list_height(40)
+            carried_list_height(CARRIED_VISIBLE_ROWS, cap),
+            carried_list_height(40, cap)
         );
     }
 

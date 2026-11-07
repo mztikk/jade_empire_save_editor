@@ -361,6 +361,70 @@ impl Component for ItemRowView {
             }
         };
         let is_expanded = *self.expanded.read() == Some(item.struct_index);
+        let compact = theme::text_scale() >= 1.5;
+        let name = widgets::expanding_name(
+            item.struct_index,
+            item.name.clone(),
+            item_subtitle(item.item_id, item.category.as_deref(), item.kind),
+            expanded,
+            theme::font::body(),
+        );
+        let controls: Vec<Element> = vec![
+            widgets::row_action(
+                fill(keys::INVENTORY_DECREASE, &[("name", &item.name)]),
+                "−",
+                minus,
+            )
+            .into_element(),
+            // Direct numeric editing: a 254-item stack is one edit, not 254
+            // stepper clicks. Enter applies the value.
+            Input::new(draft)
+                .width(Size::px(theme::layout::item_count_width()))
+                .text_align(TextAlign::Center)
+                .compact()
+                .on_submit(set_count)
+                .into_element(),
+            widgets::row_action(
+                fill(keys::INVENTORY_INCREASE, &[("name", &item.name)]),
+                "+",
+                plus,
+            )
+            .into_element(),
+            widgets::row_action(
+                fill(keys::GEMS_REMOVE_ACTION, &[("name", &item.name)]),
+                t(keys::GEMS_REMOVE),
+                remove,
+            )
+            .into_element(),
+        ];
+        let row = if compact {
+            rect()
+                .vertical()
+                .width(Size::fill())
+                .spacing(theme::space::sm())
+                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::sm()))
+                .child(rect().width(Size::fill()).child(name))
+                .child(
+                    rect()
+                        .horizontal()
+                        .width(Size::fill())
+                        .spacing(theme::space::sm())
+                        .content(Content::wrap_spacing(theme::space::sm()))
+                        .children(controls),
+                )
+                .into_element()
+        } else {
+            rect()
+                .horizontal()
+                .width(Size::fill())
+                .spacing(theme::space::sm())
+                .content(Content::Flex)
+                .cross_align(Alignment::Center)
+                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::sm()))
+                .child(name)
+                .children(controls)
+                .into_element()
+        };
 
         rect()
             .vertical()
@@ -380,46 +444,7 @@ impl Component for ItemRowView {
                     *hovered.write() = None;
                 }
             })
-            .child(
-                rect()
-                    .horizontal()
-                    .width(Size::fill())
-                    .spacing(theme::space::sm())
-                    .content(Content::Flex)
-                    .cross_align(Alignment::Center)
-                    .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::sm()))
-                    .child(widgets::expanding_name(
-                        item.struct_index,
-                        item.name.clone(),
-                        item_subtitle(item.item_id, item.category.as_deref(), item.kind),
-                        expanded,
-                        theme::font::body(),
-                    ))
-                    .child(widgets::row_action(
-                        fill(keys::INVENTORY_DECREASE, &[("name", &item.name)]),
-                        "−",
-                        minus,
-                    ))
-                    .child(
-                        // Direct numeric editing: a 254-item stack is one edit,
-                        // not 254 stepper clicks. Enter applies the value.
-                        Input::new(draft)
-                            .width(Size::px(theme::layout::item_count_width()))
-                            .text_align(TextAlign::Center)
-                            .compact()
-                            .on_submit(set_count),
-                    )
-                    .child(widgets::row_action(
-                        fill(keys::INVENTORY_INCREASE, &[("name", &item.name)]),
-                        "+",
-                        plus,
-                    ))
-                    .child(widgets::row_action(
-                        fill(keys::GEMS_REMOVE_ACTION, &[("name", &item.name)]),
-                        t(keys::GEMS_REMOVE),
-                        remove,
-                    )),
-            )
+            .child(row)
             .maybe_child(if is_expanded {
                 widgets::details(item.description.as_deref())
             } else {

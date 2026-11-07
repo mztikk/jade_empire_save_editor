@@ -275,6 +275,13 @@ fn launch(save_dir: PathBuf) -> TestingRunner {
     launch_sized(save_dir, 1000.0)
 }
 
+/// Common fullscreen-class logical window sizes: 1080p and 1440p ("2K").
+///
+/// The headless runner has no window decorations, so these are the complete
+/// logical viewport, exactly what a maximised or fullscreen window provides on
+/// the matching monitor.
+const FULLSCREEN_SIZES: [(f64, f64); 2] = [(1920.0, 1080.0), (2560.0, 1440.0)];
+
 /// Finds a paragraph whose text contains `needle` (input placeholders and
 /// values are paragraphs, not labels).
 fn find_paragraph(test: &TestingRunner, needle: &str) -> Option<freya_testing::TestingNode> {
@@ -323,6 +330,210 @@ fn every_tab_renders_at_narrow_and_wide_sizes() {
             );
         }
     }
+}
+
+#[test]
+fn fullscreen_layout_keeps_every_tab_and_the_footer_on_screen() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    for (width, height) in FULLSCREEN_SIZES {
+        let mut test = launch_unopened_at(fixture.save_dir.clone(), width, height);
+        assert!(click_text(&mut test, "Level "), "the savegame did not open");
+        settle(&mut test);
+
+        let rows = test
+            .find_many(|node, _| (a11y_role(&node) == "ListBoxOption").then_some(()))
+            .len();
+        assert!(rows > 0, "no save row is visible at {width}x{height}");
+
+        let list = test
+            .find(|node, _| (a11y_role(&node) == "ListBox").then_some(node))
+            .expect("the save list is missing");
+        let list_area = list.layout().area;
+        assert!(
+            list_area.size.width <= 296.5,
+            "the save list is {} px wide at {width}px, beyond the 320px sidebar cap",
+            list_area.size.width
+        );
+        assert!(
+            list_area.origin.x + list_area.size.width <= 320.5,
+            "the save list runs outside the 320px sidebar at {width}px"
+        );
+
+        let scroll = test
+            .find(|node, _| {
+                (a11y_role(&node) == "ScrollView" && a11y_focusable(&node)).then_some(node)
+            })
+            .expect("the editor scroll view is missing");
+        let scroll_height = scroll.layout().area.size.height;
+        assert!(
+            scroll_height >= height as f32 * 0.4,
+            "the editor viewport is only {scroll_height}px high at {width}x{height}"
+        );
+
+        // At these widths the six tabs fit on one row; a wrapped tab strip
+        // would steal vertical room from the editor for no reason.
+        assert_same_row(&test, "Overview", "Character");
+        assert_same_row(&test, "Character", "Companions");
+
+        for (tab, heading) in [
+            ("Overview", "At a glance"),
+            ("Character", "Identity"),
+            ("Styles", "Fighting styles"),
+            ("Inventory", "stacks"),
+            ("Gems", "Amulet"),
+            ("Companions", "known"),
+        ] {
+            assert!(click_label_exact(&mut test, tab), "tab {tab} is missing");
+            assert!(
+                find_label_text(&test, heading).is_some(),
+                "tab {tab} did not render its {heading:?} content at {width}x{height}"
+            );
+        }
+
+        let footer = label_area(&test, "Save to disk");
+        assert!(
+            footer.origin.y + footer.size.height <= height as f32 + 0.5,
+            "the footer is below the {height}px window"
+        );
+        assert!(
+            footer.origin.x + footer.size.width <= width as f32 + 0.5,
+            "the footer runs off the {width}px window"
+        );
+    }
+}
+
+#[test]
+fn fullscreen_layout_keeps_the_help_backup_and_review_pages_reachable() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    for (width, height) in FULLSCREEN_SIZES {
+        let mut test = launch_unopened_at(fixture.save_dir.clone(), width, height);
+        assert!(click_text(&mut test, "Level "), "the savegame did not open");
+        settle(&mut test);
+
+        assert!(click_label_exact(&mut test, "About"), "About is missing");
+        assert!(
+            find_label_text(&test, "About JadeForge").is_some(),
+            "the About page did not open at {width}x{height}"
+        );
+        assert!(click_label_exact(&mut test, "Close"), "Close is missing");
+        assert!(
+            find_label_text(&test, "At a glance").is_some(),
+            "closing About did not return to the active tab"
+        );
+
+        assert!(
+            click_label_exact(&mut test, "Backups"),
+            "Backups is missing"
+        );
+        assert!(
+            find_label_text(&test, "timestamps are UTC").is_some(),
+            "the Backups page did not open at {width}x{height}"
+        );
+        assert!(
+            click_text(&mut test, "Back to editing"),
+            "the Backups page has no way back"
+        );
+
+        assert!(
+            click_label_exact(&mut test, "Character"),
+            "the Character tab is missing"
+        );
+        assert!(
+            click_label_exact(&mut test, "+1 point"),
+            "the quick-add action is missing at {width}x{height}"
+        );
+        assert!(
+            click_text(&mut test, "Save to disk"),
+            "the footer Save action is missing"
+        );
+        assert!(
+            find_label_text(&test, "Review changes").is_some(),
+            "the Review page did not open at {width}x{height}"
+        );
+        assert!(
+            click_text(&mut test, "Back to editing"),
+            "the Review page has no way back"
+        );
+        assert!(
+            find_label_text(&test, "Identity").is_some(),
+            "closing Review did not return to the Character tab"
+        );
+    }
+}
+
+#[test]
+fn every_tab_renders_at_fullscreen_sizes_with_200_percent_text() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    write_ui_preferences(ThemeChoice::Dark, 200);
+    for (width, height) in FULLSCREEN_SIZES {
+        let mut test = launch_unopened_at(fixture.save_dir.clone(), width, height);
+        assert!(
+            (theme::current().text_scale - 2.0).abs() < f32::EPSILON,
+            "the 200 percent scale was not installed"
+        );
+        assert!(click_text(&mut test, "Level "), "the savegame did not open");
+        settle(&mut test);
+
+        let rows = test
+            .find_many(|node, _| (a11y_role(&node) == "ListBoxOption").then_some(()))
+            .len();
+        assert!(
+            rows > 0,
+            "no save row is visible at {width}x{height} with 200 percent text"
+        );
+
+        let list = test
+            .find(|node, _| (a11y_role(&node) == "ListBox").then_some(node))
+            .expect("the save list is missing");
+        let list_area = list.layout().area;
+        assert!(
+            list_area.size.width <= 296.5,
+            "the scaled save list is {} px wide at {width}px",
+            list_area.size.width
+        );
+
+        let scroll = test
+            .find(|node, _| {
+                (a11y_role(&node) == "ScrollView" && a11y_focusable(&node)).then_some(node)
+            })
+            .expect("the editor scroll view is missing");
+        let scroll_height = scroll.layout().area.size.height;
+        assert!(
+            scroll_height >= height as f32 * 0.3,
+            "the 200 percent editor viewport is only {scroll_height}px high at {width}x{height}"
+        );
+
+        for (tab, heading) in [
+            ("Overview", "At a glance"),
+            ("Character", "Identity"),
+            ("Styles", "Fighting styles"),
+            ("Inventory", "stacks"),
+            ("Gems", "Amulet"),
+            ("Companions", "known"),
+        ] {
+            assert!(click_label_exact(&mut test, tab), "tab {tab} is missing");
+            assert!(
+                find_label_text(&test, heading).is_some(),
+                "tab {tab} did not render its {heading:?} content at {width}x{height} with 200 percent text"
+            );
+        }
+
+        let footer = label_area(&test, "Save to disk");
+        assert!(
+            footer.origin.y + footer.size.height <= height as f32 + 0.5,
+            "the 200 percent footer is below the {height}px window"
+        );
+    }
+    write_ui_preferences(ThemeChoice::Dark, 100);
 }
 
 #[test]
@@ -2954,6 +3165,32 @@ fn a_save_without_gold_opens_without_an_invalid_form() {
     );
 }
 
+/// Number of save rows the virtual list actually built.
+fn save_row_count(test: &TestingRunner) -> usize {
+    test.find_many(|node, _| (a11y_role(&node) == "ListBoxOption").then_some(()))
+        .len()
+}
+
+/// Every text input must stay inside the window horizontally.
+///
+/// Page content scrolls vertically, so an input below the fold is fine. An
+/// input beyond the right edge is clipped and unreachable.
+fn assert_text_inputs_inside(test: &TestingRunner, width: f64) {
+    for node in test.find_many(|node, _| (a11y_role(&node) == "TextInput").then_some(node)) {
+        let area = node.layout().area;
+        assert!(
+            area.origin.x >= -0.5,
+            "an input starts at {} px, left of the window",
+            area.origin.x
+        );
+        assert!(
+            area.origin.x + area.size.width <= width as f32 + 0.5,
+            "an input ends at {} px, beyond the {width} px window",
+            area.origin.x + area.size.width
+        );
+    }
+}
+
 /// Layout area of an exact label, which is the visible anchor of its field.
 fn label_area(test: &TestingRunner, wanted: &str) -> freya::prelude::Area {
     find_label_exact(test, wanted)
@@ -2970,6 +3207,18 @@ fn assert_same_row(test: &TestingRunner, left: &str, right: &str) {
         "{left:?} and {right:?} are not on the same row ({} vs {})",
         left.origin.y,
         right.origin.y
+    );
+}
+
+/// Labels with different font sizes share a row when their centres align.
+fn assert_same_center_line(test: &TestingRunner, left: &str, right: &str) {
+    let left = label_area(test, left);
+    let right = label_area(test, right);
+    let left_center = left.origin.y + left.size.height / 2.0;
+    let right_center = right.origin.y + right.size.height / 2.0;
+    assert!(
+        (left_center - right_center).abs() < 1.0,
+        "{left:?} and {right:?} are not vertically centred on the same row ({left_center} vs {right_center})"
     );
 }
 
@@ -3020,14 +3269,173 @@ fn identity_fields_use_three_columns_at_the_default_and_minimum_size() {
 }
 
 #[test]
+fn text_scaling_keeps_navigation_and_fields_usable() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    for (width, height) in [(900.0, 700.0), (1180.0, 760.0), (1280.0, 800.0)] {
+        for scale in [100, 125, 150, 200] {
+            write_ui_preferences(ThemeChoice::Dark, scale);
+            let mut test = launch_unopened_at(fixture.save_dir.clone(), width, height);
+            assert!(
+                click_text(&mut test, "Level "),
+                "the savegame did not open at {width}x{height}, {scale} percent"
+            );
+            settle(&mut test);
+            assert!(
+                save_row_count(&test) > 0,
+                "no save row is visible at {width}x{height}, {scale} percent"
+            );
+            assert_same_center_line(&test, "JadeForge", "About");
+
+            let scroll = test
+                .find(|node, _| {
+                    (a11y_role(&node) == "ScrollView" && a11y_focusable(&node)).then_some(node)
+                })
+                .expect("the editor scroll view is missing");
+            let scroll_height = scroll.layout().area.size.height;
+            assert!(
+                scroll_height >= 100.0,
+                "the editor viewport is only {scroll_height} px at {width}x{height}, {scale} percent"
+            );
+
+            for (tab, heading) in [
+                ("Overview", "At a glance"),
+                ("Character", "Identity"),
+                ("Styles", "Fighting styles"),
+                ("Inventory", "stacks"),
+                ("Gems", "Amulet"),
+                ("Companions", "known"),
+            ] {
+                assert!(
+                    click_label_exact(&mut test, tab),
+                    "tab {tab} is missing at {width}x{height}, {scale} percent"
+                );
+                assert!(
+                    find_label_text(&test, heading).is_some(),
+                    "tab {tab} did not render at {width}x{height}, {scale} percent"
+                );
+                assert_text_inputs_inside(&test, width);
+            }
+
+            let footer = label_area(&test, "Save to disk");
+            assert!(
+                footer.origin.y + footer.size.height <= height as f32 + 0.5,
+                "the footer is below the {height} px window at {scale} percent"
+            );
+        }
+    }
+    write_ui_preferences(ThemeChoice::Dark, 100);
+}
+
+#[test]
+fn german_text_scaling_keeps_the_save_browser_usable() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    set_next_launch_locale(jadeforge_gui::Locale::German);
+    for scale in [125, 150, 200] {
+        write_ui_preferences(ThemeChoice::Dark, scale);
+        let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+        assert!(
+            click_text(&mut test, "Test Save"),
+            "the savegame did not open at 900x700, {scale} percent German"
+        );
+        settle(&mut test);
+        assert!(
+            save_row_count(&test) > 0,
+            "the German save browser has no row at 900x700, {scale} percent"
+        );
+        assert_same_center_line(
+            &test,
+            "JadeForge",
+            jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::SHELL_ABOUT),
+        );
+
+        let character = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::NAV_CHARACTER);
+        assert!(
+            click_label_exact(&mut test, character),
+            "the German Character tab is missing"
+        );
+        let identity = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::CHARACTER_IDENTITY);
+        assert!(
+            find_label_text(&test, identity).is_some(),
+            "the German Character content is missing at {scale} percent"
+        );
+        assert_text_inputs_inside(&test, 900.0);
+
+        let scroll = test
+            .find(|node, _| {
+                (a11y_role(&node) == "ScrollView" && a11y_focusable(&node)).then_some(node)
+            })
+            .expect("the editor scroll view is missing");
+        assert!(
+            scroll.layout().area.size.height >= 100.0,
+            "the German editor viewport is too small at {scale} percent"
+        );
+        let footer = label_area(
+            &test,
+            jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::SHELL_SAVE),
+        );
+        assert!(
+            footer.origin.y + footer.size.height <= 700.5,
+            "the German footer is below the window at {scale} percent"
+        );
+    }
+    write_ui_preferences(ThemeChoice::Dark, 100);
+    set_next_launch_locale(jadeforge_gui::Locale::English);
+}
+
+#[test]
+fn picker_viewport_stays_inside_a_short_window_at_200_percent() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data for the style picker");
+        return;
+    }
+    write_ui_preferences(ThemeChoice::Dark, 200);
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    assert!(click_text(&mut test, "Level "), "the savegame did not open");
+    assert!(click_label_exact(&mut test, "Styles"), "Styles is missing");
+    let label = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::STYLES_LEARN_LIST);
+    let picker = test
+        .find(|node, _| {
+            (a11y_role(&node) == "ListBox" && a11y_label(&node).as_deref() == Some(label))
+                .then_some(node)
+        })
+        .expect("the style picker is missing");
+    let height = picker.layout().area.size.height;
+    assert!(
+        height >= 100.0,
+        "the style picker is only {height} px high at 200 percent"
+    );
+    assert!(
+        height <= 280.5,
+        "the style picker is {height} px high at 200 percent on a 700 px window"
+    );
+    write_ui_preferences(ThemeChoice::Dark, 100);
+}
+
+#[test]
 fn overview_glance_rows_use_the_full_width_at_every_size() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
         return;
     };
 
-    for width in [900.0, 1280.0, 1600.0] {
-        let mut test = launch_unopened_at(fixture.save_dir.clone(), width, 900.0);
+    for (width, height) in [
+        (900.0, 900.0),
+        (1280.0, 900.0),
+        (1600.0, 900.0),
+        (1920.0, 1080.0),
+        (2560.0, 1440.0),
+    ] {
+        let mut test = launch_unopened_at(fixture.save_dir.clone(), width, height);
         assert!(click_text(&mut test, "Level "), "the savegame did not open");
         // Every glance value is one full-width row: no fixed 340 px cell can
         // leave half of a 900 px card empty while the next row starts below.
@@ -3053,14 +3461,22 @@ fn the_editor_column_stops_growing_on_wide_windows() {
         return;
     };
     // "Unspent attribute points" is the first cell of the second glance row, so
-    // its x is the left edge of the editor column.
-    let mut wide = launch_unopened_at(fixture.save_dir.clone(), 1600.0, 900.0);
-    assert!(click_text(&mut wide, "Level "), "the savegame did not open");
-    let capped = label_area(&wide, "Unspent attribute points").origin.x;
-    assert!(
-        (390.0..480.0).contains(&capped),
-        "the editor column starts at {capped}px on a 1600px window; it is not capped and centred"
-    );
+    // its x is the left edge of the editor column. The expected x follows from
+    // the 320px sidebar, the 18px page padding, the 1100px editor cap and the
+    // 18px card padding at each of these widths.
+    for (width, height, expected_min, expected_max) in [
+        (1600.0, 900.0, 390.0, 480.0),
+        (1920.0, 1080.0, 560.0, 620.0),
+        (2560.0, 1440.0, 880.0, 950.0),
+    ] {
+        let mut test = launch_unopened_at(fixture.save_dir.clone(), width, height);
+        assert!(click_text(&mut test, "Level "), "the savegame did not open");
+        let capped = label_area(&test, "Unspent attribute points").origin.x;
+        assert!(
+            (expected_min..expected_max).contains(&capped),
+            "the editor column starts at {capped}px on a {width}px window; it is not capped and centred"
+        );
+    }
 
     let mut narrow = launch_unopened_at(fixture.save_dir.clone(), 900.0, 900.0);
     assert!(

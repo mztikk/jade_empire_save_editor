@@ -56,21 +56,57 @@ pub fn card(title: impl Into<String>, hint: Option<String>, children: Vec<Elemen
         .into_element()
 }
 
-/// One row of form fields that share the width evenly.
+/// A responsive row of form fields.
 ///
-/// Fields grow to fill the row and never shrink below
-/// [`theme::layout::field_min_width()`]. Callers group the fields they want on a
-/// row, so a wide window shows a deliberate 3+3 identity grid instead of
-/// whichever fields happen to fit; a row that no longer fits keeps its fields
-/// inside the horizontal scroll area rather than moving one field to its own
-/// row.
+/// At 100 percent the fields share a 2, 3 or 4-column row exactly as before.
+/// At larger text scales the column count is reduced until every field keeps
+/// [`theme::layout::field_min_width()`]; fields wrap onto additional rows
+/// instead of clipping at the card edge. Column count is derived from the
+/// window and the same sidebar, page and card caps the shell uses.
 pub fn field_grid(children: Vec<Element>) -> Element {
+    let window_width = Platform::get().current_window().root_size.peek().width;
+    let sidebar = (window_width * theme::layout::sidebar_percent() / 100.0).clamp(
+        theme::layout::sidebar_min_width(),
+        theme::layout::sidebar_max_width(),
+    );
+    let page_width = (window_width - sidebar - 2.0 * theme::space::card())
+        .min(theme::layout::editor_max_width());
+    let grid_width = (page_width - 2.0 * theme::space::card()).max(0.0);
+    let minimum = theme::layout::field_min_width();
+    let gap = theme::space::field();
+    let mut columns = children.len().max(1);
+    while columns > 1
+        && minimum * columns as f32 + gap * (columns.saturating_sub(1)) as f32 > grid_width
+    {
+        columns -= 1;
+    }
+
+    let row = |children: Vec<Element>| {
+        rect()
+            .horizontal()
+            .width(Size::fill())
+            .spacing(theme::space::field())
+            .content(Content::Flex)
+            .children(children)
+            .into_element()
+    };
+    let mut rows: Vec<Element> = Vec::new();
+    let mut current: Vec<Element> = Vec::with_capacity(columns);
+    for child in children {
+        current.push(child);
+        if current.len() == columns {
+            rows.push(row(std::mem::take(&mut current)));
+        }
+    }
+    if !current.is_empty() {
+        rows.push(row(current));
+    }
+
     rect()
-        .horizontal()
+        .vertical()
         .width(Size::fill())
         .spacing(theme::space::field())
-        .content(Content::Flex)
-        .children(children)
+        .children(rows)
         .into_element()
 }
 
@@ -429,6 +465,8 @@ where
             .child(
                 a11y_text(self.subtitle.clone())
                     .font_size(theme::font::micro())
+                    .max_lines(1)
+                    .text_overflow(TextOverflow::Ellipsis)
                     .color(theme::dim()),
             )
     }
@@ -869,10 +907,26 @@ struct PickerData {
 
 /// Number of picker rows a virtualized list shows before it scrolls.
 ///
-/// The list is inside the page's own scroll view; seven rows keep the picker
-/// reachable while the wheel still scrolls the page when the pointer is
-/// outside the list.
+/// The list is inside the page's own scroll view; up to seven rows keep the
+/// picker reachable while the wheel still scrolls the page when the pointer is
+/// outside the list. Short windows and large text scales show fewer rows so a
+/// scaled picker cannot grow taller than the window.
 const PICKER_VISIBLE_ROWS: usize = 7;
+
+/// Fraction of the window height a scrollable list viewport may occupy.
+const LIST_VIEWPORT_FRACTION: f32 = 0.35;
+
+/// Rows a scrollable list can show before it would exceed the window.
+///
+/// The cap keeps a seven-row picker from becoming 588 px at 150 percent and
+/// 784 px at 200 percent. It uses the window height rather than the page
+/// viewport because the pickers live inside the page's own scroll view.
+#[must_use]
+pub fn viewport_rows(default: usize, row_height: f32) -> usize {
+    let window_height = Platform::get().current_window().root_size.peek().height;
+    let by_height = (window_height * LIST_VIEWPORT_FRACTION / row_height).floor() as usize;
+    by_height.clamp(2, default.max(2))
+}
 
 /// Conservative wrap width used before a description has been measured.
 ///
@@ -898,7 +952,10 @@ pub fn picker_list(label: &'static str, rows: Vec<PickerRow>) -> Element {
 /// avoids rebuilding the model and lets the virtual list compare it by pointer.
 pub fn picker_list_shared(label: &'static str, rows: Rc<Vec<PickerRow>>) -> Element {
     let row_count = rows.len();
-    let visible = row_count.clamp(1, PICKER_VISIBLE_ROWS);
+    let visible = row_count.clamp(
+        1,
+        viewport_rows(PICKER_VISIBLE_ROWS, theme::layout::picker_row_height()),
+    );
     PickerList {
         rows,
         height: theme::layout::picker_row_height() * visible as f32,
