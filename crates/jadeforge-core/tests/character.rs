@@ -8,7 +8,8 @@ mod common;
 
 use jadeforge_core::save::POLYPLAYER_BLOCK;
 use jadeforge_core::{
-    Character, Error, Gff, MAX_ALIGNMENT, MAX_STAT, MIN_ALIGNMENT, SaveGame, Value, locate_player,
+    Character, Error, Gff, MAX_ALIGNMENT, MAX_APPEARANCE, MAX_ATTRIBUTE_POINTS, MAX_CHAPTER,
+    MAX_EXPERIENCE, MAX_LEVEL, MAX_STAT, MIN_ALIGNMENT, SaveGame, Value, locate_player,
 };
 
 fn changed(base: &Character, apply: impl FnOnce(&mut Character)) -> Character {
@@ -21,16 +22,31 @@ fn value(gff: &Gff, path: &str) -> Value {
     gff.get(path).expect("field").value.clone()
 }
 
-#[test]
-fn rejects_every_out_of_range_character_field() {
+fn assert_rejected(cases: &[(&str, Character)]) {
     let mut save = common::save(&common::character_gff());
-    let base = save.character().expect("character");
+    for (field, character) in cases {
+        let error = save
+            .apply_character(character)
+            .expect_err("out of range character was accepted");
+        assert!(error.to_string().contains(field), "{field}: {error}");
+        assert!(!save.is_modified(), "{field} dirtied the savegame");
+    }
+}
 
-    let cases = [
+#[test]
+fn rejects_out_of_range_progression_values() {
+    let base = common::character();
+    assert_rejected(&[
         ("level", changed(&base, |character| character.level = 0)),
         (
+            "level",
+            changed(&base, |character| character.level = MAX_LEVEL + 1),
+        ),
+        (
             "experience",
-            changed(&base, |character| character.experience = MAX_STAT + 1),
+            changed(&base, |character| {
+                character.experience = MAX_EXPERIENCE + 1;
+            }),
         ),
         (
             "gold",
@@ -39,9 +55,42 @@ fn rejects_every_out_of_range_character_field() {
         (
             "attribute points",
             changed(&base, |character| {
-                character.attribute_points = MAX_STAT + 1;
+                character.attribute_points = MAX_ATTRIBUTE_POINTS + 1;
             }),
         ),
+        (
+            "alignment",
+            changed(&base, |character| character.alignment = MAX_ALIGNMENT + 1),
+        ),
+        (
+            "alignment",
+            changed(&base, |character| character.alignment = MIN_ALIGNMENT - 1),
+        ),
+        (
+            "appearance",
+            changed(&base, |character| character.appearance = -1),
+        ),
+        (
+            "appearance",
+            changed(&base, |character| {
+                character.appearance = MAX_APPEARANCE + 1;
+            }),
+        ),
+        (
+            "chapter",
+            changed(&base, |character| character.chapter = MAX_CHAPTER + 1),
+        ),
+        (
+            "kills",
+            changed(&base, |character| character.kills = MAX_STAT + 1),
+        ),
+    ]);
+}
+
+#[test]
+fn rejects_out_of_range_vitals_and_skills() {
+    let base = common::character();
+    assert_rejected(&[
         ("body", changed(&base, |character| character.body = 1001)),
         ("mind", changed(&base, |character| character.mind = 1001)),
         (
@@ -87,59 +136,37 @@ fn rejects_every_out_of_range_character_field() {
             changed(&base, |character| character.intimidate = 1_000_001),
         ),
         (
-            "alignment",
-            changed(&base, |character| character.alignment = MAX_ALIGNMENT + 1),
-        ),
-        (
-            "alignment",
-            changed(&base, |character| character.alignment = MIN_ALIGNMENT - 1),
-        ),
-        (
-            "appearance",
-            changed(&base, |character| character.appearance = -1),
-        ),
-        (
-            "chapter",
-            changed(&base, |character| character.chapter = 101),
-        ),
-        (
-            "kills",
-            changed(&base, |character| character.kills = MAX_STAT + 1),
-        ),
-        (
             "name",
             changed(&base, |character| character.name = "Bad\nName".to_owned()),
         ),
-    ];
-
-    for (field, character) in cases {
-        let error = save
-            .apply_character(&character)
-            .expect_err("out of range character was accepted");
-        assert!(error.to_string().contains(field), "{field}: {error}");
-        assert!(!save.is_modified(), "{field} dirtied the savegame");
-    }
+    ]);
 }
 
 #[test]
-fn accepts_the_largest_signed_stat_values() {
+fn accepts_the_largest_values_the_game_tables_can_load() {
     let mut save = common::save(&common::character_gff());
     let mut character = save.character().expect("character");
-    character.experience = MAX_STAT;
+    character.level = MAX_LEVEL;
+    character.experience = MAX_EXPERIENCE;
     character.gold = Some(MAX_STAT);
-    character.attribute_points = MAX_STAT;
+    character.attribute_points = MAX_ATTRIBUTE_POINTS;
     character.kills = MAX_STAT;
     character.alignment = MAX_ALIGNMENT;
+    character.appearance = MAX_APPEARANCE;
+    character.chapter = MAX_CHAPTER;
 
     save.apply_character(&character)
-        .expect("the engine's signed maximum must be writable");
+        .expect("the highest loadable values must be writable");
 
     let reread = save.character().expect("character");
-    assert_eq!(reread.experience, MAX_STAT);
+    assert_eq!(reread.level, MAX_LEVEL);
+    assert_eq!(reread.experience, MAX_EXPERIENCE);
     assert_eq!(reread.gold, Some(MAX_STAT));
-    assert_eq!(reread.attribute_points, MAX_STAT);
+    assert_eq!(reread.attribute_points, MAX_ATTRIBUTE_POINTS);
     assert_eq!(reread.kills, MAX_STAT);
     assert_eq!(reread.alignment, MAX_ALIGNMENT);
+    assert_eq!(reread.appearance, MAX_APPEARANCE);
+    assert_eq!(reread.chapter, MAX_CHAPTER);
 }
 
 #[test]
@@ -170,6 +197,48 @@ fn an_unsigned_stat_value_still_opens_for_repair() {
     save.apply_character(&character)
         .expect("repair the gold value");
     assert_eq!(save.character().expect("character").gold, Some(MAX_STAT));
+}
+
+#[test]
+fn values_that_crash_the_game_still_open_for_repair() {
+    let mut gff = common::character_gff();
+    common::replace_field(&mut gff, "PlayerCreature.Level", Value::Byte(255));
+    common::replace_field(&mut gff, "PlayerCreature.CurrentXP", Value::DWord(u32::MAX));
+    common::replace_field(
+        &mut gff,
+        "PlayerCreature.Stats.UnassignedPts",
+        Value::DWord(u32::MAX),
+    );
+    common::replace_field(
+        &mut gff,
+        "PlayerCreature.Stats.Appearance",
+        Value::Int(1_000_000),
+    );
+
+    let mut save = common::save(&gff);
+    let mut character = save.character().expect("character");
+    assert_eq!(character.level, 255);
+    assert_eq!(character.experience, u32::MAX);
+    assert_eq!(character.attribute_points, u32::MAX);
+    assert_eq!(character.appearance, 1_000_000);
+    assert!(
+        save.apply_character(&character).is_err(),
+        "the crashing values must not be written back unchanged"
+    );
+    assert!(!save.is_modified());
+
+    character.level = MAX_LEVEL;
+    character.experience = MAX_EXPERIENCE;
+    character.attribute_points = MAX_ATTRIBUTE_POINTS;
+    character.appearance = MAX_APPEARANCE;
+    save.apply_character(&character)
+        .expect("repair every crashing value");
+
+    let reread = save.character().expect("character");
+    assert_eq!(reread.level, MAX_LEVEL);
+    assert_eq!(reread.experience, MAX_EXPERIENCE);
+    assert_eq!(reread.attribute_points, MAX_ATTRIBUTE_POINTS);
+    assert_eq!(reread.appearance, MAX_APPEARANCE);
 }
 
 #[test]

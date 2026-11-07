@@ -2,7 +2,10 @@
 
 use std::fmt;
 
-use jadeforge_core::{Character, DEFAULT_ALIGNMENT, MAX_ALIGNMENT, MAX_STAT, MIN_ALIGNMENT};
+use jadeforge_core::{
+    Character, DEFAULT_ALIGNMENT, MAX_ALIGNMENT, MAX_APPEARANCE, MAX_ATTRIBUTE_POINTS, MAX_CHAPTER,
+    MAX_EXPERIENCE, MAX_LEVEL, MAX_STAT, MIN_ALIGNMENT,
+};
 use jadeforge_i18n::{Key, keys};
 
 use crate::message;
@@ -132,7 +135,7 @@ impl CharacterForm {
             Ok(()) => character.name.clone_from(&self.name),
             Err(message) => errors.push(FieldError::new(CharacterField::Name, message)),
         }
-        match parse_checked(CharacterField::Level, &self.level, 1, 255) {
+        match parse_checked(CharacterField::Level, &self.level, 1, u64::from(MAX_LEVEL)) {
             Ok(value) => character.level = value as u8,
             Err(error) => errors.push(error),
         }
@@ -140,7 +143,7 @@ impl CharacterForm {
             CharacterField::Experience,
             &self.experience,
             0,
-            u64::from(MAX_STAT),
+            u64::from(MAX_EXPERIENCE),
         ) {
             Ok(value) => character.experience = value as u32,
             Err(error) => errors.push(error),
@@ -162,7 +165,7 @@ impl CharacterForm {
             CharacterField::AttributePoints,
             &self.attribute_points,
             0,
-            u64::from(MAX_STAT),
+            u64::from(MAX_ATTRIBUTE_POINTS),
         ) {
             Ok(value) => character.attribute_points = value as u32,
             Err(error) => errors.push(error),
@@ -234,11 +237,21 @@ impl CharacterForm {
             Ok(value) => character.alignment = value,
             Err(error) => errors.push(error),
         }
-        match parse_signed_checked(CharacterField::Appearance, &self.appearance, 0, 1_000_000) {
+        match parse_signed_checked(
+            CharacterField::Appearance,
+            &self.appearance,
+            0,
+            i64::from(MAX_APPEARANCE),
+        ) {
             Ok(value) => character.appearance = value,
             Err(error) => errors.push(error),
         }
-        match parse_checked(CharacterField::Chapter, &self.chapter, 0, 100) {
+        match parse_checked(
+            CharacterField::Chapter,
+            &self.chapter,
+            0,
+            u64::from(MAX_CHAPTER),
+        ) {
             Ok(value) => character.chapter = value as u32,
             Err(error) => errors.push(error),
         }
@@ -450,10 +463,13 @@ impl CharacterField {
     #[must_use]
     pub fn range_text(self) -> String {
         match self {
-            Self::Name | Self::Level | Self::Appearance | Self::Chapter => {
-                message::tr(self.range()).to_owned()
-            }
+            Self::Name => message::tr(self.range()).to_owned(),
+            Self::Level => message::fill(self.range(), &[("max", &MAX_LEVEL.to_string())]),
             Self::Gold => message::fill(self.range(), &[("max", &MAX_STAT.to_string())]),
+            Self::Appearance => {
+                message::fill(self.range(), &[("max", &MAX_APPEARANCE.to_string())])
+            }
+            Self::Chapter => message::fill(self.range(), &[("max", &MAX_CHAPTER.to_string())]),
             Self::Alignment => message::fill(
                 self.range(),
                 &[
@@ -462,8 +478,10 @@ impl CharacterField {
                     ("default", &DEFAULT_ALIGNMENT.to_string()),
                 ],
             ),
-            Self::Experience => compose_range(0, u64::from(MAX_STAT), keys::FIELD_UNIT_XP),
-            Self::AttributePoints => compose_range(0, u64::from(MAX_STAT), keys::FIELD_UNIT_POINTS),
+            Self::Experience => compose_range(0, u64::from(MAX_EXPERIENCE), keys::FIELD_UNIT_XP),
+            Self::AttributePoints => {
+                compose_range(0, u64::from(MAX_ATTRIBUTE_POINTS), keys::FIELD_UNIT_POINTS)
+            }
             Self::Kills => compose_range(0, u64::from(MAX_STAT), keys::COUNT_KILL_OTHER),
             Self::Health => compose_range(0, 1_000_000, keys::FIELD_UNIT_HEALTHPOINTS),
             Self::Chi => compose_range(0, 1_000_000, keys::FIELD_UNIT_CHIPOINTS),

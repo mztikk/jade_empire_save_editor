@@ -149,10 +149,28 @@ shipped `nwscript.nss`), even when the savegame tags the field as `dword`. A
 `-1`.
 
 JadeForge keeps the raw value readable so an already broken save can be
-repaired, but it only writes `0..=2147483647` for gold, experience, unspent
-attribute points and the kill counter. The same signed limit applies to every
-other integer statistic the game reads as `int`; narrower editor caps (health,
-attributes, skills) are safe subsets of it.
+repaired, but it only writes `0..=2147483647` for gold and the kill counter.
+Experience, level, unspent points, appearance and chapter have narrower bounds
+taken from the game's own tables; see
+[Game-table limits](#game-table-limits).
+
+### Game-table limits
+
+Several editable values are indexes into shipped tables, or counters derived
+from them. The engine does not validate them on load: an out-of-range
+appearance or level crashes the game, and a huge unspent-point balance crashes
+the level-up screen. JadeForge therefore enforces:
+
+| field | range | source |
+| --- | --- | --- |
+| `PlayerCreature.Level` | 1..=32 | `levelxp.2da` in `data/miniglobal-a.rim` has thresholds for levels `0..=32` |
+| `PlayerCreature.CurrentXP` | 0..=1,000,000 | the last `levelxp.2da` threshold, for level 32 |
+| `PlayerCreature.Stats.UnassignedPts` | 0..=97 | four points at character creation plus three for each of the 31 level-ups |
+| `PlayerCreature.Stats.Appearance` | 0..=236 | the shipped `appearance.2da` has 237 rows (`0..=236`) |
+| `Campaign.Chapter` | 0..=8 | internal chapters 1..8; `0` is the absent-field default |
+
+Values above these limits still open for repair, but the editor refuses to
+write them back.
 
 ### Localized strings (type 12 and 18)
 
@@ -217,9 +235,11 @@ exposes:
 | `Campaign.Chapter` | dword | story chapter |
 | `Campaign.TimePlayed` | dword64 | play time in microseconds |
 
-The type column is the storage type. Gold, experience and unspent points are
-stored as `dword` but read as signed 32 bit `int` by the engine; see
-[Integer signedness](#integer-signedness).
+The type column is the storage type. Gold and the kill counter are read as
+signed 32 bit `int` by the engine; level, experience, appearance and chapter
+are also bounded by the game's tables. See
+[Integer signedness](#integer-signedness) and
+[Game-table limits](#game-table-limits).
 
 The inventory holds structs with `Count` (byte), `ItemId` (word) and `Type`
 (byte). Fields are sparse: the game only writes what differs from its defaults,
@@ -509,6 +529,10 @@ Community documentation, used for the semantics of the game data tables:
   for style upgrade effects and costs.
 * [2DA Files](https://jadeempire-modding.fandom.com/wiki/2DA_Files): index of
   the tables.
+* [Appearance.2da](https://jadeempire-modding.fandom.com/wiki/Appearance.2da):
+  the 237-row table that `Stats.Appearance` indexes.
+* [Chapters](https://jadeempire-modding.fandom.com/wiki/Chapters): the internal
+  chapter numbering (1..8).
 * [Nwscript.nss](https://jadeempire-modding.fandom.com/wiki/Nwscript.nss): the
   script API signatures that show gold, experience and the other statistics are
   signed 32 bit `int` values.

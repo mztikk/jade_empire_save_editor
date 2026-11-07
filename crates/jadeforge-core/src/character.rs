@@ -22,14 +22,40 @@ pub const MIN_ALIGNMENT: i32 = 0;
 /// Highest alignment the game's meter can show.
 pub const MAX_ALIGNMENT: i32 = 255;
 
-/// Highest value the engine can represent for a 32 bit character statistic.
+/// Highest value the engine can represent for a signed 32 bit statistic.
 ///
-/// Gold, experience and unspent points are tagged `dword` in the savegame,
-/// while the kill counter is an `int`. Jade Empire's script API reads all of
-/// them as signed `int` (`GetGold`, `GetXP`, `GetAbilityScore`, ...), so a
-/// stored `4294967295` reaches the game as `-1` and the editor stops at
-/// `i32::MAX`.
+/// Gold is stored as a `dword` and the kill counter as an `int`, but Jade
+/// Empire's script API reads both as signed `int` (`GetGold`, ...), so a stored
+/// `4294967295` reaches the game as `-1`. The editor uses this limit for the
+/// fields that have no narrower bound in the game's own tables.
 pub const MAX_STAT: u32 = 2_147_483_647;
+
+/// Highest level in the shipped `levelxp.2da`.
+///
+/// The table holds thresholds for levels `0..=32`; level 32 needs 1,000,000 XP.
+/// Higher levels have no table row, so the engine cannot level them.
+pub const MAX_LEVEL: u8 = 32;
+
+/// Experience needed to reach [`MAX_LEVEL`] in the shipped `levelxp.2da`.
+pub const MAX_EXPERIENCE: u32 = 1_000_000;
+
+/// Highest unspent attribute point balance a retail character can reach.
+///
+/// Character creation grants four points and every one of the 31 level-ups to
+/// the level 32 cap grants three, for `4 + 3 * 31 = 97`.
+pub const MAX_ATTRIBUTE_POINTS: u32 = 97;
+
+/// Highest row of the shipped `appearance.2da` (rows `0..=236`).
+///
+/// `Stats.Appearance` is a row index, not a free number. The engine crashes
+/// when the row does not exist.
+pub const MAX_APPEARANCE: i32 = 236;
+
+/// Highest internal story chapter in the shipped campaign.
+///
+/// The field is absent until the campaign starts, so `0` stays valid as the
+/// "no chapter recorded" default.
+pub const MAX_CHAPTER: u32 = 8;
 
 /// A single field that was changed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,19 +73,15 @@ pub struct Change {
 pub struct Character {
     /// First name shown in the game.
     pub name: String,
-    /// Level, stored as a byte.
+    /// Level, stored as a byte and bounded by [`MAX_LEVEL`].
     pub level: u8,
-    /// Current experience points.
-    ///
-    /// The engine reads the stored dword as a signed `int`; see [`MAX_STAT`].
+    /// Current experience points, bounded by [`MAX_EXPERIENCE`].
     pub experience: u32,
     /// Gold, when the savegame has a gold field.
     ///
     /// The engine reads the stored dword as a signed `int`; see [`MAX_STAT`].
     pub gold: Option<u32>,
-    /// Unspent attribute points.
-    ///
-    /// The engine reads the stored dword as a signed `int`; see [`MAX_STAT`].
+    /// Unspent attribute points, bounded by [`MAX_ATTRIBUTE_POINTS`].
     pub attribute_points: u32,
     /// Current health.
     pub health: f32,
@@ -87,9 +109,9 @@ pub struct Character {
     pub intimidate: i32,
     /// Alignment, from the Closed Fist (`0`) to the Open Palm (`255`).
     pub alignment: i32,
-    /// Appearance index.
+    /// Appearance index into `appearance.2da`, bounded by [`MAX_APPEARANCE`].
     pub appearance: i32,
-    /// Story chapter.
+    /// Story chapter, bounded by [`MAX_CHAPTER`].
     pub chapter: u32,
     /// Total play time in microseconds.
     pub time_played: u64,
@@ -343,12 +365,12 @@ impl Character {
         let mut changes = Vec::new();
         let path = |suffix: &str| format!("{prefix}{suffix}");
 
-        check_unsigned("level", u64::from(self.level), 1, 255)?;
+        check_unsigned("level", u64::from(self.level), 1, u64::from(MAX_LEVEL))?;
         check_unsigned(
             "experience",
             u64::from(self.experience),
             0,
-            u64::from(MAX_STAT),
+            u64::from(MAX_EXPERIENCE),
         )?;
         if let Some(gold) = self.gold {
             check_unsigned("gold", u64::from(gold), 0, u64::from(MAX_STAT))?;
@@ -357,7 +379,7 @@ impl Character {
             "attribute points",
             u64::from(self.attribute_points),
             0,
-            u64::from(MAX_STAT),
+            u64::from(MAX_ATTRIBUTE_POINTS),
         )?;
         check_unsigned("body", u64::from(self.body), 0, 1000)?;
         check_unsigned("mind", u64::from(self.mind), 0, 1000)?;
@@ -387,9 +409,19 @@ impl Character {
             i64::from(MIN_ALIGNMENT),
             i64::from(MAX_ALIGNMENT),
         )?;
-        check_signed("appearance", i64::from(self.appearance), 0, 1_000_000)?;
+        check_signed(
+            "appearance",
+            i64::from(self.appearance),
+            0,
+            i64::from(MAX_APPEARANCE),
+        )?;
         check_unsigned("kills", u64::from(self.kills), 0, u64::from(MAX_STAT))?;
-        check_unsigned("chapter", u64::from(self.chapter), 0, 100)?;
+        check_unsigned(
+            "chapter",
+            u64::from(self.chapter),
+            0,
+            u64::from(MAX_CHAPTER),
+        )?;
         check_name(&self.name)?;
 
         set_text(gff, &path("FirstName"), &self.name, &mut changes)?;
@@ -515,7 +547,12 @@ impl Character {
     /// Writes the values that live in the campaign block.
     pub fn write_global(&self, gff: &mut Gff) -> Result<Vec<Change>> {
         let mut changes = Vec::new();
-        check_unsigned("chapter", u64::from(self.chapter), 0, 100)?;
+        check_unsigned(
+            "chapter",
+            u64::from(self.chapter),
+            0,
+            u64::from(MAX_CHAPTER),
+        )?;
         set_number(
             gff,
             "Campaign.Chapter",

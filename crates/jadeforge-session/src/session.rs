@@ -3444,7 +3444,10 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use jadeforge_core::{Gff, MAX_ALIGNMENT, MAX_STAT, Value};
+    use jadeforge_core::{
+        Gff, MAX_ALIGNMENT, MAX_APPEARANCE, MAX_ATTRIBUTE_POINTS, MAX_CHAPTER, MAX_EXPERIENCE,
+        MAX_LEVEL, MAX_STAT, Value,
+    };
 
     struct TempDir {
         path: PathBuf,
@@ -4913,7 +4916,7 @@ mod tests {
         assert_eq!(errors.len(), 2, "{errors:?}");
         assert_eq!(errors[0].field, CharacterField::Level);
         assert!(
-            errors[0].message.contains("1 to 255"),
+            errors[0].message.contains("1 to 32"),
             "{}",
             errors[0].message
         );
@@ -4921,13 +4924,13 @@ mod tests {
         assert!(form.to_character(&character).is_err());
         assert_eq!(
             CharacterField::Level.range_text(),
-            "1 to 255 (level)",
+            "1 to 32 (level)",
             "the UI shows the range and the unit next to the field"
         );
         assert_eq!(
             CharacterField::Experience.range_text(),
-            "0 to 2147483647 XP",
-            "the engine reads experience as a signed 32 bit int"
+            "0 to 1000000 XP",
+            "the shipped levelxp.2da stops at level 32 and 1,000,000 XP"
         );
         assert_eq!(
             CharacterField::Gold.range_text(),
@@ -4935,9 +4938,24 @@ mod tests {
             "the gold hint must not offer values the engine wraps negative"
         );
         assert_eq!(
+            CharacterField::AttributePoints.range_text(),
+            "0 to 97 points",
+            "the game grants at most 97 unspent attribute points"
+        );
+        assert_eq!(
             CharacterField::Alignment.range_text(),
             "0 to 255, 128 balanced",
             "the alignment meter only has 256 values"
+        );
+        assert_eq!(
+            CharacterField::Appearance.range_text(),
+            "0 to 236 (index)",
+            "appearance is a row of the shipped appearance.2da"
+        );
+        assert_eq!(
+            CharacterField::Chapter.range_text(),
+            "0 to 8 (chapter)",
+            "the shipped campaign has eight internal chapters"
         );
         assert!(
             CharacterField::HealthMax
@@ -4946,30 +4964,31 @@ mod tests {
             "health ranges must carry their unit: {}",
             CharacterField::HealthMax.range_text()
         );
-        assert!(
-            CharacterField::Chapter.range_text().contains("chapter"),
-            "the chapter range must say what the number counts: {}",
-            CharacterField::Chapter.range_text()
-        );
     }
 
     #[test]
-    fn form_rejects_values_above_the_engine_range() {
+    fn form_rejects_values_above_the_game_range() {
         let character = character();
         let mut form = CharacterForm::from_character(&character);
-        form.experience = (u64::from(MAX_STAT) + 1).to_string();
+        form.level = (u16::from(MAX_LEVEL) + 1).to_string();
+        form.experience = (u64::from(MAX_EXPERIENCE) + 1).to_string();
         form.gold = (u64::from(MAX_STAT) + 1).to_string();
-        form.attribute_points = (u64::from(MAX_STAT) + 1).to_string();
+        form.attribute_points = (u64::from(MAX_ATTRIBUTE_POINTS) + 1).to_string();
         form.kills = (u64::from(MAX_STAT) + 1).to_string();
         form.alignment = (MAX_ALIGNMENT + 1).to_string();
+        form.appearance = (MAX_APPEARANCE + 1).to_string();
+        form.chapter = (u64::from(MAX_CHAPTER) + 1).to_string();
 
         let errors = form.validate_against(&character);
-        assert_eq!(errors.len(), 5, "{errors:?}");
+        assert_eq!(errors.len(), 8, "{errors:?}");
         for (field, error) in [
+            CharacterField::Level,
             CharacterField::Experience,
             CharacterField::Gold,
             CharacterField::AttributePoints,
             CharacterField::Alignment,
+            CharacterField::Appearance,
+            CharacterField::Chapter,
             CharacterField::Kills,
         ]
         .into_iter()
@@ -4980,21 +4999,27 @@ mod tests {
     }
 
     #[test]
-    fn form_accepts_the_engine_stat_maxima() {
+    fn form_accepts_the_game_table_maxima() {
         let character = character();
         let mut form = CharacterForm::from_character(&character);
-        form.experience = MAX_STAT.to_string();
+        form.level = MAX_LEVEL.to_string();
+        form.experience = MAX_EXPERIENCE.to_string();
         form.gold = MAX_STAT.to_string();
-        form.attribute_points = MAX_STAT.to_string();
+        form.attribute_points = MAX_ATTRIBUTE_POINTS.to_string();
         form.kills = MAX_STAT.to_string();
         form.alignment = MAX_ALIGNMENT.to_string();
+        form.appearance = MAX_APPEARANCE.to_string();
+        form.chapter = MAX_CHAPTER.to_string();
 
         let parsed = form.to_character(&character).expect("parse maxima");
-        assert_eq!(parsed.experience, MAX_STAT);
+        assert_eq!(parsed.level, MAX_LEVEL);
+        assert_eq!(parsed.experience, MAX_EXPERIENCE);
         assert_eq!(parsed.gold, Some(MAX_STAT));
-        assert_eq!(parsed.attribute_points, MAX_STAT);
+        assert_eq!(parsed.attribute_points, MAX_ATTRIBUTE_POINTS);
         assert_eq!(parsed.kills, MAX_STAT);
         assert_eq!(parsed.alignment, MAX_ALIGNMENT);
+        assert_eq!(parsed.appearance, MAX_APPEARANCE);
+        assert_eq!(parsed.chapter, MAX_CHAPTER);
     }
 
     #[test]
@@ -5146,11 +5171,11 @@ mod tests {
     fn consecutive_character_typing_is_one_undo_step() {
         let (_directory, mut session) = fixture();
         let mut form = form_for(&session);
-        form.level = "8".to_owned();
+        form.level = "3".to_owned();
         assert!(session.apply_form_silently(&form));
-        form.level = "80".to_owned();
+        form.level = "32".to_owned();
         assert!(session.apply_form_silently(&form));
-        assert_eq!(session.character.as_ref().expect("character").level, 80);
+        assert_eq!(session.character.as_ref().expect("character").level, 32);
         assert!(session.undo());
         assert_eq!(
             session.character.as_ref().expect("character").level,

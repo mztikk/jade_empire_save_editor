@@ -453,11 +453,11 @@ complete = true
 "field.intimidate" = "Einschüchterung"
 "field.alignment" = "GESINNUNG"
 "field.name.range" = "höchstens 64 Zeichen"
-"field.level.range" = "1 bis 255 (Stufe)"
+"field.level.range" = "1 bis {max} (Stufe)"
 "field.gold.range" = "leer oder 0 bis {max} Gold"
-"field.appearance.range" = "0 bis 1000000 (Index)"
+"field.appearance.range" = "0 bis {max} (Index)"
 "field.alignment.range" = "{min} bis {max}, {default} ist ausgeglichen"
-"field.chapter.range" = "0 bis 100 (Kapitel)"
+"field.chapter.range" = "0 bis {max} (Kapitel)"
 
 # Path actions
 "path.settings" = "Einstellungen"

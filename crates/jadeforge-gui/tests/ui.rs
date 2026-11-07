@@ -1928,7 +1928,7 @@ fn the_character_form_shows_units_and_the_optional_gold_field() {
         "the health fields do not show their unit"
     );
     assert!(
-        find_label_text(&test, "1 to 255 (level)").is_some(),
+        find_label_text(&test, "1 to 32 (level)").is_some(),
         "the level field does not combine its range and unit"
     );
     assert!(
@@ -1936,11 +1936,11 @@ fn the_character_form_shows_units_and_the_optional_gold_field() {
         "the maximum health field does not show its unit"
     );
     assert!(
-        find_label_text(&test, "0 to 100 (chapter)").is_some(),
+        find_label_text(&test, "0 to 8 (chapter)").is_some(),
         "the chapter field does not say what it counts"
     );
     assert!(
-        find_label_text(&test, "0 to 1000000 (index)").is_some(),
+        find_label_text(&test, "0 to 236 (index)").is_some(),
         "the appearance field does not say it is an index"
     );
     assert!(
@@ -4709,7 +4709,7 @@ fn an_external_change_is_explained_and_can_be_reloaded() {
     // level differs.
     let mut save = jadeforge_core::SaveGame::open(&path).expect("open savegame");
     let mut character = save.character().expect("character");
-    character.level = 42;
+    character.level = 12;
     save.apply_character(&character).expect("apply level");
     save.save(jadeforge_core::SaveOptions { backup: false })
         .expect("external save");
@@ -4728,7 +4728,7 @@ fn an_external_change_is_explained_and_can_be_reloaded() {
         "the external change was not reloaded"
     );
     assert!(
-        find_label_text(&test, "Level 42").is_some(),
+        find_label_text(&test, "Level 12").is_some(),
         "the reload did not show the file on disk"
     );
 }
