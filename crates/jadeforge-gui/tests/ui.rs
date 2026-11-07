@@ -3625,6 +3625,10 @@ fn repeated_row_actions_have_contextual_names() {
     if let Some(item) = session.items().first().cloned() {
         assert!(click_label_exact(&mut test, "Inventory"));
         assert!(
+            has_name(&test, &format!("{} item", item.name)),
+            "the item row has no contextual accessible name"
+        );
+        assert!(
             has_name(&test, &format!("Remove {}", item.name)),
             "the item remove action has no contextual name"
         );
@@ -3655,6 +3659,10 @@ fn repeated_row_actions_have_contextual_names() {
     assert!(click_label_exact(&mut test, "Companions"));
     if let Some(companion) = session.henchmen().first() {
         assert!(
+            has_name(&test, &format!("{} companion", companion.name)),
+            "the companion row has no contextual accessible name"
+        );
+        assert!(
             has_name(&test, &format!("Increase {} level", companion.name)),
             "the companion level action has no contextual name"
         );
@@ -3684,7 +3692,7 @@ fn a_stack_size_can_be_typed_directly() {
     assert!(click_label_exact(&mut test, "Inventory"));
     let paragraph = test.find(|node, _| {
         (a11y_role(&node) == "TextInput"
-            && a11y_value(&node).as_deref() == Some(&item.count.to_string()))
+            && a11y_label(&node).as_deref() == Some(&item.count.to_string()))
         .then_some(node)
     });
     let Some(paragraph) = paragraph else {
@@ -3692,13 +3700,135 @@ fn a_stack_size_can_be_typed_directly() {
         return;
     };
     click_node(&mut test, &paragraph);
-    test.write_text("\u{8}".repeat(3));
+    click_ctrl(&mut test, Key::Character("a".to_owned()));
     test.write_text(wanted.to_string());
+    test.sync_and_update();
+    assert!(
+        test.find(|node, _| {
+            (a11y_role(&node) == "TextInput"
+                && a11y_label(&node).as_deref() == Some(&wanted.to_string()))
+            .then_some(node)
+        })
+        .is_some(),
+        "the typed stack size disappeared after an intervening render"
+    );
+    let row_label = format!("{} item", item.name);
+    let row = test
+        .find(|node, _| (a11y_label(&node).as_deref() == Some(row_label.as_str())).then_some(node))
+        .expect("the item row group");
+    let area = row.layout().area;
+    test.move_cursor(CursorPoint::new(
+        f64::from(area.origin.x) + f64::from(area.size.width) / 2.0,
+        f64::from(area.origin.y) + f64::from(area.size.height) / 2.0,
+    ));
+    test.sync_and_update();
+    assert!(
+        test.find(|node, _| {
+            (a11y_role(&node) == "TextInput"
+                && a11y_label(&node).as_deref() == Some(&wanted.to_string()))
+            .then_some(node)
+        })
+        .is_some(),
+        "hovering the row dropped the typed stack size"
+    );
     test.press_key(Key::Named(NamedKey::Enter));
     test.sync_and_update();
     assert!(
         find_label_text(&test, "in the stack").is_some(),
         "typing a stack size did not report a change"
+    );
+}
+
+#[test]
+fn leaving_a_typed_stack_size_does_not_apply_it() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let Some(item) = session.items().first().cloned() else {
+        eprintln!("skipping: the fixture has no items");
+        return;
+    };
+    let wanted = if item.count < 255 {
+        item.count + 1
+    } else {
+        item.count - 1
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(click_label_exact(&mut test, "Inventory"));
+    let paragraph = test.find(|node, _| {
+        (a11y_role(&node) == "TextInput"
+            && a11y_label(&node).as_deref() == Some(&item.count.to_string()))
+        .then_some(node)
+    });
+    let Some(paragraph) = paragraph else {
+        eprintln!("skipping: could not locate the count input");
+        return;
+    };
+    click_node(&mut test, &paragraph);
+    click_ctrl(&mut test, Key::Character("a".to_owned()));
+    test.write_text(wanted.to_string());
+    test.sync_and_update();
+    test.press_key(Key::Named(NamedKey::Escape));
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "in the stack").is_none(),
+        "leaving the field applied the typed stack size"
+    );
+}
+
+#[test]
+fn a_stepper_change_refreshes_the_stack_draft() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let Some(item) = session.items().first().cloned() else {
+        eprintln!("skipping: the fixture has no items");
+        return;
+    };
+    let (action, expected) = if item.count < 255 {
+        ("Increase", item.count + 1)
+    } else {
+        ("Decrease", item.count - 1)
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(click_text(&mut test, "Inventory"), "no inventory tab");
+    test.sync_and_update();
+    let paragraph = test.find(|node, _| {
+        (a11y_role(&node) == "TextInput"
+            && a11y_label(&node).as_deref() == Some(&item.count.to_string()))
+        .then_some(node)
+    });
+    let Some(_paragraph) = paragraph else {
+        eprintln!("skipping: could not locate the count input");
+        return;
+    };
+    assert!(click_a11y_label(
+        &mut test,
+        &format!("{action} {} stack", item.name)
+    ));
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "in the stack").is_some(),
+        "the stepper did not change the stack"
+    );
+    assert!(
+        test.find(|node, _| {
+            (a11y_role(&node) == "TextInput"
+                && a11y_label(&node).as_deref() == Some(&expected.to_string()))
+            .then_some(node)
+        })
+        .is_some(),
+        "the stack input did not follow the committed count"
     );
 }
 
@@ -3720,7 +3850,7 @@ fn a_companion_level_can_be_typed_directly() {
     assert!(click_label_exact(&mut test, "Companions"));
     let paragraph = test.find(|node, _| {
         (a11y_role(&node) == "TextInput"
-            && a11y_value(&node).as_deref() == Some(&companion.level.to_string()))
+            && a11y_label(&node).as_deref() == Some(&companion.level.to_string()))
         .then_some(node)
     });
     let Some(paragraph) = paragraph else {
@@ -3728,8 +3858,17 @@ fn a_companion_level_can_be_typed_directly() {
         return;
     };
     click_node(&mut test, &paragraph);
-    test.write_text("\u{8}".repeat(2));
+    click_ctrl(&mut test, Key::Character("a".to_owned()));
     test.write_text("42");
+    test.sync_and_update();
+    assert!(
+        test.find(|node, _| {
+            (a11y_role(&node) == "TextInput" && a11y_label(&node).as_deref() == Some("42"))
+                .then_some(node)
+        })
+        .is_some(),
+        "the typed companion level disappeared after an intervening render"
+    );
     test.press_key(Key::Named(NamedKey::Enter));
     test.sync_and_update();
     assert!(
