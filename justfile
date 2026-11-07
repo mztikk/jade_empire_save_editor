@@ -239,6 +239,11 @@ publish-linux:
     ci/check-glibc.sh "$out/jadeforge-generic-cpu" 2.35; \
     echo "publish-linux: staged $out/"
 
+# Build both local release builds concurrently; see docs/RELEASING.md.
+[linux]
+[parallel]
+publish-all: publish-linux publish-windows-cross
+
 # Collect the licence inventory for the staged distribution.
 notices:
     ci/notices.sh dist
