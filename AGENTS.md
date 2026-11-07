@@ -100,6 +100,23 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
   keep the substitution exact, review `git diff`, and run the formatters and
   tests.
 
+## Shell tooling
+
+- When a shell command is the right tool, prefer the modern CLI over its classic
+  predecessor: `rg` (not `grep`), `fd` (not `find`), `bat` (not `cat`/`head`),
+  `eza` (not `ls`), `sd` (not `sed -i`), `jq`/`yq` for JSON/YAML, `delta` for
+  diffs on a terminal, `dust` (not `du`), `hyperfine` for timings and `tokei`
+  for line counts. The harness `grep`, `glob` and `read` tools stay the default
+  for structured inspection; the shell replacements are for pipelines,
+  aggregations and bulk work those tools do not express.
+- Availability is per host, not a build requirement. Use the modern tool when
+  it is on `PATH` and fall back to the POSIX equivalent when it is not. Never
+  install or bootstrap one (rule 12).
+- `sd` is a shell editor: the "Editing files" rule still applies, so use it only
+  for genuinely bulk, exact substitutions and review `git diff` afterwards.
+- Leave the global git configuration alone. Pipe `git diff`/`git show` through
+  `delta` instead of setting `core.pager`.
+
 ## Scratch files
 
 - Keep anything that must outlive a single command in `scratch/` at the
