@@ -352,7 +352,7 @@ where
         .with_size(fallback.width, fallback.height)
         .with_min_size(fallback.min_width, fallback.min_height)
         .with_window_attributes(move |attributes, event_loop| {
-            let work = crate::geometry::monitor_work_area(event_loop);
+            let work = crate::geometry::monitor_work_area(event_loop, stored);
             let fitted = crate::geometry::fit_window(preferred, stored, work, minimum);
             let attributes = attributes
                 .with_inner_size(LogicalSize::new(fitted.width, fitted.height))

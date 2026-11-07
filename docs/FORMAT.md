@@ -320,7 +320,9 @@ A style struct stores `StyleLevel` (byte) and `StyleLevelInfo` (64 bit mask).
 Both fields are absent for a freshly learned style: level 1 means no bits set.
 `StyleLevel` is `1 + population count of the mask` and is always derived. The
 game derives the unspent style points from the levels of all owned styles; the
-editor never exposes a direct level control.
+editor never exposes a direct level control. JadeForge caps a style at level 64,
+so at most 63 bits may be set; the 64th upgrade would imply level 65 and is
+rejected rather than written.
 
 The struct also carries the style identity (`NameRef`, `DescRef`, `IconRef`,
 `WeaponRef`, `WeaponCount`) and `TimeSpentInStyle` (float seconds). Those fields
@@ -481,14 +483,16 @@ once the player's decisions move it: the earliest savegames of a playthrough do
 not contain the field at all. In the 77 savegames that have it, the values run
 from 131 to 255 and rise with play time, and one savegame sits exactly at 255.
 
-The scale is unsigned 0..255: the community documentation for `gems.2da` states
-that completely Closed Fist characters have alignment 0 and completely Open Palm
-characters have 255. The neutral midpoint is therefore **128**; the editor uses
-that reference (`DEFAULT_ALIGNMENT`) for its label and shows "Balanced" at 128.
-The observed savegames only cover the Open Palm half (131..255). The engine
-clamps the meter to 0..255, and the editor enforces the same range
-(`MIN_ALIGNMENT`/`MAX_ALIGNMENT`), so a value can always be checked against the
-in-game meter. No other alignment field exists in the player block.
+The on-disk field is a signed integer, but the game's meter has an unsigned
+0..=255 scale: the community documentation for `gems.2da` states that completely
+Closed Fist characters have alignment 0 and completely Open Palm characters have
+255. The neutral midpoint is therefore **128**; the editor uses that reference
+(`DEFAULT_ALIGNMENT`) for its label and shows "Balanced" at 128. The observed
+savegames only cover the Open Palm half (131..255). Negative values are not
+valid alignment values. The editor enforces 0..=255
+(`MIN_ALIGNMENT`/`MAX_ALIGNMENT`) in both the form and the character writer, so a
+value can always be checked against the in-game meter. No other alignment field
+exists in the player block.
 
 ## Story variables and journal
 
