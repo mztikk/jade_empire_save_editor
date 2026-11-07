@@ -19,6 +19,14 @@ steppers) were sized for 11-14 px type and would clip at a larger size.
   image slots (preview and portrait) deliberately do not scale: they describe
   the monitor and the sidebar, not the type. Scaling them would push the
   minimum window off a 1366x768 screen at 200 % without improving legibility.
+- Freya's built-in `Input`, `Select` and `MenuItem` inherit `font::body()`
+  from the root, and the input layout theme uses scaled padding and radius.
+  Page and toolbar actions share one `ActionButton` with filled, outline and
+  flat variants plus a real disabled state, so the app no longer mixes the
+  16 px framework `Button` with caption-sized custom buttons.
+- Above 100 % the sidebar sort buttons collapse to one row. Pressing the
+  control cycles field and direction, keeping the save list height instead of
+  wrapping three buttons into several rows.
 - The status slot is `3 * font::line_height()` at full width and
   `2 * font::line_height()` in the compact shell, so it grows with the text
   while the compact header keeps enough room for the editor. `max_lines` keeps
@@ -63,6 +71,9 @@ and the About control implement a true type scale instead.
   inside the window and keep the footer inside the window. A German variant
   covers 125, 150 and 200 percent at 900x700. The About page test switches to
   200 % through the real control.
+- Headless control tests assert a built-in folder input and the shared
+  header/footer actions grow together with the scale, and that the one-row
+  compact sort control updates the field and direction.
 - Screenshot: `--scale 200 --width 900 --height 700` and the larger sizes render
   the reflowed shell for visual review.
 

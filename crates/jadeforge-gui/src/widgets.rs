@@ -509,18 +509,22 @@ pub fn filter_input(
         clear_query.write().clear();
     });
     let empty = query.read().is_empty();
+    let input = Input::new(query)
+        .placeholder(t(placeholder))
+        .a11y_id(a11y_id)
+        .width(Size::flex(1.0));
+    let input = if theme::text_scale() > 1.0 {
+        input.compact()
+    } else {
+        input
+    };
     rect()
         .horizontal()
         .width(Size::fill())
         .spacing(theme::space::md())
         .content(Content::Flex)
         .cross_align(Alignment::Center)
-        .child(
-            Input::new(query)
-                .placeholder(t(placeholder))
-                .a11y_id(a11y_id)
-                .width(Size::flex(1.0)),
-        )
+        .child(input)
         .child(
             AccessibleButton::new(
                 t(clear_name),
@@ -736,59 +740,175 @@ pub fn row_action(
     .hover_background(theme::surface_hover())
 }
 
-/// A filled primary action for a page or dialog.
-pub fn filled_action(
-    accessible: impl Into<String>,
-    text: impl Into<String>,
-    action: Action,
-) -> AccessibleButton {
-    AccessibleButton::new(
-        accessible,
-        action,
-        rect()
-            .padding(Gaps::new_symmetric(theme::space::md(), theme::space::xl()))
-            .background(theme::accent())
-            .corner_radius(theme::radius::control())
-            .child(
-                a11y_text(text)
-                    .font_size(theme::font::caption())
-                    .font_weight(FontWeight::BOLD)
-                    .color(theme::on_accent()),
-            ),
-    )
-    .hover_background(theme::accent_hover())
+/// Visual treatment of an [`ActionButton`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActionVariant {
+    /// Primary action on the accent fill.
+    Filled,
+    /// Secondary action with a control border.
+    Outline,
+    /// Tertiary action with no resting chrome.
+    Flat,
 }
 
-/// A compact outlined action for a toolbar or page header.
+/// A text action with one set of metrics, focus and disabled states.
 ///
-/// `AccessibleButton` has no visual chrome of its own, so a transparent action
-/// with only a hover state reads like plain text next to status badges. The
-/// border and control padding make the action recognizable as a button while
-/// the explicit accessible name stays on the button node.
-pub fn outline_action(
-    accessible: impl Into<String>,
-    text: impl Into<String>,
+/// This is the shared page and toolbar action. It replaces Freya's built-in
+/// `Button`, whose text and padding ignore the app type scale, and the older
+/// one-off filled/outline helpers.
+#[derive(PartialEq)]
+pub struct ActionButton {
+    accessible: String,
+    label: String,
     action: Action,
-) -> AccessibleButton {
-    AccessibleButton::new(
-        accessible,
-        action,
+    variant: ActionVariant,
+    enabled: bool,
+    compact: bool,
+}
+
+impl ActionButton {
+    /// Creates an outlined, enabled action.
+    pub fn new(accessible: impl Into<String>, label: impl Into<String>, action: Action) -> Self {
+        Self {
+            accessible: accessible.into(),
+            label: label.into(),
+            action,
+            variant: ActionVariant::Outline,
+            enabled: true,
+            compact: false,
+        }
+    }
+
+    /// Selects the visual treatment.
+    #[must_use]
+    pub fn variant(mut self, variant: ActionVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+
+    /// Enables or disables the action.
+    #[must_use]
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// Uses the compact padding and corner radius.
+    #[must_use]
+    pub fn compact(mut self) -> Self {
+        self.compact = true;
+        self
+    }
+}
+
+impl Component for ActionButton {
+    #[allow(clippy::too_many_lines)] // one declarative component keeps all variants and states together
+    fn render(&self) -> impl IntoElement {
+        let a11y_id = use_a11y();
+        let focus = use_focus(a11y_id);
+        let focused = focus() == Focus::Keyboard;
+        let mut hovered = use_state(|| false);
+        let enabled = self.enabled;
+        let (background, hover_background, border_color, text_color) = match self.variant {
+            ActionVariant::Filled => (
+                theme::accent(),
+                theme::accent_hover(),
+                Color::TRANSPARENT,
+                theme::on_accent(),
+            ),
+            ActionVariant::Outline => (
+                Color::TRANSPARENT,
+                theme::surface_active(),
+                theme::control_border(),
+                theme::text(),
+            ),
+            ActionVariant::Flat => (
+                Color::TRANSPARENT,
+                theme::surface_active(),
+                Color::TRANSPARENT,
+                theme::text(),
+            ),
+        };
+        let background = if !enabled {
+            match self.variant {
+                ActionVariant::Filled => theme::surface(),
+                ActionVariant::Outline | ActionVariant::Flat => Color::TRANSPARENT,
+            }
+        } else if *hovered.read() {
+            hover_background
+        } else {
+            background
+        };
+        let border_fill = if !enabled {
+            match self.variant {
+                ActionVariant::Outline => theme::border(),
+                ActionVariant::Filled | ActionVariant::Flat => Color::TRANSPARENT,
+            }
+        } else if focused {
+            match self.variant {
+                ActionVariant::Filled => theme::on_accent(),
+                ActionVariant::Outline | ActionVariant::Flat => theme::text(),
+            }
+        } else {
+            border_color
+        };
+        let action = self.action.clone();
+        let padding = if self.compact {
+            Gaps::new(
+                theme::space::xs(),
+                theme::space::sm(),
+                theme::space::xs(),
+                theme::space::sm(),
+            )
+        } else {
+            Gaps::new(
+                theme::space::sm(),
+                theme::space::xl(),
+                theme::space::sm(),
+                theme::space::xl(),
+            )
+        };
         rect()
-            .padding(Gaps::new_symmetric(theme::space::md(), theme::space::xl()))
+            .a11y_id(a11y_id)
+            .a11y_focusable(enabled)
+            .a11y_role(AccessibilityRole::Button)
+            .a11y_alt(self.accessible.clone())
+            .a11y_enabled(enabled)
+            .cursor(if enabled {
+                CursorIcon::Pointer
+            } else {
+                CursorIcon::NotAllowed
+            })
+            .background(background)
             .border(
                 Border::new()
-                    .fill(theme::control_border())
-                    .width(theme::stroke::hairline()),
+                    .fill(border_fill)
+                    .width(theme::stroke::focus()),
             )
-            .corner_radius(theme::radius::control())
+            .corner_radius(if self.compact {
+                theme::radius::small()
+            } else {
+                theme::radius::control()
+            })
+            .padding(padding)
+            .center()
             .child(
-                a11y_text(text)
-                    .font_size(theme::font::caption())
+                a11y_text(self.label.clone())
+                    .font_size(theme::font::label())
                     .font_weight(FontWeight::BOLD)
-                    .color(theme::text()),
-            ),
-    )
-    .hover_background(theme::surface_hover())
+                    .max_lines(1)
+                    .color(if enabled { text_color } else { theme::dim() }),
+            )
+            .maybe(enabled, |el| {
+                el.on_press(move |_| {
+                    a11y_id.request_focus();
+                    action.call();
+                })
+                .on_pointer_enter(move |_| hovered.set(true))
+                .on_pointer_leave(move |_| hovered.set(false))
+            })
+            .into_element()
+    }
 }
 
 #[cfg(test)]

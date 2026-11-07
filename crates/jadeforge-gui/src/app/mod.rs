@@ -1139,6 +1139,9 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         .height(Size::fill())
         .background(theme::background())
         .color(theme::text())
+        // Built-in Input, Select and MenuItem text inherits the text style
+        // from here; the direct theme tokens do not reach those components.
+        .font_size(theme::font::body())
         .content(Content::Flex)
         .child(header)
         .child(

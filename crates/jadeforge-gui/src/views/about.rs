@@ -53,7 +53,7 @@ pub fn view(
 
     let close = Action::new(move || show_about.set(false));
     let close_button =
-        widgets::outline_action(t(keys::ABOUT_CLOSE_PAGE), t(keys::ABOUT_CLOSE), close);
+        widgets::ActionButton::new(t(keys::ABOUT_CLOSE_PAGE), t(keys::ABOUT_CLOSE), close);
 
     let selected_theme = *theme_choice.read();
     let selected_scale = *text_scale.read();
@@ -406,7 +406,7 @@ pub fn view(
     children.push(widgets::section_label(t(keys::ABOUT_DIAGNOSTICS_HEADING)));
     children.extend(diagnostics_rows);
     children.push(
-        widgets::outline_action(
+        widgets::ActionButton::new(
             t(keys::ABOUT_COPY_DIAGNOSTICS_HINT),
             t(keys::ABOUT_COPY_DIAGNOSTICS),
             copy_diagnostics,

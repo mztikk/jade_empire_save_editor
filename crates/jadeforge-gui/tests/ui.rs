@@ -3422,6 +3422,122 @@ fn picker_viewport_stays_inside_a_short_window_at_200_percent() {
 }
 
 #[test]
+fn compact_sort_control_updates_the_sort_order() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    for suffix in 2..=4 {
+        let folder = fixture.save_dir.join(format!("Test Save {suffix}"));
+        std::fs::create_dir_all(&folder).expect("create extra save folder");
+        std::fs::copy(
+            fixture.save_dir.join("Test Save").join("save.sac"),
+            folder.join("save.sac"),
+        )
+        .expect("copy savegame");
+    }
+    let _ = jadeforge_gui::config::ensure_test_path();
+    let mut config = jadeforge_gui::config::Config::load();
+    config.sort = None;
+    config.sort_descending = false;
+    config.store().expect("store the sort settings");
+    write_ui_preferences(ThemeChoice::Dark, 200);
+
+    let mut test = launch_unopened_at(fixture.save_dir.clone(), 900.0, 700.0);
+    settle(&mut test);
+    assert!(
+        click_label_exact(&mut test, "Name"),
+        "the compact sort control is missing"
+    );
+    settle(&mut test);
+    let config = jadeforge_gui::config::Config::load();
+    assert_eq!(config.sort.as_deref(), Some("name"));
+    assert!(config.sort_descending);
+    let expected = jadeforge_gui::i18n::fill(
+        jadeforge_gui::i18n::keys::SAVE_BROWSER_SORT_BY_ACTIVE,
+        &[
+            ("name", "Name"),
+            (
+                "direction",
+                jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::SORT_DESCENDING),
+            ),
+        ],
+    );
+    assert!(
+        test.find(|node, _| {
+            (a11y_label(&node).as_deref() == Some(expected.as_str())).then_some(node)
+        })
+        .is_some(),
+        "the compact sort control did not expose the new direction"
+    );
+
+    let mut config = jadeforge_gui::config::Config::load();
+    config.sort = None;
+    config.sort_descending = false;
+    config.store().expect("reset the sort settings");
+    write_ui_preferences(ThemeChoice::Dark, 100);
+}
+
+#[test]
+fn builtin_controls_and_actions_follow_the_text_scale() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let browse = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::SHELL_BROWSE);
+    let save = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::SHELL_SAVE);
+    let measure = |percent: u16| {
+        write_ui_preferences(ThemeChoice::Dark, percent);
+        let test = launch_unopened_at(fixture.save_dir.clone(), 1280.0, 800.0);
+        let input = test
+            .find(|node, _| (a11y_role(&node) == "TextInput").then_some(node))
+            .expect("the folder input is missing");
+        let browse_button = test
+            .find(|node, _| {
+                (a11y_role(&node) == "Button" && a11y_label(&node).as_deref() == Some(browse))
+                    .then_some(node)
+            })
+            .expect("the Browse action is missing");
+        let save_button = test
+            .find(|node, _| {
+                (a11y_role(&node) == "Button" && a11y_label(&node).as_deref() == Some(save))
+                    .then_some(node)
+            })
+            .expect("the Save action is missing");
+        (
+            input.layout().area.size.height,
+            browse_button.layout().area.size.height,
+            save_button.layout().area.size.height,
+        )
+    };
+
+    let (small_input, small_browse, small_save) = measure(100);
+    let (large_input, large_browse, large_save) = measure(200);
+    write_ui_preferences(ThemeChoice::Dark, 100);
+
+    assert!(
+        large_input > small_input * 1.4,
+        "the folder input grew from {small_input} to {large_input} px"
+    );
+    assert!(
+        large_browse > small_browse * 1.4,
+        "the Browse action grew from {small_browse} to {large_browse} px"
+    );
+    assert!(
+        large_save > small_save * 1.4,
+        "the Save action grew from {small_save} to {large_save} px"
+    );
+    assert!(
+        (small_browse - small_save).abs() < 1.0,
+        "header and footer action metrics differ: {small_browse} vs {small_save}"
+    );
+    assert!(
+        (large_browse - large_save).abs() < 1.0,
+        "header and footer action metrics differ at 200 percent: {large_browse} vs {large_save}"
+    );
+}
+
+#[test]
 fn overview_glance_rows_use_the_full_width_at_every_size() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");

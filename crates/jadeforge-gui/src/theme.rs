@@ -817,6 +817,7 @@ fn choice_themes(theme: &mut Theme, colors: Palette) {
 }
 
 /// Builds the Freya theme for the active palette.
+#[allow(clippy::too_many_lines)] // one declarative theme keeps all component layouts together
 #[must_use]
 pub fn theme() -> Theme {
     let colors = current().palette;
@@ -828,6 +829,77 @@ pub fn theme() -> Theme {
     };
     theme.colors = palette();
 
+    theme.set(
+        "button_layout",
+        ButtonLayoutThemePreference {
+            padding: Preference::Specific(Gaps::new(
+                space::sm(),
+                space::xl(),
+                space::sm(),
+                space::xl(),
+            )),
+            margin: Preference::Specific(Gaps::new_all(0.0)),
+            corner_radius: Preference::Specific(CornerRadius::new_all(radius::control())),
+            width: Preference::Specific(Size::Inner),
+            height: Preference::Specific(Size::Inner),
+        },
+    );
+    theme.set(
+        "compact_button_layout",
+        ButtonLayoutThemePreference {
+            padding: Preference::Specific(Gaps::new(
+                space::xs(),
+                space::sm(),
+                space::xs(),
+                space::sm(),
+            )),
+            margin: Preference::Specific(Gaps::new_all(0.0)),
+            corner_radius: Preference::Specific(CornerRadius::new_all(radius::small())),
+            width: Preference::Specific(Size::Inner),
+            height: Preference::Specific(Size::Inner),
+        },
+    );
+    theme.set(
+        "expanded_button_layout",
+        ButtonLayoutThemePreference {
+            padding: Preference::Specific(Gaps::new(
+                space::lg(),
+                space::xxl(),
+                space::lg(),
+                space::xxl(),
+            )),
+            margin: Preference::Specific(Gaps::new_all(0.0)),
+            corner_radius: Preference::Specific(CornerRadius::new_all(radius::control())),
+            width: Preference::Specific(Size::Inner),
+            height: Preference::Specific(Size::Inner),
+        },
+    );
+    theme.set(
+        "input_layout",
+        InputLayoutThemePreference {
+            corner_radius: Preference::Specific(CornerRadius::new_all(radius::control())),
+            padding: Preference::Specific(Gaps::new_all(space::md())),
+        },
+    );
+    theme.set(
+        "compact_input_layout",
+        InputLayoutThemePreference {
+            corner_radius: Preference::Specific(CornerRadius::new_all(radius::small())),
+            padding: Preference::Specific(Gaps::new(
+                space::xs(),
+                space::sm(),
+                space::xs(),
+                space::sm(),
+            )),
+        },
+    );
+    theme.set(
+        "expanded_input_layout",
+        InputLayoutThemePreference {
+            corner_radius: Preference::Specific(CornerRadius::new_all(radius::medium())),
+            padding: Preference::Specific(Gaps::new_all(space::lg())),
+        },
+    );
     theme.set(
         "button",
         ButtonColorsThemePreference {

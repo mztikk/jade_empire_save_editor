@@ -151,6 +151,11 @@ pub(super) fn sidebar(
                     .color(theme::dim()),
             )
     });
+    let (vertical_padding, side_padding) = if large_text {
+        (theme::space::md(), theme::space::md())
+    } else {
+        (theme::space::field(), theme::space::xl())
+    };
 
     rect()
         .vertical()
@@ -160,12 +165,16 @@ pub(super) fn sidebar(
         .height(Size::fill())
         .content(Content::Flex)
         .padding(Gaps::new(
-            theme::space::field(),
-            theme::space::xl(),
-            theme::space::field(),
-            theme::space::xl(),
+            vertical_padding,
+            side_padding,
+            vertical_padding,
+            side_padding,
         ))
-        .spacing(theme::space::lg())
+        .spacing(if large_text {
+            theme::space::sm()
+        } else {
+            theme::space::lg()
+        })
         .background(theme::background())
         .maybe_child(show_preview.then_some(preview_block))
         .maybe_child(identity_block)
@@ -564,8 +573,15 @@ fn reveal_row(controller: &mut ScrollController, position: usize) {
     }
 }
 
-/// Sort buttons for the savegame list; pressing the active one flips the order.
-fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bool)) -> Element {
+/// Sort controls for the savegame list.
+///
+/// The three buttons fit at 100 percent. Above 100 percent they wrap into
+/// several rows and eat the list's height, so they collapse into one Select.
+fn sort_bar(ctx: &Ctx, state: State<(SaveSort, bool)>, active: (SaveSort, bool)) -> Element {
+    if theme::text_scale() > 1.0 {
+        return compact_sort_bar(ctx, state, active);
+    }
+    let mut state = state;
     let mut buttons: Vec<Element> = Vec::new();
     for key in [SaveSort::Name, SaveSort::Level, SaveSort::Played] {
         let (current, descending) = active;
@@ -650,4 +666,73 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
         .content(Content::wrap_spacing(theme::space::xs()))
         .children(buttons)
         .into_element()
+}
+
+/// One Select that carries the field and direction at larger text scales.
+fn compact_sort_bar(
+    ctx: &Ctx,
+    mut state: State<(SaveSort, bool)>,
+    active: (SaveSort, bool),
+) -> Element {
+    let (current, descending) = active;
+    let arrow = if descending { "↓" } else { "↑" };
+    let accessible = fill(
+        keys::SAVE_BROWSER_SORT_BY_ACTIVE,
+        &[
+            ("name", t(current.label())),
+            (
+                "direction",
+                if descending {
+                    t(keys::SORT_DESCENDING)
+                } else {
+                    t(keys::SORT_ASCENDING)
+                },
+            ),
+        ],
+    );
+    let action = Action::new({
+        let ctx = ctx.clone();
+        move || {
+            let (current, descending) = *state.read();
+            let next = match (current, descending) {
+                (SaveSort::Name, false) => (SaveSort::Name, true),
+                (SaveSort::Name, true) => (SaveSort::Level, false),
+                (SaveSort::Level, false) => (SaveSort::Level, true),
+                (SaveSort::Level, true) => (SaveSort::Played, false),
+                (SaveSort::Played, false) => (SaveSort::Played, true),
+                (SaveSort::Played, true) => (SaveSort::Name, false),
+            };
+            *state.write() = next;
+            ctx.run(move |session| session.persist_sort(next.0, next.1));
+        }
+    });
+    AccessibleButton::new(
+        accessible,
+        action,
+        rect()
+            .horizontal()
+            .width(Size::fill())
+            .cross_align(Alignment::Center)
+            .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::sm()))
+            .border(
+                Border::new()
+                    .fill(theme::control_border())
+                    .width(theme::stroke::hairline()),
+            )
+            .corner_radius(theme::radius::control())
+            .child(
+                crate::widgets::a11y_text(t(current.label()))
+                    .font_size(theme::font::micro())
+                    .color(theme::accent()),
+            )
+            .child(rect().width(Size::flex(1.0)))
+            .child(
+                crate::widgets::a11y_text(arrow)
+                    .font_size(theme::font::micro())
+                    .color(theme::accent()),
+            ),
+    )
+    .hover_background(theme::surface_hover())
+    .key("compact-sort")
+    .into_element()
 }
