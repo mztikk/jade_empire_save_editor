@@ -191,13 +191,18 @@ The session also owns the P3 editing-safety state:
 - a bounded undo/redo history. Each action stores the canonical payloads of
   the blocks it changed plus its field-level before/after rows; restoring a
   payload is exact at block level and an undone structural edit removes the
-  appended struct again. History is capped at 100 entries / 32 MiB and cleared
-  on save and reload.
+  appended struct again. Restores are applied to a copy and committed only when
+  every block succeeds. History is capped at 100 entries / 32 MiB and cleared
+  on save and reload; if applied entries are evicted, the review page shows an
+  explicit omitted-history row.
 - `pending_changes` groups those rows for the review page before a save.
 - a disk stamp (size + mtime) that detects an external change and explains the
   conflict; `reload_from_disk` refuses while dirty.
 - `backups` and `restore_backup`, which delegate to the core's verified backup
-  module and keep the safety copy in `last_backup`.
+  module and keep the safety copy in `last_backup`. A post-restore reload
+  failure clears the stale document and reports the error. Game data is resolved
+  before the first row rebuild, so late data cannot leave fallback names on
+  screen.
 
 `is_dirty` is a content comparison: an edit that is undone clears the flag. The
 load-time baseline stores a 128 bit fingerprint (two independently salted 64 bit

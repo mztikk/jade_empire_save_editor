@@ -692,6 +692,8 @@ pub struct Session {
     history_cursor: usize,
     /// Memory held by [`Session::history`].
     history_bytes: usize,
+    /// True when an applied entry was evicted by the history limits.
+    history_evicted: bool,
     /// Current canonical payload of every block that has edits.
     history_current: Vec<Option<Vec<u8>>>,
     /// Identity of the open savegame on disk when it was read.
@@ -791,6 +793,7 @@ impl Session {
             history: Vec::new(),
             history_cursor: 0,
             history_bytes: 0,
+            history_evicted: false,
             history_current: Vec::new(),
             disk_stamp: None,
             disk_changed: false,
@@ -1266,15 +1269,15 @@ impl Session {
                 }
                 self.last_backup = None;
                 self.accept_as_clean();
+                self.load_preview(&path);
+                if self.game.is_none() {
+                    warnings.extend(self.load_game_data());
+                }
                 let mut section_errors = self.rebuild_rows();
                 if let Some(character) = &self.character_error {
                     section_errors.insert(0, character.clone());
                 }
                 self.section_errors = section_errors;
-                self.load_preview(&path);
-                if self.game.is_none() {
-                    warnings.extend(self.load_game_data());
-                }
                 self.message = if warnings.is_empty() && self.section_errors.is_empty() {
                     Message::success(message::fill(keys::STATUS_OPENED, &[("label", &label)]))
                 } else {
@@ -1612,6 +1615,9 @@ impl Session {
             if self.history.is_empty() {
                 break;
             }
+            if self.history_cursor > 0 {
+                self.history_evicted = true;
+            }
             let removed = self.history.remove(0);
             self.history_bytes = self.history_bytes.saturating_sub(removed.cost());
             self.history_cursor = self.history_cursor.saturating_sub(1);
@@ -1623,6 +1629,7 @@ impl Session {
         self.history.clear();
         self.history_cursor = 0;
         self.history_bytes = 0;
+        self.history_evicted = false;
         self.history_current = self
             .save
             .as_ref()
@@ -1643,28 +1650,28 @@ impl Session {
     }
 
     /// Restores the block payloads of `states`.
+    ///
+    /// The whole set is applied to a copy first, so a failure cannot leave a
+    /// partially restored document in memory.
     fn restore_states(&mut self, states: &[BlockState]) -> bool {
-        let Some(save) = self.save.as_mut() else {
+        let Some(save) = self.save.as_ref() else {
             return false;
         };
-        let mut failure = None;
+        let mut candidate = save.clone();
         for state in states {
             let result = match &state.bytes {
-                Some(bytes) => save.restore_block_payload(state.index, bytes),
-                None => save.restore_block_from_source(state.index),
+                Some(bytes) => candidate.restore_block_payload(state.index, bytes),
+                None => candidate.restore_block_from_source(state.index),
             };
             if let Err(error) = result {
-                failure = Some(error);
-                break;
+                self.message = Message::error(message::fill(
+                    keys::STATUS_CANNOT_UNDO_THAT_STEP,
+                    &[("error", &error.to_string())],
+                ));
+                return false;
             }
         }
-        if let Some(error) = failure {
-            self.message = Message::error(message::fill(
-                keys::STATUS_CANNOT_UNDO_THAT_STEP,
-                &[("error", &error.to_string())],
-            ));
-            return false;
-        }
+        self.save = Some(candidate);
         true
     }
 
@@ -1746,6 +1753,19 @@ impl Session {
                     message::tr(keys::STATUS_STRUCTS_ADDED_OR_ORPHANED),
                 )],
             });
+        }
+        if self.history_evicted && (!groups.is_empty() || self.dirty) {
+            groups.insert(
+                0,
+                PendingChangeGroup {
+                    label: message::tr(keys::STATUS_EARLIER_CHANGES).to_owned(),
+                    changes: vec![PendingChange::new(
+                        message::tr(keys::STATUS_UNDO_HISTORY),
+                        message::tr(keys::STATUS_NOT_RECORDED),
+                        message::tr(keys::STATUS_OMITTED),
+                    )],
+                },
+            );
         }
         groups
     }
@@ -1846,20 +1866,7 @@ impl Session {
             return Err(SessionError::CannotReload);
         }
         match restore_backup(backup, &path) {
-            Ok(safety) => {
-                let index = self.selected;
-                if let Some(index) = index {
-                    let _ = self.load(index);
-                }
-                self.last_backup = Some(safety.clone());
-                let backup_path = backup.display().to_string();
-                let safety_path = safety.display().to_string();
-                self.message = Message::success(message::fill(
-                    keys::STATUS_RESTORED_BACKUP,
-                    &[("backup", &backup_path), ("safety", &safety_path)],
-                ));
-                Ok(safety)
-            }
+            Ok(safety) => self.apply_restored_backup(backup, safety),
             Err(error) => {
                 self.message = Message::error(message::fill(
                     keys::STATUS_CANNOT_RESTORE_THE_BACKUP,
@@ -1868,6 +1875,33 @@ impl Session {
                 Err(SessionError::CannotReload)
             }
         }
+    }
+
+    /// Reloads a restored backup and reports the result.
+    ///
+    /// The restored file is already on disk. If it cannot be opened, the old
+    /// in-memory document is discarded rather than left looking current.
+    fn apply_restored_backup(
+        &mut self,
+        backup: &Path,
+        safety: PathBuf,
+    ) -> Result<PathBuf, SessionError> {
+        if let Some(index) = self.selected
+            && !self.load(index)
+        {
+            self.clear_open_save();
+            self.last_backup = Some(safety);
+            self.message = Message::error(message::tr(keys::STATUS_RESTORE_RELOAD_FAILED));
+            return Err(SessionError::CannotReload);
+        }
+        self.last_backup = Some(safety.clone());
+        let backup_path = backup.display().to_string();
+        let safety_path = safety.display().to_string();
+        self.message = Message::success(message::fill(
+            keys::STATUS_RESTORED_BACKUP,
+            &[("backup", &backup_path), ("safety", &safety_path)],
+        ));
+        Ok(safety)
     }
 
     /// Every field of `form` that cannot be applied, in field order.
@@ -3184,8 +3218,8 @@ impl Session {
                     message::tr(keys::STATUS_COMPANION_AVAILABILITY),
                     vec![PendingChange::new(
                         format!("HenchmanList[{struct_index}].Available ({name})"),
-                        (!available).to_string(),
                         available.to_string(),
+                        (!available).to_string(),
                     )],
                     None,
                 );
@@ -3625,6 +3659,98 @@ mod tests {
         );
         bytes.extend_from_slice(&block);
         bytes
+    }
+
+    fn write_tlk(path: &Path, strings: &[&str]) {
+        let mut data = Vec::new();
+        data.extend_from_slice(b"TLK V4.0");
+        data.extend_from_slice(&2_u32.to_le_bytes());
+        data.extend_from_slice(&(strings.len() as u32).to_le_bytes());
+        data.extend_from_slice(&24_u32.to_le_bytes());
+        let data_offset = 24 + 10 * strings.len();
+        data.extend_from_slice(&(data_offset as u32).to_le_bytes());
+        let mut text = Vec::new();
+        for string in strings {
+            let bytes = string.as_bytes();
+            data.extend_from_slice(&0_u32.to_le_bytes());
+            data.extend_from_slice(&((data_offset + text.len()) as u32).to_le_bytes());
+            data.extend_from_slice(&(bytes.len() as u16).to_le_bytes());
+            text.extend_from_slice(bytes);
+        }
+        data.extend_from_slice(&text);
+        fs::write(path, data).expect("write talk table");
+    }
+
+    fn late_game_installation() -> TempDir {
+        let root = TempDir::new("late-game");
+        write_tlk(
+            &root.path().join("dialog.tlk"),
+            &[
+                "Late Named Sword",
+                "Late Sword Desc",
+                "Late Style",
+                "Late Style Desc",
+                "Upgrade One",
+                "Upgrade Two",
+                "Upgrade Family",
+            ],
+        );
+        let override_dir = root.path().join("override");
+        fs::create_dir_all(&override_dir).expect("create override");
+        fs::write(
+            override_dir.join("items.2da"),
+            "2DA V2.0\n\n   LABEL STRREF_NAME STRREF_DESC TYPE COST ICON\n\
+             0 Sword 0 1 weapons 1 ****\n\
+             42 Late_Sword 0 1 weapons 1 ****\n",
+        )
+        .expect("write items");
+        fs::write(
+            override_dir.join("stylesuperlist.2da"),
+            "2DA V2.0\n\n   Label NameRef DescRef IconRef StyleData WeaponCount Weapon Type\n\
+             21 Late_Style 2 3 icon_late 0 1 wpn_late HAND\n",
+        )
+        .expect("write styles");
+        fs::write(
+            override_dir.join("styledata.2da"),
+            "2DA V2.0\n\n   label useexcel levelup2da move2da advancement2da\n\
+             0 late 0 latelv **** ****\n",
+        )
+        .expect("write style data");
+        fs::write(
+            override_dir.join("latelv.2da"),
+            "2DA V2.0\n\n   Choices Label Choice_1 Choice_2 Choice_3 Choice_4 Choice_5\n\
+             0 2 6 1 2 **** **** ****\n",
+        )
+        .expect("write level table");
+        fs::write(
+            override_dir.join("StyleAdvance.2da"),
+            "2DA V2.0\n\n   Label DescRef CostToLevelUp Effect1 Param1\n\
+             1 Upgrade_One 4 1 72 0.25\n\
+             2 Upgrade_Two 5 1 72 0.5\n",
+        )
+        .expect("write advances");
+        root
+    }
+
+    struct GameDataGuard {
+        root: Option<PathBuf>,
+        missing: bool,
+    }
+
+    impl GameDataGuard {
+        fn capture() -> Self {
+            Self {
+                root: jadeforge_gamedata::test_game_root(),
+                missing: jadeforge_gamedata::test_game_data_missing(),
+            }
+        }
+    }
+
+    impl Drop for GameDataGuard {
+        fn drop(&mut self) {
+            jadeforge_gamedata::set_test_game_root(self.root.clone());
+            jadeforge_gamedata::set_test_game_data_missing(self.missing);
+        }
     }
 
     fn fixture() -> (TempDir, Session) {
@@ -4664,6 +4790,14 @@ mod tests {
             "{}",
             session.message.text
         );
+        let diff = session
+            .pending_changes()
+            .into_iter()
+            .flat_map(|group| group.changes)
+            .find(|change| change.field.contains("Available"))
+            .expect("availability diff");
+        assert_eq!(diff.before, "true");
+        assert_eq!(diff.after, "false");
         session.toggle_henchman_available(index);
         assert!(session.henchmen[0].available);
         assert!(session.message.text.contains("available"));
@@ -5205,6 +5339,127 @@ mod tests {
         assert!(session.redo());
         assert_eq!(session.character.as_ref().expect("character").level, 10);
         assert!(session.is_dirty());
+    }
+
+    #[test]
+    fn a_failed_undo_does_not_partially_restore_the_document() {
+        let (_directory, mut session) = fixture();
+        let mut form = form_for(&session);
+        form.level = "9".to_owned();
+        assert!(session.apply(&form).is_ok());
+        let before = session
+            .save
+            .as_ref()
+            .expect("savegame")
+            .to_bytes()
+            .expect("serialize");
+        session
+            .history
+            .last_mut()
+            .expect("history")
+            .before
+            .push(BlockState {
+                index: 999,
+                bytes: Some(vec![0]),
+            });
+
+        assert!(!session.undo());
+        assert_eq!(session.history_cursor, 1);
+        assert_eq!(
+            session
+                .save
+                .as_ref()
+                .expect("savegame")
+                .to_bytes()
+                .expect("serialize"),
+            before
+        );
+        assert_eq!(session.character.as_ref().expect("character").level, 9);
+        assert_eq!(
+            session.message.kind,
+            MessageKind::Error,
+            "{}",
+            session.message.text
+        );
+    }
+
+    #[test]
+    fn evicted_history_is_disclosed_in_pending_changes() {
+        let (_directory, mut session) = fixture();
+        for index in 0..=HISTORY_MAX_ENTRIES {
+            set_field(
+                &mut session,
+                "PlayerCreature.Level",
+                Value::Byte(u8::try_from(index).expect("level")),
+            );
+            session.remember_edit(
+                "Edit",
+                vec![PendingChange::new(
+                    "PlayerCreature.Level",
+                    "before",
+                    "after",
+                )],
+                None,
+            );
+        }
+        assert_eq!(session.history.len(), HISTORY_MAX_ENTRIES);
+        assert!(session.history_evicted);
+
+        let groups = session.pending_changes();
+        assert_eq!(groups[0].label, message::tr(keys::STATUS_EARLIER_CHANGES));
+        assert_eq!(
+            groups[0].changes[0].field,
+            message::tr(keys::STATUS_UNDO_HISTORY)
+        );
+    }
+
+    #[test]
+    fn a_failed_reload_after_restore_clears_the_stale_document() {
+        let (_directory, mut session) = fixture();
+        let safety = PathBuf::from("safety.sac");
+        Rc::make_mut(&mut session.entries).clear();
+
+        assert!(
+            session
+                .apply_restored_backup(Path::new("backup.sac"), safety.clone())
+                .is_err()
+        );
+        assert!(session.save.is_none());
+        assert_eq!(session.selected, None);
+        assert_eq!(session.last_backup(), Some(safety.as_path()));
+        assert_eq!(session.message.kind, MessageKind::Error);
+        assert!(session.message.text.contains("could not be reopened"));
+    }
+
+    #[test]
+    fn late_game_data_rebuilds_rows_before_the_session_finishes_loading() {
+        let guard = GameDataGuard::capture();
+        jadeforge_gamedata::set_test_game_root(None);
+        jadeforge_gamedata::set_test_game_data_missing(true);
+        let directory = TempDir::new("late-game-save");
+        fs::write(directory.path().join("save.sac"), container(&fixture_gff()))
+            .expect("write savegame");
+        let mut session = Session::with_directory(directory.path());
+        assert!(session.game.is_none());
+
+        let game = late_game_installation();
+        jadeforge_gamedata::set_test_game_data_missing(false);
+        jadeforge_gamedata::set_test_game_root(Some(game.path().to_path_buf()));
+        assert!(session.open(0), "{}", session.message.text);
+        assert!(matches!(session.game_status(), GameStatus::Loaded { .. }));
+
+        assert_eq!(session.items[0].name, "Late Named Sword");
+        assert_eq!(
+            session.items[0].description.as_deref(),
+            Some("Late Sword Desc")
+        );
+        assert_eq!(session.styles[0].name, "Late Style");
+        assert_eq!(
+            session.styles[0].description.as_deref(),
+            Some("Late Style Desc")
+        );
+        assert_eq!(session.styles[0].upgrades.len(), 2);
+        drop(guard);
     }
 
     #[test]

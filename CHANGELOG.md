@@ -15,6 +15,11 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- Session undo and redo now restore the whole document or nothing, a failed
+  reload after a backup restore clears the stale document and reports the
+  failure, companion availability diffs show the real before and after values,
+  late game data rebuilds rows before they are shown, and an evicted undo
+  history is disclosed on the review screen instead of looking complete.
 - Chapter edits now create a missing `Campaign.Chapter` field. Learning a style
   from a sparse template now adds the missing identity fields and clears the
   copied `ResistList`, and typed item, companion and style setters reject struct

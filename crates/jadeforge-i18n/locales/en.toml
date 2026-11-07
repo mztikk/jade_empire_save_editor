@@ -505,6 +505,10 @@ complete = true
 "status.nothing_to_undo" = "There is nothing to undo."
 "status.nothing_to_redo" = "There is nothing to redo."
 "status.savegame.structure" = "Savegame structure"
+"status.earlier.changes" = "Earlier changes"
+"status.undo.history" = "Undo history"
+"status.not.recorded" = "not recorded"
+"status.omitted" = "omitted from this list"
 "status.block.layout" = "Block layout"
 "status.as.opened" = "as opened"
 "status.structs_added_or_orphaned" = "structs were added or orphaned"
@@ -581,6 +585,7 @@ complete = true
 "status.redid" = "Redid {label}."
 # args: backup, safety
 "status.restored_backup" = "Restored {backup}. The file it replaced is kept as {safety}."
+"status.restore_reload_failed" = "The backup was restored, but the savegame could not be reopened."
 # args: error
 "status.cannot.restore.the.backup" = "Cannot restore the backup: {error}"
 # args: changes

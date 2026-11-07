@@ -509,6 +509,10 @@ complete = true
 "status.nothing_to_undo" = "Es gibt nichts rückgängig zu machen."
 "status.nothing_to_redo" = "Es gibt nichts zu wiederholen."
 "status.savegame.structure" = "Spielstandstruktur"
+"status.earlier.changes" = "Frühere Änderungen"
+"status.undo.history" = "Rückgängig-Verlauf"
+"status.not.recorded" = "nicht aufgezeichnet"
+"status.omitted" = "aus dieser Liste ausgelassen"
 "status.block.layout" = "Blocklayout"
 "status.as.opened" = "wie beim Öffnen"
 "status.structs_added_or_orphaned" = "Strukturen wurden hinzugefügt oder sind verwaist"
@@ -585,6 +589,7 @@ complete = true
 "status.redid" = "Änderung erneut ausgeführt: {label}."
 # args: backup, safety
 "status.restored_backup" = "{backup} wiederhergestellt. Die ersetzte Datei ist unter {safety} gesichert."
+"status.restore_reload_failed" = "Das Backup wurde wiederhergestellt, aber der Spielstand konnte nicht erneut geöffnet werden."
 # args: error
 "status.cannot.restore.the.backup" = "Backup kann nicht wiederhergestellt werden: {error}"
 # args: changes
