@@ -124,6 +124,27 @@ fn restoring_a_backup_writes_it_atomically_and_keeps_a_safety_copy() {
     assert_eq!(backups_of(&path).len(), 2);
 }
 
+#[test]
+fn restoring_over_a_corrupt_current_file_keeps_a_raw_safety_copy() {
+    let dir = TempDir::new();
+    let path = dir.save("original");
+    let original_bytes = std::fs::read(&path).expect("read original");
+    let mut save = SaveGame::open(&path).expect("open");
+    save.save(SaveOptions { backup: true }).expect("save");
+    let backup = backups_of(&path).remove(0).path;
+    std::fs::write(&path, b"broken current savegame").expect("corrupt current file");
+
+    let safety = restore_backup(&backup, &path).expect("restore over corrupt current file");
+    assert_eq!(
+        std::fs::read(&path).expect("read restored save"),
+        original_bytes
+    );
+    assert_eq!(
+        std::fs::read(&safety).expect("read raw safety copy"),
+        b"broken current savegame"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn restoring_through_a_symlink_keeps_the_link_and_writes_the_target() {

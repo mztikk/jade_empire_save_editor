@@ -45,7 +45,8 @@ pub(super) fn sidebar(
         move |index| {
             let changed = ctx.run(|session| {
                 let before = session.selected();
-                session.open(index) && session.selected() != before
+                session.open(index);
+                session.selected() != before
             });
             if changed {
                 reset();

@@ -1197,7 +1197,9 @@ impl Session {
 
     /// Opens the savegame at `index` of the entry list.
     ///
-    /// Refuses to switch away from a savegame with unsaved changes.
+    /// Refuses to switch away from a savegame with unsaved changes. An
+    /// unreadable entry is still selected, without opening a document, so its
+    /// backups remain reachable through the backup browser.
     pub fn open(&mut self, index: usize) -> bool {
         if self.selected == Some(index) {
             // Clicking the row that is already open must not reload it: that
@@ -1213,9 +1215,15 @@ impl Session {
             return false;
         };
         if let Some(error) = &entry.error {
+            let label = entry.label.clone();
+            let error = error.clone();
+            self.clear_open_save();
+            self.selected = Some(index);
+            self.section_errors.clear();
+            self.character_error = None;
             self.message = Message::error(message::fill(
                 keys::STATUS_CANNOT_OPEN_SCAN,
-                &[("label", &entry.label), ("error", error)],
+                &[("label", &label), ("error", &error)],
             ));
             return false;
         }
@@ -1248,6 +1256,14 @@ impl Session {
                 };
                 self.save = Some(save);
                 self.selected = Some(index);
+                if let Some(entry) = Rc::make_mut(&mut self.entries).get_mut(index) {
+                    entry.error = None;
+                    if let Some(character) = &self.character {
+                        entry.character = Some(character.name.clone());
+                        entry.level = Some(character.level);
+                        entry.time_played = character.time_played;
+                    }
+                }
                 self.last_backup = None;
                 self.accept_as_clean();
                 let mut section_errors = self.rebuild_rows();
@@ -1784,7 +1800,10 @@ impl Session {
         Ok(())
     }
 
-    /// Backups of the open savegame, newest first.
+    /// Backups of the selected savegame, newest first.
+    ///
+    /// The selection may point at an unreadable savegame, which keeps its
+    /// backups reachable when the current document cannot be parsed.
     #[must_use]
     pub fn backups(&self) -> Vec<BackupRow> {
         let Some(path) = self.current_path() else {
@@ -1802,11 +1821,13 @@ impl Session {
             .collect()
     }
 
-    /// Restores one of the open savegame's backups.
+    /// Restores one of the selected savegame's backups.
     ///
-    /// Refuses when the current savegame has unsaved changes or when `backup`
-    /// does not belong to it. The core verifies both files and writes a new
-    /// backup of the current file first; the returned path is that safety copy.
+    /// Refuses when the selected savegame has unsaved changes or when `backup`
+    /// does not belong to it. The core verifies the backup, writes a raw safety
+    /// copy of the current file first, and returns that safety path. The
+    /// selected entry may be unreadable, which is how a corrupt save recovers
+    /// from the backup browser.
     pub fn restore_backup(&mut self, backup: &Path) -> Result<PathBuf, SessionError> {
         let Some(path) = self.current_path() else {
             self.message = Message::error(message::tr(keys::STATUS_NO_SAVEGAME_IS_OPEN));
@@ -5151,6 +5172,35 @@ mod tests {
             "the safety copy is missing"
         );
         assert_eq!(session.backups().len(), 2);
+    }
+
+    #[test]
+    fn an_unreadable_save_keeps_its_backups_reachable() {
+        let (directory, mut session) = fixture();
+        let mut form = form_for(&session);
+        form.level = "9".to_owned();
+        assert!(session.apply(&form).is_ok());
+        let saved = session.save().expect("save");
+        let backup_count = session.backups().len();
+        assert_eq!(backup_count, 1);
+
+        fs::write(&saved, b"broken savegame").expect("corrupt savegame");
+        let mut broken = Session::with_directory(directory.path());
+        assert!(!broken.open(0), "the corrupt save opened as a document");
+        assert_eq!(broken.selected(), Some(0));
+        assert!(broken.save.is_none());
+        assert_eq!(broken.backups().len(), backup_count);
+
+        let backup = broken.backups().remove(0).path;
+        assert!(
+            broken.restore_backup(&backup).is_ok(),
+            "the unreadable save blocked its own backup restore"
+        );
+        assert!(broken.character.is_some());
+        assert!(
+            broken.entries()[0].error.is_none(),
+            "the restored save still looks unreadable in the list"
+        );
     }
 
     #[test]

@@ -9,7 +9,7 @@ mod common;
 use std::fs;
 use std::path::Path;
 
-use jadeforge_core::{Error, SaveGame, SaveOptions, list_backups};
+use jadeforge_core::{Error, SaveGame, SaveOptions, Value, list_backups};
 
 fn save_with_level(path: &Path, level: u8) {
     let mut save = SaveGame::open(path).expect("open savegame");
@@ -78,6 +78,38 @@ fn two_saves_in_the_same_second_keep_two_backups() {
         .save(SaveOptions { backup: true })
         .expect("save again");
     assert_eq!(backups(temp.path()).len(), 3);
+}
+
+#[test]
+fn a_same_length_replacement_is_a_conflict() {
+    let temp = common::TempDir::new("same-length");
+    let path = common::write_save(temp.path(), &common::character_gff());
+    let mut replacement = common::character_gff();
+    replacement
+        .get_mut("PlayerCreature.Level")
+        .expect("level field")
+        .value = Value::Byte(8);
+    let replacement = common::container(&replacement);
+    assert_eq!(
+        fs::read(&path).expect("read original").len(),
+        replacement.len(),
+        "the replacement must have the same length"
+    );
+
+    let mut save = SaveGame::open(&path).expect("open savegame");
+    let replacement_path = temp.path().join("replacement.sac");
+    fs::write(&replacement_path, &replacement).expect("write replacement");
+    fs::rename(&replacement_path, &path).expect("replace savegame");
+
+    let error = save
+        .save(SaveOptions { backup: false })
+        .expect_err("same-length replacement was accepted");
+    assert!(matches!(error, Error::Conflict { .. }), "{error}");
+    assert_eq!(
+        fs::read(&path).expect("read replacement"),
+        replacement,
+        "the external replacement must survive"
+    );
 }
 
 #[cfg(unix)]

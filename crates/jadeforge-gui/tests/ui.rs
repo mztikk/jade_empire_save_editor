@@ -1962,6 +1962,11 @@ fn broken_savegames_are_reported() {
     let broken = fixture.save_dir.join("ZZ Broken Save");
     std::fs::create_dir_all(&broken).expect("create broken save");
     std::fs::write(broken.join("save.sac"), b"SAV V3.2 not really").expect("write broken save");
+    std::fs::copy(
+        fixture.save_dir.join("Test Save").join("save.sac"),
+        broken.join("save.sac.jadeforge-backup-1700000000.000000001.1"),
+    )
+    .expect("write a valid backup next to the broken save");
 
     reset_test_config();
     let save_dir = fixture.save_dir.clone();
@@ -1982,6 +1987,14 @@ fn broken_savegames_are_reported() {
     );
     assert!(click_text(&mut test, "ZZ Broken Save"));
     assert!(find_label_text(&test, "Cannot open").is_some());
+    assert!(
+        click_text(&mut test, "Backups"),
+        "the backup browser is unreachable for the broken save"
+    );
+    assert!(
+        find_label_text(&test, "1 BACKUP").is_some(),
+        "the broken save's backup was not listed"
+    );
 }
 
 #[test]
