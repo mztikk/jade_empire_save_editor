@@ -696,7 +696,7 @@ impl SaveGame {
         Ok(())
     }
 
-    fn verify_bytes(&self, bytes: &[u8]) -> Result<()> {
+    fn verify_bytes(&self, bytes: &[u8]) -> Result<Self> {
         let reparsed = Self::parse_container(self.path.clone(), bytes.to_vec(), None)
             .map_err(|error| Error::Verification(error.to_string()))?;
         if reparsed.blocks.len() != self.blocks.len() {
@@ -748,14 +748,14 @@ impl SaveGame {
                 }
             }
         }
-        Ok(())
+        Ok(reparsed)
     }
 
-    fn verified_bytes(&self) -> Result<Vec<u8>> {
+    fn verified_bytes(&self) -> Result<(Vec<u8>, Self)> {
         let bytes = self.to_bytes()?;
-        self.verify_bytes(&bytes)?;
+        let reparsed = self.verify_bytes(&bytes)?;
         self.verify_semantics()?;
-        Ok(bytes)
+        Ok((bytes, reparsed))
     }
 
     /// Saves the savegame back to its original path.
@@ -774,7 +774,7 @@ impl SaveGame {
     pub fn save_to(&mut self, target: impl AsRef<Path>, options: SaveOptions) -> Result<PathBuf> {
         let target = target.as_ref();
         let write_target = resolve_write_target(target)?;
-        let bytes = self.verified_bytes()?;
+        let (bytes, mut verified) = self.verified_bytes()?;
         self.ensure_unchanged(&write_target)?;
         let target_metadata = match fs::metadata(&write_target) {
             Ok(metadata) => Some(metadata),
@@ -822,9 +822,10 @@ impl SaveGame {
             }
         };
 
-        let reloaded = Self::parse_container(target.to_path_buf(), bytes, Some(stamp))?;
-        *self = reloaded;
-        self.last_backup = backup;
+        verified.path = target.to_path_buf();
+        verified.source = Some(stamp);
+        verified.last_backup = backup;
+        *self = verified;
         Ok(target.to_path_buf())
     }
 

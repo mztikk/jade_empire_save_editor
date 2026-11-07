@@ -15,6 +15,11 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- GFF parsing now validates shared list offsets once under a total work bound,
+  moves single-use field values instead of cloning them, and saves reuse the
+  verified parse instead of parsing the container a second time. Writer payload
+  de-duplication compares hashed offsets byte for byte without cloning every
+  candidate key.
 - GFF parsing now rejects duplicate label names, multiple root structs, and
   localized strings with trailing bytes. A bounded baseline keeps compact,
   de-duplicated writer output parseable without removing the decoded-data guard.
