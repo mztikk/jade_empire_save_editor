@@ -191,6 +191,16 @@ impl Fixture {
             .expect("run jadeforge")
     }
 
+    /// Runs with a bare relative SAVE argument from the fixture directory.
+    fn run_relative(&self, args: &[&str]) -> Output {
+        Command::new(env!("CARGO_BIN_EXE_jadeforge-cli"))
+            .current_dir(&self.dir)
+            .arg("save.sac")
+            .args(args)
+            .output()
+            .expect("run jadeforge")
+    }
+
     fn backups(&self) -> usize {
         std::fs::read_dir(&self.dir)
             .expect("read dir")
@@ -604,6 +614,28 @@ fn no_backup_actions_leave_no_backup_file() {
     let output = fixture.run(&["add-item", "1234", "--no-backup"]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(fixture.backups(), 0);
+}
+
+#[test]
+fn set_accepts_a_bare_relative_save_path() {
+    let fixture = Fixture::new();
+
+    let output = fixture.run_relative(&["set", "save.sav", "PlayerCreature.Level", "6"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(fixture.backups(), 1);
+
+    let output = fixture.run_relative(&[
+        "set",
+        "save.sav",
+        "PlayerCreature.Level",
+        "7",
+        "--no-backup",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(fixture.backups(), 1);
+
+    let save = SaveGame::open(&fixture.save).expect("reopen savegame");
+    assert_eq!(save.character().expect("character").level, 7);
 }
 
 #[test]

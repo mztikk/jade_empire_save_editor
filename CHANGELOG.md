@@ -15,6 +15,9 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- Save, backup, restore and backup listing now work with bare relative paths
+  and symlinked savegames. Backups stay next to the visible savegame path, and
+  restoring through a symlink writes its target while keeping the link.
 - A scan that finishes after the open savegame becomes dirty no longer replaces
   the folder or clears the document. The result is blocked with the unsaved
   changes message until the user saves or reverts; same-folder refreshes still

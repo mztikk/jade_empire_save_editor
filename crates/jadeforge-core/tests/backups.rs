@@ -124,6 +124,50 @@ fn restoring_a_backup_writes_it_atomically_and_keeps_a_safety_copy() {
     assert_eq!(backups_of(&path).len(), 2);
 }
 
+#[cfg(unix)]
+#[test]
+fn restoring_through_a_symlink_keeps_the_link_and_writes_the_target() {
+    use std::os::unix::fs::symlink;
+
+    let dir = TempDir::new();
+    let real = dir.0.join("real.sac");
+    let link = dir.0.join("save.sac");
+    let original_bytes = container(&sample_block("original"));
+    std::fs::write(&real, &original_bytes).expect("write real");
+    symlink("real.sac", &link).expect("symlink");
+
+    let mut save = SaveGame::open(&link).expect("open link");
+    save.save(SaveOptions { backup: true })
+        .expect("save through link");
+    let backup = backups_of(&link).remove(0).path;
+    std::fs::write(&real, container(&sample_block("changed"))).expect("change real");
+
+    let safety = restore_backup(&backup, &link).expect("restore through link");
+    assert!(
+        std::fs::symlink_metadata(&link)
+            .expect("link metadata")
+            .file_type()
+            .is_symlink(),
+        "restore must keep the symlink"
+    );
+    assert_eq!(
+        std::fs::read(&real).expect("read real"),
+        original_bytes,
+        "restore must update the link target"
+    );
+    assert_eq!(
+        std::fs::read(&link).expect("read link"),
+        original_bytes,
+        "the link must resolve to the restored target"
+    );
+    assert_eq!(
+        safety.parent(),
+        Some(dir.0.as_path()),
+        "the safety backup must stay next to the link"
+    );
+    assert_eq!(backups_of(&link).len(), 2);
+}
+
 #[test]
 fn restoring_a_broken_backup_never_touches_the_savegame() {
     let dir = TempDir::new();
