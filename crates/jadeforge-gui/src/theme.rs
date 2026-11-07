@@ -776,6 +776,37 @@ pub fn palette() -> ColorsSheet {
     }
 }
 
+/// Themes for the dropdown and its menu items.
+fn choice_themes(theme: &mut Theme, colors: Palette) {
+    theme.set(
+        "select",
+        SelectThemePreference {
+            width: Preference::Specific(Size::fill()),
+            margin: Preference::Specific(Gaps::new_all(0.0)),
+            select_background: Preference::Specific(colors.surface),
+            background_button: Preference::Specific(colors.surface),
+            hover_background: Preference::Specific(colors.surface_hover),
+            border_fill: Preference::Specific(colors.control_border),
+            focus_border_fill: Preference::Specific(colors.accent),
+            arrow_fill: Preference::Specific(colors.text),
+            color: Preference::Specific(colors.text),
+        },
+    );
+    theme.set(
+        "menu_item",
+        MenuItemThemePreference {
+            background: Preference::Specific(Color::TRANSPARENT),
+            hover_background: Preference::Specific(colors.surface_hover),
+            select_background: Preference::Specific(colors.surface_active),
+            border_fill: Preference::Specific(Color::TRANSPARENT),
+            focus_border_fill: Preference::Specific(colors.accent),
+            corner_radius: Preference::Specific(CornerRadius::new_all(radius::medium())),
+            color: Preference::Specific(colors.text),
+            select_color: Preference::Specific(colors.accent),
+        },
+    );
+}
+
 /// Builds the Freya theme for the active palette.
 #[must_use]
 pub fn theme() -> Theme {
@@ -850,6 +881,7 @@ pub fn theme() -> Theme {
             focus_border_fill: Preference::Specific(colors.control_border),
         },
     );
+    choice_themes(&mut theme, colors);
     theme.set(
         "scrollbar",
         ScrollBarThemePreference {
@@ -878,6 +910,7 @@ pub fn theme() -> Theme {
             font_size: Preference::Specific(font::caption()),
         },
     );
+
     theme
 }
 

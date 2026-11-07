@@ -114,6 +114,7 @@ complete = true
 
 # Character tab
 "character.attribute_points_hint" = "Attribute points you can still spend; the field is created when the savegame does not have it."
+"character.appearance.choose" = "choose a player appearance"
 "character.attributes" = "Attributes"
 "character.current_sheet" = "Current sheet"
 "character.current_values_hint" = "Current values may stay below the maximum; the game fills them on rest."
@@ -451,7 +452,7 @@ complete = true
 "field.name.range" = "at most 64 characters"
 "field.level.range" = "1 to {max} (level)"
 "field.gold.range" = "empty or 0 to {max} gold"
-"field.appearance.range" = "0 to {max} (index)"
+"field.appearance.range" = "one of the seven player appearances"
 "field.alignment.range" = "{min} to {max}, {default} balanced"
 "field.chapter.range" = "0 to {max} (chapter)"
 

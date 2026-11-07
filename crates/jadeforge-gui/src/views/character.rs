@@ -63,7 +63,7 @@ pub fn view(ctx: &Ctx, character: &jadeforge_core::Character, errors: &[FieldErr
             widgets::divider(),
             widgets::field_grid(vec![
                 checked(&form, CharacterField::Alignment, errors),
-                checked(&form, CharacterField::Appearance, errors),
+                appearance_field(ctx, &form, errors),
                 checked(&form, CharacterField::AttributePoints, errors),
             ]),
             alignment_note(alignment_hint(&form.alignment.read())),
@@ -165,6 +165,47 @@ fn checked(form: &Form, field: CharacterField, errors: &[FieldError]) -> Element
         field,
         input(form, field),
         widgets::field_error(errors, field),
+    )
+}
+
+/// The seven player models as a select; an arbitrary `appearance.2da` row
+/// crashes the game.
+fn appearance_field(ctx: &Ctx, form: &Form, errors: &[FieldError]) -> Element {
+    let options = ctx.session.borrow().appearance_options();
+    let current = form
+        .appearance
+        .read()
+        .trim()
+        .parse::<i32>()
+        .ok()
+        .and_then(jadeforge_core::PlayerAppearance::from_row);
+    let selected_label = current
+        .and_then(|appearance| {
+            options
+                .iter()
+                .find(|option| option.appearance == appearance)
+                .map(|option| option.label.clone())
+        })
+        .unwrap_or_else(|| t(keys::CHARACTER_APPEARANCE_CHOOSE).to_owned());
+    let mut state = form.appearance;
+    let select = Select::new()
+        .list_match_width(true)
+        .selected_item(
+            widgets::a11y_text(selected_label)
+                .font_size(theme::font::body())
+                .color(theme::text()),
+        )
+        .children(options.into_iter().map(|option| {
+            let row = option.appearance.row();
+            MenuItem::new()
+                .selected(current == Some(option.appearance))
+                .on_press(move |_| state.set(row.to_string()))
+                .child(option.label)
+        }));
+    widgets::field_checked(
+        CharacterField::Appearance,
+        select,
+        widgets::field_error(errors, CharacterField::Appearance),
     )
 }
 

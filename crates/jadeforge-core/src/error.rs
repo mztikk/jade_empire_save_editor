@@ -61,6 +61,17 @@ pub enum Error {
         max: String,
     },
 
+    /// A value is not one of the discrete values the game accepts.
+    #[error("value {value} is not valid for {path}; expected {expected}")]
+    InvalidValue {
+        /// Path of the field.
+        path: String,
+        /// The rejected value.
+        value: String,
+        /// The accepted values.
+        expected: String,
+    },
+
     /// The newly written savegame did not survive a round trip.
     #[error("savegame verification failed: {0}")]
     Verification(String),

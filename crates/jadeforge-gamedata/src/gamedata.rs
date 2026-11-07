@@ -140,8 +140,19 @@ pub struct GemInfo {
     pub duration: f32,
 }
 
-/// A loaded game installation: item and style names, style slots, gems and
-/// effect names.
+/// One playable character appearance from `players.2da`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlayerAppearanceInfo {
+    /// Row in `appearance.2da` stored in `PlayerCreature.Stats.Appearance`.
+    pub row: i32,
+    /// Internal label, for example `Ming`.
+    pub label: String,
+    /// Localized character name from the talk table.
+    pub name: String,
+}
+
+/// A loaded game installation: item and style names, style slots, gems,
+/// effect names and player appearances.
 #[derive(Debug)]
 pub struct GameData {
     root: PathBuf,
@@ -151,6 +162,7 @@ pub struct GameData {
     style_choices: Vec<Option<Vec<StyleChoice>>>,
     gems: Vec<GemInfo>,
     effects: Vec<Option<String>>,
+    player_appearances: Vec<PlayerAppearanceInfo>,
     search_index: HashMap<u16, String>,
     warnings: Vec<String>,
 }
@@ -408,6 +420,7 @@ impl GameData {
         let style_data = source.load("styledata.2da", &mut warnings);
         let gem_table = source.load("gems.2da", &mut warnings);
         let effects_table = source.load("effects.2da", &mut warnings);
+        let players_table = source.load("players.2da", &mut warnings);
 
         let mut item_records = Vec::new();
         if let (Some(table), Some(talk)) = (&items, &talktable) {
@@ -653,6 +666,26 @@ impl GameData {
             }
         }
 
+        let mut player_appearances = Vec::new();
+        if let Some(table) = &players_table {
+            for (index, _) in table.iter() {
+                let Some(row) = table
+                    .uint(index, "appearanceindex")
+                    .and_then(|value| i32::try_from(value).ok())
+                else {
+                    continue;
+                };
+                let label = table.cell(index, "label").unwrap_or_default().to_owned();
+                let name = table
+                    .uint(index, "name")
+                    .and_then(|reference| u32::try_from(reference).ok())
+                    .and_then(|reference| talktable.as_ref()?.get(reference))
+                    .filter(|text| !text.is_empty() && text != "****")
+                    .unwrap_or_else(|| label.clone());
+                player_appearances.push(PlayerAppearanceInfo { row, label, name });
+            }
+        }
+
         Ok(Self {
             root,
             items: item_slots,
@@ -661,6 +694,7 @@ impl GameData {
             style_choices,
             gems: gem_infos,
             effects: effect_names,
+            player_appearances,
             search_index,
             warnings,
         })
@@ -730,6 +764,12 @@ impl GameData {
     #[must_use]
     pub fn effect_name(&self, effect: u32) -> Option<&str> {
         self.effects.get(effect as usize).and_then(Option::as_deref)
+    }
+
+    /// Playable character appearances from `players.2da`, in table order.
+    #[must_use]
+    pub fn player_appearances(&self) -> &[PlayerAppearanceInfo] {
+        &self.player_appearances
     }
 
     /// Number of resolved styles.
@@ -1102,6 +1142,46 @@ mod tests {
         assert!(!is_playable_item(&item("zzz_unused", "Unused")));
         assert!(!is_playable_item(&item("cut_item", "Cut")));
     }
+    #[test]
+    fn player_appearances_are_read_from_the_players_table() {
+        let root = std::env::temp_dir().join(format!(
+            "jadeforge-players-root-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_nanos())
+        ));
+        std::fs::create_dir_all(root.join("override")).expect("create game layout");
+        std::fs::write(
+            root.join("override").join("players.2da"),
+            "2DA V2.0\n\nlabel appearanceindex name\n\
+             0 Blossom 0 0\n\
+             1 Ming 5 314\n\
+             2 Shen 7 36548\n\
+             3 JenZi 2 29210\n\
+             4 Ling 3 288\n\
+             5 Prodgy 6 30278\n\
+             6 Tan 8 315\n",
+        )
+        .expect("write players table");
+
+        let game = GameData::open(&root).expect("open synthetic game");
+        let appearances = game.player_appearances();
+        assert_eq!(appearances.len(), 7);
+        assert_eq!(
+            appearances[0],
+            PlayerAppearanceInfo {
+                row: 0,
+                label: "Blossom".to_owned(),
+                name: "Blossom".to_owned(),
+            }
+        );
+        assert_eq!(appearances[1].row, 5);
+        assert_eq!(appearances[6].row, 8);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     #[test]
     fn a_broken_override_is_reported_instead_of_hidden() {
         let root = std::env::temp_dir().join(format!(

@@ -48,7 +48,7 @@ pub(crate) fn add_character_fields(gff: &mut Gff, player: usize) {
         .expect("level");
     gff.add_field(player, "CurrentXP", Value::DWord(1234))
         .expect("experience");
-    gff.add_field(player, "PlayerOrigApp", Value::Int(4))
+    gff.add_field(player, "PlayerOrigApp", Value::Int(5))
         .expect("original appearance");
     gff.add_field(player, "Stats", Value::Struct(stats))
         .expect("stats");
@@ -84,7 +84,7 @@ pub(crate) fn add_character_fields(gff: &mut Gff, player: usize) {
         .expect("intimidate");
     gff.add_field(stats, "Alignment", Value::Int(200))
         .expect("alignment");
-    gff.add_field(stats, "Appearance", Value::Int(4))
+    gff.add_field(stats, "Appearance", Value::Int(5))
         .expect("appearance");
     gff.add_field(progress, "Kills", Value::DWord(42))
         .expect("kills");
@@ -122,7 +122,7 @@ pub(crate) fn character() -> Character {
         intuition: 2,
         intimidate: 3,
         alignment: 200,
-        appearance: 4,
+        appearance: 5,
         chapter: 2,
         time_played: 90_000_000_000,
         kills: 42,
