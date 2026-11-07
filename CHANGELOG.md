@@ -6,10 +6,14 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-07
+
 ### Fixed
 
 - The Windows GUI executable now links as a GUI-subsystem binary, so opening it
-  no longer creates a console window next to the editor.
+  no longer creates a console window next to the editor. Renderer diagnostics
+  are best effort, so the process does not panic when the GUI subsystem gives it
+  no stderr handle; redirect stderr to a file to read them.
 
 ## [0.3.0] - 2026-11-07
 

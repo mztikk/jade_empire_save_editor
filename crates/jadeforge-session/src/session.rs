@@ -424,6 +424,7 @@ pub fn set_scan_delay_for_tests(delay: std::time::Duration) {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameDataContext {
     test_root: Option<PathBuf>,
+    test_missing: bool,
     config_path: Option<PathBuf>,
     scan_delay: std::time::Duration,
 }
@@ -434,6 +435,7 @@ impl GameDataContext {
     pub fn capture() -> Self {
         Self {
             test_root: jadeforge_gamedata::test_game_root(),
+            test_missing: jadeforge_gamedata::test_game_data_missing(),
             config_path: crate::config::Config::path(),
             scan_delay: SCAN_DELAY.with(std::cell::Cell::get),
         }
@@ -449,7 +451,9 @@ impl GameDataContext {
         // whole fixture at a game root, and a probe session must not disarm the
         // root that the UI session started from.
         let previous = jadeforge_gamedata::test_game_root();
+        let previous_missing = jadeforge_gamedata::test_game_data_missing();
         jadeforge_gamedata::set_test_game_root(self.test_root.clone());
+        jadeforge_gamedata::set_test_game_data_missing(self.test_missing);
         let configured = self
             .config_path
             .as_ref()
@@ -460,6 +464,7 @@ impl GameDataContext {
             Err(error) => Err(error),
         };
         jadeforge_gamedata::set_test_game_root(previous);
+        jadeforge_gamedata::set_test_game_data_missing(previous_missing);
         result
     }
 }

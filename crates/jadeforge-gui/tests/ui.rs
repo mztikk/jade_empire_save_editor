@@ -2908,7 +2908,11 @@ fn the_game_installation_can_be_chosen_from_the_ui() {
         return;
     };
     let save_dir = isolated_save_root(&fixture);
+    // The release gate sets JADEFORGE_GAME_DIR, which would supply an
+    // installation for the isolated save root; force the missing state
+    // explicitly so the test does not depend on the ambient environment.
     jadeforge_gamedata::set_test_game_root(None);
+    jadeforge_gamedata::set_test_game_data_missing(true);
     let mut test = launch_unopened_at(save_dir, 1180.0, 900.0);
     assert!(
         find_label_text(&test, "GAME DATA").is_some(),
@@ -2926,6 +2930,7 @@ fn the_game_installation_can_be_chosen_from_the_ui() {
         find_label_text(&test, "items loaded").is_some(),
         "the chosen installation did not load"
     );
+    jadeforge_gamedata::set_test_game_data_missing(false);
     jadeforge_gamedata::set_test_game_root(None);
 }
 

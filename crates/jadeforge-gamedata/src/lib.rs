@@ -21,7 +21,8 @@ pub use error::{Error, Result};
 pub use gamedata::{
     Advance, GameData, GemInfo, ItemInfo, StyleChoice, StyleInfo, StyleKind,
     category_for_save_type, is_game_root, is_playable_item, pretty_effect_name,
-    save_type_for_category, set_test_game_root, style_kind, test_game_root,
+    save_type_for_category, set_test_game_data_missing, set_test_game_root, style_kind,
+    test_game_data_missing, test_game_root,
 };
 pub use names::{BundledItem, NameIndex, export_english};
 pub use rim::RimArchive;
