@@ -7,7 +7,9 @@
 mod common;
 
 use jadeforge_core::save::POLYPLAYER_BLOCK;
-use jadeforge_core::{Character, Error, Gff, SaveGame, Value, locate_player};
+use jadeforge_core::{
+    Character, Error, Gff, MAX_ALIGNMENT, MAX_STAT, MIN_ALIGNMENT, SaveGame, Value, locate_player,
+};
 
 fn changed(base: &Character, apply: impl FnOnce(&mut Character)) -> Character {
     let mut character = base.clone();
@@ -26,6 +28,20 @@ fn rejects_every_out_of_range_character_field() {
 
     let cases = [
         ("level", changed(&base, |character| character.level = 0)),
+        (
+            "experience",
+            changed(&base, |character| character.experience = MAX_STAT + 1),
+        ),
+        (
+            "gold",
+            changed(&base, |character| character.gold = Some(MAX_STAT + 1)),
+        ),
+        (
+            "attribute points",
+            changed(&base, |character| {
+                character.attribute_points = MAX_STAT + 1;
+            }),
+        ),
         ("body", changed(&base, |character| character.body = 1001)),
         ("mind", changed(&base, |character| character.mind = 1001)),
         (
@@ -72,7 +88,11 @@ fn rejects_every_out_of_range_character_field() {
         ),
         (
             "alignment",
-            changed(&base, |character| character.alignment = -1_000_001),
+            changed(&base, |character| character.alignment = MAX_ALIGNMENT + 1),
+        ),
+        (
+            "alignment",
+            changed(&base, |character| character.alignment = MIN_ALIGNMENT - 1),
         ),
         (
             "appearance",
@@ -81,6 +101,10 @@ fn rejects_every_out_of_range_character_field() {
         (
             "chapter",
             changed(&base, |character| character.chapter = 101),
+        ),
+        (
+            "kills",
+            changed(&base, |character| character.kills = MAX_STAT + 1),
         ),
         (
             "name",
@@ -95,6 +119,57 @@ fn rejects_every_out_of_range_character_field() {
         assert!(error.to_string().contains(field), "{field}: {error}");
         assert!(!save.is_modified(), "{field} dirtied the savegame");
     }
+}
+
+#[test]
+fn accepts_the_largest_signed_stat_values() {
+    let mut save = common::save(&common::character_gff());
+    let mut character = save.character().expect("character");
+    character.experience = MAX_STAT;
+    character.gold = Some(MAX_STAT);
+    character.attribute_points = MAX_STAT;
+    character.kills = MAX_STAT;
+    character.alignment = MAX_ALIGNMENT;
+
+    save.apply_character(&character)
+        .expect("the engine's signed maximum must be writable");
+
+    let reread = save.character().expect("character");
+    assert_eq!(reread.experience, MAX_STAT);
+    assert_eq!(reread.gold, Some(MAX_STAT));
+    assert_eq!(reread.attribute_points, MAX_STAT);
+    assert_eq!(reread.kills, MAX_STAT);
+    assert_eq!(reread.alignment, MAX_ALIGNMENT);
+}
+
+#[test]
+fn an_unsigned_stat_value_still_opens_for_repair() {
+    let mut gff = common::character_gff();
+    common::replace_field(
+        &mut gff,
+        "PlayerCreature.Stats.Gold",
+        Value::DWord(u32::MAX),
+    );
+    let mut save = common::save(&gff);
+    let mut character = save.character().expect("character");
+    assert_eq!(
+        character.gold,
+        Some(u32::MAX),
+        "the raw value must stay readable so the user can repair it"
+    );
+    assert!(
+        save.apply_character(&character).is_err(),
+        "an out-of-range value must not be written back"
+    );
+    assert!(
+        !save.is_modified(),
+        "the rejected write dirtied the savegame"
+    );
+
+    character.gold = Some(MAX_STAT);
+    save.apply_character(&character)
+        .expect("repair the gold value");
+    assert_eq!(save.character().expect("character").gold, Some(MAX_STAT));
 }
 
 #[test]

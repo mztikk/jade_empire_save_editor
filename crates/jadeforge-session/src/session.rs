@@ -3444,7 +3444,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use jadeforge_core::{Gff, Value};
+    use jadeforge_core::{Gff, MAX_ALIGNMENT, MAX_STAT, Value};
 
     struct TempDir {
         path: PathBuf,
@@ -3535,7 +3535,7 @@ mod tests {
         add(&mut gff, stats, "Charm", Value::Int(1));
         add(&mut gff, stats, "Intuition", Value::Int(2));
         add(&mut gff, stats, "Intimidate", Value::Int(3));
-        add(&mut gff, stats, "Alignment", Value::Int(500));
+        add(&mut gff, stats, "Alignment", Value::Int(200));
         add(&mut gff, stats, "Appearance", Value::Int(4));
         add(&mut gff, progress, "Kills", Value::DWord(42));
 
@@ -3645,7 +3645,7 @@ mod tests {
             charm: 1,
             intuition: 2,
             intimidate: 3,
-            alignment: 500,
+            alignment: 200,
             appearance: 4,
             chapter: 2,
             time_played: 90_000_000_000,
@@ -4924,6 +4924,21 @@ mod tests {
             "1 to 255 (level)",
             "the UI shows the range and the unit next to the field"
         );
+        assert_eq!(
+            CharacterField::Experience.range_text(),
+            "0 to 2147483647 XP",
+            "the engine reads experience as a signed 32 bit int"
+        );
+        assert_eq!(
+            CharacterField::Gold.range_text(),
+            "empty or 0 to 2147483647 gold",
+            "the gold hint must not offer values the engine wraps negative"
+        );
+        assert_eq!(
+            CharacterField::Alignment.range_text(),
+            "0 to 255, 128 balanced",
+            "the alignment meter only has 256 values"
+        );
         assert!(
             CharacterField::HealthMax
                 .range_text()
@@ -4936,6 +4951,61 @@ mod tests {
             "the chapter range must say what the number counts: {}",
             CharacterField::Chapter.range_text()
         );
+    }
+
+    #[test]
+    fn form_rejects_values_above_the_engine_range() {
+        let character = character();
+        let mut form = CharacterForm::from_character(&character);
+        form.experience = (u64::from(MAX_STAT) + 1).to_string();
+        form.gold = (u64::from(MAX_STAT) + 1).to_string();
+        form.attribute_points = (u64::from(MAX_STAT) + 1).to_string();
+        form.kills = (u64::from(MAX_STAT) + 1).to_string();
+        form.alignment = (MAX_ALIGNMENT + 1).to_string();
+
+        let errors = form.validate_against(&character);
+        assert_eq!(errors.len(), 5, "{errors:?}");
+        for (field, error) in [
+            CharacterField::Experience,
+            CharacterField::Gold,
+            CharacterField::AttributePoints,
+            CharacterField::Alignment,
+            CharacterField::Kills,
+        ]
+        .into_iter()
+        .zip(errors)
+        {
+            assert_eq!(error.field, field);
+        }
+    }
+
+    #[test]
+    fn form_accepts_the_engine_stat_maxima() {
+        let character = character();
+        let mut form = CharacterForm::from_character(&character);
+        form.experience = MAX_STAT.to_string();
+        form.gold = MAX_STAT.to_string();
+        form.attribute_points = MAX_STAT.to_string();
+        form.kills = MAX_STAT.to_string();
+        form.alignment = MAX_ALIGNMENT.to_string();
+
+        let parsed = form.to_character(&character).expect("parse maxima");
+        assert_eq!(parsed.experience, MAX_STAT);
+        assert_eq!(parsed.gold, Some(MAX_STAT));
+        assert_eq!(parsed.attribute_points, MAX_STAT);
+        assert_eq!(parsed.kills, MAX_STAT);
+        assert_eq!(parsed.alignment, MAX_ALIGNMENT);
+    }
+
+    #[test]
+    fn form_rejects_alignment_outside_the_meter() {
+        let character = character();
+        for raw in ["-1", "256"] {
+            let mut form = CharacterForm::from_character(&character);
+            form.alignment = raw.to_owned();
+            let error = form.to_character(&character).expect_err("alignment");
+            assert!(error.contains("alignment"), "{raw}: {error}");
+        }
     }
 
     #[test]

@@ -139,6 +139,21 @@ first used them; JadeForge keeps that order and appends new labels.
 | 17 | vector3 | offset into field data | 3 × f32 |
 | 18 | locstring | offset into field data | see below |
 
+### Integer signedness
+
+The type tags describe storage, not the range the engine uses. Jade Empire's
+script API exposes the player's statistics as signed 32 bit `int` values
+(`GetGold`, `GetXP`, `GetAbilityScore`, `GetHealth`, `GetLevel`, ... in the
+shipped `nwscript.nss`), even when the savegame tags the field as `dword`. A
+`PlayerCreature.Stats.Gold` of `4294967295` therefore reaches the game as
+`-1`.
+
+JadeForge keeps the raw value readable so an already broken save can be
+repaired, but it only writes `0..=2147483647` for gold, experience, unspent
+attribute points and the kill counter. The same signed limit applies to every
+other integer statistic the game reads as `int`; narrower editor caps (health,
+attributes, skills) are safe subsets of it.
+
 ### Localized strings (type 12 and 18)
 
 ```
@@ -201,6 +216,10 @@ exposes:
 | `PlayerCreature.Amulet.OpenGemsList` | list | amulet sockets, see below |
 | `Campaign.Chapter` | dword | story chapter |
 | `Campaign.TimePlayed` | dword64 | play time in microseconds |
+
+The type column is the storage type. Gold, experience and unspent points are
+stored as `dword` but read as signed 32 bit `int` by the engine; see
+[Integer signedness](#integer-signedness).
 
 The inventory holds structs with `Count` (byte), `ItemId` (word) and `Type`
 (byte). Fields are sparse: the game only writes what differs from its defaults,
@@ -431,9 +450,10 @@ The scale is unsigned 0..255: the community documentation for `gems.2da` states
 that completely Closed Fist characters have alignment 0 and completely Open Palm
 characters have 255. The neutral midpoint is therefore **128**; the editor uses
 that reference (`DEFAULT_ALIGNMENT`) for its label and shows "Balanced" at 128.
-The observed savegames only cover the Open Palm half (131..255). The raw number
-stays editable, so a value can always be checked against the in-game meter; no
-other alignment field exists in the player block.
+The observed savegames only cover the Open Palm half (131..255). The engine
+clamps the meter to 0..255, and the editor enforces the same range
+(`MIN_ALIGNMENT`/`MAX_ALIGNMENT`), so a value can always be checked against the
+in-game meter. No other alignment field exists in the player block.
 
 ## Story variables and journal
 
@@ -489,3 +509,6 @@ Community documentation, used for the semantics of the game data tables:
   for style upgrade effects and costs.
 * [2DA Files](https://jadeempire-modding.fandom.com/wiki/2DA_Files): index of
   the tables.
+* [Nwscript.nss](https://jadeempire-modding.fandom.com/wiki/Nwscript.nss): the
+  script API signatures that show gold, experience and the other statistics are
+  signed 32 bit `int` values.

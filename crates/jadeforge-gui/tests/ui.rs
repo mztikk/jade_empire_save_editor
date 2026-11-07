@@ -1944,6 +1944,10 @@ fn the_character_form_shows_units_and_the_optional_gold_field() {
         "the appearance field does not say it is an index"
     );
     assert!(
+        find_label_text(&test, "empty or 0 to 2147483647 gold").is_some(),
+        "the gold field must not offer values the engine wraps negative"
+    );
+    assert!(
         find_label_text(&test, "128 balanced").is_some(),
         "the alignment field does not explain its balanced value"
     );

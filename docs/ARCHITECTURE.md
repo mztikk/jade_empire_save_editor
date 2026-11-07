@@ -85,9 +85,10 @@ its seven slots, socketed gems fit the tier, and a style level matches its mask.
 
 1. Parsing is strict: bad magic, out-of-range offsets, unknown field types and
    inconsistent block sizes are errors, never "best effort".
-2. Edits are range checked (`level` 1..=255, health 0..=1_000_000, names at most
-   64 characters, ...) and typed editors run on a working copy, so a rejected
-   edit leaves the savegame and its dirty flag untouched.
+2. Edits are range checked (`level` 1..=255, health 0..=1_000_000, gold,
+   experience, unspent points and kills 0..=2_147_483_647, alignment 0..=255,
+   names at most 64 characters, ...) and typed editors run on a working copy, so
+   a rejected edit leaves the savegame and its dirty flag untouched.
 3. Only fields that actually change are touched; `apply_character` returns the
    list of changes so callers can show a diff.
 4. Saving verifies the full round trip and the domain invariants first.

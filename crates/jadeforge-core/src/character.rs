@@ -16,6 +16,21 @@ use crate::save::{GLOBAL_BLOCK, POLYPLAYER_BLOCK, SaveGame};
 /// of the Closed Fist, everything above the Way of the Open Palm.
 pub const DEFAULT_ALIGNMENT: i64 = 128;
 
+/// Lowest alignment the game's meter can show.
+pub const MIN_ALIGNMENT: i32 = 0;
+
+/// Highest alignment the game's meter can show.
+pub const MAX_ALIGNMENT: i32 = 255;
+
+/// Highest value the engine can represent for a 32 bit character statistic.
+///
+/// Gold, experience and unspent points are tagged `dword` in the savegame,
+/// while the kill counter is an `int`. Jade Empire's script API reads all of
+/// them as signed `int` (`GetGold`, `GetXP`, `GetAbilityScore`, ...), so a
+/// stored `4294967295` reaches the game as `-1` and the editor stops at
+/// `i32::MAX`.
+pub const MAX_STAT: u32 = 2_147_483_647;
+
 /// A single field that was changed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Change {
@@ -35,10 +50,16 @@ pub struct Character {
     /// Level, stored as a byte.
     pub level: u8,
     /// Current experience points.
+    ///
+    /// The engine reads the stored dword as a signed `int`; see [`MAX_STAT`].
     pub experience: u32,
     /// Gold, when the savegame has a gold field.
+    ///
+    /// The engine reads the stored dword as a signed `int`; see [`MAX_STAT`].
     pub gold: Option<u32>,
     /// Unspent attribute points.
+    ///
+    /// The engine reads the stored dword as a signed `int`; see [`MAX_STAT`].
     pub attribute_points: u32,
     /// Current health.
     pub health: f32,
@@ -64,7 +85,7 @@ pub struct Character {
     pub intuition: i32,
     /// Intimidate skill.
     pub intimidate: i32,
-    /// Alignment.
+    /// Alignment, from the Closed Fist (`0`) to the Open Palm (`255`).
     pub alignment: i32,
     /// Appearance index.
     pub appearance: i32,
@@ -73,6 +94,8 @@ pub struct Character {
     /// Total play time in microseconds.
     pub time_played: u64,
     /// Number of kills.
+    ///
+    /// The engine reads the stored value as a signed `int`; see [`MAX_STAT`].
     pub kills: u32,
 }
 
@@ -325,7 +348,16 @@ impl Character {
             "experience",
             u64::from(self.experience),
             0,
-            u64::from(u32::MAX),
+            u64::from(MAX_STAT),
+        )?;
+        if let Some(gold) = self.gold {
+            check_unsigned("gold", u64::from(gold), 0, u64::from(MAX_STAT))?;
+        }
+        check_unsigned(
+            "attribute points",
+            u64::from(self.attribute_points),
+            0,
+            u64::from(MAX_STAT),
         )?;
         check_unsigned("body", u64::from(self.body), 0, 1000)?;
         check_unsigned("mind", u64::from(self.mind), 0, 1000)?;
@@ -352,11 +384,11 @@ impl Character {
         check_signed(
             "alignment",
             i64::from(self.alignment),
-            -1_000_000,
-            1_000_000,
+            i64::from(MIN_ALIGNMENT),
+            i64::from(MAX_ALIGNMENT),
         )?;
         check_signed("appearance", i64::from(self.appearance), 0, 1_000_000)?;
-        check_unsigned("kills", u64::from(self.kills), 0, u64::from(u32::MAX))?;
+        check_unsigned("kills", u64::from(self.kills), 0, u64::from(MAX_STAT))?;
         check_unsigned("chapter", u64::from(self.chapter), 0, 100)?;
         check_name(&self.name)?;
 
