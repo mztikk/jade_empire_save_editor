@@ -207,6 +207,8 @@ complete = true
 # Gems tab
 "gems.add_heading" = "Add a gem"
 "gems.clear_filter" = "Clear the gem filter"
+"gems.clear_inventory_filter" = "Clear the carried gem filter"
+"gems.inventory_list" = "Carried gems"
 "gems.move_hint" = "Moving a gem keeps its effects; JadeForge only changes which list references it."
 "gems.empty_inventory" = "No gems carried in the inventory."
 "gems.empty_amulet" = "No gems socketed into the amulet."
@@ -216,6 +218,7 @@ complete = true
 "gems.add" = "Add"
 "gems.missing_hint" = "The game data with the gem definitions was not found."
 "gems.no_match" = "No gem matches this filter."
+"gems.no_inventory_match" = "No carried gem matches this filter."
 "gems.add_list" = "Gems you can add"
 "gems.from_game_data" = "From the game data"
 "gems.all_sockets" = "All seven sockets are unlocked."
@@ -429,6 +432,7 @@ complete = true
 "filter.items" = "Filter the item database, or leave empty to browse it"
 "filter.styles" = "Filter the style list, or leave empty to browse it"
 "filter.gems" = "Filter the gem list, or leave empty to browse it"
+"filter.gems.inventory" = "Filter carried gems, or leave empty to browse them"
 
 # Shared
 # Separator for joining short noun lists in the UI.

@@ -24,11 +24,13 @@ pub fn view(
     ctx: &Ctx,
     gems: &[GemRow],
     query: State<String>,
+    inventory_query: State<String>,
     available: &Rc<Vec<PickerRow>>,
     database_empty: bool,
     amulet: Option<AmuletInfo>,
     hovered: State<Option<crate::app::HoverKey>>,
     filter_id: AccessibilityId,
+    inventory_filter_id: AccessibilityId,
 ) -> Element {
     let amulet_gems: Vec<&GemRow> = gems
         .iter()
@@ -44,6 +46,18 @@ pub fn view(
         .filter(|gem| gem.location == GemLocation::Amulet && !gem.empty)
         .count();
     let carried = inventory.iter().filter(|gem| !gem.empty).count();
+    let inventory_needle = inventory_query.read().trim().to_lowercase();
+    let matching_inventory: Vec<&GemRow> = inventory
+        .iter()
+        .copied()
+        .filter(|gem| gem_matches_filter(gem, &inventory_needle))
+        .collect();
+    let matching_carried = matching_inventory.iter().filter(|gem| !gem.empty).count();
+    let carried_hint = if inventory_needle.is_empty() {
+        carried
+    } else {
+        matching_carried
+    };
     let can_socket = amulet.is_some_and(|amulet| socketed < usize::from(amulet.sockets));
     let amulet_title = amulet.map_or_else(
         || t(keys::GEMS_NO_AMULET).to_owned(),
@@ -66,29 +80,20 @@ pub fn view(
             .map(|gem| gem_row(ctx, gem, true, true, amulet.is_some(), hovered, filter_id))
             .collect()
     };
-    let inventory_rows: Vec<Element> = if let Some(error) = &gems_error {
-        vec![widgets::hint(super::section_unreadable(
-            Section::Gems,
-            &error.message,
-        ))]
-    } else if inventory.is_empty() {
-        vec![widgets::hint(t(keys::GEMS_EMPTY_INVENTORY))]
-    } else {
-        inventory
-            .into_iter()
-            .map(|gem| {
-                gem_row(
-                    ctx,
-                    gem,
-                    false,
-                    can_socket,
-                    amulet.is_some(),
-                    hovered,
-                    filter_id,
-                )
-            })
-            .collect()
-    };
+    let inventory_rows: Vec<Element> = matching_inventory
+        .into_iter()
+        .map(|gem| {
+            gem_row(
+                ctx,
+                gem,
+                false,
+                can_socket,
+                amulet.is_some(),
+                hovered,
+                inventory_filter_id,
+            )
+        })
+        .collect();
 
     let matching = available.len();
     let mut add_children = vec![widgets::filter_input(
@@ -164,21 +169,90 @@ pub fn view(
         .child(widgets::card(
             capitalize(t(keys::LABEL_INVENTORY)),
             Some(widgets::plural(
-                carried,
+                carried_hint,
                 keys::COUNT_GEM_CARRIED_ONE,
                 keys::COUNT_GEM_CARRIED_OTHER,
             )),
-            vec![
-                rect()
-                    .vertical()
-                    .width(Size::fill())
-                    .spacing(theme::space::xs())
-                    .children(inventory_rows)
-                    .into_element(),
-                widgets::hint(t(keys::GEMS_MOVE_HINT)),
-            ],
+            {
+                let mut children = Vec::new();
+                if gems_error.is_none() {
+                    children.push(widgets::filter_input(
+                        inventory_query,
+                        keys::FILTER_GEMS_INVENTORY,
+                        keys::GEMS_CLEAR_INVENTORY_FILTER,
+                        inventory_filter_id,
+                    ));
+                }
+                if let Some(error) = &gems_error {
+                    children.push(widgets::hint(super::section_unreadable(
+                        Section::Gems,
+                        &error.message,
+                    )));
+                } else if inventory.is_empty() && inventory_needle.is_empty() {
+                    children.push(widgets::hint(t(keys::GEMS_EMPTY_INVENTORY)));
+                } else if inventory_rows.is_empty() {
+                    children.push(widgets::hint(t(keys::GEMS_NO_INVENTORY_MATCH)));
+                } else {
+                    children.push(carried_gem_list(
+                        t(keys::GEMS_INVENTORY_LIST),
+                        inventory_rows,
+                    ));
+                }
+                children.push(widgets::hint(t(keys::GEMS_MOVE_HINT)));
+                children
+            },
         ))
         .child(add_card)
+        .into_element()
+}
+
+/// Number of carried gem rows the viewport shows before it scrolls.
+///
+/// The add-gem picker below uses the same idea; both lists stay a fixed block
+/// instead of letting a long one push the other out of the page.
+const CARRIED_VISIBLE_ROWS: usize = 7;
+
+/// Whether a carried gem matches a filter term.
+///
+/// The effect line is part of the visible row, so searching for an effect such
+/// as `+2 Body` narrows the list as usefully as searching for the gem name.
+fn gem_matches_filter(gem: &GemRow, needle: &str) -> bool {
+    needle.is_empty()
+        || gem.name.to_lowercase().contains(needle)
+        || gem
+            .effects
+            .iter()
+            .any(|effect| effect.to_lowercase().contains(needle))
+}
+
+/// Height of the carried gem viewport for a list of `rows` elements.
+///
+/// Short lists shrink to their own height; longer ones stop at
+/// [`CARRIED_VISIBLE_ROWS`] and scroll inside the card.
+fn carried_list_height(rows: usize) -> f32 {
+    let visible = rows.clamp(1, CARRIED_VISIBLE_ROWS);
+    let gaps = visible.saturating_sub(1);
+    theme::layout::gem_row_height() * visible as f32 + theme::space::xs() * gaps as f32
+}
+
+/// A scrollable carried-gem list capped at [`CARRIED_VISIBLE_ROWS`] rows.
+fn carried_gem_list(label: &str, rows: Vec<Element>) -> Element {
+    rect()
+        .width(Size::fill())
+        .height(Size::px(carried_list_height(rows.len())))
+        .a11y_role(AccessibilityRole::ListBox)
+        .a11y_alt(label.to_owned())
+        .child(
+            ScrollView::new()
+                .width(Size::fill())
+                .height(Size::fill())
+                .spacing(theme::space::xs())
+                .show_scrollbar(true)
+                .auto_hide_scrollbars(false)
+                .drag_scrolling(false)
+                .key("carried-gem-rows")
+                .children(rows),
+        )
         .into_element()
 }
 
@@ -330,6 +404,31 @@ fn gem_row(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_carried_list_stops_growing_at_the_viewport_cap() {
+        assert!(carried_list_height(2) > carried_list_height(1));
+        assert!(carried_list_height(7) > carried_list_height(6));
+        assert_eq!(
+            carried_list_height(CARRIED_VISIBLE_ROWS),
+            carried_list_height(40)
+        );
+    }
+
+    #[test]
+    fn the_carried_filter_matches_names_and_effects() {
+        let gem = GemRow {
+            struct_index: 3,
+            name: "Aurajuwel der Bosheit".to_owned(),
+            effects: vec!["+2 Intimidate".to_owned(), "+2 Body".to_owned()],
+            empty: false,
+            location: GemLocation::Inventory,
+        };
+        assert!(gem_matches_filter(&gem, "aurajuwel"));
+        assert!(gem_matches_filter(&gem, "+2 body"));
+        assert!(gem_matches_filter(&gem, ""));
+        assert!(!gem_matches_filter(&gem, "friendship"));
+    }
 
     #[test]
     fn the_amulet_summary_names_both_counts_and_the_tier() {

@@ -679,6 +679,15 @@ pub mod layout {
     pub fn picker_row_height() -> f32 {
         scaled(56.0)
     }
+    /// Height of one carried gem row.
+    ///
+    /// The row stacks a name line and up to two effect lines, so it needs more
+    /// room than a picker row. The carried-gem viewport uses this to cap itself
+    /// at a fixed number of rows.
+    #[must_use]
+    pub fn gem_row_height() -> f32 {
+        scaled(64.0)
+    }
     /// Smallest click target of a row control.
     #[must_use]
     pub fn target_min() -> f32 {
@@ -1274,6 +1283,7 @@ mod tests {
             layout::item_count_width(),
             layout::upgrade_label_width(),
             layout::picker_row_height(),
+            layout::gem_row_height(),
             layout::field_narrow(),
             layout::field_medium(),
             layout::field_wide(),

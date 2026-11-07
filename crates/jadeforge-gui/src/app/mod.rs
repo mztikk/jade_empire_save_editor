@@ -378,6 +378,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let style_query = use_state(String::new);
     let hovered = use_state(|| None::<HoverKey>);
     let gem_query = use_state(String::new);
+    let gem_inventory_query = use_state(String::new);
     let expanded_item = use_state(|| None::<usize>);
     let expanded_suggestion = use_state(|| None::<u16>);
     let expanded_style = use_state(|| None::<u16>);
@@ -414,6 +415,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let item_filter_id = use_a11y();
     let style_filter_id = use_a11y();
     let gem_filter_id = use_a11y();
+    let gem_inventory_filter_id = use_a11y();
     // One focus target for the editor's scroll view: static content below the
     // fold is reachable with the arrow and paging keys, not only the wheel.
     let editor_scroll_id = use_a11y();
@@ -503,6 +505,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 show_review,
                 style_query,
                 gem_query,
+                gem_inventory_query,
                 expanded_item,
                 expanded_suggestion,
                 expanded_style,
@@ -821,11 +824,13 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 &ctx,
                 &gems,
                 gem_query,
+                gem_inventory_query,
                 &gem_picker_rows,
                 gem_database_empty,
                 amulet,
                 hovered,
                 gem_filter_id,
+                gem_inventory_filter_id,
             )
         }
         (Tab::Companions, _) => views::henchmen::view(&ctx, &henchmen, hovered),
@@ -960,6 +965,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         let mut item_query = item_query;
         let mut style_query = style_query;
         let mut gem_query = gem_query;
+        let mut gem_inventory_query = gem_inventory_query;
         let mut show_about = show_about;
         let mut show_backups = show_backups;
         let mut show_review = show_review;
@@ -1032,7 +1038,12 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         match active {
                             Tab::Inventory => item_query.set(String::new()),
                             Tab::Styles => style_query.set(String::new()),
-                            Tab::Gems => gem_query.set(String::new()),
+                            // The gems tab has one filter per list, so Escape
+                            // clears both instead of leaving one query behind.
+                            Tab::Gems => {
+                                gem_query.set(String::new());
+                                gem_inventory_query.set(String::new());
+                            }
                             Tab::Overview | Tab::Character | Tab::Companions => {
                                 save_query.set(String::new());
                             }
@@ -1158,6 +1169,7 @@ fn reset_pickers(
     show_review: State<bool>,
     style_query: State<String>,
     gem_query: State<String>,
+    gem_inventory_query: State<String>,
     expanded_item: State<Option<usize>>,
     expanded_suggestion: State<Option<u16>>,
     expanded_style: State<Option<u16>>,
@@ -1182,6 +1194,8 @@ fn reset_pickers(
     style_query.set(String::new());
     let mut gem_query = gem_query;
     gem_query.set(String::new());
+    let mut gem_inventory_query = gem_inventory_query;
+    gem_inventory_query.set(String::new());
     let mut expanded_item = expanded_item;
     expanded_item.set(None);
     let mut expanded_suggestion = expanded_suggestion;

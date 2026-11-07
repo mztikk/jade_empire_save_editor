@@ -1533,6 +1533,144 @@ fn the_gems_tab_lists_amulet_and_inventory() {
 }
 
 #[test]
+fn the_carried_gems_filter_only_filters_the_carried_list() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data");
+        return;
+    }
+    let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
+    assert!(session.open(0));
+    let available = session.available_gems();
+    let Some(gem) = available.first().cloned() else {
+        eprintln!("skipping: no gem can be resolved from the game data");
+        return;
+    };
+    let add_count = match available.len() {
+        1 => "1 gem".to_owned(),
+        count => format!("{count} gems"),
+    };
+    session.add_gem(gem.item_id);
+    session.save().expect("add a carried gem to the fixture");
+
+    let mut test = launch_sized(fixture.save_dir.clone(), 1600.0);
+    assert!(click_text(&mut test, "Gems"), "no gems tab");
+    let filter =
+        find_paragraph(&test, "Filter carried gems").expect("the carried gem filter is missing");
+    click_node(&mut test, &filter);
+    test.write_text("zzz-no-such-gem");
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "No carried gem matches this filter.").is_some(),
+        "the carried gem filter did not filter the carried list"
+    );
+    assert!(
+        find_label_exact(&test, &add_count).is_some(),
+        "the carried gem filter also filtered the add-gem picker"
+    );
+    assert!(
+        test.find(|node, _| {
+            (a11y_role(&node) == "ListBox" && a11y_label(&node).as_deref() == Some("Carried gems"))
+                .then_some(())
+        })
+        .is_none(),
+        "the filtered carried list still renders its full list box"
+    );
+
+    assert!(
+        click_a11y_label(&mut test, "Clear the carried gem filter"),
+        "the carried gem filter has no clear button"
+    );
+    test.sync_and_update();
+    let filter =
+        find_paragraph(&test, "Filter carried gems").expect("the carried gem filter is missing");
+    click_node(&mut test, &filter);
+    test.write_text("zzz-no-such-gem");
+    test.sync_and_update();
+    assert!(find_label_text(&test, "No carried gem matches this filter.").is_some());
+    // Escape clears both gem filters; the carried list comes back.
+    test.press_key(Key::Named(NamedKey::Escape));
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "No carried gem matches this filter.").is_none(),
+        "Escape did not clear the carried gem filter"
+    );
+    let filter =
+        find_paragraph(&test, "Filter carried gems").expect("the carried gem filter is missing");
+    click_node(&mut test, &filter);
+    test.write_text(gem.name.to_lowercase());
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "No carried gem matches this filter.").is_none(),
+        "a matching carried gem was filtered out"
+    );
+    assert!(
+        test.find(|node, _| {
+            (a11y_role(&node) == "ListBox" && a11y_label(&node).as_deref() == Some("Carried gems"))
+                .then_some(())
+        })
+        .is_some(),
+        "the carried list did not come back after the filter was cleared"
+    );
+}
+
+#[test]
+fn the_carried_gems_list_scrolls_after_a_full_viewport() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data");
+        return;
+    }
+    let mut session = jadeforge_gui::Session::with_directory(fixture.save_dir.clone());
+    assert!(session.open(0));
+    let Some(gem) = session.available_gems().first().cloned() else {
+        eprintln!("skipping: no gem can be resolved from the game data");
+        return;
+    };
+    for _ in 0..8 {
+        session.add_gem(gem.item_id);
+    }
+    session.save().expect("fill the carried gem list");
+
+    let mut test = launch_sized(fixture.save_dir.clone(), 1800.0);
+    assert!(click_text(&mut test, "Gems"), "no gems tab");
+    let list = test
+        .find(|node, _| {
+            (a11y_role(&node) == "ListBox" && a11y_label(&node).as_deref() == Some("Carried gems"))
+                .then_some(node)
+        })
+        .expect("the carried gem list is missing");
+    let expected = theme::layout::gem_row_height() * 7.0 + theme::space::xs() * 6.0;
+    assert!(
+        (list.layout().area.size.height - expected).abs() < 1.0,
+        "the carried gem viewport is {} px, expected {expected} px",
+        list.layout().area.size.height
+    );
+    assert!(
+        list.children()
+            .iter()
+            .any(|child| a11y_role(child) == "ScrollView"),
+        "the carried gem list is capped but does not scroll"
+    );
+    let rows = test.find_many(|node, _| {
+        (a11y_role(&node) == "Group"
+            && a11y_label(&node).is_some_and(|label| label.ends_with(" gem")))
+        .then_some(())
+    });
+    assert!(
+        rows.len() > 7,
+        "the carried gem list only has {} rows, so it never has to scroll",
+        rows.len()
+    );
+}
+
+#[test]
 fn an_empty_carried_gems_list_does_not_report_a_gem() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
