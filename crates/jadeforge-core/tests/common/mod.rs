@@ -80,7 +80,7 @@ pub(crate) fn add_character_fields(gff: &mut Gff, player: usize) {
         .expect("intuition");
     gff.add_field(stats, "Intimidate", Value::Int(3))
         .expect("intimidate");
-    gff.add_field(stats, "Alignment", Value::Int(500))
+    gff.add_field(stats, "Alignment", Value::Int(200))
         .expect("alignment");
     gff.add_field(stats, "Appearance", Value::Int(4))
         .expect("appearance");
@@ -119,7 +119,7 @@ pub(crate) fn character() -> Character {
         charm: 1,
         intuition: 2,
         intimidate: 3,
-        alignment: 500,
+        alignment: 200,
         appearance: 4,
         chapter: 2,
         time_played: 90_000_000_000,

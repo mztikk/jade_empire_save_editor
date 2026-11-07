@@ -248,7 +248,7 @@ fn block() -> Gff {
     add(&mut gff, stats, "Charm", Value::Int(1));
     add(&mut gff, stats, "Intuition", Value::Int(2));
     add(&mut gff, stats, "Intimidate", Value::Int(3));
-    add(&mut gff, stats, "Alignment", Value::Int(500));
+    add(&mut gff, stats, "Alignment", Value::Int(200));
     add(&mut gff, stats, "Appearance", Value::Int(4));
     add(&mut gff, progress, "Kills", Value::DWord(42));
 
