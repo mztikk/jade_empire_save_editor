@@ -156,15 +156,16 @@ catalogs, the locale enum and the strictness rules:
 | `lib` | `Key`, generated `keys`, `Locale`, `t`/`fill`/`plural`, `install`/`current`, `is_complete`, `has_id`, `locale_label`, catalog loading, generated pseudo locale |
 | `build.rs` | generates the typed `keys` module from `en.toml` and fails the build through a generated `compile_error!` on a malformed or colliding catalog |
 | `locales/en.toml` | English source of truth, `complete = true` |
-| `locales/de.toml` | German peer catalog, `complete = false` while the preview is incomplete |
+| `locales/de.toml` | German peer catalog, `complete = true` |
 
 A missing or empty value renders a cached `⟦id⟧` marker; there is no English
 fallback. A malformed catalog degrades to markers, never to English. The typed
 `Key` newtype and the build-generated `keys` constants make a raw catalog-id
 string a compile error, and a test keeps `keys::ALL` in lockstep with
 `en.toml`. Placeholder parity and English completeness are enforced by tests.
-German stays preview-only and is not selected from the environment until its
-catalog is marked complete.
+German is complete and may be selected from the environment. An incomplete
+catalog stays preview-only (`Deutsch (Vorschau)`, `⟦id⟧` markers) until it is
+marked complete.
 
 ## `jadeforge-session`
 

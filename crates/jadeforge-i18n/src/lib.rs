@@ -213,6 +213,24 @@ pub fn fill(key: Key, arguments: &[(&str, &str)]) -> String {
     text
 }
 
+/// Joins catalogued short labels with a catalogued separator.
+///
+/// Used for noun lists that mean the same thing in every language, so they
+/// reuse the individual field ids instead of adding a second combined id. The
+/// separator itself is translatable.
+#[must_use]
+pub fn join_list(keys: &[Key], separator: Key) -> String {
+    let separator = t(separator);
+    let mut text = String::new();
+    for (index, key) in keys.iter().enumerate() {
+        if index > 0 {
+            text.push_str(separator);
+        }
+        text.push_str(t(*key));
+    }
+    text
+}
+
 /// A count followed by the singular or plural catalogued noun.
 ///
 /// Both nouns are typed keys:
@@ -351,6 +369,31 @@ mod tests {
     }
 
     #[test]
+    fn noun_lists_reuse_the_shared_separator() {
+        install(Locale::English);
+        assert_eq!(
+            join_list(
+                &[keys::FIELD_BODY, keys::FIELD_MIND, keys::FIELD_SPIRIT],
+                keys::COMMON_LIST_SEPARATOR,
+            ),
+            "Body / Mind / Spirit"
+        );
+    }
+
+    #[test]
+    fn english_values_are_unique() {
+        let mut seen: HashMap<&str, &str> = HashMap::new();
+        for (id, value) in &english().messages {
+            if let Some(previous) = seen.insert(value.as_str(), id.as_str()) {
+                assert_eq!(
+                    previous, id,
+                    "two ids have the same English value; reuse one id"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn placeholder_sets_match_across_catalogs() {
         let en = english();
         let de = german();
@@ -417,7 +460,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "run after filling locales/de.toml"]
     fn every_german_value_is_filled() {
         let mut empty: Vec<&str> = german()
             .messages

@@ -98,8 +98,6 @@ complete = true
 "overview.game_data.missing" = "No game installation found next to the savegames: names fall back to ids, while categories, levels and timings still come from the savegame."
 "overview.game_data.bundled_suffix" = ". Bundled English names are still available."
 "field.attribute_points" = "Unspent attribute points"
-"overview.body_mind_spirit" = "Body / Mind / Spirit"
-"overview.charm_intuition_intimidate" = "Charm / Intuition / Intimidate"
 "overview.unknown_size" = "unknown size"
 "overview.notice" = "Notice"
 "overview.linked" = "linked"
@@ -431,6 +429,10 @@ complete = true
 "filter.styles" = "Filter the style list, or leave empty to browse it"
 "filter.gems" = "Filter the gem list, or leave empty to browse it"
 
+# Shared
+# Separator for joining short noun lists in the UI.
+"common.list_separator" = " / "
+
 # Character tab and fields
 "character.alignment.fallback" = "Alignment is a number; below 128 is the Closed Fist, above is the Open Palm."
 "character.changes_hint" = "Every valid change is applied in memory immediately"
@@ -439,12 +441,12 @@ complete = true
 # args: alignment, default
 "character.alignment.template" = "{alignment} (the game starts at {default}, below is Closed Fist, above is Open Palm)."
 "field.experience" = "EXPERIENCE"
-"field.body" = "BODY"
-"field.mind" = "MIND"
-"field.spirit" = "SPIRIT"
-"field.charm" = "CHARM"
-"field.intuition" = "INTUITION"
-"field.intimidate" = "INTIMIDATE"
+"field.body" = "Body"
+"field.mind" = "Mind"
+"field.spirit" = "Spirit"
+"field.charm" = "Charm"
+"field.intuition" = "Intuition"
+"field.intimidate" = "Intimidate"
 "field.alignment" = "ALIGNMENT"
 "field.name.range" = "at most 64 characters"
 "field.level.range" = "1 to 255 (level)"

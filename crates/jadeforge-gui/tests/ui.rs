@@ -4475,27 +4475,32 @@ fn the_german_catalog_translations_render_in_the_shell() {
         jadeforge_gui::i18n::current(),
         jadeforge_gui::Locale::German
     );
+    let about = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::SHELL_ABOUT);
     assert!(
-        find_label_text(&test, "Über JadeForge").is_some(),
+        find_label_text(&test, about).is_some(),
         "the translated About button is missing"
     );
+    let empty = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::SHELL_NO_SAVEGAME_SELECTED);
     assert!(
-        find_label_text(&test, "Kein Spielstand ausgewählt").is_some(),
+        find_label_text(&test, empty).is_some(),
         "the translated empty state is missing"
     );
-    for translated in ["Edelsteine", "Stile", "Inventar"] {
+    for tab in [
+        jadeforge_gui::i18n::keys::COUNT_GEM_OTHER,
+        jadeforge_gui::i18n::keys::COUNT_STYLE_OTHER,
+        jadeforge_gui::i18n::keys::LABEL_INVENTORY,
+    ] {
+        let translated = jadeforge_gui::i18n::t(tab);
         assert!(
             find_label_text(&test, translated).is_some(),
-            "the prefilled German tab {translated:?} is missing"
+            "the translated German tab {translated:?} is missing"
         );
     }
     let scan = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::SHELL_SCAN);
-    if scan.starts_with('⟦') {
-        assert!(
-            find_label_text(&test, scan).is_some(),
-            "an empty German id did not render its marker"
-        );
-    }
+    assert!(
+        !scan.starts_with('⟦'),
+        "the complete German catalog still renders a marker for the scan label"
+    );
 }
 
 #[test]
@@ -4522,25 +4527,25 @@ fn the_about_page_changes_the_language_and_persists_it() {
     let config = jadeforge_gui::config::Config::load();
     assert_eq!(config.locale, jadeforge_gui::Locale::Pseudo);
 
+    let german_label = jadeforge_gui::i18n::locale_label(jadeforge_gui::Locale::German);
     assert!(
-        click_text(&mut test, "Deutsch (Vorschau)"),
-        "the German preview chip is missing"
+        click_text(&mut test, german_label),
+        "the German language chip is missing"
     );
     assert_eq!(
         jadeforge_gui::i18n::current(),
         jadeforge_gui::Locale::German
     );
+    let about = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::SHELL_ABOUT);
     assert!(
-        find_label_text(&test, "Über JadeForge").is_some(),
-        "the preview did not render the translated About title"
+        find_label_text(&test, about).is_some(),
+        "the German About title is missing"
     );
     let scan = jadeforge_gui::i18n::t(jadeforge_gui::i18n::keys::SHELL_SCAN);
-    if scan.starts_with('⟦') {
-        assert!(
-            find_label_text(&test, scan).is_some(),
-            "the preview did not render a marker for an empty German id"
-        );
-    }
+    assert!(
+        !scan.starts_with('⟦'),
+        "the complete German catalog still renders a marker for the scan label"
+    );
     let config = jadeforge_gui::config::Config::load();
     assert_eq!(config.locale, jadeforge_gui::Locale::German);
 }

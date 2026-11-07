@@ -66,10 +66,11 @@ the game does, verifies the result and keeps a backup of the original.
   entries stay responsive while only the visible rows are built.
 - **Localization-ready UI** – interface strings use stable semantic ids in an
   English source catalog plus a peer German catalog in
-  `crates/jadeforge-i18n/locales`, and a generated QA pseudolocale. English is
-  complete; German is a `Deutsch (Vorschau)` catalog that shows `⟦id⟧` markers
-  until filled, with no English fallback. Adding a language means one TOML file
-  and one locale variant, not touching the views.
+  `crates/jadeforge-i18n/locales`, and a generated QA pseudolocale. English and
+  German are complete; a future language can start as a `Deutsch (Vorschau)`-style
+  preview that shows `⟦id⟧` markers until filled, with no English fallback.
+  Adding a language means one TOML file and one locale variant, not touching the
+  views; ids are generated as typed compile-time constants.
 - **Help and diagnostics** – About shows the version, configuration and data
   folders, block count, theme, language and renderer preference, copies a
   diagnostics report, and lists every keyboard shortcut (Ctrl+/ opens it).

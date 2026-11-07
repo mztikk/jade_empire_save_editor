@@ -238,7 +238,10 @@ pub fn view(
                     .into_element(),
             ),
             (
-                t(keys::OVERVIEW_BODY_MIND_SPIRIT).to_owned(),
+                crate::i18n::join_list(
+                    &[keys::FIELD_BODY, keys::FIELD_MIND, keys::FIELD_SPIRIT],
+                    keys::COMMON_LIST_SEPARATOR,
+                ),
                 widgets::a11y_text(format!(
                     "{} / {} / {}",
                     character.body, character.mind, character.spirit
@@ -248,7 +251,14 @@ pub fn view(
                 .into_element(),
             ),
             (
-                t(keys::OVERVIEW_CHARM_INTUITION_INTIMIDATE).to_owned(),
+                crate::i18n::join_list(
+                    &[
+                        keys::FIELD_CHARM,
+                        keys::FIELD_INTUITION,
+                        keys::FIELD_INTIMIDATE,
+                    ],
+                    keys::COMMON_LIST_SEPARATOR,
+                ),
                 widgets::a11y_text(format!(
                     "{} / {} / {}",
                     character.charm, character.intuition, character.intimidate
