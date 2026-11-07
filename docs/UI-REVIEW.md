@@ -78,7 +78,7 @@ Delivered on `main` in [#30](https://github.com/mztikk/jade_empire_save_editor/p
 | Backups, dialogs, no-op states | The successful save message and Overview card show the exact backup path with copy/open actions and restore instructions; the close guard offers explicit Save / Discard / Cancel; Save and Revert are disabled with an explanation when there is nothing to write or discard, while the success status stays visible; folder-dialog cancellation and unreadable picked paths are reported distinctly. |
 | Visual polish | The duplicate Overview screenshot was removed and the sidebar preview aligns with the identity block at the shared card radius; the glance values are full-width rows at every supported width; the save path has copy/open-folder actions; the first scan has sidebar and editor skeletons and manual scans have a reserved busy indicator in the tab bar. |
 | Guidance and settings | The About entry point is an outlined toolbar button and opening it clears the tab selection, so no editor tab looks active while the page is shown; the page shows the version, config path, remembered save folder and sort order, backup rules and keyboard shortcuts; each character field shows its range and unit and the optional Gold field explains when it is created; the item picker has a category filter; the save filter placeholder names the character name it also matches. |
-| Tooling and documentation | Snapshot `--query` resolves the active tab's own filter instead of the first `Filter ` field; this document has a screenshot/evidence maintenance note; README and CONTRIBUTING link the P1/P2/P3 issues. |
+| Tooling and documentation | Snapshot `all` selects tabs by accessibility role and display order and writes the six documented names; `--query` resolves the active tab's translated filter placeholder instead of the first `Filter ` field; missing tabs, filters and savegames exit nonzero. This document has a screenshot/evidence maintenance note; README and CONTRIBUTING link the P1/P2/P3 issues. |
 
 ### P3: [#9](https://github.com/mztikk/jade_empire_save_editor/issues/9)
 
@@ -153,17 +153,27 @@ cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" scratch/l
 cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" scratch/zoom.png all --scale 200 --width 1600 --height 900
 ```
 
+`all` writes the six documented names next to `<OUT.png>`
+(`screenshot-overview.png`, `screenshot-character.png`, ...). Tabs are selected
+by their accessibility role and display order, and the picker filter is located
+by its translated placeholder, so changing the UI language cannot silently
+capture the wrong tab or the sidebar filter. A missing tab, missing picker
+filter or save folder that opens no savegame exits nonzero instead of writing
+an empty-state image.
+
 `--query <text>` types into the active tab's own picker filter (Inventory,
-Styles or Gems) and refuses to fall back to the sidebar save filter. The
-headless suite asserts the same placeholders, the row geometry, the responsive
-breakpoints and the a11y tree, so a screenshot alone is never the test.
+Styles or Gems) and refuses to fall back to the sidebar save filter. A query on
+a tab without a picker is an error. The headless suite asserts the tab labels,
+the same placeholders, the row geometry, the responsive breakpoints and the a11y
+tree, and renders the six tab images to prove they differ, so a screenshot
+alone is never the test.
 
 ## Verification
 
 - `just check`: the full workspace suite (formatting, clippy, rustdoc, nextest and doctests) passes after the P3 work; the windowed suite passed all six scenarios separately. P3 adds palette/contrast tests for three themes, text-scale token tests, localization catalog/placeholder/completeness tests, core backup tests, session undo/diff/backup/reload tests, virtualized-picker tests and headless UI tests for themes, 200 % text, undo/redo, review, backups, external reload, diagnostics and the shortcut sheet.
 - P2 headless coverage: the empty carried-gems count, amulet summary, `STYLES TO LEARN`, friendly item categories and the category filter, `Level`/`Time played`/available wording, the optional-Gold explanation, field units, the save-filter character match, the About page and its settings, the About entry semantics and tab selection while the page is open, backup surfacing/copy/open actions, no-op Save/Revert, folder-picker cancellation and unreadable paths, loading skeletons and the manual-scan busy slot, full-width overview rows at 900/1280/1600, and the sidebar preview alignment. The snapshot example's filter targeting is covered by the tab-filter unit test and a headless Styles-filter test.
 - Windowed verification for P2: not run, because the user did not grant permission under AGENTS.md rule 13. The native close dialog's Save / Discard / Cancel labels, the actual folder-dialog cancellation backend and the Windows ComCtl32 v6 manifest therefore remain unverified in a real window; the choice mapping and the save-before-close decision table are unit tested, and the manifest is embedded by the existing Windows resource build.
-- Headless coverage of the P1 work: geometry at 1180x760, 900x700 and 1600x900; DPI geometry for 1366x768 at 125 %; scan-keeps-save; dirty content comparison; invalid-form save independence; first-invalid-field focus; focus restoration after removal; target sizes; keyboard scrolling focus; keyboard browsing past the first seven picker rows with focus retained; announced save and picker active rows; Enter activation for items, styles, gems and saves; carried-gem keyboard scrolling; the 89-save render test.
+- Headless coverage of the P1 work: geometry at 1180x760, 900x700 and 1600x900; DPI geometry for 1366x768 at 125 %; scan-keeps-save; dirty content comparison; invalid-form save independence; first-invalid-field focus; focus restoration after removal; target sizes; keyboard scrolling focus; keyboard browsing past the first seven picker rows with focus retained; announced save and picker active rows; Enter activation for items, styles, gems and saves; carried-gem keyboard scrolling; six distinct tab images and a picker query in the snapshot regression; the 89-save render test.
 - Headless accessibility coverage for the Freya 0.5 follow-up: dynamic scan count, status and empty-state updates; a synthetic AccessKit `Focus` on a tab; and synthetic `Click` activation of the tab, save row, footer Undo button and an inventory row action. The existing dynamic-hint and focus-restoration tests stay green.
 - Live AT-SPI check on KDE Plasma Wayland (2026-11-07): `grab_focus` on a tab reported the `FOCUSED` state; `Click` opened the save row, switched tabs, changed an item stack and pressed the footer Undo button, which cleared the edit. Moving the save folder out and rescanning updated the existing `1 SAVEGAME` and status nodes to `0 SAVEGAMES` and the empty message, and a broken save updated them back; the empty-list hint appeared and disappeared. Orca 51.1 was installed, but its session service was already owned, so audible output stays on the manual checklist below instead of being captured by a second instance.
 - `just live`: all six windowed scenarios passed on Wayland with the KWin input backend. The window opened at the configured size, save opening and tab switching, item filtering, keyboard save-list navigation and real frame presentation all worked; the captured frame was written to the ignored `target/live-ui/presented.png`. The two-pass `window_geometry_restarts` scenario opened at the seeded 1000x720, the plugin stored the real rectangle on close, and the relaunch restored 1000x720. Each scenario uses its own settings directory; the two geometry passes deliberately share one. The P3 verification rerun on 2026-11-07 passed the same six scenarios.

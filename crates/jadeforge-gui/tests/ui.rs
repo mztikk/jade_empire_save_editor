@@ -15,8 +15,10 @@ use freya::prelude::*;
 use freya_core::events::platform::{KeyboardEventName, PlatformEvent};
 use freya_testing::TestingRunner;
 use jadeforge_gui::ThemeChoice;
+use jadeforge_gui::app::Tab;
 use jadeforge_gui::app_with_directory;
 use jadeforge_gui::i18n::{keys, t};
+use jadeforge_gui::message::capitalize;
 use jadeforge_gui::theme;
 
 mod support;
@@ -1093,6 +1095,58 @@ fn buttons_use_the_pointer_cursor() {
         test.cursor_icon(),
         CursorIcon::Pointer,
         "the tab does not show a pointer cursor"
+    );
+}
+
+#[test]
+fn snapshot_tabs_render_distinct_images_and_a_query_changes_the_picker() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    if !fixture.game_data {
+        eprintln!("skipping: no game data for the picker query");
+        return;
+    }
+    let mut test = launch_sized(fixture.save_dir.clone(), 900.0);
+    let mut images: Vec<Vec<u8>> = Vec::new();
+    for tab in Tab::ALL {
+        let label = capitalize(t(tab.label()));
+        let node = test
+            .find(|node, _| {
+                (a11y_role(&node) == "Tab" && a11y_label(&node).as_deref() == Some(label.as_str()))
+                    .then_some(node)
+            })
+            .expect("a tab is missing from the rendered shell");
+        click_node(&mut test, &node);
+        settle(&mut test);
+        let image = test.render().as_bytes().to_vec();
+        assert!(
+            !images.contains(&image),
+            "{tab:?} rendered the same image as an earlier tab"
+        );
+        images.push(image);
+    }
+    assert_eq!(images.len(), Tab::ALL.len());
+
+    assert!(click_label_exact(&mut test, "Inventory"));
+    settle(&mut test);
+    let before = test.render().as_bytes().to_vec();
+    let placeholder = t(Tab::Inventory
+        .filter_placeholder()
+        .expect("Inventory has a picker filter"));
+    let input = find_paragraph(&test, placeholder).expect("the item filter is missing");
+    click_node(&mut test, &input);
+    test.write_text("Viper");
+    test.sync_and_update();
+    assert!(
+        find_label_text(&test, "Viper").is_some(),
+        "the query did not reach the item picker"
+    );
+    let after = test.render().as_bytes().to_vec();
+    assert_ne!(
+        before, after,
+        "typing a picker query did not change the rendered image"
     );
 }
 
