@@ -13,9 +13,10 @@ pushes to `main`, pull requests, tags and manual dispatches.
 - `test`: tests, doctests, clippy and rustdoc for `jadeforge-gff`,
   `jadeforge-core`, `jadeforge-session`, `jadeforge-gamedata` and
   `jadeforge-cli` on Linux, Windows and macOS. This includes the game-data
-  tests that the previous workflow missed. On Windows it also checks the GUI so
-  the `winresource` build script really embeds the `.exe` icon, and on macOS it
-  checks that the GUI still compiles even though macOS is not released yet.
+  tests that the previous workflow missed. On Windows it also builds and tests
+  the GUI, so the `winresource` build script really embeds the `.exe` icon and
+  the executable links as a GUI-subsystem binary, while on macOS it checks that
+  the GUI still compiles even though macOS is not released yet.
 - `msrv`: `cargo check` with the declared MSRV (currently 1.99) on Linux.
 - `gui`: installs the X11/Wayland/EGL development packages, runs the headless
   `freya-testing` UI suite, clippy and the release icon staging smoke test. The

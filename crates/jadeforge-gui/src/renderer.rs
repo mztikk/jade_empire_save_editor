@@ -20,7 +20,9 @@
 //! Freya 0.5 has no Direct3D driver, even though Skia itself can render with
 //! D3D12, so there is no value for it here. A backend that fails to initialize
 //! falls back (Vulkan to OpenGL to software), which is why
-//! [`RendererLogPlugin`] prints what the window actually got.
+//! [`RendererLogPlugin`] reports what the window actually got.
+
+use std::io::Write as _;
 
 use freya::prelude::{GpuPreference, GpuResourceCacheLimit, RendererPreference};
 use freya_winit::plugins::{FreyaPlugin, PluginEvent, PluginHandle};
@@ -29,7 +31,7 @@ use freya_winit::plugins::{FreyaPlugin, PluginEvent, PluginHandle};
 ///
 /// Accepted values, case-insensitive: `auto`, `software` (or `cpu`), `opengl`
 /// (or `gl`) and `vulkan` (or `vk`). An unknown value falls back to `auto` and
-/// logs a warning.
+/// reports a warning when stderr is connected.
 pub const RENDERER_ENV: &str = "JADEFORGE_RENDERER";
 
 /// Skia GPU resource cache limit used by the default renderer, in MiB.
@@ -51,10 +53,10 @@ pub fn preference() -> RendererPreference {
         return RendererPreference::Auto;
     };
     parse(&value).unwrap_or_else(|| {
-        eprintln!(
+        report(format_args!(
             "jadeforge: ignoring unknown {RENDERER_ENV} value {value:?}; \
              expected auto, software, opengl or vulkan"
-        );
+        ));
         RendererPreference::Auto
     })
 }
@@ -78,13 +80,13 @@ pub fn gpu_resource_cache_limit() -> GpuResourceCacheLimit {
     GpuResourceCacheLimit::from_mb(GPU_RESOURCE_CACHE_LIMIT_MB)
 }
 
-/// Prints the renderer a window actually got, after any fallback.
+/// Reports the renderer a window actually got, after any fallback.
 ///
 /// Asking for a backend is not a guarantee that it is the one drawing: Freya
 /// falls back when initialization fails, most visibly for Vulkan on machines
 /// without a working driver. One line on stderr (`jadeforge: renderer ...`)
 /// makes the real choice visible when the editor is started from a terminal or
-/// its journal is read.
+/// its journal is read, and when stderr is redirected to a file on Windows.
 pub struct RendererLogPlugin;
 
 impl FreyaPlugin for RendererLogPlugin {
@@ -106,8 +108,20 @@ impl FreyaPlugin for RendererLogPlugin {
             } => (*graphics_driver, *gpu_name),
             _ => return,
         };
-        eprintln!("jadeforge: renderer {}", describe(driver, gpu));
+        report(format_args!(
+            "jadeforge: renderer {}",
+            describe(driver, gpu)
+        ));
     }
+}
+
+/// Writes one diagnostic line to stderr, ignoring a missing or closed stderr.
+///
+/// A Windows GUI-subsystem process started from Explorer has no stderr handle,
+/// and `eprintln!` panics when that write fails. Diagnostics are best effort;
+/// redirect stderr to a file when the renderer line is needed.
+fn report(arguments: std::fmt::Arguments<'_>) {
+    let _ = writeln!(std::io::stderr(), "{arguments}");
 }
 
 /// Human readable `driver (gpu)` line.

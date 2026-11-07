@@ -6,6 +6,11 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The Windows GUI executable now links as a GUI-subsystem binary, so opening it
+  no longer creates a console window next to the editor.
+
 ## [0.3.0] - 2026-11-07
 
 ### Added
