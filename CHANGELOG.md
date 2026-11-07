@@ -15,6 +15,11 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- Translation filling no longer rescans inserted values, so placeholder-like
+  user text survives unchanged. The alignment and style-level limits are now
+  documented consistently, the startup and scan state machine in the
+  architecture notes matches the code, and a remembered window position selects
+  the monitor that contains it instead of always using the primary one.
 - Disabled tabs keep their accessible names, keyboard-focused upgrade orbs
   expose the same effect, cost and action detail as pointer hover, and a dirty
   backup browser shows a disabled, non-focusable Restore control instead of an

@@ -203,14 +203,34 @@ pub fn t(key: Key) -> &'static str {
 /// ```
 ///
 /// Values are inserted verbatim, so a path, a character name or an error
-/// detail is never translated.
+/// detail is never translated, and placeholder-like text inside a value is not
+/// expanded again.
 #[must_use]
 pub fn fill(key: Key, arguments: &[(&str, &str)]) -> String {
-    let mut text = t(key).to_owned();
-    for (name, value) in arguments {
-        text = text.replace(&format!("{{{name}}}"), value);
+    let mut text = String::new();
+    let mut rest = t(key);
+    loop {
+        let Some((before, after)) = rest.split_once('{') else {
+            text.push_str(rest);
+            return text;
+        };
+        text.push_str(before);
+        let Some((name, tail)) = after.split_once('}') else {
+            // An unterminated placeholder is treated as literal text.
+            text.push('{');
+            text.push_str(after);
+            return text;
+        };
+        if let Some((_, value)) = arguments.iter().find(|(key, _)| *key == name) {
+            // Inserted values are appended verbatim and never rescanned.
+            text.push_str(value);
+        } else {
+            text.push('{');
+            text.push_str(name);
+            text.push('}');
+        }
+        rest = tail;
     }
-    text
 }
 
 /// Joins catalogued short labels with a catalogued separator.
@@ -378,6 +398,18 @@ mod tests {
             ),
             "Body / Mind / Spirit"
         );
+    }
+
+    #[test]
+    fn inserted_values_are_not_scanned_for_placeholders() {
+        install(Locale::English);
+        let rendered = fill(
+            keys::STATUS_OPENED_WITH_PROBLEMS,
+            &[("label", "{problems}"), ("problems", "oops")],
+        );
+        assert!(rendered.contains("Opened {problems},"), "{rendered}");
+        assert!(rendered.ends_with(": oops"), "{rendered}");
+        assert!(!rendered.contains("Opened oops"), "{rendered}");
     }
 
     #[test]

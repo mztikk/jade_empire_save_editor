@@ -313,20 +313,20 @@ model, backends and the desktop/VM requirements.
 
 Opening the window must not wait for the savegame corpus. The sequence is:
 
-1. `Session::empty(directory)` builds the shell without opening any savegame and
-   loads the game data (a few milliseconds on the retail install).
+1. `Session::pending(directory)` sets the loading state without opening a
+   savegame or reading the game data on the UI thread.
 2. The first frame renders with the "Scanning for savegames…" message.
-3. `app_with_directory` starts a `use_future` task. It spawns a worker thread
-   running `Session::scan_entries` and awaits the result through a futures
-   channel, so the Freya executor is never blocked by file I/O. Freya 0.5's
-   `use_future` is reactive, but this callback reads no state before its async
-   block, so it starts once and cannot restart itself through the revision it
-   bumps when the scan lands.
-4. The future calls `Session::apply_entries_for` with the directory and scan
-   token it started from. Stale results for a folder the user has already left
-   are discarded, then the revision is bumped and the list appears.
-5. If the worker dies, `Session::report_scan_failure` replaces the pending
-   message instead of leaving the UI waiting forever.
+3. `app_with_directory` keeps the `ScanRequest` from `Session::begin_scan` in
+   `scan_job`. Its `use_future` task reads that request, spawns a worker thread
+   running `ScanOutcome::run`, and awaits the result through a futures channel,
+   so the Freya executor is never blocked by file I/O.
+4. `Session::complete_scan` commits the directory, entries and game data
+   together. A result for a superseded request is stale and discarded; a
+   same-folder result keeps the open savegame; a result that would close a
+   dirty document is blocked. The future then bumps the revision and resets or
+   syncs the shell as needed.
+5. If the worker channel fails, `Session::fail_scan` settles the pending state
+   instead of leaving the UI waiting forever.
 
 `SaveGame::metadata` and `Gff::selected_fields` keep the scan cheap: only
 `PlayerCreature.FirstName`, `PlayerCreature.Level` and `Campaign.TimePlayed`
@@ -336,8 +336,9 @@ On the 89-savegame corpus this was measured at about 39 ms warm (the earlier
 parse, and `tests/metadata.rs` checks every save against `Character::read`.
 
 Directory changes still scan synchronously (about 27 ms warm); they happen on an
-explicit user action and use the same `scan_entries`/`apply_entries` path as the
-background scan, so the messages cannot diverge.
+explicit user action and use the same `begin_scan`, `ScanOutcome::run` and
+`complete_scan` state machine as the background scan, so the messages cannot
+diverge.
 
 ## Test strategy
 

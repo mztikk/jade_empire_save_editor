@@ -13,6 +13,11 @@ use crate::gff::{Gff, Value};
 use crate::save::SaveGame;
 
 /// Highest style level `JadeForge` allows to be set.
+///
+/// The level is `1 + popcount(StyleLevelInfo)`, so a 64 bit mask can describe
+/// level 65. `JadeForge` caps styles at level 64, which means at most 63 mask bits
+/// may be set; buying the 64th upgrade is rejected by
+/// [`SaveGame::set_style_family_slot`].
 pub const MAX_STYLE_LEVEL: u8 = 64;
 
 /// Identity of a style that is being learned.

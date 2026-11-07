@@ -6,6 +6,7 @@
 //! show the window, and the minimum size has to follow, or the window manager
 //! keeps a window that is larger than the screen.
 
+use freya::winit::monitor::MonitorHandle;
 use freya_winit::plugins::{FreyaPlugin, PluginEvent, PluginHandle};
 
 use crate::config::WindowGeometry;
@@ -113,26 +114,52 @@ fn wayland_display_is_set(value: Option<&std::ffi::OsStr>) -> bool {
     value.is_some_and(|value| !value.is_empty())
 }
 
-/// Reads the monitor the window will open on as a logical work area.
-///
-/// winit exposes the monitor bounds, not the desktop's work area, so the whole
-/// monitor is used and [`fit_window`] keeps a margin around the window.
-#[must_use]
-pub fn monitor_work_area(
-    event_loop: &freya::winit::event_loop::ActiveEventLoop,
-) -> Option<WorkArea> {
-    let monitor = event_loop
-        .primary_monitor()
-        .or_else(|| event_loop.available_monitors().next())?;
+/// Logical bounds of one monitor.
+fn logical_work_area(monitor: &MonitorHandle) -> WorkArea {
     let scale = monitor.scale_factor();
     let size = monitor.size().to_logical::<f64>(scale);
     let position = monitor.position().to_logical::<f64>(scale);
-    Some(WorkArea {
+    WorkArea {
         x: position.x,
         y: position.y,
         width: size.width,
         height: size.height,
+    }
+}
+
+/// Finds the monitor containing a remembered window position.
+fn work_area_containing(areas: &[WorkArea], stored: Option<WindowGeometry>) -> Option<WorkArea> {
+    let point =
+        stored.and_then(|geometry| Some((f64::from(geometry.x?), f64::from(geometry.y?))))?;
+    areas.iter().copied().find(|area| {
+        point.0 >= area.x
+            && point.0 < area.x + area.width
+            && point.1 >= area.y
+            && point.1 < area.y + area.height
     })
+}
+
+/// Reads the monitor the window will open on as a logical work area.
+///
+/// winit exposes the monitor bounds, not the desktop's work area, so the whole
+/// monitor is used and [`fit_window`] keeps a margin around the window. A
+/// remembered position on a secondary monitor selects that monitor instead of
+/// always clamping the window to the primary one.
+#[must_use]
+pub fn monitor_work_area(
+    event_loop: &freya::winit::event_loop::ActiveEventLoop,
+    stored: Option<WindowGeometry>,
+) -> Option<WorkArea> {
+    let primary = event_loop
+        .primary_monitor()
+        .map(|monitor| logical_work_area(&monitor));
+    let areas: Vec<WorkArea> = event_loop
+        .available_monitors()
+        .map(|monitor| logical_work_area(&monitor))
+        .collect();
+    work_area_containing(&areas, stored)
+        .or(primary)
+        .or_else(|| areas.first().copied())
 }
 
 /// Remembers the window rectangle when the window closes.
@@ -303,6 +330,31 @@ mod tests {
         assert!((fitted.height - 800.0).abs() < f64::EPSILON);
         assert_eq!(fitted.x, Some(64.0));
         assert_eq!(fitted.y, Some(48.0));
+    }
+
+    #[test]
+    fn a_remembered_position_selects_the_monitor_containing_it() {
+        let areas = [
+            screen(1920.0, 1080.0),
+            WorkArea {
+                x: -1920.0,
+                y: 0.0,
+                width: 1920.0,
+                height: 1080.0,
+            },
+        ];
+        let stored = WindowGeometry {
+            width: 1000,
+            height: 700,
+            x: Some(-500),
+            y: Some(200),
+        };
+        assert_eq!(
+            work_area_containing(&areas, Some(stored)),
+            Some(areas[1]),
+            "the secondary monitor was not selected"
+        );
+        assert_eq!(work_area_containing(&areas, None), None);
     }
 
     #[test]
