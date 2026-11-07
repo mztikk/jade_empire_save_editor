@@ -3,6 +3,8 @@
 //! Regression tests for the strictness fixes: hostile counts, malformed
 //! references, canonical layout and unrepresentable writer values.
 
+use std::time::{Duration, Instant};
+
 use jadeforge_gff::{Error, Field, Gff, Struct, VERSION, Value};
 
 fn empty_block() -> Gff {
@@ -236,6 +238,56 @@ fn writer_output_with_deduplicated_payloads_parses() {
     let bytes = gff.to_bytes().expect("serialize");
     let parsed = Gff::parse("budget", &bytes).expect("writer output did not parse");
     assert_eq!(parsed.structs[0].fields.len(), 100);
+}
+
+#[test]
+fn shared_lists_are_validated_once() {
+    let mut gff = empty_block();
+    let child = gff.push_struct(0);
+    let field_count = 40_000;
+    let list_len = 100_000;
+    let mut labels = vec!["Sel".to_owned(), "Items".to_owned()];
+    let mut fields = vec![
+        Field {
+            label: 0,
+            type_id: 0,
+            value: Value::Byte(1),
+        },
+        Field {
+            label: 1,
+            type_id: 15,
+            value: Value::List(vec![child; list_len]),
+        },
+    ];
+    for index in 0..field_count {
+        labels.push(format!("F{index}"));
+        fields.push(Field {
+            label: u32::try_from(index + 2).expect("label index"),
+            type_id: 0,
+            value: Value::Byte(1),
+        });
+    }
+    gff.labels = labels;
+    gff.structs[0].fields = fields;
+
+    let mut bytes = gff.to_bytes().expect("serialize");
+    let field_offset = u32_at(&bytes, 16) as usize;
+    let total_fields = u32_at(&bytes, 20) as usize;
+    let list_offset = u32_at(&bytes, field_offset + 12 + 8);
+    for index in 2..total_fields {
+        let start = field_offset + index * 12;
+        put_u32(&mut bytes, start, 15);
+        put_u32(&mut bytes, start + 8, list_offset);
+    }
+
+    let started = Instant::now();
+    let selected = Gff::selected_fields("shared-lists", &bytes, &["Sel"]).expect("selected fields");
+    assert_eq!(selected[0], Some(Value::Byte(1)));
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "shared-list validation took {:?}",
+        started.elapsed()
+    );
 }
 
 #[test]

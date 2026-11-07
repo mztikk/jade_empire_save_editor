@@ -6,6 +6,8 @@
 //! output does not grow when a block is rewritten unchanged.
 
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 use super::{FIELD_ENTRY_SIZE, Gff, HEADER_SIZE, LABEL_SIZE, STRUCT_ENTRY_SIZE, Value};
 use crate::error::{Error, Result};
@@ -45,22 +47,37 @@ impl Gff {
         let label_offset = field_offset + field_count * FIELD_ENTRY_SIZE;
         let field_data_offset = label_offset + label_count * LABEL_SIZE;
 
-        // Field data section, de-duplicated by (type, payload).
+        // Field data section, de-duplicated by (type, payload). The key is a
+        // hash; the stored offsets are compared byte for byte before reusing
+        // one, so collisions cannot change the output.
         let mut field_data: Vec<u8> = Vec::new();
-        let mut field_data_seen: HashMap<(u32, Vec<u8>), u32> = HashMap::new();
+        let mut field_data_seen: HashMap<u64, Vec<(u32, u32)>> = HashMap::new();
         let mut data_words: Vec<u32> = vec![0; field_count];
         for (index, field) in flat_fields.iter().enumerate() {
             if let Value::List(_) = field.value {
                 continue; // filled in below
             }
             if let Some(payload) = field.value.encode() {
-                let key = (field.type_id, payload.clone());
-                data_words[index] = if let Some(existing) = field_data_seen.get(&key) {
-                    *existing
+                let key = payload_key(field.type_id, &payload);
+                let existing = field_data_seen.get(&key).and_then(|entries| {
+                    entries.iter().find_map(|(seen_type, offset)| {
+                        if *seen_type != field.type_id {
+                            return None;
+                        }
+                        let start = *offset as usize;
+                        let end = start.checked_add(payload.len())?;
+                        (field_data.get(start..end) == Some(payload.as_slice())).then_some(*offset)
+                    })
+                });
+                data_words[index] = if let Some(existing) = existing {
+                    existing
                 } else {
                     let offset = to_offset(field_data.len(), "field data")?;
                     field_data.extend_from_slice(&payload);
-                    field_data_seen.insert(key, offset);
+                    field_data_seen
+                        .entry(key)
+                        .or_default()
+                        .push((field.type_id, offset));
                     offset
                 };
             } else {
@@ -179,4 +196,11 @@ impl Gff {
 fn to_offset(value: usize, what: &str) -> Result<u32> {
     u32::try_from(value)
         .map_err(|_| Error::Corrupt(format!("{what} is too large for the file format")))
+}
+
+fn payload_key(type_id: u32, payload: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    type_id.hash(&mut hasher);
+    payload.hash(&mut hasher);
+    hasher.finish()
 }

@@ -111,11 +111,18 @@ impl Gff {
         let list_indices = tables.list_indices(bytes);
         let mut budget = Budget::new(bytes.len());
 
-        let mut values = Vec::with_capacity(tables.fields.len());
+        let mut values: Vec<Option<Value>> = Vec::with_capacity(tables.fields.len());
         for entry in &tables.fields {
             let value = decode_value(block, entry, field_data, list_indices)?;
             budget.consume(block, &value)?;
-            values.push(value);
+            values.push(Some(value));
+        }
+
+        let mut field_uses = vec![0_usize; tables.fields.len()];
+        for entry in &tables.structs {
+            for &index in &entry.fields {
+                field_uses[index] = field_uses[index].saturating_add(1);
+            }
         }
 
         let mut structs = Vec::with_capacity(tables.structs.len());
@@ -123,8 +130,22 @@ impl Gff {
             let mut fields = Vec::with_capacity(entry.fields.len());
             for &index in &entry.fields {
                 let field = &tables.fields[index];
-                let value = values[index].clone();
-                budget.consume(block, &value)?;
+                // A field used once can be moved into its struct. Shared field
+                // entries still need a clone for every reference.
+                let value = if field_uses[index] == 1 {
+                    values[index].take().ok_or_else(|| {
+                        Error::Corrupt(format!(
+                            "field {index} was consumed before its struct was built"
+                        ))
+                    })?
+                } else {
+                    let value = values[index].as_ref().ok_or_else(|| {
+                        Error::Corrupt(format!("field {index} was consumed too early"))
+                    })?;
+                    let value = value.clone();
+                    budget.consume(block, &value)?;
+                    value
+                };
                 fields.push(Field {
                     label: field.label,
                     type_id: field.type_id,

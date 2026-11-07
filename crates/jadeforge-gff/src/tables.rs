@@ -334,6 +334,9 @@ impl Tables {
             )));
         }
 
+        let mut validated_lists = HashSet::new();
+        let mut list_work = 0_usize;
+        let list_work_limit = list_indices_slice.len().saturating_mul(2);
         for (index, field) in fields.iter().enumerate() {
             match field.type_id {
                 TYPE_STRUCT => {
@@ -344,8 +347,19 @@ impl Tables {
                         )));
                     }
                 }
-                TYPE_LIST => {
-                    validate_list(block, field.data, struct_count, list_indices_slice)?;
+                // Identical lists share one offset. Validate each distinct
+                // list once, and bound the total element work so many
+                // overlapping lists cannot make table parsing quadratic.
+                TYPE_LIST if validated_lists.insert(field.data) => {
+                    let count = validate_list(block, field.data, struct_count, list_indices_slice)?;
+                    list_work = list_work.checked_add(count).ok_or_else(|| {
+                        err("list validation work overflows the address space".to_owned())
+                    })?;
+                    if list_work > list_work_limit {
+                        return Err(err(format!(
+                            "list validation requires {list_work} elements, above the {list_work_limit} element limit"
+                        )));
+                    }
                 }
                 _ => {}
             }
@@ -393,7 +407,7 @@ pub(crate) fn validate_list(
     data: u32,
     struct_count: usize,
     list_indices: &[u8],
-) -> Result<()> {
+) -> Result<usize> {
     let err = |message: String| Error::Malformed {
         block: block.to_owned(),
         message,
@@ -432,7 +446,7 @@ pub(crate) fn validate_list(
             )));
         }
     }
-    Ok(())
+    Ok(count)
 }
 
 /// Reads a list value that was already validated by [`Tables::parse`].
