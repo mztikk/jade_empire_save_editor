@@ -114,6 +114,7 @@ pub fn view(
             action: Action::new(move || ctx.run(|session| session.add_gem(item_id))),
             select: None,
             selected: false,
+            description: None,
         });
     }
     let mut add_children = vec![widgets::filter_input(

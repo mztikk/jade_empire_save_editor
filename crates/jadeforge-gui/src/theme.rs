@@ -670,10 +670,11 @@ pub mod layout {
     pub fn text_measure() -> f32 {
         scaled(720.0)
     }
-    /// Height of one row in a virtualized picker.
+    /// Height of one collapsed row in a virtualized picker.
     ///
-    /// Two text lines plus the action button fit, and the virtual list uses it
-    /// as its fixed item size.
+    /// Two text lines plus the action button fit. An expanded row adds its
+    /// measured description height to this base through the virtual list's
+    /// dynamic item size.
     #[must_use]
     pub fn picker_row_height() -> f32 {
         scaled(56.0)

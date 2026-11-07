@@ -4394,7 +4394,7 @@ fn an_external_change_is_explained_and_can_be_reloaded() {
 }
 
 #[test]
-fn a_virtualized_picker_row_still_opens_its_description() {
+fn a_virtualized_picker_row_expands_its_description_in_place() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found");
         return;
@@ -4419,11 +4419,13 @@ fn a_virtualized_picker_row_still_opens_its_description() {
     let description = item.description.clone().expect("description");
     let mut test = launch_sized(fixture.save_dir.clone(), 2200.0);
     assert!(click_text(&mut test, "Inventory"));
-    let title = find_label_exact(&test, &item.name).expect("picker row title");
-    // The owned inventory may share the name; the picker sits below it, so the
-    // bottom-most matching title is the picker row.
-    let nodes = exact_label_nodes(&test, &item.name);
-    let node = nodes
+    let row_label = format!("{} item", item.name);
+    let picker_row = |test: &TestingRunner| {
+        test.find_many(|node, _| {
+            (a11y_role(&node) == "Group"
+                && a11y_label(&node).as_deref() == Some(row_label.as_str()))
+            .then_some(node)
+        })
         .into_iter()
         .max_by(|left, right| {
             left.layout()
@@ -4432,12 +4434,67 @@ fn a_virtualized_picker_row_still_opens_its_description() {
                 .y
                 .total_cmp(&right.layout().area.origin.y)
         })
-        .unwrap_or(title);
-    click_node(&mut test, &node);
-    let needle: String = description.chars().take(40).collect();
+    };
+    // The owned inventory may share the name; the picker sits below it, so the
+    // bottom-most matching title is the picker row.
+    let title = exact_label_nodes(&test, &item.name)
+        .into_iter()
+        .max_by(|left, right| {
+            left.layout()
+                .area
+                .origin
+                .y
+                .total_cmp(&right.layout().area.origin.y)
+        })
+        .expect("picker row title");
+    let collapsed = picker_row(&test).expect("picker row").layout().area;
+    click_node(&mut test, &title);
+    settle(&mut test);
+    settle(&mut test);
+
+    let expanded = picker_row(&test)
+        .expect("the expanded picker row disappeared")
+        .layout()
+        .area;
     assert!(
-        find_text_node(&test, &needle).is_some(),
-        "expanding a virtualized picker row did not show its description"
+        expanded.size.height > collapsed.size.height + 1.0,
+        "clicking a picker row did not grow it ({} -> {} px)",
+        collapsed.size.height,
+        expanded.size.height
+    );
+    let needle: String = description.chars().take(40).collect();
+    let description_node = find_text_node(&test, &needle)
+        .expect("expanding a virtualized picker row did not show its description");
+    let area = description_node.layout().area;
+    assert!(
+        area.origin.y >= expanded.origin.y
+            && area.origin.y + area.size.height <= expanded.origin.y + expanded.size.height,
+        "the description renders outside its row instead of expanding it"
+    );
+
+    let title = exact_label_nodes(&test, &item.name)
+        .into_iter()
+        .max_by(|left, right| {
+            left.layout()
+                .area
+                .origin
+                .y
+                .total_cmp(&right.layout().area.origin.y)
+        })
+        .expect("picker row title after expanding");
+    click_node(&mut test, &title);
+    settle(&mut test);
+    let collapsed_again = picker_row(&test)
+        .expect("the collapsed picker row disappeared")
+        .layout()
+        .area;
+    assert!(
+        (collapsed_again.size.height - collapsed.size.height).abs() < 1.0,
+        "the picker row did not shrink back on collapse"
+    );
+    assert!(
+        find_text_node(&test, &needle).is_none(),
+        "the description stayed visible after collapsing the row"
     );
 }
 
