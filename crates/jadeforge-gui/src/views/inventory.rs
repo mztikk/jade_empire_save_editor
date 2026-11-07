@@ -3,6 +3,8 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
+use crate::i18n::{fill, keys, t};
+use crate::message::capitalize;
 use crate::session::{ItemRow, ItemSuggestion, Section};
 use crate::theme;
 use crate::widgets::{self, AccessibleButton, Action};
@@ -27,7 +29,6 @@ pub fn view(
     expanded_suggestion: State<Option<u16>>,
     hovered: State<Option<crate::app::HoverKey>>,
     filter_id: AccessibilityId,
-    show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for item in items {
@@ -35,11 +36,8 @@ pub fn view(
     }
     if rows.is_empty() {
         rows.push(match ctx.session.borrow().section_error(Section::Items) {
-            Some(error) => widgets::hint(format!(
-                "The inventory section could not be read: {}",
-                error.message
-            )),
-            None => widgets::hint("The inventory is empty."),
+            Some(error) => widgets::hint(super::section_unreadable(Section::Items, &error.message)),
+            None => widgets::hint(t(keys::INVENTORY_EMPTY_HINT)),
         });
     }
 
@@ -47,18 +45,18 @@ pub fn view(
         rect()
             .vertical()
             .width(Size::fill())
-            .spacing(theme::space::XS)
+            .spacing(theme::space::xs())
             .children(rows)
             .into_element(),
         widgets::divider(),
-        widgets::section_label("ADD AN ITEM"),
+        widgets::section_label(t(keys::INVENTORY_ADD_HEADING)),
     ];
 
     if game_ready {
         children.push(widgets::filter_input(
             query,
             crate::app::ITEM_FILTER_PLACEHOLDER,
-            "Clear the item database filter",
+            keys::INVENTORY_CLEAR_FILTER,
             filter_id,
         ));
         if !categories.is_empty() {
@@ -68,88 +66,100 @@ pub fn view(
         if results.is_empty() {
             children.push(widgets::hint(if query.read().trim().is_empty() {
                 if active_category.is_some() {
-                    "No items in this category."
+                    t(keys::INVENTORY_NO_CATEGORY)
                 } else {
-                    "The item database is empty."
+                    t(keys::INVENTORY_EMPTY_DATABASE)
                 }
             } else {
-                "No items match this search and category."
+                t(keys::INVENTORY_NO_MATCH)
             }));
         } else {
-            let shown = results.len();
             let browsing = query.read().trim().is_empty() && active_category.is_none();
             let total = if browsing { total_items } else { matching };
             let heading_text = active_category.as_deref().map_or_else(
                 || {
                     if browsing {
-                        "ALL ITEMS".to_owned()
+                        t(keys::INVENTORY_ALL_CHIP).to_uppercase()
                     } else {
-                        "SEARCH RESULTS".to_owned()
+                        t(keys::INVENTORY_SEARCH_RESULTS).to_owned()
                     }
                 },
                 |category| crate::session::item_category_label(category).to_uppercase(),
             );
-            let count_text = match (browsing, shown == total) {
-                (true, _) => format!("{shown} of {}", widgets::plural(total, "item", "items")),
-                (false, true) => widgets::plural(total, "match", "matches"),
-                (false, false) => {
-                    format!("{shown} of {}", widgets::plural(total, "match", "matches"))
-                }
+            let count_text = if browsing {
+                widgets::plural(total, keys::COUNT_ITEM_ONE, keys::COUNT_ITEM_OTHER)
+            } else {
+                widgets::plural(total, keys::COUNT_MATCH_ONE, keys::COUNT_MATCH_OTHER)
             };
             let heading = rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::LG)
+                .spacing(theme::space::lg())
                 .content(Content::Flex)
                 .child(widgets::section_label(&heading_text))
                 .child(rect().width(Size::flex(1.0)))
                 .child(
                     widgets::a11y_text(count_text)
-                        .font_size(theme::font::MICRO)
-                        .color(theme::DIM),
-                )
-                .maybe(shown < total, |el| {
-                    el.child(
-                        Button::new()
-                            .compact()
-                            .outline()
-                            .child("Show more")
-                            .on_press(show_more),
-                    )
-                });
+                        .font_size(theme::font::micro())
+                        .color(theme::dim()),
+                );
             children.push(heading.into_element());
-            let mut result_rows: Vec<Element> = Vec::new();
+            let selected = *expanded_suggestion.read();
+            let mut picker_rows = Vec::with_capacity(results.len());
             for suggestion in results {
-                result_rows.push(suggestion_row(
-                    ctx,
-                    suggestion,
-                    expanded_suggestion,
-                    hovered,
-                ));
+                let id = suggestion.item_id;
+                let selectable = suggestion
+                    .description
+                    .as_deref()
+                    .is_some_and(|text| !text.trim().is_empty());
+                let select = selectable.then_some(expanded_suggestion);
+                picker_rows.push(widgets::PickerRow {
+                    key: id,
+                    title: suggestion.name.clone(),
+                    subtitle: item_subtitle(
+                        id,
+                        Some(suggestion.category.as_str()),
+                        suggestion.save_type,
+                    ),
+                    accessible: fill(keys::INVENTORY_ACCESSIBLE, &[("name", &suggestion.name)]),
+                    action_label: fill(keys::GEMS_ADD_ACTION, &[("name", &suggestion.name)]),
+                    action_text: t(keys::GEMS_ADD).to_owned(),
+                    action: {
+                        let ctx = ctx.clone();
+                        let id = suggestion.item_id;
+                        Action::new(move || {
+                            ctx.run(|session| {
+                                let _ = session.add_item(id);
+                            });
+                        })
+                    },
+                    select,
+                    selected: selected == Some(id),
+                });
             }
-            children.push(
-                rect()
-                    .vertical()
-                    .width(Size::fill())
-                    .spacing(theme::space::XXS)
-                    .children(result_rows)
-                    .into_element(),
-            );
+            children.push(widgets::picker_list(
+                t(keys::INVENTORY_ADD_LIST),
+                picker_rows,
+            ));
+            if let Some(selected) = selected
+                && let Some(suggestion) = results.iter().find(|row| row.item_id == selected)
+            {
+                children.extend(widgets::details(suggestion.description.as_deref()));
+            }
         }
     } else if game_loading {
-        children.push(widgets::hint(
-            "Reading the game data; existing items can already be edited and removed.",
-        ));
+        children.push(widgets::hint(t(keys::INVENTORY_READING_HINT)));
     } else {
-        children.push(widgets::hint(
-            "The game data was not found, so items can only be removed, not added. \
-             The category comes from the item type stored in the savegame.",
-        ));
+        children.push(widgets::hint(t(keys::INVENTORY_MISSING_HINT)));
     }
 
     widgets::card(
-        "Inventory",
-        Some(widgets::plural(items.len(), "stack", "stacks")),
+        capitalize(t(keys::LABEL_INVENTORY)),
+        Some(widgets::plural(
+            items.len(),
+            keys::COUNT_STACK_ONE,
+            keys::COUNT_STACK_OTHER,
+        )),
         children,
     )
 }
@@ -165,7 +175,7 @@ pub fn item_subtitle(item_id: u16, category: Option<&str>, kind: u8) -> String {
             "{} · #{item_id}",
             crate::session::item_category_label(category)
         ),
-        None => format!("type {kind}"),
+        None => fill(keys::INVENTORY_TYPE, &[("kind", &kind.to_string())]),
     }
 }
 
@@ -180,8 +190,8 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
     let active = category.read().clone();
     let mut chips: Vec<Element> = Vec::new();
     chips.push(category_chip(
-        "All items".to_owned(),
-        "Show items from every category".to_owned(),
+        t(keys::INVENTORY_ALL_CHIP).to_owned(),
+        t(keys::INVENTORY_ALL_CHIP_DESCRIPTION).to_owned(),
         active.is_none(),
         Action::new(move || category.set(None)),
     ));
@@ -192,7 +202,7 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
         let value = raw.clone();
         chips.push(category_chip(
             label.clone(),
-            format!("Show only {label}"),
+            fill(keys::INVENTORY_CATEGORY_FILTER, &[("label", &label)]),
             selected,
             Action::new(move || category.set(Some(value.clone()))),
         ));
@@ -200,9 +210,9 @@ fn category_filter(mut category: State<Option<String>>, categories: &[String]) -
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(theme::space::SM)
-        .content(Content::wrap_spacing(theme::space::SM))
-        .child(widgets::section_label("CATEGORY"))
+        .spacing(theme::space::sm())
+        .content(Content::wrap_spacing(theme::space::sm()))
+        .child(widgets::section_label(t(keys::INVENTORY_CATEGORY)))
         .children(chips)
         .into_element()
 }
@@ -213,27 +223,27 @@ fn category_chip(label: String, accessible: String, selected: bool, action: Acti
         accessible,
         action,
         rect()
-            .padding(Gaps::new_symmetric(theme::space::XXS, theme::space::MD))
+            .padding(Gaps::new_symmetric(theme::space::xxs(), theme::space::md()))
             .background(if selected {
-                theme::SURFACE_ACTIVE
+                theme::surface_active()
             } else {
-                theme::SURFACE
+                theme::surface()
             })
-            .corner_radius(theme::radius::PILL)
+            .corner_radius(theme::radius::pill())
             .child(
                 widgets::a11y_text(label)
-                    .font_size(theme::font::MICRO)
+                    .font_size(theme::font::micro())
                     .max_lines(1)
                     .color(if selected {
-                        theme::ACCENT
+                        theme::accent()
                     } else {
-                        theme::MUTED
+                        theme::muted()
                     }),
             ),
     )
     .role(AccessibilityRole::RadioButton)
     .selected(selected)
-    .hover_background(theme::SURFACE_HOVER)
+    .hover_background(theme::surface_hover())
     .into_element()
 }
 
@@ -263,10 +273,8 @@ fn item_row(
         let name = item.name.clone();
         Action::new(move || {
             if !crate::dialog::confirm(
-                "Remove item?",
-                &format!(
-                    "Remove {name} from the inventory? You can still press Revert before saving."
-                ),
+                &fill(keys::DIALOG_REMOVE, &[("kind", t(keys::COUNT_ITEM_ONE))]),
+                &fill(keys::INVENTORY_REMOVE_CONFIRM, &[("name", &name)]),
             ) {
                 return;
             }
@@ -283,7 +291,7 @@ fn item_row(
         move |text: String| {
             let Ok(count) = text.trim().parse::<u8>() else {
                 ctx.run(|session| {
-                    session.set_error(&format!("{name}: enter a stack size from 1 to 255."));
+                    session.set_error(&fill(keys::INVENTORY_STACK_ERROR, &[("name", &name)]));
                 });
                 return;
             };
@@ -297,13 +305,13 @@ fn item_row(
         .width(Size::fill())
         .key(item.struct_index)
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(format!("{} item", item.name))
+        .a11y_alt(fill(keys::INVENTORY_ACCESSIBLE, &[("name", &item.name)]))
         .background(if is_hovered {
-            theme::SURFACE_HOVER
+            theme::surface_hover()
         } else {
-            theme::SURFACE
+            theme::surface()
         })
-        .corner_radius(theme::radius::MEDIUM)
+        .corner_radius(theme::radius::medium())
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -314,19 +322,19 @@ fn item_row(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::SM)
+                .spacing(theme::space::sm())
                 .content(Content::Flex)
                 .cross_align(Alignment::Center)
-                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::SM))
+                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::sm()))
                 .child(widgets::expanding_name(
                     item.struct_index,
                     item.name.clone(),
                     item_subtitle(item.item_id, item.category.as_deref(), item.kind),
                     expanded,
-                    theme::font::BODY,
+                    theme::font::body(),
                 ))
                 .child(widgets::row_action(
-                    format!("Decrease {} stack", item.name),
+                    fill(keys::INVENTORY_DECREASE, &[("name", &item.name)]),
                     "−",
                     minus,
                 ))
@@ -334,92 +342,24 @@ fn item_row(
                     // Direct numeric editing: a 254-item stack is one edit,
                     // not 254 stepper clicks. Enter applies the value.
                     Input::new(WritableSetter::new(item.count.to_string(), |_: String| {}))
-                        .width(Size::px(theme::layout::ITEM_COUNT_WIDTH))
+                        .width(Size::px(theme::layout::item_count_width()))
                         .text_align(TextAlign::Center)
                         .compact()
                         .on_submit(set_count),
                 )
                 .child(widgets::row_action(
-                    format!("Increase {} stack", item.name),
+                    fill(keys::INVENTORY_INCREASE, &[("name", &item.name)]),
                     "+",
                     plus,
                 ))
                 .child(widgets::row_action(
-                    format!("Remove {}", item.name),
-                    "Remove",
+                    fill(keys::GEMS_REMOVE_ACTION, &[("name", &item.name)]),
+                    t(keys::GEMS_REMOVE),
                     remove,
                 )),
         )
         .maybe_child(if is_expanded {
             widgets::details(item.description.as_deref())
-        } else {
-            None
-        })
-        .into_element()
-}
-
-fn suggestion_row(
-    ctx: &Ctx,
-    suggestion: &ItemSuggestion,
-    expanded: State<Option<u16>>,
-    mut hovered: State<Option<crate::app::HoverKey>>,
-) -> Element {
-    let key = crate::app::HoverKey::ItemSuggestion(suggestion.item_id);
-    let is_hovered = *hovered.read() == Some(key);
-    let add = {
-        let ctx = ctx.clone();
-        let item_id = suggestion.item_id;
-        Action::new(move || {
-            ctx.run(|session| {
-                let _ = session.add_item(item_id);
-            });
-        })
-    };
-    let is_expanded = *expanded.read() == Some(suggestion.item_id);
-    rect()
-        .vertical()
-        .width(Size::fill())
-        .key(suggestion.item_id)
-        .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(format!("{} item", suggestion.name))
-        .background(if is_hovered {
-            theme::SURFACE
-        } else {
-            theme::PANEL
-        })
-        .corner_radius(theme::radius::CONTROL)
-        .on_pointer_enter(move |_| *hovered.write() = Some(key))
-        .on_pointer_leave(move |_| {
-            if *hovered.read() == Some(key) {
-                *hovered.write() = None;
-            }
-        })
-        .child(
-            rect()
-                .horizontal()
-                .width(Size::fill())
-                .spacing(theme::space::LG)
-                .content(Content::Flex)
-                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::XS))
-                .child(widgets::expanding_name(
-                    suggestion.item_id,
-                    suggestion.name.clone(),
-                    item_subtitle(
-                        suggestion.item_id,
-                        Some(suggestion.category.as_str()),
-                        suggestion.save_type,
-                    ),
-                    expanded,
-                    theme::font::LABEL,
-                ))
-                .child(widgets::row_action(
-                    format!("Add {}", suggestion.name),
-                    "Add",
-                    add,
-                )),
-        )
-        .maybe_child(if is_expanded {
-            widgets::details(suggestion.description.as_deref())
         } else {
             None
         })

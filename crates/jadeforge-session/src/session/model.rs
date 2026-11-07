@@ -3,7 +3,9 @@
 use std::path::PathBuf;
 
 use jadeforge_core::GemLocation;
+use jadeforge_i18n::{Key, keys};
 
+use crate::message;
 use crate::session::format;
 
 /// One entry of the savegame list.
@@ -35,14 +37,17 @@ impl SaveEntry {
     #[must_use]
     pub fn summary(&self) -> String {
         if self.error.is_some() {
-            return "Cannot be read".to_owned();
+            return message::tr(keys::SESSION_CANNOT_BE_READ).to_owned();
         }
         let level = self
             .level
             .map_or_else(|| "?".to_owned(), |level| level.to_string());
-        let mut parts = vec![format!(
-            "Level {level} · Time played {}",
-            format::duration(self.time_played)
+        let mut parts = vec![message::fill(
+            keys::SESSION_ROW_LEVEL_TIME,
+            &[
+                ("level", &level),
+                ("time", &format::duration(self.time_played)),
+            ],
         )];
         if let Some(character) = self.character.as_deref().filter(|name| !name.is_empty()) {
             parts.push(character.to_owned());
@@ -121,16 +126,16 @@ pub enum Section {
 }
 
 impl Section {
-    /// Human-readable name used in notices.
+    /// Stable catalog key used in notices.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> Key {
         match self {
-            Self::Character => "Character",
-            Self::Items => "Inventory",
-            Self::Styles => "Styles",
-            Self::Companions => "Companions",
-            Self::Gems => "Gems",
-            Self::Amulet => "Amulet",
+            Self::Character => keys::NAV_CHARACTER,
+            Self::Items => keys::LABEL_INVENTORY,
+            Self::Styles => keys::COUNT_STYLE_OTHER,
+            Self::Companions => keys::NAV_COMPANIONS,
+            Self::Gems => keys::COUNT_GEM_OTHER,
+            Self::Amulet => keys::LABEL_AMULET,
         }
     }
 }
@@ -330,4 +335,64 @@ pub struct Preview {
     pub rgba: Vec<u8>,
     /// Bumped every time a new preview is loaded.
     pub generation: u64,
+}
+
+/// One field or row that an applied edit changed.
+///
+/// The pending-changes screen groups these by action so the user can see the
+/// exact fields and rows a save will write, not just "unsaved changes".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingChange {
+    /// Dotted field path or row description.
+    pub field: String,
+    /// Value before the edit.
+    pub before: String,
+    /// Value after the edit.
+    pub after: String,
+}
+
+impl PendingChange {
+    /// Builds a change row.
+    #[must_use]
+    pub fn new(
+        field: impl Into<String>,
+        before: impl Into<String>,
+        after: impl Into<String>,
+    ) -> Self {
+        Self {
+            field: field.into(),
+            before: before.into(),
+            after: after.into(),
+        }
+    }
+}
+
+/// All pending changes made by one user action.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingChangeGroup {
+    /// Short action label such as `Inventory` or `Upgrade`.
+    pub label: String,
+    /// Fields and rows the action changed.
+    pub changes: Vec<PendingChange>,
+}
+
+/// One backup listed by the backup screen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackupRow {
+    /// Path of the backup file.
+    pub path: PathBuf,
+    /// The savegame the backup belongs to.
+    pub original: PathBuf,
+    /// Creation instant parsed from the backup name.
+    pub created: std::time::SystemTime,
+    /// Size in bytes.
+    pub size: u64,
+}
+
+impl BackupRow {
+    /// UTC timestamp shown in the backup list.
+    #[must_use]
+    pub fn timestamp(&self) -> String {
+        format::timestamp(self.created)
+    }
 }

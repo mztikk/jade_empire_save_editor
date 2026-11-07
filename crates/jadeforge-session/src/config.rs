@@ -12,6 +12,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde::{Deserialize, Serialize};
 
+use crate::Locale;
+use crate::preferences::{ThemeChoice, normalize_text_scale};
+
 /// Distinguishes the temporary settings directories created by tests.
 static TEST_PATH_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static STORE_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -74,7 +77,7 @@ impl WindowGeometry {
 }
 
 /// Settings persisted between runs.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     /// Folder that was scanned last.
@@ -94,9 +97,83 @@ pub struct Config {
     /// Size and position of the main window.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window: Option<WindowGeometry>,
+    /// Colour theme selected in the About page.
+    #[serde(default)]
+    pub theme: ThemeChoice,
+    /// Text and layout scale in percent, see [`Config::normalized_text_scale`].
+    #[serde(default = "default_text_scale")]
+    pub text_scale: u16,
+    /// Interface language; unsupported languages fall back to English.
+    #[serde(default)]
+    pub locale: Locale,
+    /// Whether the window size and position are remembered between runs.
+    #[serde(default = "default_true")]
+    pub remember_window: bool,
+}
+
+/// Default for boolean settings that are on unless the user turns them off.
+#[must_use]
+pub fn default_true() -> bool {
+    true
+}
+
+/// Default text scale in percent.
+#[must_use]
+pub fn default_text_scale() -> u16 {
+    100
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            save_dir: None,
+            sort: None,
+            sort_descending: false,
+            game_dir: None,
+            window: None,
+            theme: ThemeChoice::default(),
+            text_scale: default_text_scale(),
+            locale: Locale::default(),
+            remember_window: default_true(),
+        }
+    }
 }
 
 impl Config {
+    /// Theme and text scale after clamping the stored scale to the tested range.
+    #[must_use]
+    pub fn ui_preferences(&self) -> (ThemeChoice, u16) {
+        (self.theme, self.normalized_text_scale())
+    }
+
+    /// Text scale after validation; an unsupported stored value becomes 100.
+    #[must_use]
+    pub fn normalized_text_scale(&self) -> u16 {
+        normalize_text_scale(self.text_scale)
+    }
+
+    /// Persists the interface language for the next start (best effort).
+    pub fn remember_locale(locale: Locale) {
+        let mut config = Self::load();
+        config.locale = locale;
+        let _ = config.store();
+    }
+
+    /// Persists whether the window rectangle is remembered (best effort).
+    pub fn remember_window_preference(remember: bool) {
+        let mut config = Self::load();
+        config.remember_window = remember;
+        let _ = config.store();
+    }
+
+    /// Persists the theme and text scale for the next start (best effort).
+    pub fn remember_ui_preferences(theme: ThemeChoice, text_scale: u16) {
+        let mut config = Self::load();
+        config.theme = theme;
+        config.text_scale = normalize_text_scale(text_scale);
+        let _ = config.store();
+    }
+
     /// Remembers the window rectangle for the next start (best effort).
     pub fn remember_window(geometry: WindowGeometry) {
         if !geometry.is_valid() {
@@ -324,13 +401,56 @@ mod tests {
                 x: Some(40),
                 y: Some(32),
             }),
+
+            theme: ThemeChoice::Light,
+            text_scale: 150,
+            locale: Locale::Pseudo,
+            remember_window: true,
         };
         let text = config.to_text();
         assert!(text.contains("save_dir = \"/games/Jade Empire/Save\""));
         assert!(text.contains("sort = \"played\""));
         assert!(text.contains("sort_descending = true"));
         assert!(text.contains("game_dir = \"/games/Jade Empire\""));
+        assert!(text.contains("theme = \"light\""), "{text}");
+        assert!(text.contains("locale = \"en-xa\""), "{text}");
         assert_eq!(Config::parse(&text), config);
+    }
+
+    #[test]
+    fn the_window_rectangle_is_remembered_by_default() {
+        let config = Config::parse("save_dir = \"/tmp/saves\"\n");
+        assert!(config.remember_window);
+        let config = Config {
+            remember_window: false,
+            ..Config::default()
+        };
+        assert_eq!(Config::parse(&config.to_text()), config);
+    }
+
+    #[test]
+    fn old_settings_default_to_the_dark_theme_at_full_scale() {
+        let config = Config::parse("save_dir = \"/tmp/saves\"\n");
+        assert_eq!(config.theme, ThemeChoice::Dark);
+        assert_eq!(config.normalized_text_scale(), 100);
+        assert_eq!(config.ui_preferences(), (ThemeChoice::Dark, 100));
+    }
+
+    #[test]
+    fn an_unsupported_stored_scale_falls_back_to_100() {
+        let config = Config::parse("text_scale = 400\n");
+        assert_eq!(config.text_scale, 400);
+        assert_eq!(config.normalized_text_scale(), 100);
+    }
+
+    #[test]
+    fn ui_preferences_are_written_and_read_back() {
+        ensure_test_path();
+        Config::remember_ui_preferences(ThemeChoice::HighContrast, 200);
+        let config = Config::load();
+        assert_eq!(config.theme, ThemeChoice::HighContrast);
+        assert_eq!(config.normalized_text_scale(), 200);
+        assert_eq!(config.to_text().matches("theme = ").count(), 1);
     }
 
     #[test]
@@ -399,6 +519,10 @@ mod tests {
             sort_descending: true,
             game_dir: None,
             window: None,
+            theme: ThemeChoice::Dark,
+            text_scale: 100,
+            locale: Locale::English,
+            remember_window: true,
         };
         config.store().expect("store settings");
         assert_eq!(Config::load(), config);
@@ -442,6 +566,10 @@ mod tests {
             sort_descending: false,
             game_dir: None,
             window: None,
+            theme: ThemeChoice::Dark,
+            text_scale: 100,
+            locale: Locale::English,
+            remember_window: true,
         };
         config.store().expect("store");
         let parent = path.parent().expect("parent");
@@ -468,6 +596,10 @@ mod tests {
             sort_descending: false,
             game_dir: None,
             window: None,
+            theme: ThemeChoice::Dark,
+            text_scale: 100,
+            locale: Locale::English,
+            remember_window: true,
         };
         good.store().expect("store good settings");
         let before = std::fs::read(&path).expect("read config");
@@ -478,6 +610,10 @@ mod tests {
             sort_descending: false,
             game_dir: None,
             window: None,
+            theme: ThemeChoice::Dark,
+            text_scale: 100,
+            locale: Locale::English,
+            remember_window: true,
         };
         assert!(bad.store().is_err());
         assert_eq!(std::fs::read(&path).expect("read config"), before);

@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use freya::prelude::*;
 
+use crate::i18n::{Key, fill, keys, t};
 use crate::session::{CharacterField, FieldError};
 use crate::theme;
 
@@ -18,34 +19,35 @@ pub fn a11y_text(content: impl Into<String>) -> Label {
 }
 
 /// A card with a title, an optional hint and a vertical body.
-pub fn card(title: &'static str, hint: Option<String>, children: Vec<Element>) -> Element {
+pub fn card(title: impl Into<String>, hint: Option<String>, children: Vec<Element>) -> Element {
+    let title = title.into();
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::XXL)
-        .padding(Gaps::new_all(theme::space::CARD))
-        .background(theme::PANEL)
-        .corner_radius(theme::radius::PANEL)
+        .spacing(theme::space::xxl())
+        .padding(Gaps::new_all(theme::space::card()))
+        .background(theme::panel())
+        .corner_radius(theme::radius::panel())
         .child(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::LG)
+                .spacing(theme::space::lg())
                 .content(Content::Flex)
                 .child(
                     a11y_text(title)
                         .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-                        .font_size(theme::font::CARD_TITLE)
+                        .font_size(theme::font::card_title())
                         .font_weight(FontWeight::BOLD)
-                        .color(theme::TEXT),
+                        .color(theme::text()),
                 )
                 .child(rect().width(Size::flex(1.0)))
                 .child(hint.map_or_else(
-                    || a11y_text("").font_size(theme::font::CAPTION),
+                    || a11y_text("").font_size(theme::font::caption()),
                     |hint| {
                         a11y_text(hint)
-                            .font_size(theme::font::CAPTION)
-                            .color(theme::DIM)
+                            .font_size(theme::font::caption())
+                            .color(theme::dim())
                     },
                 )),
         )
@@ -56,7 +58,7 @@ pub fn card(title: &'static str, hint: Option<String>, children: Vec<Element>) -
 /// One row of form fields that share the width evenly.
 ///
 /// Fields grow to fill the row and never shrink below
-/// [`theme::layout::FIELD_MIN_WIDTH`]. Callers group the fields they want on a
+/// [`theme::layout::field_min_width()`]. Callers group the fields they want on a
 /// row, so a wide window shows a deliberate 3+3 identity grid instead of
 /// whichever fields happen to fit; a row that no longer fits keeps its fields
 /// inside the horizontal scroll area rather than moving one field to its own
@@ -65,7 +67,7 @@ pub fn field_grid(children: Vec<Element>) -> Element {
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(theme::space::FIELD)
+        .spacing(theme::space::field())
         .content(Content::Flex)
         .children(children)
         .into_element()
@@ -82,23 +84,28 @@ pub fn field_checked(
     input: impl IntoElement,
     error: Option<&FieldError>,
 ) -> Element {
-    let message = error.map_or_else(|| field.range().to_owned(), |error| error.message.clone());
+    let message = error.map_or_else(|| field.range_text(), |error| error.message.clone());
+    let caption = field.caption().to_uppercase();
     let invalid = error.is_some();
     // Freya 0.5 still has no Input::label API. Naming the field group at
     // least gives a screen reader the caption before it reaches the input's
     // own value; the true label association is an upstream follow-up.
     rect()
         .vertical()
-        .spacing(theme::space::XS)
+        .spacing(theme::space::xs())
         .width(Size::flex(1.0))
-        .min_width(Size::px(theme::layout::FIELD_MIN_WIDTH))
+        .min_width(Size::px(theme::layout::field_min_width()))
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(field.label())
+        .a11y_alt(caption.clone())
         .child(
-            a11y_text(field.label())
-                .font_size(theme::font::MICRO)
+            a11y_text(caption)
+                .font_size(theme::font::micro())
                 .font_weight(FontWeight::BOLD)
-                .color(if invalid { theme::DANGER } else { theme::DIM }),
+                .color(if invalid {
+                    theme::danger()
+                } else {
+                    theme::dim()
+                }),
         )
         .child(
             rect()
@@ -106,25 +113,29 @@ pub fn field_checked(
                 .border(
                     Border::new()
                         .fill(if invalid {
-                            theme::DANGER
+                            theme::danger()
                         } else {
                             Color::TRANSPARENT
                         })
-                        .width(theme::stroke::FOCUS),
+                        .width(theme::stroke::focus()),
                 )
                 .child(input),
         )
         .child(
             rect()
                 .width(Size::fill())
-                .height(Size::px(theme::font::LINE_HEIGHT))
+                .height(Size::px(theme::font::line_height()))
                 .child(with_tooltip(
                     message.clone(),
                     a11y_text(message)
-                        .font_size(theme::font::MICRO)
+                        .font_size(theme::font::micro())
                         .max_lines(1)
                         .text_overflow(TextOverflow::Ellipsis)
-                        .color(if invalid { theme::DANGER } else { theme::DIM }),
+                        .color(if invalid {
+                            theme::danger()
+                        } else {
+                            theme::dim()
+                        }),
                 )),
         )
         .into_element()
@@ -140,19 +151,19 @@ pub fn field_error(errors: &[FieldError], field: CharacterField) -> Option<&Fiel
 pub fn stat(label_text: &'static str, value: String) -> Element {
     rect()
         .vertical()
-        .spacing(theme::space::XXS)
+        .spacing(theme::space::xxs())
         .width(Size::flex(1.0))
-        .min_width(Size::px(theme::layout::STAT_MIN_WIDTH))
+        .min_width(Size::px(theme::layout::stat_min_width()))
         .child(
             a11y_text(label_text)
-                .font_size(theme::font::MICRO)
-                .color(theme::DIM),
+                .font_size(theme::font::micro())
+                .color(theme::dim()),
         )
         .child(
             a11y_text(value)
-                .font_size(theme::font::SUBHEADING)
+                .font_size(theme::font::subheading())
                 .font_weight(FontWeight::BOLD)
-                .color(theme::TEXT),
+                .color(theme::text()),
         )
         .into_element()
 }
@@ -170,7 +181,7 @@ pub fn stat_grid(children: Vec<Element>) -> Element {
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::GRID)
+                .spacing(theme::space::grid())
                 .content(Content::Flex)
                 .children(pair)
                 .into_element(),
@@ -179,7 +190,7 @@ pub fn stat_grid(children: Vec<Element>) -> Element {
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::MD)
+        .spacing(theme::space::md())
         .children(rows)
         .into_element()
 }
@@ -187,12 +198,12 @@ pub fn stat_grid(children: Vec<Element>) -> Element {
 /// A coloured pill, used for categories and states.
 pub fn badge(text: impl Into<String>, fill: Color, text_color: Color) -> Element {
     rect()
-        .padding(Gaps::new_symmetric(theme::space::XXS, theme::space::MD))
+        .padding(Gaps::new_symmetric(theme::space::xxs(), theme::space::md()))
         .background(fill)
-        .corner_radius(theme::radius::PILL)
+        .corner_radius(theme::radius::pill())
         .child(
             a11y_text(text.into())
-                .font_size(theme::font::MICRO)
+                .font_size(theme::font::micro())
                 .color(text_color),
         )
         .into_element()
@@ -202,16 +213,16 @@ pub fn badge(text: impl Into<String>, fill: Color, text_color: Color) -> Element
 pub fn divider() -> Element {
     rect()
         .width(Size::fill())
-        .height(Size::px(theme::layout::DIVIDER))
-        .background(theme::BORDER)
+        .height(Size::px(theme::layout::divider()))
+        .background(theme::border())
         .into_element()
 }
 
 /// Small muted explanatory text.
 pub fn hint(text: impl Into<String>) -> Element {
     a11y_text(text.into())
-        .font_size(theme::font::CAPTION)
-        .color(theme::DIM)
+        .font_size(theme::font::caption())
+        .color(theme::dim())
         .into_element()
 }
 
@@ -219,9 +230,9 @@ pub fn hint(text: impl Into<String>) -> Element {
 pub fn section_label(text: impl Into<String>) -> Element {
     a11y_text(text.into())
         .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-        .font_size(theme::font::MICRO)
+        .font_size(theme::font::micro())
         .font_weight(FontWeight::BOLD)
-        .color(theme::DIM)
+        .color(theme::dim())
         .into_element()
 }
 
@@ -230,12 +241,12 @@ pub fn label_row(label_text: impl Into<String>, trailing: impl IntoElement) -> E
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(theme::space::LG)
+        .spacing(theme::space::lg())
         .content(Content::Flex)
         .child(
             a11y_text(label_text.into())
-                .font_size(theme::font::LABEL)
-                .color(theme::MUTED),
+                .font_size(theme::font::label())
+                .color(theme::muted()),
         )
         .child(rect().width(Size::flex(1.0)))
         .child(trailing)
@@ -256,17 +267,17 @@ pub fn details(description: Option<&str>) -> Option<Element> {
             rect()
                 .width(Size::fill())
                 .padding(Gaps::new(
-                    theme::space::XXS,
-                    theme::space::LG,
-                    theme::space::SM,
-                    theme::space::LG,
+                    theme::space::xxs(),
+                    theme::space::lg(),
+                    theme::space::sm(),
+                    theme::space::lg(),
                 ))
                 .child(
                     paragraph()
                         .width(Size::fill())
-                        .max_width(Size::px(theme::layout::TEXT_MEASURE))
-                        .font_size(theme::font::CAPTION)
-                        .color(theme::MUTED)
+                        .max_width(Size::px(theme::layout::text_measure()))
+                        .font_size(theme::font::caption())
+                        .color(theme::muted())
                         .a11y_builder(move |node| node.set_value(value))
                         .span(text.to_owned()),
                 )
@@ -286,8 +297,8 @@ pub fn with_tooltip(text: String, content: impl IntoElement) -> Element {
 /// Delegates to the shared session helper so the shell and the session
 /// messages can never disagree about "1 gem" versus "1 gems".
 #[must_use]
-pub fn plural(count: usize, singular: &str, plural: &str) -> String {
-    crate::session::format::plural(count, singular, plural)
+pub fn plural(count: usize, singular: Key, plural: Key) -> String {
+    crate::i18n::plural(count, singular, plural)
 }
 
 /// Name block that expands a description when pressed.
@@ -343,26 +354,35 @@ where
         let mut expanded = self.expanded;
         let id = self.id;
         let is_expanded = *expanded.read() == Some(id);
-        let accessible = format!(
-            "{}, {}, {}, Details",
-            self.name,
-            self.subtitle,
-            if is_expanded { "expanded" } else { "collapsed" }
+        let accessible = fill(
+            keys::WIDGET_DETAILS,
+            &[
+                ("name", &self.name),
+                ("subtitle", &self.subtitle),
+                (
+                    "state",
+                    if is_expanded {
+                        t(keys::WIDGET_EXPANDED)
+                    } else {
+                        t(keys::WIDGET_COLLAPSED)
+                    },
+                ),
+            ],
         );
         rect()
             .vertical()
-            .spacing(theme::space::XXS)
+            .spacing(theme::space::xxs())
             .width(Size::flex(1.0))
-            .padding(Gaps::new_symmetric(theme::space::SM, theme::space::SM))
-            .corner_radius(theme::radius::SMALL)
+            .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::sm()))
+            .corner_radius(theme::radius::small())
             .border(if focused {
                 Border::new()
-                    .fill(theme::ACCENT)
-                    .width(theme::stroke::FOCUS)
+                    .fill(theme::accent())
+                    .width(theme::stroke::focus())
             } else {
                 Border::new()
                     .fill(Color::TRANSPARENT)
-                    .width(theme::stroke::FOCUS)
+                    .width(theme::stroke::focus())
             })
             .a11y_id(a11y_id)
             .a11y_focusable(true)
@@ -379,7 +399,7 @@ where
                 rect()
                     .horizontal()
                     .width(Size::fill())
-                    .spacing(theme::space::SM)
+                    .spacing(theme::space::sm())
                     .content(Content::Flex)
                     .cross_align(Alignment::Center)
                     .child(
@@ -390,26 +410,26 @@ where
                                     .font_size(self.font_size)
                                     .max_lines(1)
                                     .text_overflow(TextOverflow::Ellipsis)
-                                    .color(theme::TEXT)
+                                    .color(theme::text())
                             })),
                     )
                     // The chevron is the visible disclosure affordance; its
                     // slot is reserved on every row so the name never jumps.
                     .child(
                         rect()
-                            .width(Size::px(theme::layout::CHEVRON_WIDTH))
+                            .width(Size::px(theme::layout::chevron_width()))
                             .center()
                             .child(
                                 a11y_text(if is_expanded { "▾" } else { "▸" })
-                                    .font_size(theme::font::CAPTION)
-                                    .color(theme::ACCENT),
+                                    .font_size(theme::font::caption())
+                                    .color(theme::accent()),
                             ),
                     ),
             )
             .child(
                 a11y_text(self.subtitle.clone())
-                    .font_size(theme::font::MICRO)
-                    .color(theme::DIM),
+                    .font_size(theme::font::micro())
+                    .color(theme::dim()),
             )
     }
 }
@@ -431,7 +451,7 @@ pub fn definition_list(rows: Vec<(String, Element)>) -> Element {
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::MD)
+        .spacing(theme::space::md())
         .children(children)
         .into_element()
 }
@@ -442,8 +462,8 @@ pub fn definition_list(rows: Vec<(String, Element)>) -> Element {
 /// selecting the text and deleting it.
 pub fn filter_input(
     query: State<String>,
-    placeholder: &'static str,
-    clear_name: &'static str,
+    placeholder: Key,
+    clear_name: Key,
     a11y_id: AccessibilityId,
 ) -> Element {
     let mut clear_query = query;
@@ -454,25 +474,25 @@ pub fn filter_input(
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(theme::space::MD)
+        .spacing(theme::space::md())
         .content(Content::Flex)
         .cross_align(Alignment::Center)
         .child(
             Input::new(query)
-                .placeholder(placeholder)
+                .placeholder(t(placeholder))
                 .a11y_id(a11y_id)
                 .width(Size::flex(1.0)),
         )
         .child(
             AccessibleButton::new(
-                clear_name,
+                t(clear_name),
                 clear,
                 rect()
-                    .padding(Gaps::new_symmetric(theme::space::XS, theme::space::MD))
+                    .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::md()))
                     .child(
-                        a11y_text("Clear")
-                            .font_size(theme::font::MICRO)
-                            .color(if empty { theme::DIM } else { theme::MUTED }),
+                        a11y_text(t(keys::WIDGET_CLEAR))
+                            .font_size(theme::font::micro())
+                            .color(if empty { theme::dim() } else { theme::muted() }),
                     ),
             )
             .focusable(!empty),
@@ -493,7 +513,7 @@ impl Action {
         Self(Rc::new(RefCell::new(action)))
     }
 
-    fn call(&self) {
+    pub(crate) fn call(&self) {
         (self.0.borrow_mut())();
     }
 }
@@ -618,16 +638,16 @@ impl Component for AccessibleButton {
             .border(
                 Border::new()
                     .fill(if focused {
-                        theme::TEXT
+                        theme::text()
                     } else {
                         Color::TRANSPARENT
                     })
-                    .width(theme::stroke::FOCUS),
+                    .width(theme::stroke::focus()),
             )
             .child(self.content.clone())
             .maybe(self.fill_width, |el| el.width(Size::fill()))
             .maybe(hover_background.is_some(), |el| {
-                el.corner_radius(theme::radius::SMALL).background(
+                el.corner_radius(theme::radius::small()).background(
                     hover_background
                         .filter(|_| *hovered.read())
                         .unwrap_or(Color::TRANSPARENT),
@@ -655,7 +675,7 @@ impl Component for AccessibleButton {
 /// flat buttons it replaces.
 pub fn row_action(
     accessible: impl Into<String>,
-    text: &'static str,
+    text: impl Into<String>,
     action: Action,
 ) -> AccessibleButton {
     AccessibleButton::new(
@@ -666,16 +686,39 @@ pub fn row_action(
             // target at least 24 px tall; the explicit minimum keeps a single
             // glyph wide enough to hit.
             .center()
-            .min_width(Size::px(theme::layout::TARGET_MIN))
-            .min_height(Size::px(theme::layout::TARGET_MIN))
-            .padding(Gaps::new_symmetric(theme::space::SM, theme::space::SM))
+            .min_width(Size::px(theme::layout::target_min()))
+            .min_height(Size::px(theme::layout::target_min()))
+            .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::sm()))
             .child(
-                a11y_text(text)
-                    .font_size(theme::font::MICRO)
-                    .color(theme::MUTED),
+                a11y_text(text.into())
+                    .font_size(theme::font::micro())
+                    .color(theme::muted()),
             ),
     )
-    .hover_background(theme::SURFACE_HOVER)
+    .hover_background(theme::surface_hover())
+}
+
+/// A filled primary action for a page or dialog.
+pub fn filled_action(
+    accessible: impl Into<String>,
+    text: impl Into<String>,
+    action: Action,
+) -> AccessibleButton {
+    AccessibleButton::new(
+        accessible,
+        action,
+        rect()
+            .padding(Gaps::new_symmetric(theme::space::md(), theme::space::xl()))
+            .background(theme::accent())
+            .corner_radius(theme::radius::control())
+            .child(
+                a11y_text(text)
+                    .font_size(theme::font::caption())
+                    .font_weight(FontWeight::BOLD)
+                    .color(theme::on_accent()),
+            ),
+    )
+    .hover_background(theme::accent_hover())
 }
 
 /// A compact outlined action for a toolbar or page header.
@@ -693,31 +736,203 @@ pub fn outline_action(
         accessible,
         action,
         rect()
-            .padding(Gaps::new_symmetric(theme::space::MD, theme::space::XL))
+            .padding(Gaps::new_symmetric(theme::space::md(), theme::space::xl()))
             .border(
                 Border::new()
-                    .fill(theme::CONTROL_BORDER)
-                    .width(theme::stroke::HAIRLINE),
+                    .fill(theme::control_border())
+                    .width(theme::stroke::hairline()),
             )
-            .corner_radius(theme::radius::CONTROL)
+            .corner_radius(theme::radius::control())
             .child(
                 a11y_text(text)
-                    .font_size(theme::font::CAPTION)
+                    .font_size(theme::font::caption())
                     .font_weight(FontWeight::BOLD)
-                    .color(theme::TEXT),
+                    .color(theme::text()),
             ),
     )
-    .hover_background(theme::SURFACE_HOVER)
+    .hover_background(theme::surface_hover())
 }
 
 #[cfg(test)]
 mod tests {
     use super::plural;
+    use crate::i18n::keys;
 
     #[test]
     fn plural_counts_use_the_singular_only_for_one() {
-        assert_eq!(plural(0, "effect", "effects"), "0 effects");
-        assert_eq!(plural(1, "effect", "effects"), "1 effect");
-        assert_eq!(plural(2, "stack", "stacks"), "2 stacks");
+        assert_eq!(
+            plural(0, keys::COUNT_EFFECT_ONE, keys::COUNT_EFFECT_OTHER),
+            "0 effects"
+        );
+        assert_eq!(
+            plural(1, keys::COUNT_EFFECT_ONE, keys::COUNT_EFFECT_OTHER),
+            "1 effect"
+        );
+        assert_eq!(
+            plural(2, keys::COUNT_STACK_ONE, keys::COUNT_STACK_OTHER),
+            "2 stacks"
+        );
     }
+}
+
+/// One row of a virtualized picker.
+///
+/// The row model is deliberately UI independent of the picker that produced it:
+/// the item, style and gem lists all render the same compact two-line row, so a
+/// very large database only builds the rows inside the viewport.
+#[derive(Clone, PartialEq)]
+pub struct PickerRow {
+    /// Stable key, the game id of the item or style.
+    pub key: u16,
+    /// Primary line.
+    pub title: String,
+    /// Secondary line.
+    pub subtitle: String,
+    /// Accessible name of the whole row.
+    pub accessible: String,
+    /// Accessible name of the add/learn action.
+    pub action_label: String,
+    /// Visible action text.
+    pub action_text: String,
+    /// Adds or learns the row.
+    pub action: Action,
+    /// Toggles the description panel below the list, when the row has one.
+    pub select: Option<State<Option<u16>>>,
+    /// Whether the description panel is currently open for this row.
+    pub selected: bool,
+}
+
+/// The data a virtualized picker builds its visible rows from.
+#[derive(Clone, PartialEq)]
+pub struct PickerData {
+    /// Every filtered row, in display order.
+    pub rows: Rc<Vec<PickerRow>>,
+}
+
+/// Number of picker rows a virtualized list shows before it scrolls.
+///
+/// The list is inside the page's own scroll view; seven rows keep the picker
+/// reachable while the wheel still scrolls the page when the pointer is
+/// outside the list.
+const PICKER_VISIBLE_ROWS: usize = 7;
+
+/// Builds a virtualized picker list with a fixed visible height.
+///
+/// Only the rows inside the viewport are built. The rows keep their stable
+/// `u16` keys across filtering, and the list is a single accessibility list
+/// box rather than a tab stop per off-screen row.
+pub fn picker_list(label: &'static str, rows: Vec<PickerRow>) -> Element {
+    let row_count = rows.len();
+    let visible = row_count.clamp(1, PICKER_VISIBLE_ROWS);
+    let height = theme::layout::picker_row_height() * visible as f32;
+    PickerList {
+        data: PickerData {
+            rows: Rc::new(rows),
+        },
+        height,
+        label,
+        key: DiffKey::None,
+    }
+    .key("picker-list")
+    .into_element()
+}
+
+#[derive(PartialEq)]
+struct PickerList {
+    data: PickerData,
+    height: f32,
+    label: &'static str,
+    key: DiffKey,
+}
+
+impl KeyExt for PickerList {
+    fn key_mut(&mut self) -> &mut DiffKey {
+        &mut self.key
+    }
+}
+
+impl Component for PickerList {
+    fn render(&self) -> impl IntoElement {
+        let data = self.data.clone();
+        let length = self.data.rows.len();
+        let item_size = theme::layout::picker_row_height();
+        rect()
+            .width(Size::fill())
+            .height(Size::px(self.height))
+            .a11y_role(AccessibilityRole::ListBox)
+            .a11y_alt(self.label)
+            .child(
+                VirtualScrollView::new_with_data(data, |item, data: &PickerData| {
+                    data.rows.get(item.index).map_or_else(
+                        || rect().height(Size::px(item.size)).into_element(),
+                        |row| picker_row(row, item.size),
+                    )
+                })
+                .length(length)
+                .item_size(item_size)
+                .show_scrollbar(true)
+                .auto_hide_scrollbars(false)
+                // The picker sits inside the page's scroll view; drag scrolling
+                // here would capture the pointer press and swallow row clicks.
+                .drag_scrolling(false)
+                .key("picker-rows"),
+            )
+            .into_element()
+    }
+}
+
+/// One compact row inside a virtualized picker.
+fn picker_row(row: &PickerRow, height: f32) -> Element {
+    let content = rect()
+        .vertical()
+        .width(Size::flex(1.0))
+        .spacing(theme::space::xxs())
+        .child(
+            a11y_text(row.title.clone())
+                .font_size(theme::font::label())
+                .max_lines(1)
+                .text_overflow(TextOverflow::Ellipsis)
+                .color(theme::text()),
+        )
+        .child(
+            a11y_text(row.subtitle.clone())
+                .font_size(theme::font::micro())
+                .max_lines(1)
+                .text_overflow(TextOverflow::Ellipsis)
+                .color(theme::dim()),
+        );
+    let title: Element = match row.select {
+        Some(expanded) => expanding_name(
+            row.key,
+            row.title.clone(),
+            row.subtitle.clone(),
+            expanded,
+            theme::font::label(),
+        ),
+        None => content.into_element(),
+    };
+    rect()
+        .horizontal()
+        .width(Size::fill())
+        .height(Size::px(height))
+        .key(row.key)
+        .a11y_role(AccessibilityRole::Group)
+        .a11y_alt(row.accessible.clone())
+        .spacing(theme::space::md())
+        .content(Content::Flex)
+        .cross_align(Alignment::Center)
+        .padding(Gaps::new_symmetric(theme::space::xxs(), theme::space::md()))
+        .background(if row.selected {
+            theme::surface_hover()
+        } else {
+            theme::surface()
+        })
+        .corner_radius(theme::radius::control())
+        .child(rect().width(Size::flex(1.0)).child(title))
+        .child(row_action(
+            row.action_label.clone(),
+            row.action_text.clone(),
+            row.action.clone(),
+        ))
+        .into_element()
 }

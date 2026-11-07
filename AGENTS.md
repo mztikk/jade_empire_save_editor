@@ -419,6 +419,7 @@ documentation, not ground truth: verify against the game files where possible).
 | --- | --- |
 | `crates/jadeforge-core` | savegame container, character, inventory, styles, companions, screenshots |
 | `crates/jadeforge-gff` | GFF block reader/writer, dotted field paths |
+| `crates/jadeforge-i18n` | stable-id English/German interface catalogs, locale selection and strictness (no Freya) |
 | `crates/jadeforge-session` | UI independent session state, form/model modules and settings (no Freya) |
 | `crates/jadeforge-gamedata` | talk table and 2DA readers, names for items and styles |
 | `crates/jadeforge-cli` | `jadeforge-cli` command line tool |

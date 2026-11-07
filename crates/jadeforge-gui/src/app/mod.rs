@@ -14,6 +14,7 @@ use freya::prelude::*;
 
 use crate::dialog::CloseChoice;
 use crate::form::Form;
+use crate::i18n::keys;
 use crate::session::{CharacterForm, GameStatus, Preview, Session, default_save_dir};
 use crate::theme;
 use crate::views;
@@ -86,20 +87,17 @@ impl HoverKey {
     }
 }
 
-/// Entries a searchable picker renders per page (items, styles, gems).
-pub const PAGE_SIZE: usize = 30;
-
 /// Placeholder of the savegame-list filter.
 ///
 /// The filter matches the folder label and the character name, so the
 /// placeholder names both instead of promising a folder-name-only search.
-pub const SAVE_FILTER_PLACEHOLDER: &str = "Filter by name or character";
+pub const SAVE_FILTER_PLACEHOLDER: crate::i18n::Key = keys::FILTER_SAVEGAME;
 /// Placeholder of the item-database filter.
-pub const ITEM_FILTER_PLACEHOLDER: &str = "Filter the item database, or leave empty to browse it";
+pub const ITEM_FILTER_PLACEHOLDER: crate::i18n::Key = keys::FILTER_ITEMS;
 /// Placeholder of the learnable-style filter.
-pub const STYLE_FILTER_PLACEHOLDER: &str = "Filter the style list, or leave empty to browse it";
+pub const STYLE_FILTER_PLACEHOLDER: crate::i18n::Key = keys::FILTER_STYLES;
 /// Placeholder of the gem-picker filter.
-pub const GEM_FILTER_PLACEHOLDER: &str = "Filter the gem list, or leave empty to browse it";
+pub const GEM_FILTER_PLACEHOLDER: crate::i18n::Key = keys::FILTER_GEMS;
 
 /// Title of the main window.
 ///
@@ -199,16 +197,16 @@ impl Tab {
         }
     }
 
-    /// Label shown on the tab and used to identify it in the snapshot example.
+    /// Stable catalog key for the tab label and the snapshot example.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> crate::i18n::Key {
         match self {
-            Self::Overview => "Overview",
-            Self::Character => "Character",
-            Self::Styles => "Styles",
-            Self::Inventory => "Inventory",
-            Self::Gems => "Gems",
-            Self::Companions => "Companions",
+            Self::Overview => keys::NAV_OVERVIEW,
+            Self::Character => keys::NAV_CHARACTER,
+            Self::Styles => keys::COUNT_STYLE_OTHER,
+            Self::Inventory => keys::LABEL_INVENTORY,
+            Self::Gems => keys::COUNT_GEM_OTHER,
+            Self::Companions => keys::NAV_COMPANIONS,
         }
     }
 
@@ -219,7 +217,7 @@ impl Tab {
     /// active tab's filter" must never fall back to the sidebar for Styles,
     /// Inventory or Gems. Tabs with no picker return `None`.
     #[must_use]
-    pub fn filter_placeholder(self) -> Option<&'static str> {
+    pub fn filter_placeholder(self) -> Option<crate::i18n::Key> {
         match self {
             Self::Inventory => Some(ITEM_FILTER_PLACEHOLDER),
             Self::Styles => Some(STYLE_FILTER_PLACEHOLDER),
@@ -248,14 +246,15 @@ where
     use freya::winit::dpi::{LogicalPosition, LogicalSize};
 
     let preferred = (
-        f64::from(theme::layout::WINDOW_WIDTH),
-        f64::from(theme::layout::WINDOW_HEIGHT),
+        f64::from(theme::layout::window_width()),
+        f64::from(theme::layout::window_height()),
     );
     let minimum = (
-        f64::from(theme::layout::MIN_WINDOW_WIDTH),
-        f64::from(theme::layout::MIN_WINDOW_HEIGHT),
+        f64::from(theme::layout::min_window_width()),
+        f64::from(theme::layout::min_window_height()),
     );
-    let stored = crate::config::Config::load().window;
+    let config = crate::config::Config::load();
+    let stored = config.remember_window.then_some(config.window).flatten();
     // Without a monitor (a headless start or a failed query) the preferred
     // rectangle is used; the attributes hook replaces it with the fitted one
     // once the real monitor is known.
@@ -290,7 +289,43 @@ where
 /// Root component that starts with a specific save folder.
 #[allow(clippy::too_many_lines, clippy::redundant_closure_for_method_calls)] // the root wires every view in dependency order
 pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
-    use_init_theme(theme::theme);
+    // The user's theme and text scale are installed before any child renders.
+    // On Windows and macOS Freya's platform preference is reactive; on Linux
+    // winit reports nothing, so the binary's startup detection and the portal
+    // watcher installed here provide the System choice.
+    let saved_config = use_hook(crate::config::Config::load);
+    let theme_choice = use_state(|| saved_config.theme);
+    let text_scale = use_state(|| saved_config.normalized_text_scale());
+    let locale = use_state(|| saved_config.locale);
+    let remember_window = use_state(|| saved_config.remember_window);
+    crate::i18n::install(*locale.read());
+    let platform_preferred = *Platform::get().current_window().preferred_theme.read();
+    #[cfg(target_os = "linux")]
+    let mut system_preferred = use_state(crate::system_theme::detected);
+    #[cfg(target_os = "linux")]
+    let _system_theme_updates = use_future(move || {
+        let updates = crate::system_theme::enabled().then(crate::system_theme::subscribe);
+        async move {
+            let Some((_subscription, mut updates)) = updates else {
+                return;
+            };
+            while let Ok(theme) = updates.recv().await {
+                system_preferred.set(Some(theme));
+            }
+        }
+    });
+    #[cfg(target_os = "linux")]
+    let preferred = (*system_preferred.read()).unwrap_or(platform_preferred);
+    #[cfg(not(target_os = "linux"))]
+    let preferred = platform_preferred;
+    let resolved = theme::resolved_choice(*theme_choice.read(), preferred);
+    theme::install(theme::UiStyle::new(resolved, *text_scale.read()));
+    let mut freya_theme = use_init_theme(theme::theme);
+    freya_theme.set_if_modified(theme::theme());
+    // Both states are read here so the session-wide re-render below always
+    // repaints after a change made on the About page.
+    let _ = *theme_choice.read();
+    let _ = *text_scale.read();
 
     let session: Rc<RefCell<Session>> =
         use_hook(move || Rc::new(RefCell::new(Session::pending(directory))));
@@ -315,10 +350,9 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     let item_query = use_state(String::new);
     let item_category = use_state(|| None::<String>);
     let show_about = use_state(|| false);
+    let show_backups = use_state(|| false);
+    let show_review = use_state(|| false);
     let style_query = use_state(String::new);
-    let item_limit = use_state(|| PAGE_SIZE);
-    let style_limit = use_state(|| PAGE_SIZE);
-    let gem_limit = use_state(|| PAGE_SIZE);
     let hovered = use_state(|| None::<HoverKey>);
     let gem_query = use_state(String::new);
     let expanded_item = use_state(|| None::<usize>);
@@ -442,11 +476,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 item_query,
                 item_category,
                 show_about,
+                show_backups,
+                show_review,
                 style_query,
                 gem_query,
-                item_limit,
-                style_limit,
-                gem_limit,
                 expanded_item,
                 expanded_suggestion,
                 expanded_style,
@@ -459,6 +492,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
     };
 
     // Snapshot everything the shell needs so the borrow stays short.
+    let disk_changed = session.borrow_mut().check_disk_state();
     let active_tab = *tab.read();
     let entries = session.borrow().entries();
     let selected = session.borrow().selected();
@@ -509,10 +543,9 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             let _ = *revision.read();
             let query = item_query.read().clone();
             let category = item_category.read().clone();
-            let limit = *item_limit.read();
             session
                 .borrow()
-                .search_items_filtered(&query, category.as_deref(), limit)
+                .search_items_filtered(&query, category.as_deref(), usize::MAX)
         });
         results.read().clone()
     };
@@ -524,12 +557,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         });
         categories.read().clone()
     };
-    let (style_matches, style_matches_total, total_missing) = {
+    let (style_matches, total_missing) = {
         let session = session.clone();
         let results = use_memo(move || {
             let _ = *revision.read();
             let query = style_query.read().trim().to_lowercase();
-            let limit = *style_limit.read();
             let missing = session.borrow().missing_styles();
             let total_missing = missing.len();
             let matching: Vec<_> = missing
@@ -540,12 +572,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         || style.label.to_lowercase().contains(&query)
                 })
                 .collect();
-            let total = matching.len();
-            (
-                matching.into_iter().take(limit).collect::<Vec<_>>(),
-                total,
-                total_missing,
-            )
+            (matching, total_missing)
         });
         results.read().clone()
     };
@@ -667,44 +694,35 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
             views::overview::view(&ctx, character, items.len(), styles.len())
         }
         (Tab::Character, Some(character)) => views::character::view(&ctx, character, &form_errors),
-        (Tab::Styles, _) => {
-            let mut style_limit = style_limit;
-            views::styles::view(
-                &ctx,
-                &styles,
-                style_query,
-                &style_matches,
-                game_ready,
-                game_loading,
-                names_ready,
-                game_ready.then_some(total_missing),
-                style_matches_total,
-                expanded_style,
-                hovered,
-                style_filter_id,
-                move |_| *style_limit.write() += PAGE_SIZE,
-            )
-        }
-        (Tab::Inventory, _) => {
-            let mut item_limit = item_limit;
-            views::inventory::view(
-                &ctx,
-                &items,
-                item_query,
-                item_category,
-                &item_categories,
-                &item_results,
-                items_ready,
-                game_loading,
-                item_matches,
-                total_items,
-                expanded_item,
-                expanded_suggestion,
-                hovered,
-                item_filter_id,
-                move |_| *item_limit.write() += PAGE_SIZE,
-            )
-        }
+        (Tab::Styles, _) => views::styles::view(
+            &ctx,
+            &styles,
+            style_query,
+            &style_matches,
+            game_ready,
+            game_loading,
+            names_ready,
+            game_ready.then_some(total_missing),
+            expanded_style,
+            hovered,
+            style_filter_id,
+        ),
+        (Tab::Inventory, _) => views::inventory::view(
+            &ctx,
+            &items,
+            item_query,
+            item_category,
+            &item_categories,
+            &item_results,
+            items_ready,
+            game_loading,
+            item_matches,
+            total_items,
+            expanded_item,
+            expanded_suggestion,
+            hovered,
+            item_filter_id,
+        ),
         (Tab::Gems, _) => {
             let available = session.borrow().available_gems();
             let amulet = session.borrow().amulet();
@@ -715,7 +733,6 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                 gem_query,
                 &available,
                 amulet,
-                gem_limit,
                 hovered,
                 gem_filter_id,
             )
@@ -725,15 +742,42 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         (_, None) => shell::empty_state(&ctx, entries.len(), directory_state, start_scan.clone()),
     };
     let show_about_now = *show_about.read();
-    let content = if show_about_now {
-        views::about::view(&ctx, save_sort, show_about)
+    let show_backups_now = *show_backups.read();
+    let show_review_now = *show_review.read();
+    let close_review: Rc<dyn Fn()> = Rc::new(move || {
+        let mut state = show_review;
+        state.set(false);
+    });
+    let close_backups: Rc<dyn Fn()> = Rc::new(move || {
+        let mut state = show_backups;
+        state.set(false);
+    });
+    let content = if show_review_now {
+        views::review::view(&ctx, form, close_review, &sync)
+    } else if show_backups_now {
+        views::backups::view(&ctx, close_backups, &sync)
+    } else if show_about_now {
+        views::about::view(
+            &ctx,
+            save_sort,
+            show_about,
+            theme_choice,
+            text_scale,
+            locale,
+            remember_window,
+        )
     } else {
         tab_content
+    };
+    let page_index = if show_review_now {
+        2
+    } else {
+        usize::from(show_backups_now)
     };
 
     let content = rect()
         .width(Size::fill())
-        .key(active_tab.index() * 2 + usize::from(show_about_now))
+        .key(active_tab.index() * 3 + page_index)
         .child(content)
         .into_element();
 
@@ -748,6 +792,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         &form_errors,
         scanning,
         show_about,
+        show_backups,
+        show_review,
         start_scan.clone(),
         cancel_scan.clone(),
     );
@@ -784,8 +830,26 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         reset.clone(),
         sync.clone(),
     );
-    let tabs = navigation::tab_bar(tab, active_tab, has_save, scanning, show_about);
-    let footer = shell::footer(&ctx, form, dirty, has_save, &form_errors, sync.clone());
+    let tabs = navigation::tab_bar(
+        tab,
+        active_tab,
+        has_save,
+        scanning,
+        show_about,
+        show_backups,
+        show_review,
+    );
+    let footer = shell::footer(
+        &ctx,
+        form,
+        dirty,
+        has_save,
+        &form_errors,
+        show_about,
+        show_backups,
+        show_review,
+        sync.clone(),
+    );
 
     // Desktop shortcuts. Save and Scan duplicate the footer/header actions so
     // they work no matter which control has focus.
@@ -806,27 +870,45 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         let mut style_query = style_query;
         let mut gem_query = gem_query;
         let mut show_about = show_about;
+        let mut show_backups = show_backups;
+        let mut show_review = show_review;
         move |event: Event<KeyboardEventData>| {
             let ctrl = event.modifiers.contains(Modifiers::CONTROL);
+            let ctrl_shift = event.modifiers.contains(Modifiers::SHIFT);
             match &event.key {
                 Key::Character(character) if ctrl => match character.to_lowercase().as_str() {
                     "s" => {
                         // Match the disabled footer action: a shortcut must not
-                        // report a save when there is no applied change.
+                        // open an empty review when there is no applied change.
                         if !ctx.session.borrow().is_dirty() {
                             return;
                         }
-                        let errors = ctx.run(|session| session.form_errors(&form.read()));
-                        if let Some(first) = errors.first() {
-                            form.focus(first.field);
+                        show_about.set(false);
+                        show_backups.set(false);
+                        show_review.set(true);
+                    }
+                    "z" => {
+                        let changed = if ctrl_shift {
+                            ctx.run(Session::redo)
+                        } else {
+                            ctx.run(Session::undo)
+                        };
+                        if changed {
+                            sync();
                         }
-                        let saved = ctx.run(|session| session.save_applied(&form.read()));
-                        if errors.is_empty() && saved.is_ok() {
+                    }
+                    "y" => {
+                        if ctx.run(Session::redo) {
                             sync();
                         }
                     }
                     "o" => {
                         shell::choose_folder(&ctx, directory, &start_scan);
+                    }
+                    "/" | "?" => {
+                        show_review.set(false);
+                        show_backups.set(false);
+                        show_about.set(true);
                     }
                     "f" => {
                         show_about.set(false);
@@ -849,7 +931,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                     }
                 }
                 Key::Named(NamedKey::Escape) => {
-                    if *show_about.read() {
+                    if *show_review.read() {
+                        show_review.set(false);
+                    } else if *show_backups.read() {
+                        show_backups.set(false);
+                    } else if *show_about.read() {
                         show_about.set(false);
                     } else {
                         match active {
@@ -871,8 +957,8 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
         .vertical()
         .width(Size::fill())
         .height(Size::fill())
-        .background(theme::BACKGROUND)
-        .color(theme::TEXT)
+        .background(theme::background())
+        .color(theme::text())
         .content(Content::Flex)
         .child(header)
         .child(
@@ -888,6 +974,9 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                         .height(Size::fill())
                         .content(Content::Flex)
                         .child(tabs)
+                        .maybe_child(
+                            disk_changed.then(|| shell::external_change_banner(&ctx, &sync)),
+                        )
                         .child(
                             rect()
                                 .a11y_id(editor_scroll_id)
@@ -899,11 +988,11 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                                 .border(
                                     Border::new()
                                         .fill(if editor_scroll_focus() == Focus::Keyboard {
-                                            theme::TEXT
+                                            theme::text()
                                         } else {
                                             Color::TRANSPARENT
                                         })
-                                        .width(theme::stroke::FOCUS),
+                                        .width(theme::stroke::focus()),
                                 )
                                 .on_key_down({
                                     let mut scroll = scrolls[active_tab.index()];
@@ -934,10 +1023,10 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                                                 .width(Size::fill())
                                                 .cross_align(Alignment::Center)
                                                 .padding(Gaps::new(
-                                                    theme::space::XXL,
-                                                    theme::space::CARD,
-                                                    theme::space::XXL,
-                                                    theme::space::CARD,
+                                                    theme::space::xxl(),
+                                                    theme::space::card(),
+                                                    theme::space::xxl(),
+                                                    theme::space::card(),
                                                 ))
                                                 // Wide windows stop stretching the
                                                 // cards: past this width a paragraph
@@ -947,7 +1036,7 @@ pub fn app_with_directory(directory: PathBuf) -> impl IntoElement {
                                                         .vertical()
                                                         .width(Size::fill())
                                                         .max_width(Size::px(
-                                                            theme::layout::EDITOR_MAX_WIDTH,
+                                                            theme::layout::editor_max_width(),
                                                         ))
                                                         // The content already renders the loading
                                                         // skeleton, the About page and the empty
@@ -974,11 +1063,10 @@ fn reset_pickers(
     item_query: State<String>,
     item_category: State<Option<String>>,
     show_about: State<bool>,
+    show_backups: State<bool>,
+    show_review: State<bool>,
     style_query: State<String>,
     gem_query: State<String>,
-    item_limit: State<usize>,
-    style_limit: State<usize>,
-    gem_limit: State<usize>,
     expanded_item: State<Option<usize>>,
     expanded_suggestion: State<Option<u16>>,
     expanded_style: State<Option<u16>>,
@@ -995,16 +1083,14 @@ fn reset_pickers(
     item_category.set(None);
     let mut show_about = show_about;
     show_about.set(false);
+    let mut show_backups = show_backups;
+    show_backups.set(false);
+    let mut show_review = show_review;
+    show_review.set(false);
     let mut style_query = style_query;
     style_query.set(String::new());
     let mut gem_query = gem_query;
     gem_query.set(String::new());
-    let mut item_limit = item_limit;
-    item_limit.set(PAGE_SIZE);
-    let mut style_limit = style_limit;
-    style_limit.set(PAGE_SIZE);
-    let mut gem_limit = gem_limit;
-    gem_limit.set(PAGE_SIZE);
     let mut expanded_item = expanded_item;
     expanded_item.set(None);
     let mut expanded_suggestion = expanded_suggestion;
@@ -1075,16 +1161,39 @@ mod tests {
     #[test]
     fn tab_positions_match_the_all_array() {
         for (position, tab) in Tab::ALL.into_iter().enumerate() {
-            assert_eq!(tab.index(), position, "{}", tab.label());
+            assert_eq!(tab.index(), position, "{}", tab.label().id());
         }
     }
 
     #[test]
     fn every_tab_has_a_distinct_label() {
-        let mut labels: Vec<&str> = Tab::ALL.iter().map(|tab| tab.label()).collect();
+        let mut labels: Vec<&str> = Tab::ALL.iter().map(|tab| tab.label().id()).collect();
         labels.sort_unstable();
         labels.dedup();
         assert_eq!(labels.len(), Tab::ALL.len());
+    }
+
+    #[test]
+    fn tab_labels_and_filter_placeholders_are_catalogued_ids() {
+        for tab in Tab::ALL {
+            assert!(
+                crate::i18n::has_id(tab.label().id()),
+                "missing tab id {}",
+                tab.label().id()
+            );
+        }
+        for placeholder in [
+            SAVE_FILTER_PLACEHOLDER,
+            ITEM_FILTER_PLACEHOLDER,
+            STYLE_FILTER_PLACEHOLDER,
+            GEM_FILTER_PLACEHOLDER,
+        ] {
+            assert!(
+                crate::i18n::has_id(placeholder.id()),
+                "missing filter placeholder id {}",
+                placeholder.id()
+            );
+        }
     }
 
     #[test]
@@ -1099,7 +1208,7 @@ mod tests {
         );
         assert_eq!(Tab::Gems.filter_placeholder(), Some(GEM_FILTER_PLACEHOLDER));
         for tab in [Tab::Overview, Tab::Character, Tab::Companions] {
-            assert_eq!(tab.filter_placeholder(), None, "{}", tab.label());
+            assert_eq!(tab.filter_placeholder(), None, "{}", tab.label().id());
         }
         for placeholder in [
             ITEM_FILTER_PLACEHOLDER,

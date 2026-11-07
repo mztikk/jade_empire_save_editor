@@ -1981,7 +1981,9 @@ dependencies = [
  "image",
  "jadeforge-core",
  "jadeforge-gamedata",
+ "jadeforge-i18n",
  "jadeforge-session",
+ "mundy",
  "open",
  "rfd",
  "serde_json",
@@ -1991,11 +1993,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "jadeforge-i18n"
+version = "0.2.1"
+dependencies = [
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "jadeforge-session"
 version = "0.2.1"
 dependencies = [
  "jadeforge-core",
  "jadeforge-gamedata",
+ "jadeforge-i18n",
  "serde",
  "toml",
 ]
@@ -2276,6 +2287,7 @@ dependencies = [
  "async-io",
  "beul",
  "cfg-if",
+ "dispatch",
  "futures-channel",
  "futures-lite",
  "jni",

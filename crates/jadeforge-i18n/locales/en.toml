@@ -1,0 +1,677 @@
+# English source-of-truth catalog.
+#
+# Keys are stable semantic ids, not English sentences. The values are the
+# current English interface text. `complete = true` is enforced by tests and
+# every literal id used by the GUI or the session must exist here.
+#
+# `# args:` documents the placeholder names a template expects. `# context:`
+# explains an id that is used in more than one place.
+
+complete = true
+
+[messages]
+
+# Header, footer, status line and empty states
+"shell.about" = "About"
+"shell.about.details" = "About JadeForge, version, settings and backups"
+"shell.browse.backups" = "Browse the backups of the open savegame"
+"shell.browse" = "Browse…"
+"shell.cancel_scan" = "Cancel scan"
+"shell.choose_save_folder" = "Choose save folder"
+"shell.copy" = "Copy"
+"shell.copy_status" = "Copy the status message"
+"shell.loading.explanation" = "JadeForge is reading the save folder and the game data. The save list appears as soon as the scan finishes."
+"shell.savegame.safety" = "JadeForge never writes a savegame without verifying it and keeping a backup."
+"shell.loading_savegames" = "Loading savegames…"
+"shell.no_savegame_selected" = "No savegame selected"
+"shell.save_folder_path" = "Path to the Jade Empire Save folder"
+"shell.game_data_path" = "Path to the Jade Empire installation (with dialog.tlk)"
+"shell.redo" = "Redo"
+"shell.reload" = "Reload from disk"
+"shell.revert" = "Revert"
+"shell.save" = "Save to disk"
+"shell.undo" = "Undo"
+"shell.use" = "Use"
+"shell.all_changes_saved" = "all changes saved"
+"shell.no_savegame_open" = "no savegame open"
+"shell.unsaved_changes" = "unsaved changes"
+# context: Guards scanning, opening a savegame and changing the folder.
+"status.unsaved_first" = "Save or revert the unsaved changes first."
+"shell.folder_unchanged_save" = "No folder was chosen; the save folder on screen is unchanged."
+"shell.status_copied" = "Copied the status message to the clipboard."
+"shell.loading.game.data" = "loading game data…"
+"shell.english.names.loaded" = "English names loaded"
+"shell.game.data.not.found" = "game data not found"
+"shell.game.data.unreadable" = "game data unreadable"
+"shell.folder_unchanged_game" = "No folder was chosen; the game data folder is unchanged."
+"shell.scanning" = "Scanning…"
+"shell.scan" = "Scan"
+"shell.no.screenshot" = "no screenshot"
+"shell.select.a.save" = "select a save"
+"shell.discard.changes" = "Discard changes?"
+"shell.reload_discard_confirm" = "Reload the savegame from disk and discard every change that is only in memory?"
+"shell.empty.open_save" = "Open a savegame to edit it."
+"shell.invalid_fields_savable" = "Some character fields are invalid and were not applied; your other edits can still be saved."
+"shell.invalid_fields_fix" = "Some character fields are invalid and were not applied; fix the highlighted fields to apply them."
+"shell.memory_only" = "Changes are only in memory until you save."
+"shell.nothing_to_write" = "All changes are saved. There is nothing to write."
+"shell.empty.point_to_folder" = "Point JadeForge at the folder that contains your Jade Empire savegames and press Scan."
+"shell.empty.pick_save" = "Pick a savegame on the left to start editing."
+"shell.disk_changed_dirty" = "This savegame changed on disk since it was opened. Saving will be refused; reloading discards the unsaved edits on screen and shows the file that is on disk."
+"shell.disk_changed" = "This savegame changed on disk since it was opened. Reload it to edit the current file."
+"shell.disk_changed_external" = "The savegame changed on disk outside JadeForge. Reloading discards every unsaved edit on screen."
+# args: items
+"shell.loaded" = "{items} loaded"
+
+# Save browser
+"save_browser.clear_filter" = "Clear the savegame filter"
+"save_browser.select.a.savegame" = "Select a savegame"
+"save_browser.empty_folder" = "No savegames in this folder."
+"save_browser.no_match" = "No savegame matches this filter."
+# args: shown, total
+"save_browser.of" = "{shown} OF {total}"
+# args: level, time
+"session.row.level_time" = "Level {level} · Time played {time}"
+# args: name, direction
+"save_browser.sort_by.active" = "Sort by {name} ({direction})"
+# args: name
+"save_browser.sort_by" = "Sort by {name}"
+
+# Tabs and window
+"nav.character" = "Character"
+"nav.companions" = "Companions"
+"nav.overview" = "Overview"
+
+# Overview tab
+"overview.backup.created" = "A timestamped backup is created next to the savegame on every save and shown here."
+"overview.at_a_glance" = "At a glance"
+"field.chi" = "CHI"
+"overview.contents" = "Contents"
+"field.focus" = "FOCUS"
+"overview.file" = "File"
+"field.gold" = "GOLD"
+"overview.game_data" = "Game data"
+"field.health" = "HEALTH"
+"overview.backup.verification" = "JadeForge verifies every savegame by re-reading it before writing, writes it atomically and keeps a timestamped backup next to the file."
+"overview.backup.explanation" = "This is the file as it was before the last save. To restore it, close JadeForge and copy the backup over save.sac."
+"overview.game_data.loading" = "Reading the game installation and its tables…"
+"overview.game_data.missing" = "No game installation found next to the savegames: names fall back to ids, while categories, levels and timings still come from the savegame."
+"overview.game_data.bundled_suffix" = ". Bundled English names are still available."
+"field.attribute_points" = "Unspent attribute points"
+"overview.unknown_size" = "unknown size"
+"overview.notice" = "Notice"
+"overview.linked" = "linked"
+"overview.loading" = "loading"
+"overview.not_found" = "not found"
+# args: items, styles, root
+"overview.game_data.resolved" = "{items} and {styles} resolved from {root}"
+# args: items, styles
+"overview.game_data.bundled" = "No game installation found: using bundled English names for {items} and {styles}. Descriptions and upgrades still need the game data."
+# args: error, bundled
+"overview.game_data.unreadable" = "Cannot read the game data: {error}{bundled}"
+# args: time, kills, experience
+"overview.time_played" = "Time played {time} · {kills} · {experience}"
+
+# Character tab
+"character.attribute_points_hint" = "Attribute points you can still spend; the field is created when the savegame does not have it."
+"character.attributes" = "Attributes"
+"character.current_sheet" = "Current sheet"
+"character.current_values_hint" = "Current values may stay below the maximum; the game fills them on rest."
+"character.gold_hint" = "Gold is optional in the savegame: leave it empty to keep the field absent, or enter a value to create it when you save."
+"character.identity" = "Identity"
+# context: Used for the character field caption, the overview badge and the save sort label.
+"character.level" = "Level"
+# context: Used for the character field caption and the save sort label.
+"character.name" = "Name"
+# context: Used for the character field caption, the overview and the save sort label.
+"character.time_played" = "Time played"
+"character.vitals" = "Vitals"
+"character.not_set" = "not set"
+
+# Styles tab
+"styles.intro" = "A new style is stored with the same field layout as one the player already owns; the game fills in the remaining data from its own tables."
+"styles.bundled_hint" = "Bundled English names are loaded, but new styles and upgrade details still need the game data. Levels, weapons and time spent come from the savegame."
+"styles.clear_filter" = "Clear the style filter"
+"styles.fighting_styles" = "Fighting styles"
+"styles.orb_hint" = "Filled gold orbs are owned; an empty ring is available. Clicking tier N buys every missing tier up to N; clicking an owned tier removes it and everything above it."
+"styles.learn_heading" = "LEARN A STYLE"
+"styles.reading_hint" = "Reading the game data; learned styles can already be inspected and removed."
+"styles.missing_hint" = "The game data was not found, so style names and new styles are unavailable. Levels, weapons and time spent come from the savegame."
+"styles.empty_hint" = "The player has not learned any fighting styles."
+"styles.upgrades" = "UPGRADES"
+"styles.all_learned" = "Every style in the game data is already learned."
+"styles.no_match" = "No styles match this search."
+"styles.learn" = "Learn"
+"styles.learn_list" = "Styles you can learn"
+"styles.read_only_hint" = "This style has no level-up table in the game data, so its upgrades are read-only here."
+"styles.upgrade_needs_data" = "Upgrade details need the game data: point JadeForge at the game installation to see them."
+"styles.owned_action" = "owned: clicking removes this tier and every tier above it"
+"styles.available_action" = "available: clicking buys every missing tier up to this one"
+"styles.no_effect" = "no listed effect"
+"styles.no_cost" = "no style point cost"
+# args: name
+"styles.accessible" = "{name} style"
+# args: name
+"styles.learn_action" = "Learn {name} style"
+# args: name
+"styles.remove.confirm" = "Remove {name} from the fighting styles? You can still press Revert before saving."
+# args: name
+"styles.remove.action" = "Remove {name} style"
+# args: style, family, tier, name
+"styles.orb.owned" = "{style}, {family}, tier {tier}, {name}, owned: removes this tier and every tier above it"
+# args: style, family, tier, name, effect
+"styles.orb.available" = "{style}, {family}, tier {tier}, {name}{effect}, buys every missing tier up to this one"
+# args: family, tier, name
+"styles.orb.title" = "{family} tier {tier}: {name}"
+# args: effect, cost, action
+"styles.orb.detail" = "{effect} · {cost} · {action}"
+# args: icon
+"styles.icon" = "icon {icon}"
+# args: time
+"styles.time_used" = "{time} used"
+# args: weapon
+"styles.weapon" = "weapon {weapon}"
+# args: fields
+"styles.saved_data" = "Saved style data: {fields}."
+
+# Inventory tab
+"inventory.add_heading" = "ADD AN ITEM"
+"inventory.category" = "CATEGORY"
+"inventory.clear_filter" = "Clear the item database filter"
+"inventory.reading_hint" = "Reading the game data; existing items can already be edited and removed."
+"inventory.missing_hint" = "The game data was not found, so items can only be removed, not added. The category comes from the item type stored in the savegame."
+"inventory.empty_hint" = "The inventory is empty."
+"inventory.no_category" = "No items in this category."
+"inventory.empty_database" = "The item database is empty."
+"inventory.no_match" = "No items match this search and category."
+"inventory.search_results" = "SEARCH RESULTS"
+"inventory.add_list" = "Items you can add"
+"inventory.all_chip" = "All items"
+"inventory.all_chip.description" = "Show items from every category"
+# args: name
+"inventory.accessible" = "{name} item"
+# args: kind
+"inventory.type" = "type {kind}"
+# args: label
+"inventory.category_filter" = "Show only {label}"
+# args: name
+"inventory.remove.confirm" = "Remove {name} from the inventory? You can still press Revert before saving."
+# args: name
+"inventory.stack_error" = "{name}: enter a stack size from 1 to 255."
+# args: name
+"inventory.decrease" = "Decrease {name} stack"
+# args: name
+"inventory.increase" = "Increase {name} stack"
+
+# Gems tab
+"gems.add_heading" = "Add a gem"
+"gems.clear_filter" = "Clear the gem filter"
+"gems.move_hint" = "Moving a gem keeps its effects; JadeForge only changes which list references it."
+"gems.empty_inventory" = "No gems carried in the inventory."
+"gems.empty_amulet" = "No gems socketed into the amulet."
+"gems.amulet_locked" = "The amulet is unlocked early in the story; it has no sockets before that."
+"gems.no_amulet" = "No amulet yet"
+"gems.no_effects" = "no effects"
+"gems.add" = "Add"
+"gems.missing_hint" = "The game data with the gem definitions was not found."
+"gems.no_match" = "No gem matches this filter."
+"gems.add_list" = "Gems you can add"
+"gems.from_game_data" = "From the game data"
+"gems.all_sockets" = "All seven sockets are unlocked."
+"gems.more_sockets" = "More sockets unlock as the story progresses."
+"gems.move_to_inventory" = "Move to inventory"
+"gems.move_to_amulet" = "Move to amulet"
+"gems.amulet_full" = "Amulet full"
+"gems.remove" = "Remove"
+# args: name, effects
+"gems.accessible" = "{name} gem, {effects}"
+# args: name
+"gems.add_action" = "Add {name}"
+# args: socketed, sockets, tier
+"gems.summary" = "{socketed} of {sockets} filled · amulet tier {tier}"
+# args: action, name
+"gems.move_action" = "{action} ({name})"
+# args: name
+"gems.remove.action" = "Remove {name}"
+# args: name
+"gems.remove.confirm" = "Remove {name}? You can still press Revert before saving."
+# args: name
+"gems.row_accessible" = "{name} gem"
+
+# Companions tab
+"companions.level_hint" = "Companion levels follow the player through the game; raising them here only changes what the companion starts with."
+"companions.empty_hint" = "This savegame has no companions yet. They appear here once the story introduces them."
+"companions.available" = "available"
+"companions.hidden" = "hidden"
+"companions.hide" = "Hide"
+"companions.make_available" = "Make available"
+# args: name
+"companions.level_error" = "{name}: enter a level from 1 to 60."
+# args: name
+"companions.accessible" = "{name} companion"
+# args: name
+"companions.decrease" = "Decrease {name} level"
+# args: name
+"companions.increase" = "Increase {name} level"
+# args: name
+"companions.hide_action" = "Hide {name}"
+# args: name
+"companions.make_available_action" = "Make {name} available"
+
+# Backups page
+"backups.back" = "Back to editing"
+"backups.close" = "Close the backup browser"
+"backups.empty_hint" = "No backups were found next to this savegame. The first successful save creates one."
+"backups.restore" = "Restore"
+"backups.dirty_hint" = "Save or revert the unsaved changes before restoring a backup: a restore would otherwise silently discard them."
+"backups.utc_hint" = "timestamps are UTC"
+"backups.restore.title" = "Restore this backup?"
+"backups.restore.confirm" = "The current savegame is replaced by the chosen backup. JadeForge first writes a new backup of the current file, so the restore can be undone."
+# args: open
+"backups.explanation" = "Backups of the open savegame, newest first. A restore verifies the chosen file, keeps a new backup of the file it replaces, and writes atomically. Open savegame: {open}"
+# args: timestamp
+"backups.restore.action" = "Restore the backup from {timestamp}"
+# args: path
+"backups.original" = "Original: {path}"
+
+# Review-before-save page
+"review.explanation" = "Nothing is written until the write button below is pressed. The file is verified by re-reading it, written atomically, and the previous file is kept as a backup. Invalid character fields are not applied; the other edits are."
+"review.title" = "Review changes"
+"review.write" = "Write savegame"
+"review.unsaved_no_fields" = "There are unsaved changes, but no described field changed."
+"review.nothing" = "There is nothing to write."
+# args: count
+"review.invalid_fields" = "{count} character field(s) are still invalid and will not be written. Go back to fix them if you need those values."
+# args: changes, groups
+"review.summary" = "{changes} in {groups}"
+# args: before, after
+"review.change" = "was {before}, now {after}"
+
+# About, settings and diagnostics
+"field.appearance" = "APPEARANCE"
+"about.title" = "About JadeForge"
+"about.close" = "Close"
+"about.close_page" = "Close the About page"
+"about.copy_diagnostics" = "Copy diagnostics"
+"about.copy_diagnostics_hint" = "Copy the diagnostics to the clipboard"
+"about.diagnostics_heading" = "DIAGNOSTICS"
+"about.backup.explanation" = "Every save writes a copy of the previous save.sac next to it, named save.sac.jadeforge-backup-<seconds>.<nanos>.<counter>. To undo a save, close JadeForge and copy the backup over save.sac. An earlier backup is never overwritten."
+"about.tagline" = "Jade Empire savegame editor"
+"about.read_write.summary" = "JadeForge reads and writes save.sac files directly. Every write is verified by re-reading the produced file and is written atomically, and the game installation is only ever read."
+"about.shortcuts_heading" = "KEYBOARD SHORTCUTS"
+"about.licenses_heading" = "LICENSES"
+"about.backup.none" = "No backup has been written in this session; saving a change creates one and shows its exact path on the Overview tab."
+"about.config.none" = "No config directory is available in this environment. JADEFORGE_CONFIG_DIR can point at one for portable installs."
+"about.save_folder.none" = "No save folder has been chosen yet. Use Browse… or Ctrl+O to pick one."
+"about.remember_size" = "Remember size and position"
+"about.remember_size_description" = "Remember the window size and position between runs"
+"about.remember_size_wayland" = "Remember the window size between runs; the compositor places the window"
+"about.settings_heading" = "SETTINGS"
+"about.sort_order" = "Sort order"
+"about.text_size_heading" = "TEXT SIZE"
+"about.appearance.explanation" = "The theme and text size apply immediately and are remembered in the settings file. System follows the operating system preference; high contrast can be selected here because the windowing layer does not report the platform's forced-colours setting."
+"about.settings.explanation" = "These preferences live in one TOML file. They are remembered between runs and can be edited while JadeForge is closed."
+"about.window_heading" = "WINDOW"
+"about.window.wayland_hint" = "Wayland compositors place windows themselves. Add a window rule in your desktop settings to pin the position."
+"about.game_data.loading" = "Reading the game installation…"
+"about.game_data.bundled" = "Bundled English names (no installation)"
+"about.game_data.missing" = "No installation configured"
+# context: Diagnostics row label, report label and footer label.
+"about.diagnostics.version" = "Version"
+"about.diagnostics.open_savegame" = "Open savegame"
+"about.diagnostics.none" = "none"
+"about.diagnostics.file_size" = "File size"
+"about.diagnostics.not_read" = "not read"
+"about.diagnostics.renderer" = "Renderer override"
+"about.diagnostics.auto" = "auto"
+"about.diagnostics.remember_window" = "Remember window"
+"about.diagnostics.yes" = "yes"
+"about.diagnostics.no" = "no"
+"about.diagnostics.backup_folder" = "Backup folder"
+"about.diagnostics.title" = "JadeForge diagnostics"
+"about.diagnostics.unavailable" = "unavailable"
+"about.diagnostics.copied" = "Copied the diagnostics to the clipboard."
+"sort.descending" = "descending"
+"sort.ascending" = "ascending"
+"about.settings_file" = "Settings file"
+"about.latest_backup" = "Latest backup"
+"about.license.summary" = "JadeForge is MIT licensed. The bundled English item and style names are game content and are not covered by that license; see NOTICE and docs/NAMES.md."
+"about.shortcut.save" = "Save (opens the review)"
+"about.shortcut.focus" = "Focus the active filter"
+"about.shortcut.undo" = "Undo the last edit"
+"about.shortcut.redo" = "Redo an undone edit"
+"about.shortcut.scan" = "Scan the save folder"
+"about.shortcut.help" = "Open this help page"
+"about.shortcut.escape" = "Clear the active filter or close this page"
+# args: error
+"about.game_data.unreadable" = "Unreadable: {error}"
+# args: percent
+"about.text_size.option" = "Use {percent} percent text size"
+# args: language
+"about.language.option" = "Use {language} for the interface"
+# args: theme, scale
+"about.diagnostics.theme_value" = "{theme} at {scale} %"
+# args: name, direction
+"about." = "{name}, {direction}"
+# args: version
+"about.diagnostics.version_footer" = "Version {version}"
+
+# Shared widgets
+"widget.clear" = "Clear"
+"widget.expanded" = "expanded"
+"widget.collapsed" = "collapsed"
+# args: name, subtitle, state
+"widget.details" = "{name}, {subtitle}, {state}, Details"
+"theme.system.description" = "Follow the operating system's light or dark preference"
+
+# Count nouns: singular and plural
+"count.gem.one" = "gem"
+"count.gem.other" = "gems"
+"count.gem.carried.one" = "carried gem"
+"count.gem.carried.other" = "carried gems"
+"count.socket.one" = "socket"
+"count.socket.other" = "sockets"
+"count.companion.known.one" = "companion known"
+"count.companion.known.other" = "companions known"
+"count.item.one" = "item"
+"count.item.other" = "items"
+"count.match.one" = "match"
+"count.match.other" = "matches"
+"count.stack.one" = "stack"
+"count.stack.other" = "stacks"
+"count.style.one" = "style"
+"count.style.other" = "styles"
+"count.style.tolearn.one" = "style to learn"
+"count.style.tolearn.other" = "styles to learn"
+"count.style.learned.one" = "style learned"
+"count.style.learned.other" = "styles learned"
+"count.style.point.one" = "style point"
+"count.style.point.other" = "style points"
+"count.change.one" = "change"
+"count.change.other" = "changes"
+"count.group.one" = "group"
+"count.group.other" = "groups"
+"count.backup.one" = "backup"
+"count.backup.other" = "backups"
+"count.invalidfield.one" = "invalid field"
+"count.invalidfield.other" = "invalid fields"
+"count.experiencepoint.one" = "experience point"
+"count.experiencepoint.other" = "experience points"
+"count.block.one" = "block"
+"count.block.other" = "blocks"
+"count.effect.one" = "effect"
+"count.effect.other" = "effects"
+"count.kill.one" = "kill"
+"count.kill.other" = "kills"
+"count.weapon.one" = "weapon"
+"count.weapon.other" = "weapons"
+# context: Card caption, row summary and scan count.
+"count.savegame.one" = "savegame"
+# context: Save browser heading and scan count.
+"count.savegame.other" = "savegames"
+"count.upgrade.one" = "upgrade"
+"count.upgrade.other" = "upgrades"
+
+# Dialogs
+"dialog.choose_save_folder" = "Choose the Jade Empire save folder"
+# args: kind
+# context: Confirmation title for removing an item, gem or style.
+"dialog.remove" = "Remove {kind}?"
+"dialog.unsaved_changes.explanation" = "This savegame has changes that are only in memory. Save them before closing, discard them, or cancel and keep editing."
+# context: Close dialog button; distinct from the footer save action.
+"dialog.save" = "Save"
+"dialog.discard" = "Discard"
+"dialog.cancel" = "Cancel"
+
+# Filter placeholders
+"filter.savegame" = "Filter by name or character"
+"filter.items" = "Filter the item database, or leave empty to browse it"
+"filter.styles" = "Filter the style list, or leave empty to browse it"
+"filter.gems" = "Filter the gem list, or leave empty to browse it"
+
+# Shared
+# Separator for joining short noun lists in the UI.
+"common.list_separator" = " / "
+
+# Character tab and fields
+"character.alignment.fallback" = "Alignment is a number; below 128 is the Closed Fist, above is the Open Palm."
+"character.changes_hint" = "Every valid change is applied in memory immediately"
+"character.quick_add.one" = "+1 point"
+"character.quick_add.five" = "+5 points"
+# args: alignment, default
+"character.alignment.template" = "{alignment} (the game starts at {default}, below is Closed Fist, above is Open Palm)."
+"field.experience" = "EXPERIENCE"
+"field.body" = "Body"
+"field.mind" = "Mind"
+"field.spirit" = "Spirit"
+"field.charm" = "Charm"
+"field.intuition" = "Intuition"
+"field.intimidate" = "Intimidate"
+"field.alignment" = "ALIGNMENT"
+"field.name.range" = "at most 64 characters"
+"field.level.range" = "1 to 255 (level)"
+"field.gold.range" = "empty or 0 to 4294967295 gold"
+"field.appearance.range" = "0 to 1000000 (index)"
+"field.alignment.range" = "-1000000 to 1000000, 128 balanced"
+"field.chapter.range" = "0 to 100 (chapter)"
+
+# Path actions
+"path.settings" = "settings"
+"path.copy" = "Copy path"
+"path.open" = "Open folder"
+# context: Args: what. The path noun comes from label.savegame, label.backup or label.settings.
+# args: what
+"path.copied" = "Copied the {what} path to the clipboard."
+# args: what
+"path.opened" = "Opened the {what} folder in the file manager."
+# args: what, folder, error
+"path.open_failed" = "Could not open the {what} folder {folder}: {error}"
+# args: what
+"path.copy_action" = "Copy the {what} path"
+# args: what
+"path.open_action" = "Open the {what} folder"
+
+# Theme choices
+"theme.system" = "System"
+"theme.dark" = "Dark"
+"theme.light" = "Light"
+"theme.high_contrast" = "High contrast"
+"theme.dark.description" = "The original dark jade theme"
+"theme.light.description" = "A light parchment theme for bright rooms"
+"theme.high_contrast.description" = "Black and white with a yellow focus ring"
+
+# Session rows
+"session.cannot.be.read" = "Cannot be read"
+
+# Session status messages
+"alignment.open_palm" = "Way of the Open Palm"
+"alignment.closed_fist" = "Way of the Closed Fist"
+"alignment.balanced" = "Balanced"
+"category.powerups" = "Power-ups"
+"category.plot_items" = "Plot items"
+"category.magic_weapons" = "Magic weapons"
+"category.improvements" = "Improvements"
+"style.kind.martial" = "Martial"
+"style.kind.magic" = "Magic"
+"style.kind.support" = "Support"
+"style.kind.transformation" = "Transformation"
+"style.kind.improvised" = "Improvised"
+"style.kind.unique" = "Unique"
+"status.choose_save_folder" = "Choose the folder that contains your Jade Empire savegames."
+"status.scanning" = "Scanning for savegames…"
+"status.scan_cancelled" = "Scan cancelled; the savegames on screen are unchanged."
+"status.savegame_gone" = "That savegame no longer exists; scan the folder again."
+"status.nothing_to_undo" = "There is nothing to undo."
+"status.nothing_to_redo" = "There is nothing to redo."
+"status.savegame.structure" = "Savegame structure"
+"status.block.layout" = "Block layout"
+"status.as.opened" = "as opened"
+"status.structs_added_or_orphaned" = "structs were added or orphaned"
+"status.no.savegame.is.open" = "No savegame is open."
+"status.reload_would_discard" = "Reloading from disk would discard the unsaved changes. Save or revert them first."
+"status.reloaded" = "Reloaded the savegame from disk."
+"status.save_or_revert_before_restore" = "Save or revert the current edits before restoring a backup."
+"status.not_a_backup" = "That file is not a backup of the open savegame."
+"status.nothing_to_apply" = "Nothing changed, so there was nothing to apply."
+"status.nothing_to_write" = "Nothing changed, so there is nothing to write."
+"status.stack_minimum" = "A stack needs at least one item; use Remove instead."
+"status.item.stack" = "Item stack"
+# args: kind
+# context: Pending-change label; the session capitalizes it for the undo history.
+"status.added_label" = "{kind} added"
+"status.not.present" = "not present"
+# args: kind
+# context: Pending-change label; the session capitalizes it for the undo history.
+"status.removed_label_template" = "{kind} removed"
+# context: Pending-change label; the sentence appends a period.
+"status.removed_label" = "removed"
+# args: kind
+"status.already_gone" = "The {kind} was already gone."
+"status.style.upgrade" = "Style upgrade"
+"status.upgrade_unchanged" = "That upgrade is already in the requested state."
+"status.empty.socket" = "Empty socket"
+# args: kind
+"status.not_in_game_data" = "That {kind} is not in the game data."
+# context: Tab caption, overview glance label and gem location value.
+"label.inventory" = "inventory"
+# context: Card caption and gem location value.
+"label.amulet" = "amulet"
+"status.gem.moved" = "Gem moved"
+"status.gem_socketed" = "Gem socketed into the amulet."
+"status.learn_style_first" = "Learn a style first so JadeForge can copy the field layout."
+"status.keep_one_style" = "Keep at least one style: JadeForge needs an existing style as the layout template for learning one."
+"status.companion_level_range" = "Companion levels go from 1 to 60."
+"status.companion.level" = "Companion level"
+"status.companion.availability" = "Companion availability"
+# args: directory
+"status.scanning_directory" = "Scanning {directory} for savegames…"
+# args: directory
+"status.no.savegames.found.in" = "No savegames found in {directory}."
+# args: savegames, directory
+"status.found.in" = "Found {savegames} in {directory}."
+# args: savegames, directory
+"status.scan_none_readable" = "Found {savegames} in {directory}, but none of them can be read."
+# args: savegames, directory, broken
+"status.scan_partial" = "Found {savegames} in {directory}; {broken} of them cannot be read."
+# args: directory
+"status.scan_failed" = "Could not scan {directory}: the savegame reader stopped unexpectedly."
+# args: root
+"status.using_game_data" = "Using the game data in {root}."
+# args: root, error
+"status.game_data_unreadable" = "{root} is not a readable Jade Empire installation: {error}"
+# args: label, error
+"status.cannot_open_scan" = "Cannot open {label}: the scan found it unreadable ({error})."
+# context: Args: label. Also used for the sibling template with a problems suffix.
+# args: label
+"status.opened" = "Opened {label}."
+# args: label, problems
+"status.opened_with_problems" = "Opened {label}, but some sections could not be read: {problems}"
+# args: path, error
+"status.cannot.open" = "Cannot open {path}: {error}"
+# args: item_id
+"status.item" = "Item {item_id}"
+# args: style_id
+"status.style" = "Style {style_id}"
+# args: error
+"status.cannot.undo.that.step" = "Cannot undo that step: {error}"
+# args: label
+"status.undid" = "Undid {label}."
+# args: label
+"status.redid" = "Redid {label}."
+# args: backup, safety
+"status.restored_backup" = "Restored {backup}. The file it replaced is kept as {safety}."
+# args: error
+"status.cannot.restore.the.backup" = "Cannot restore the backup: {error}"
+# args: changes
+"status.applied.in.memory" = "Applied {changes} in memory."
+# args: path, backup
+"status.saved_with_backup" = "Saved {path}. The previous file is kept as {backup}."
+# args: path
+"status.saved" = "Saved {path}."
+# args: error
+"status.disk_changed" = "The savegame changed on disk since it was opened, so it was not overwritten. Reload it to keep the file on disk, or restore a backup. ({error})"
+# args: error
+"status.cannot.save" = "Cannot save: {error}"
+# args: path, error
+"status.saved_invalid_field" = "Saved {path}. The invalid character field was not applied: {error}"
+# args: message, error
+"status.invalid_field_also" = "{message} The character form also has an invalid field: {error}"
+# args: name
+"status.stack_too_large" = "{name}: a stack cannot hold more than 255."
+# args: name, count
+"status.in.the.stack" = "{name}: {count} in the stack."
+# args: error
+"status.cannot_change" = "Cannot change: {error}"
+# args: item_id
+"status.item_no_category" = "item {item_id} has no savegame category type"
+# args: name
+"status.added" = "Added {name}."
+# args: error
+"status.cannot_add" = "Cannot add: {error}"
+# args: error
+"status.cannot_remove" = "Cannot remove: {error}"
+# args: advance
+"status.upgrade" = "Upgrade {advance}"
+# args: upgrades
+"status.bought" = "Bought {upgrades}."
+# args: item_id
+"status.gem" = "Gem {item_id}"
+# args: error
+"status.cannot.move.the.gem" = "Cannot move the gem: {error}"
+# args: level
+"status.companion.level.set.to" = "Companion level set to {level}."
+# args: name, state
+"status.is.now" = "{name} is now {state}."
+# args: kind
+"status.effect" = "Effect {kind}"
+# args: value, kind
+"status.unsaved_effect" = "{value} effect {kind}"
+# args: directory
+"status.folder_missing" = "The save folder {directory} does not exist. Check the path or use Browse."
+# args: directory
+"status.folder_permission" = "The save folder {directory} cannot be read: permission denied."
+# args: directory, error
+"status.folder_unreadable" = "The save folder {directory} cannot be read: {error}."
+# args: directory
+"status.not_a_folder" = "{directory} is a file, not a save folder."
+# args: directory, error
+"status.folder_list_failed" = "The save folder {directory} cannot be listed: {error}."
+"status.gem_moved_to_inventory" = "Gem moved to the inventory."
+"status.unknown" = "unknown"
+
+# Shared errors
+# args: section, error
+# context: Shared by every tab whose savegame section could not be read.
+"error.section_unreadable" = "The {section} section could not be read: {error}"
+# context: Copy actions in the shell, About and the path cards.
+"error.clipboard_unavailable" = "The system clipboard is not available."
+
+# Merged labels
+# context: Diagnostics caption and settings section heading; the section displays it uppercased.
+"label.theme" = "theme"
+# context: Diagnostics caption and settings section heading; the section displays it uppercased.
+"label.language" = "language"
+"label.save.folder" = "save folder"
+# context: Used for the character field caption and the overview badge.
+"character.chapter" = "Chapter"
+
+# Composed field text
+# args: stat
+"field.max" = "{stat} MAX"
+# args: min, max, unit
+"field.range" = "{min} to {max} {unit}"
+"field.unit.xp" = "XP"
+"field.unit.points" = "points"
+"field.unit.healthpoints" = "health points"
+"field.unit.chipoints" = "chi points"
+"field.unit.focuspoints" = "focus points"
+
+# Diagnostics report
+# args: label, value
+"about.diagnostics.line" = "{label}: {value}"
+"about.diagnostics.config" = "Config"
+
+# Session messages
+# context: Generic success sentence for item, style and upgrade removals; the arg is the removed thing.
+# args: what
+"status.removed_sentence" = "Removed {what}."

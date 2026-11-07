@@ -2,12 +2,13 @@
 
 **Reviewed:** 2026-11-05, P1 follow-up 2026-11-06, P2 polish 2026-11-06 · **Base:** `main` at `491163c`
 **Scope:** the Freya 0.5 desktop UI in `crates/jadeforge-gui`, the session state it renders, and the real 89-savegame corpus.
-**Status:** P0 release blockers and the P1 follow-ups are addressed. The P2
-polish is implemented on `fix/ui-p2-polish` and verified with the headless
-suite and snapshots; its native close dialog and folder-picker backend are not
-window-verified because permission was not granted. P3 work remains tracked in
-[#9](https://github.com/mztikk/jade_empire_save_editor/issues/9). The remaining
-upstream blocker is the missing `Input` label association.
+**Status:** P0 release blockers, the P1 follow-ups and the P2 polish are
+addressed. The P3 strategic work is implemented on `feat/ui-p3-strategic` and
+verified with the headless suite and snapshots; the windowed suite passed all
+six scenarios on KDE Plasma Wayland on 2026-11-07. The item-icon reference is
+blocked on engine BIF/KEY texture data (see
+[docs/ui-p3/icons.md](ui-p3/icons.md)). The remaining upstream blocker is the
+missing `Input` label association.
 
 ![JadeForge overview](screenshot.png)
 
@@ -42,7 +43,7 @@ Addressed on the `fix/ui-p1-followups` branch:
 | Area | Result |
 | --- | --- |
 | Responsive composition | Fluid 3+3 identity grid at 1180×760 and 900×700, overview glance cells 1-up → 2+2+1, hero stats 2×2, 1100 px editor cap and a 720 px text measure; descriptions expand in full. |
-| Window geometry | `geometry::fit_window` clamps the default and remembered size to the monitor, lowers the minimum on short screens and keeps a stored position on screen; a plugin remembers the rectangle. Tested for 1366×768 at 125 %. |
+| Window geometry | `geometry::fit_window` clamps the default and remembered size to the monitor, lowers the minimum on short screens and keeps a stored position on screen; a plugin remembers the size everywhere and the position on X11, because Wayland compositors own placement. Tested for 1366×768 at 125 %. |
 | Clipped names | Ellipsis plus a tooltip on save, item, companion and sidebar names; the overview path wraps and has a Copy path action. |
 | State safety | Scan keeps the open savegame for the same folder and re-locates it by path; Browse checks dirty state before the dialog; filters, paging, expanded rows and scroll positions reset on a document change; every filter has a Clear button. |
 | Save vs. form | Each field validates on its own and shows its range; valid fields apply even when another is invalid; Save writes applied edits, reports the invalid form separately and focuses the first invalid field. |
@@ -78,11 +79,36 @@ Addressed on `fix/ui-p2-polish`:
 
 ### P3: [#9](https://github.com/mztikk/jade_empire_save_editor/issues/9)
 
-Strategic work:
+Addressed on `feat/ui-p3-strategic`; each item has a design note with its test
+plan in [docs/ui-p3/](ui-p3/README.md). Item icons are the one blocked item.
 
-- Light/system theme, high-contrast support, text scaling/zoom, UI localization.
-- Virtualized large lists, full undo/redo, pending-changes diff, backup restore screen, external-change reload.
-- Item/style icons, About/help, command palette/cheat sheet, configurable window geometry and multi-monitor policy.
+| Area | Result |
+| --- | --- |
+| Themes | Dark, light, system-following and high-contrast palettes share one semantic `Palette`; the choice persists and is selected on About. Palette tests assert WCAG AA on every surface for every theme and AAA for high contrast. High contrast is manual because Freya/winit expose no forced-colours signal (recorded in the note; the platform-contrast follow-up is #33). |
+| Text scaling | 100/125/150/200 % scales type, spacing, radii and type-related fixed dimensions; the status slot and save rows grow, and the sidebar hides its decorative preview above 125 % so the list stays usable. Tests render all tabs at 200 %. |
+| Localization | Stable semantic ids in a new `jadeforge-i18n` crate: complete English and German peer catalogs (472 ids), a generated QA pseudolocale, strict key/placeholder/completeness checks and build-generated typed keys. `t`/`fill`/`plural` render `⟦id⟧` markers instead of English fallback; the session calls the shared catalog directly. About shows **Deutsch**, the choice persists as `de`, and the preview path remains for an incomplete future language. The last reuse pass composes the Overview stat lists from the shared field ids and a catalogued separator. |
+| Large lists | Save browser unchanged (already virtual); item, style and gem pickers now virtualize the full filtered list, keep stable ids and accessible names, and show descriptions in a panel below the fixed-height rows. |
+| Editing safety | Bounded per-action undo/redo with coalesced character typing, a pending-changes review page before Save, a backup browser with verified restore and safety copy, and an external-change banner with an explicit reload/discard path. |
+| Content and identity | About now carries diagnostics (version, savegame, blocks, size, theme, scale, language, renderer, backup folder), licenses, a Copy diagnostics action and a complete shortcut sheet opened with Ctrl+/; window remembering is configurable. Item/style icons are blocked: the references resolve but the images are engine BIF/KEY textures, not RIM images. |
+
+P3 verification caveats:
+
+- Item icons are blocked on a new KEY/BIF + engine-texture reader; the evidence
+  (icon references, RIM resource types and payload samples) is recorded in
+  [docs/ui-p3/icons.md](ui-p3/icons.md). No placeholder icon was added.
+- The windowed suite passed all six scenarios on the review desktop (KDE
+  Plasma Wayland, KWin fake input) on 2026-11-07. It covered window creation and
+  presentation, save opening and tab switching, item filtering, keyboard
+  save-list navigation and the two-pass `window_geometry_restarts` (seeded
+  1000x720, remembered rectangle, restored 1000x720). The new Backups, Review
+  and About pages and the theme/scale variants are covered by the headless
+  suite and the snapshot example.
+- Linux has no system theme through winit (X11 unsupported, Wayland only
+  overrides). A `System` choice therefore reads the freedesktop appearance
+  portal, with KDE's `kdeglobals` as the first-frame fallback, and follows
+  portal changes while the window is open. Detection was verified on the
+  reviewer's KDE Plasma Wayland session, where the portal reports dark; the
+  live-desktop test is opt-in because CI has no session bus.
 
 ## Upstream accessibility blockers
 
@@ -120,6 +146,8 @@ cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" docs/scre
 cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" docs/screenshot.png Overview
 cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" scratch/narrow.png Overview --width 900 --height 700
 cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" scratch/wide.png all --width 1600 --height 900
+cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" scratch/light.png all --theme light
+cargo run -p jadeforge-gui --example snapshot -- "$JADEFORGE_SAVE_DIR" scratch/zoom.png all --scale 200 --width 1600 --height 900
 ```
 
 `--query <text>` types into the active tab's own picker filter (Inventory,
@@ -129,11 +157,11 @@ breakpoints and the a11y tree, so a screenshot alone is never the test.
 
 ## Verification
 
-- `just check`: 437 workspace tests passed (1 skipped: the opt-in live suite), clippy, formatting and rustdoc clean after the P2 work (see `docs/COVERAGE.md` for coverage).
+- `just check`: the full workspace suite (formatting, clippy, rustdoc, nextest and doctests) passes after the P3 work; the windowed suite passed all six scenarios separately. P3 adds palette/contrast tests for three themes, text-scale token tests, localization catalog/placeholder/completeness tests, core backup tests, session undo/diff/backup/reload tests, virtualized-picker tests and headless UI tests for themes, 200 % text, undo/redo, review, backups, external reload, diagnostics and the shortcut sheet.
 - P2 headless coverage: the empty carried-gems count, amulet summary, `STYLES TO LEARN`, friendly item categories and the category filter, `Level`/`Time played`/available wording, the optional-Gold explanation, field units, the save-filter character match, the About page and its settings, the About entry semantics and tab selection while the page is open, backup surfacing/copy/open actions, no-op Save/Revert, folder-picker cancellation and unreadable paths, loading skeletons and the manual-scan busy slot, full-width overview rows at 900/1280/1600, and the sidebar preview alignment. The snapshot example's filter targeting is covered by the tab-filter unit test and a headless Styles-filter test.
 - Windowed verification for P2: not run, because the user did not grant permission under AGENTS.md rule 13. The native close dialog's Save / Discard / Cancel labels, the actual folder-dialog cancellation backend and the Windows ComCtl32 v6 manifest therefore remain unverified in a real window; the choice mapping and the save-before-close decision table are unit tested, and the manifest is embedded by the existing Windows resource build.
 - Headless coverage of the P1 work: geometry at 1180x760, 900x700 and 1600x900; DPI geometry for 1366x768 at 125 %; scan-keeps-save; dirty content comparison; invalid-form save independence; first-invalid-field focus; focus restoration after removal; target sizes; keyboard scrolling focus; the 89-save render test.
-- `just live`: all six windowed scenarios passed on Wayland with the KWin input backend. The window opened at the configured size, save opening and tab switching, item filtering, keyboard save-list navigation and real frame presentation all worked; the captured frame was written to the ignored `target/live-ui/presented.png`. The two-pass `window_geometry_restarts` scenario opened at the seeded 1000x720, the plugin stored the real rectangle on close, and the relaunch restored 1000x720. Each scenario uses its own settings directory; the two geometry passes deliberately share one.
+- `just live`: all six windowed scenarios passed on Wayland with the KWin input backend. The window opened at the configured size, save opening and tab switching, item filtering, keyboard save-list navigation and real frame presentation all worked; the captured frame was written to the ignored `target/live-ui/presented.png`. The two-pass `window_geometry_restarts` scenario opened at the seeded 1000x720, the plugin stored the real rectangle on close, and the relaunch restored 1000x720. Each scenario uses its own settings directory; the two geometry passes deliberately share one. The P3 branch rerun on 2026-11-07 passed the same six scenarios.
 - Live screen-reader check: Orca 51.1 (Speech Dispatcher 0.12.1, espeak-ng 1.52) announced the polite scan statuses and the assertive folder error in a manual run. The AT-SPI event log showed the full text with politeness level 1 for the scan messages and level 2 for "The save folder … does not exist …". This closes the P1 status live-region check.
 - The P0 work is merged on `main`; the remaining P1 items and #8/#9 are tracked in the issues above.
 

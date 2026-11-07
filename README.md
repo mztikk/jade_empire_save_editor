@@ -51,6 +51,29 @@ the game does, verifies the result and keeps a backup of the original.
   the save folder never has to be typed. Cancelling the dialog and picking an
   unreadable path are reported distinctly. The choice is remembered between runs
   and no installation path is baked into the program.
+- **Themes and text size** – the original dark jade theme, a light parchment
+  theme, system-following mode and a high-contrast theme, shared through one
+  semantic palette. Text can be scaled to 125, 150 or 200 %: rows, badges and
+  the three-line status slot grow with it. Both choices are remembered and
+  available on the About page.
+- **Undo, review and backups** – every edit has an undo step (Ctrl+Z, Ctrl+Y),
+  Save opens a pending-changes page that lists the exact fields and rows before
+  the verified write, and a backup browser restores an older file with its
+  timestamp and original path. A savegame that changed on disk is reported
+  with a Reload action instead of being overwritten.
+- **Large collections** – the save browser and the item/style/gem pickers are
+  virtualized, so the full item database and a save folder with hundreds of
+  entries stay responsive while only the visible rows are built.
+- **Localization-ready UI** – interface strings use stable semantic ids in an
+  English source catalog plus a peer German catalog in
+  `crates/jadeforge-i18n/locales`, and a generated QA pseudolocale. English and
+  German are complete; a future language can start as a `Deutsch (Vorschau)`-style
+  preview that shows `⟦id⟧` markers until filled, with no English fallback.
+  Adding a language means one TOML file and one locale variant, not touching the
+  views; ids are generated as typed compile-time constants.
+- **Help and diagnostics** – About shows the version, configuration and data
+  folders, block count, theme, language and renderer preference, copies a
+  diagnostics report, and lists every keyboard shortcut (Ctrl+/ opens it).
 - **Responsive layout** – the sidebar, tab bar and overview values adapt down to
   small windows instead of clipping, and long scans show a loading state while
   the save list and editor fill in.
@@ -439,8 +462,9 @@ changes are listed in [CHANGELOG.md](CHANGELOG.md).
 ## UI review and roadmap
 
 The desktop UI review and its evidence live in
-[docs/UI-REVIEW.md](docs/UI-REVIEW.md). The follow-up work is tracked in the
-issue tracker:
+[docs/UI-REVIEW.md](docs/UI-REVIEW.md); the P3 design notes and their progress
+table are in [docs/ui-p3/](docs/ui-p3/README.md). The follow-up work is tracked
+in the issue tracker:
 
 - P0 release blockers: [#5](https://github.com/mztikk/jade_empire_save_editor/pull/5) (merged)
 - P1 follow-ups: [#7](https://github.com/mztikk/jade_empire_save_editor/issues/7)
@@ -458,8 +482,10 @@ Not implemented yet:
 
 - editing story variables and journal entries,
 - companion stats beyond level and availability,
-- item icons in the interface (names, categories and descriptions are resolved
-  and shown).
+- item icons in the interface. The icon references resolve, but the image data
+  lives in compressed engine BIF/KEY archives rather than the RIM tables the
+  editor reads; the evidence and the required format work are recorded in
+  [docs/ui-p3/icons.md](docs/ui-p3/icons.md). No placeholder image is shipped.
 
 ## License
 

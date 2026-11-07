@@ -1,6 +1,6 @@
 # Architecture
 
-JadeForge is a Cargo workspace with six crates. The split keeps the savegame
+JadeForge is a Cargo workspace with seven crates. The split keeps the savegame
 knowledge in the lower crates so that both front ends stay thin and the
 interesting logic can be tested without a window or a terminal.
 
@@ -8,6 +8,7 @@ interesting logic can be tested without a window or a terminal.
 crates/
   jadeforge-gff/      GFF block reader/writer
   jadeforge-core/     savegame container, editing model, verification
+  jadeforge-i18n/     stable-id English/German catalogs and locale selection
   jadeforge-session/  UI independent session state and settings
   jadeforge-gamedata/ talk table and 2DA readers for names
   jadeforge-cli/      `jadeforge` command line tool
@@ -46,12 +47,13 @@ savegame container and the typed editing model.
 
 | module | responsibility |
 | --- | --- |
-| `save` | the container: parsing, block access, locking in byte ranges, atomic save |
+| `save` | the container: parsing, block access, locking in byte ranges, atomic save, block payload restore for undo |
 | `character` | typed view of the player: read, validate, write, report changes |
 | `inventory` | item list: list, count changes, add, remove |
 | `styles` | fighting styles: names, levels, upgrade masks, add/remove |
 | `henchmen` | companions: level and availability |
 | `screenshot` | `SaveImage.tga` decoder (TGA 24/32 bit, RLE and raw) |
+| `backup` | listing and verified atomic restore of the `*.jadeforge-backup-*` files |
 | `json` | JSON export used by `jadeforge-cli dump --json`; the only JSON surface |
 | `error` | one error enum with context, wrapping the GFF layer's error |
 
@@ -141,6 +143,30 @@ A thin wrapper over the core: `info`, `blocks`, `character`, `items`, `get`,
 command. It is intentionally useful on its own and serves as an end-to-end test
 target (see `crates/jadeforge-cli/tests`).
 
+## `jadeforge-i18n`
+
+The interface catalog is keyed by stable semantic ids, not English sentences.
+After the final consolidation the ids use `area.subject.action` names and
+repeated wrappers share one template with a placeholder (`error.section_unreadable`,
+`status.cannot_add`, `status.added_label`). The crate owns the two peer
+catalogs, the locale enum and the strictness rules:
+
+| module | responsibility |
+| --- | --- |
+| `lib` | `Key`, generated `keys`, `Locale`, `t`/`fill`/`plural`, `install`/`current`, `is_complete`, `has_id`, `locale_label`, catalog loading, generated pseudo locale |
+| `build.rs` | generates the typed `keys` module from `en.toml` and fails the build through a generated `compile_error!` on a malformed or colliding catalog |
+| `locales/en.toml` | English source of truth, `complete = true` |
+| `locales/de.toml` | German peer catalog, `complete = true` |
+
+A missing or empty value renders a cached `⟦id⟧` marker; there is no English
+fallback. A malformed catalog degrades to markers, never to English. The typed
+`Key` newtype and the build-generated `keys` constants make a raw catalog-id
+string a compile error, and a test keeps `keys::ALL` in lockstep with
+`en.toml`. Placeholder parity and English completeness are enforced by tests.
+German is complete and may be selected from the environment. An incomplete
+catalog stays preview-only (`Deutsch (Vorschau)`, `⟦id⟧` markers) until it is
+marked complete.
+
 ## `jadeforge-session`
 
 UI independent state and behaviour of the desktop application. The `Session`
@@ -149,11 +175,26 @@ and `message()`. UI actions return the typed `SessionError`; form parsing return
 the save folder, holds the opened savegame, applies form edits, searches the
 item database and saves or reverts; the row/message model lives in
 `session/model.rs`, the editable form in `session/form.rs`; `config` is the small TOML settings file
-(save folder and list sorting; old `key=value` files are still read). The crate
+(save folder, list sorting, theme, text scale, locale and window remembering;
+old `key=value` files are still read), while `preferences` and `locale` hold the
+typed values it stores. The crate
 depends on `jadeforge-core` and `jadeforge-gamedata` but on no windowing
 toolkit, so its tests run on every platform without the GUI system libraries.
 `jadeforge-gui` re-exports the modules, which keeps the views' `crate::session`
 paths unchanged.
+
+The session also owns the P3 editing-safety state:
+
+- a bounded undo/redo history. Each action stores the canonical payloads of
+  the blocks it changed plus its field-level before/after rows; restoring a
+  payload is exact at block level and an undone structural edit removes the
+  appended struct again. History is capped at 100 entries / 32 MiB and cleared
+  on save and reload.
+- `pending_changes` groups those rows for the review page before a save.
+- a disk stamp (size + mtime) that detects an external change and explains the
+  conflict; `reload_from_disk` refuses while dirty.
+- `backups` and `restore_backup`, which delegate to the core's verified backup
+  module and keep the safety copy in `last_backup`.
 
 `is_dirty` is a content comparison: an edit that is undone clears the flag. The
 load-time baseline stores a 128 bit fingerprint (two independently salted 64 bit
@@ -170,7 +211,10 @@ Freya 0.5 application with a small, explicit structure:
 | --- | --- |
 | `app/` | root component (`mod.rs`), header/preview/footer (`shell.rs`), save list and sort controls (`sidebar.rs`), tab bar (`navigation.rs`) |
 | `dialog` | the native folder dialog (`rfd`) with a test seam for the headless suite |
-| `theme` | palette, Freya component theme, named type/spacing/radius/stroke scales and fixed layout tokens |
+| `theme` | three semantic palettes, the active thread-local `UiStyle`, scaled type/spacing/radius/layout tokens and the Freya component theme |
+| `i18n` | active locale, typed `Key`/`keys` re-exports, English/pseudolocale catalog and the `t(...)` lookup |
+| `views/review` | pending-changes page before a save |
+| `views/backups` | backup browser with timestamps, original path and verified restore |
 | `renderer` | `JADEFORGE_RENDERER` parsing and the Skia GPU resource cache limit |
 | `app::HoverKey` | one shared hover state for save, item, style rows and upgrade orbs |
 | `widgets` | cards, fields, badges, dividers |
@@ -207,7 +251,10 @@ back to OpenGL. Freya 0.5 ships OpenGL, Vulkan, Metal and software drivers; it
 has no Direct3D driver, so there is no Windows Direct3D preference to expose.
 The savegame sidebar is a `VirtualScrollView`, so only the rows inside it are
 built; each row carries two tooltips and two text paragraphs, and building all
-of them for a few hundred saves dominated the idle footprint.
+of them for a few hundred saves dominated the idle footprint. The P3 item, style
+and gem pickers use the same mechanism through `widgets::picker_list`: the full
+filtered corpus is available, the list shows seven fixed-height rows, and the
+selected description renders in a panel below it.
 
 There are no hardcoded installation paths anywhere. The folder comes from
 `JADEFORGE_SAVE_DIR`, the settings file or the native folder dialog, in that order.
@@ -302,7 +349,8 @@ Deliberately small:
 * `serde_json`, only for the `jadeforge-cli dump --json` export (never for settings or
   internal data flow),
 * `thiserror` for errors,
-* `serde` and `toml` for the settings file,
+* `serde` and `toml` for the settings file (theme, text scale, locale and
+  window remembering are typed values),
 * `freya` for the GUI,
 * `accesskit` for the roles, states, actions and live regions the views set
   directly; it must stay on the same 0.25 release line as Freya,

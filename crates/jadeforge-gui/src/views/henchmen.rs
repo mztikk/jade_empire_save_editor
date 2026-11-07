@@ -3,6 +3,7 @@
 use freya::prelude::*;
 
 use crate::app::Ctx;
+use crate::i18n::{fill, keys, t};
 use crate::session::{HenchRow, Section};
 use crate::theme;
 use crate::widgets::{self, Action};
@@ -18,36 +19,33 @@ pub fn view(
         rows.push(henchman_row(ctx, henchman, hovered));
     }
     if rows.is_empty() {
-        rows.push(match ctx.session.borrow().section_error(Section::Companions) {
-            Some(error) => widgets::hint(format!(
-                "The companions section could not be read: {}",
-                error.message
-            )),
-            None => widgets::hint(
-                "This savegame has no companions yet. They appear here once the story introduces them.",
-            ),
-        });
+        rows.push(
+            match ctx.session.borrow().section_error(Section::Companions) {
+                Some(error) => widgets::hint(super::section_unreadable(
+                    Section::Companions,
+                    &error.message,
+                )),
+                None => widgets::hint(t(keys::COMPANIONS_EMPTY_HINT)),
+            },
+        );
     }
 
     widgets::card(
-        "Companions",
+        t(keys::NAV_COMPANIONS),
         Some(widgets::plural(
             henchmen.len(),
-            "companion known",
-            "companions known",
+            keys::COUNT_COMPANION_KNOWN_ONE,
+            keys::COUNT_COMPANION_KNOWN_OTHER,
         )),
         vec![
             rect()
                 .vertical()
                 .width(Size::fill())
-                .spacing(theme::space::XS)
+                .spacing(theme::space::xs())
                 .children(rows)
                 .into_element(),
             widgets::divider(),
-            widgets::hint(
-                "Companion levels follow the player through the game; raising them here only \
-                 changes what the companion starts with.",
-            ),
+            widgets::hint(t(keys::COMPANIONS_LEVEL_HINT)),
         ],
     )
 }
@@ -95,7 +93,7 @@ fn henchman_row(
         move |text: String| {
             let Ok(value) = text.trim().parse::<u8>() else {
                 ctx.run(|session| {
-                    session.set_error(&format!("{name}: enter a level from 1 to 60."));
+                    session.set_error(&fill(keys::COMPANIONS_LEVEL_ERROR, &[("name", &name)]));
                 });
                 return;
             };
@@ -108,16 +106,19 @@ fn henchman_row(
         .width(Size::fill())
         .key(index)
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(format!("{} companion", henchman.name))
-        .spacing(theme::space::LG)
+        .a11y_alt(fill(
+            keys::COMPANIONS_ACCESSIBLE,
+            &[("name", &henchman.name)],
+        ))
+        .spacing(theme::space::lg())
         .content(Content::Flex)
-        .padding(Gaps::new_symmetric(theme::space::SM, theme::space::LG))
+        .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::lg()))
         .background(if is_hovered {
-            theme::SURFACE_HOVER
+            theme::surface_hover()
         } else {
-            theme::SURFACE
+            theme::surface()
         })
-        .corner_radius(theme::radius::MEDIUM)
+        .corner_radius(theme::radius::medium())
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -127,54 +128,62 @@ fn henchman_row(
         .child(
             rect()
                 .vertical()
-                .spacing(theme::space::XXS)
+                .spacing(theme::space::xxs())
                 .width(Size::flex(1.0))
                 .child(widgets::with_tooltip(
                     henchman.name.clone(),
                     widgets::a11y_text(henchman.name.clone())
-                        .font_size(theme::font::BODY)
+                        .font_size(theme::font::body())
                         .max_lines(1)
                         .text_overflow(TextOverflow::Ellipsis)
-                        .color(theme::TEXT),
+                        .color(theme::text()),
                 ))
                 .child(
                     widgets::a11y_text(henchman.resref.clone())
-                        .font_size(theme::font::MICRO)
-                        .color(theme::DIM),
+                        .font_size(theme::font::micro())
+                        .color(theme::dim()),
                 ),
         )
         .child(if available {
-            widgets::badge("available", theme::SURFACE_ACTIVE, theme::JADE)
+            widgets::badge(
+                t(keys::COMPANIONS_AVAILABLE),
+                theme::surface_active(),
+                theme::jade(),
+            )
         } else {
             // Hidden is a resting state, not a failure: a calmer colour than
             // the danger red that made an unavailable companion look broken.
-            widgets::badge("hidden", theme::SURFACE, theme::MUTED)
+            widgets::badge(t(keys::COMPANIONS_HIDDEN), theme::surface(), theme::muted())
         })
         .child(widgets::row_action(
-            format!("Decrease {name} level"),
+            fill(keys::COMPANIONS_DECREASE, &[("name", &name)]),
             "−",
             lower,
         ))
         .child(
             // Direct numeric editing: level 60 from level 1 is one edit.
             Input::new(WritableSetter::new(level.to_string(), |_: String| {}))
-                .width(Size::px(theme::layout::STEPPER_WIDTH))
+                .width(Size::px(theme::layout::stepper_width()))
                 .text_align(TextAlign::Center)
                 .compact()
                 .on_submit(set_level),
         )
         .child(widgets::row_action(
-            format!("Increase {name} level"),
+            fill(keys::COMPANIONS_INCREASE, &[("name", &name)]),
             "+",
             raise,
         ))
         .child(widgets::row_action(
             if available {
-                format!("Hide {name}")
+                fill(keys::COMPANIONS_HIDE_ACTION, &[("name", &name)])
             } else {
-                format!("Make {name} available")
+                fill(keys::COMPANIONS_MAKE_AVAILABLE_ACTION, &[("name", &name)])
             },
-            if available { "Hide" } else { "Make available" },
+            if available {
+                t(keys::COMPANIONS_HIDE)
+            } else {
+                t(keys::COMPANIONS_MAKE_AVAILABLE)
+            },
             toggle,
         ))
         .into_element()

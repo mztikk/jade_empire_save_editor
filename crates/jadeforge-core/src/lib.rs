@@ -6,6 +6,7 @@
 //! tool and the desktop application are thin layers on top of it, and the test
 //! suite exercises this crate directly against real savegames.
 
+pub mod backup;
 pub mod character;
 pub mod error;
 pub mod gems;
@@ -16,6 +17,7 @@ pub mod save;
 pub mod screenshot;
 pub mod styles;
 
+pub use backup::{BackupEntry, list_backups, restore_backup};
 pub use character::{Change, Character, DEFAULT_ALIGNMENT, PlayerLocation, locate_player};
 pub use error::{Error, Result};
 pub use gems::{AmuletInfo, Gem, GemEffect, GemLocation, sockets_for_tier};

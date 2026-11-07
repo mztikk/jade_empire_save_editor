@@ -55,7 +55,7 @@ pub fn fit_window(
     work: Option<WorkArea>,
     minimum: (f64, f64),
 ) -> FittedWindow {
-    let margin = f64::from(theme::layout::WINDOW_MARGIN);
+    let margin = f64::from(theme::layout::window_margin());
     let wanted = stored
         .filter(WindowGeometry::is_valid)
         .map_or(preferred, |geometry| {
@@ -97,6 +97,22 @@ pub fn fit_window(
     }
 }
 
+/// Whether the desktop compositor owns window placement.
+///
+/// Wayland has no client-side absolute placement. winit returns
+/// `NotSupportedError` from `outer_position` and ignores the requested
+/// position, so `JadeForge` can restore the size but not the coordinates there.
+/// X11 and the two desktop platforms keep the remembered position.
+#[must_use]
+pub fn position_is_compositor_owned() -> bool {
+    cfg!(target_os = "linux")
+        && wayland_display_is_set(std::env::var_os("WAYLAND_DISPLAY").as_deref())
+}
+
+fn wayland_display_is_set(value: Option<&std::ffi::OsStr>) -> bool {
+    value.is_some_and(|value| !value.is_empty())
+}
+
 /// Reads the monitor the window will open on as a logical work area.
 ///
 /// winit exposes the monitor bounds, not the desktop's work area, so the whole
@@ -124,7 +140,8 @@ pub fn monitor_work_area(
 /// The close hook of a `WindowConfig` only sees the renderer context, whose
 /// window is private to `freya-winit`, so the plugin event is the supported way
 /// to read the final size and position. Wayland does not report a window
-/// position; the stored one is kept in that case.
+/// position, so a close there stores the size and leaves the coordinates unset;
+/// the compositor owns placement.
 pub struct WindowGeometryPlugin;
 
 impl FreyaPlugin for WindowGeometryPlugin {
@@ -142,6 +159,9 @@ impl FreyaPlugin for WindowGeometryPlugin {
             .outer_position()
             .ok()
             .map(|position| position.to_logical::<f64>(scale));
+        if !crate::config::Config::load().remember_window {
+            return;
+        }
         let geometry = WindowGeometry {
             width: size.width.max(1.0).round() as u32,
             height: size.height.max(1.0).round() as u32,
@@ -167,15 +187,15 @@ mod tests {
 
     fn preferred() -> (f64, f64) {
         (
-            f64::from(theme::layout::WINDOW_WIDTH),
-            f64::from(theme::layout::WINDOW_HEIGHT),
+            f64::from(theme::layout::window_width()),
+            f64::from(theme::layout::window_height()),
         )
     }
 
     fn minimum() -> (f64, f64) {
         (
-            f64::from(theme::layout::MIN_WINDOW_WIDTH),
-            f64::from(theme::layout::MIN_WINDOW_HEIGHT),
+            f64::from(theme::layout::min_window_width()),
+            f64::from(theme::layout::min_window_height()),
         )
     }
 
@@ -195,7 +215,7 @@ mod tests {
         // keeps a title bar and panel, so the whole monitor is the bound.
         let work = screen(1366.0 / 1.25, 768.0 / 1.25);
         let fitted = fit_window(preferred(), None, Some(work), minimum());
-        let margin = f64::from(theme::layout::WINDOW_MARGIN);
+        let margin = f64::from(theme::layout::window_margin());
         assert!(
             fitted.width <= work.width - margin,
             "the default width {} does not fit {work:?}",
@@ -283,6 +303,53 @@ mod tests {
         assert!((fitted.height - 800.0).abs() < f64::EPSILON);
         assert_eq!(fitted.x, Some(64.0));
         assert_eq!(fitted.y, Some(48.0));
+    }
+
+    #[test]
+    fn a_window_on_a_second_monitor_stays_inside_that_monitor() {
+        let work = WorkArea {
+            x: -1920.0,
+            y: 0.0,
+            width: 1920.0,
+            height: 1080.0,
+        };
+        let stored = WindowGeometry {
+            width: 1000,
+            height: 700,
+            x: Some(-500),
+            y: Some(200),
+        };
+        let fitted = fit_window(preferred(), Some(stored), Some(work), minimum());
+        assert_eq!(fitted.x, Some(-1000.0));
+        assert_eq!(fitted.y, Some(200.0));
+        let displaced = WindowGeometry {
+            width: 1000,
+            height: 700,
+            x: Some(500),
+            y: Some(2000),
+        };
+        let fitted = fit_window(preferred(), Some(displaced), Some(work), minimum());
+        assert_eq!(fitted.x, Some(-1000.0));
+        assert_eq!(fitted.y, Some(380.0));
+    }
+
+    #[test]
+    fn a_150_percent_display_still_fits_the_default() {
+        // 2560x1440 physical at 150% is 1706.7x960 logical.
+        let work = screen(2560.0 / 1.5, 1440.0 / 1.5);
+        let fitted = fit_window(preferred(), None, Some(work), minimum());
+        assert!(fitted.width <= work.width - 16.0);
+        assert!(fitted.height <= work.height - 16.0);
+        assert_eq!(fitted.min_width, 900.0);
+    }
+
+    #[test]
+    fn a_wayland_session_owns_the_window_position() {
+        assert!(!wayland_display_is_set(None));
+        assert!(!wayland_display_is_set(Some(std::ffi::OsStr::new(""))));
+        assert!(wayland_display_is_set(Some(std::ffi::OsStr::new(
+            "wayland-1"
+        ))));
     }
 
     #[test]

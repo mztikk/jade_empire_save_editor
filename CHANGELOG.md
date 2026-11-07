@@ -8,6 +8,40 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- P3 strategic desktop UI: light, dark, system-following and high-contrast
+  themes from one semantic palette, plus a 100-200 % text scale that grows the
+  type, spacing and fixed row/status dimensions without clipping. Both
+  preferences persist in the settings file and are selectable on the About
+  page; the palette tests cover contrast for every theme.
+- A bounded per-action undo/redo history (Ctrl+Z, Ctrl+Y, footer buttons),
+  including structural item/style/gem edits. Character typing coalesces into
+  one step per 1.5 s burst, undoing every edit clears the dirty state, and a
+  save clears the history.
+- Save opens a pending-changes review page that lists every field and row with
+  its before/after value; only the explicit Write savegame button performs the
+  verified write and backup.
+- A first-class backup browser with UTC timestamps, the original path, size and
+  a verified restore that keeps a safety backup of the file it replaces.
+- External-change detection with an assertive explanation banner and an
+  explicit Reload from disk path (with discard confirmation when edits are
+  unsaved).
+- The item, style and gem pickers are virtualized: the full filtered list is
+  browsable, only visible rows are built, and rows keep stable ids, accessible
+  names and their description expansion.
+- A dedicated `jadeforge-i18n` crate with stable semantic ids, a complete
+  English source catalog (`crates/jadeforge-i18n/locales/en.toml`) and a complete
+  German peer catalog (`de.toml`), plus a generated QA pseudolocale. About shows
+  **Deutsch**; the preview mechanism (`complete = false`, `Deutsch (Vorschau)`,
+  `⟦id⟧` markers) remains for a future language and never falls back to
+  English. Key parity, placeholder parity, English/German completeness and the
+  typed-key checks are enforced by tests. The session calls the shared catalog
+  directly through `message::tr`/`message::fill`; the GUI re-exports the catalog
+  API. The consolidation renamed sentence-slug ids, merged repeated wrappers and
+  reused the six shared field ids for the Overview stat lists, leaving 472 ids.
+- About/help now shows version, savegame block count and size, theme, scale,
+  language, renderer override and backup folder, with a Copy diagnostics
+  action and a complete keyboard shortcut sheet (Ctrl+/ opens it). Window size
+  and position remembering can be turned off.
 - Responsive editor composition: the six identity fields are a fluid 3+3
   grid at the default 1180x760 window and at the 900 minimum, the overview
   glance cells reflow from one column to 2+2+1 and the hero stats stay a 2x2
@@ -94,6 +128,18 @@ All notable changes are documented here. The format follows
   P1/P2/P3 issues.
 - `just install` now installs `jadeforge-cli` alongside the `jadeforge` GUI
   binary, so a source install provides both tools.
+- The window-geometry setting is now explicit about Wayland: the size is
+  remembered everywhere, while the position is restored only on X11 because
+  Wayland compositors place windows themselves. The About page shows the
+  compositor hint and points at window rules for a fixed position.
+
+### Fixed
+
+- A `System` theme choice now follows a dark KDE or GNOME desktop on Linux.
+  winit reports no desktop theme there, so the editor reads the freedesktop
+  appearance portal (and KDE's `kdeglobals` for the first frame) instead of
+  falling back to light, and keeps following portal changes while the window
+  is open.
 
 ## [0.2.1] - 2026-11-06
 

@@ -2,6 +2,8 @@
 
 use freya::prelude::*;
 
+use crate::i18n::{keys, t};
+use crate::message::capitalize;
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
 
@@ -14,22 +16,26 @@ pub(super) fn tab_bar(
     enabled: bool,
     scanning: bool,
     mut show_about: State<bool>,
+    mut show_backups: State<bool>,
+    mut show_review: State<bool>,
 ) -> Element {
     let mut buttons: Vec<Element> = Vec::new();
-    let about_open = *show_about.read();
+    let page_open = *show_about.read() || *show_backups.read() || *show_review.read();
     for candidate in Tab::ALL {
         let mut tab = tab;
-        let is_active = candidate == active && !about_open;
+        let is_active = candidate == active && !page_open;
         let action = Action::new(move || {
             *tab.write() = candidate;
             show_about.set(false);
+            show_backups.set(false);
+            show_review.set(false);
         });
         let content = rect()
             .vertical()
-            .padding(Gaps::new_symmetric(theme::space::SM, theme::space::XL))
-            .corner_radius(theme::radius::MEDIUM)
+            .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::xl()))
+            .corner_radius(theme::radius::medium())
             .background(if is_active && enabled {
-                theme::SURFACE_ACTIVE
+                theme::surface_active()
             } else {
                 Color::TRANSPARENT
             })
@@ -43,43 +49,45 @@ pub(super) fn tab_bar(
                     .width(BorderWidth {
                         top: 0.0,
                         right: 0.0,
-                        bottom: theme::stroke::EMPHASIS,
+                        bottom: theme::stroke::emphasis(),
                         left: 0.0,
                     })
                     .alignment(BorderAlignment::Inner)
                     .fill(if is_active && enabled {
-                        theme::ACCENT
+                        theme::accent()
                     } else {
                         Color::TRANSPARENT
                     }),
             )
             .child(
-                crate::widgets::a11y_text(candidate.label())
-                    .font_size(theme::font::LABEL)
+                crate::widgets::a11y_text(capitalize(t(candidate.label())))
+                    .font_size(theme::font::label())
                     .max_lines(1)
                     // Keep the weight constant: bold text is wider,
                     // so toggling it moved the active tab.
                     .font_weight(FontWeight::BOLD)
                     .color(if !enabled {
-                        theme::DIM
+                        theme::dim()
                     } else if is_active {
-                        theme::ACCENT
+                        theme::accent()
                     } else {
-                        theme::MUTED
+                        theme::muted()
                     }),
             )
             .into_element();
         if enabled {
             buttons.push(
-                AccessibleButton::new(candidate.label(), action, content)
+                AccessibleButton::new(capitalize(t(candidate.label())), action, content)
                     .role(AccessibilityRole::Tab)
                     .selected(is_active)
-                    .hover_background(theme::SURFACE_HOVER)
+                    .hover_background(theme::surface_hover())
                     // Arrow keys move between tabs while one of them has
                     // keyboard focus; Home and End jump to the ends.
                     .on_key({
                         let mut tab = tab;
                         let mut show_about = show_about;
+                        let mut show_backups = show_backups;
+                        let mut show_review = show_review;
                         move |event: Event<KeyboardEventData>| {
                             let target = match event.key {
                                 Key::Named(NamedKey::ArrowLeft) => {
@@ -97,6 +105,8 @@ pub(super) fn tab_bar(
                             {
                                 *tab.write() = *next;
                                 show_about.set(false);
+                                show_backups.set(false);
+                                show_review.set(false);
                                 event.stop_propagation();
                             }
                         }
@@ -119,26 +129,26 @@ pub(super) fn tab_bar(
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::NONE)
+        .spacing(theme::space::none())
         .child(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::MD)
+                .spacing(theme::space::md())
                 .content(Content::Flex)
                 .cross_align(Alignment::Center)
                 .padding(Gaps::new(
-                    theme::space::LG,
-                    theme::space::CARD,
-                    theme::space::MD,
-                    theme::space::CARD,
+                    theme::space::lg(),
+                    theme::space::card(),
+                    theme::space::md(),
+                    theme::space::card(),
                 ))
                 .child(
                     rect()
                         .horizontal()
                         .width(Size::flex(1.0))
-                        .spacing(theme::space::XS)
-                        .content(Content::wrap_spacing(theme::space::XS))
+                        .spacing(theme::space::xs())
+                        .content(Content::wrap_spacing(theme::space::xs()))
                         .a11y_role(AccessibilityRole::TabList)
                         .children(buttons),
                 )
@@ -148,8 +158,8 @@ pub(super) fn tab_bar(
         .child(
             rect()
                 .width(Size::fill())
-                .height(Size::px(theme::layout::DIVIDER))
-                .background(theme::BORDER)
+                .height(Size::px(theme::layout::divider()))
+                .background(theme::border())
                 .into_element(),
         )
         .into_element()
@@ -162,22 +172,26 @@ pub(super) fn tab_bar(
 /// this is the persistent "work is happening" cue next to the content.
 fn busy_slot(scanning: bool) -> Element {
     rect()
-        .width(Size::px(theme::layout::BUSY_SLOT))
-        .height(Size::px(theme::font::LINE_HEIGHT))
+        .width(Size::px(theme::layout::busy_slot()))
+        .height(Size::px(theme::font::line_height()))
         .main_align(Alignment::Center)
         .cross_align(Alignment::End)
         .child(
-            crate::widgets::a11y_text(if scanning { "SCANNING…" } else { "" })
-                .a11y_builder(move |node| {
-                    if scanning {
-                        node.set_role(AccessibilityRole::Status);
-                        node.set_live(accesskit::Live::Polite);
-                    }
-                })
-                .font_size(theme::font::MICRO)
-                .font_weight(FontWeight::BOLD)
-                .max_lines(1)
-                .color(theme::WARNING),
+            crate::widgets::a11y_text(if scanning {
+                t(keys::SHELL_SCANNING).to_uppercase()
+            } else {
+                String::new()
+            })
+            .a11y_builder(move |node| {
+                if scanning {
+                    node.set_role(AccessibilityRole::Status);
+                    node.set_live(accesskit::Live::Polite);
+                }
+            })
+            .font_size(theme::font::micro())
+            .font_weight(FontWeight::BOLD)
+            .max_lines(1)
+            .color(theme::warning()),
         )
         .into_element()
 }

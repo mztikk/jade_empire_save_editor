@@ -8,6 +8,8 @@ use freya::elements::image::ImageHandle;
 use freya::prelude::*;
 use jadeforge_core::Character;
 
+use crate::i18n::{fill, keys, t};
+use crate::message::capitalize;
 use crate::session::{SaveEntry, SaveSort};
 use crate::theme;
 use crate::widgets::{AccessibleButton, Action};
@@ -59,16 +61,32 @@ pub(super) fn sidebar(
         visible.first().copied()
     };
 
+    // At large text scales the fixed preview square would squeeze the save list
+    // out of the sidebar on a normal-height window. The screenshot is
+    // decorative; the name and level below it carry the same information, so
+    // it is hidden once the type no longer leaves room for at least one row.
+    let show_preview = theme::text_scale() <= 1.25;
     let preview_block = preview_slot(preview, selected.is_some());
     let heading = if entries.is_empty() && scanning {
-        "LOADING SAVEGAMES…".to_owned()
+        t(keys::SHELL_LOADING_SAVEGAMES).to_uppercase()
     } else if visible.len() == entries.len() {
-        crate::widgets::plural(entries.len(), "SAVEGAME", "SAVEGAMES")
+        crate::widgets::plural(
+            entries.len(),
+            keys::COUNT_SAVEGAME_ONE,
+            keys::COUNT_SAVEGAME_OTHER,
+        )
+        .to_uppercase()
     } else {
-        format!(
-            "{} OF {}",
-            visible.len(),
-            crate::widgets::plural(entries.len(), "SAVEGAME", "SAVEGAMES")
+        let shown = visible.len().to_string();
+        let total = crate::widgets::plural(
+            entries.len(),
+            keys::COUNT_SAVEGAME_ONE,
+            keys::COUNT_SAVEGAME_OTHER,
+        )
+        .to_uppercase();
+        fill(
+            keys::SAVE_BROWSER_OF,
+            &[("shown", &shown), ("total", &total)],
         )
     };
     let list = if entries.is_empty() && scanning {
@@ -91,70 +109,75 @@ pub(super) fn sidebar(
     };
 
     let title = character.as_ref().map_or_else(
-        || "No savegame".to_owned(),
+        || t(keys::SHELL_NO_SAVEGAME_SELECTED).to_owned(),
         |character| character.name.clone(),
     );
     let subtitle = character.as_ref().map_or_else(
-        || "Select a savegame".to_owned(),
+        || t(keys::SAVE_BROWSER_SELECT_A_SAVEGAME).to_owned(),
         |character| {
-            format!(
-                "Level {} · Time played {}",
-                character.level,
-                crate::session::format::duration(character.time_played)
+            fill(
+                keys::SESSION_ROW_LEVEL_TIME,
+                &[
+                    ("level", &character.level.to_string()),
+                    (
+                        "time",
+                        &crate::session::format::duration(character.time_played),
+                    ),
+                ],
             )
         },
     );
 
     rect()
         .vertical()
-        .width(Size::percent(theme::layout::SIDEBAR_PERCENT))
-        .min_width(Size::px(theme::layout::SIDEBAR_MIN_WIDTH))
-        .max_width(Size::px(theme::layout::SIDEBAR_MAX_WIDTH))
+        .width(Size::percent(theme::layout::sidebar_percent()))
+        .min_width(Size::px(theme::layout::sidebar_min_width()))
+        .max_width(Size::px(theme::layout::sidebar_max_width()))
         .height(Size::fill())
         .content(Content::Flex)
         .padding(Gaps::new(
-            theme::space::FIELD,
-            theme::space::XL,
-            theme::space::FIELD,
-            theme::space::XL,
+            theme::space::field(),
+            theme::space::xl(),
+            theme::space::field(),
+            theme::space::xl(),
         ))
-        .spacing(theme::space::LG)
-        .background(theme::BACKGROUND)
-        .child(preview_block)
+        .spacing(theme::space::lg())
+        .background(theme::background())
+        .maybe_child(show_preview.then_some(preview_block))
         .child(
             rect()
                 .vertical()
-                .spacing(theme::space::XS)
+                .spacing(theme::space::xs())
                 .child(crate::widgets::with_tooltip(
                     title.clone(),
                     crate::widgets::a11y_text(title)
                         .a11y_builder(|node| node.set_role(AccessibilityRole::Heading))
-                        .font_size(theme::font::CARD_TITLE)
+                        .font_size(theme::font::card_title())
                         .font_weight(FontWeight::BOLD)
                         .max_lines(1)
                         .text_overflow(TextOverflow::Ellipsis)
-                        .color(theme::TEXT),
+                        .color(theme::text()),
                 ))
                 .child(
                     crate::widgets::a11y_text(subtitle)
-                        .font_size(theme::font::MICRO)
-                        .color(theme::DIM),
+                        .font_size(theme::font::micro())
+                        .color(theme::dim()),
                 ),
         )
         .child(
             crate::widgets::a11y_text(heading)
-                .font_size(theme::font::MICRO)
+                .font_size(theme::font::micro())
                 .font_weight(FontWeight::BOLD)
                 .color(if entries.is_empty() && scanning {
-                    theme::WARNING
+                    theme::warning()
                 } else {
-                    theme::DIM
+                    theme::dim()
                 }),
         )
         .child(crate::widgets::filter_input(
             query,
             crate::app::SAVE_FILTER_PLACEHOLDER,
-            "Clear the savegame filter",
+            keys::SAVE_BROWSER_CLEAR_FILTER,
             filter_id,
         ))
         .child(sort_bar(ctx, sort, *sort.read()))
@@ -174,18 +197,18 @@ fn loading_rows() -> Element {
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .height(Size::px(theme::layout::SAVE_ROW_HEIGHT))
-                .padding(Gaps::new_symmetric(theme::space::MD, theme::space::LG))
+                .height(Size::px(theme::layout::save_row_height()))
+                .padding(Gaps::new_symmetric(theme::space::md(), theme::space::lg()))
                 .cross_align(Alignment::Center)
-                .background(theme::SURFACE)
-                .corner_radius(theme::radius::MEDIUM)
+                .background(theme::surface())
+                .corner_radius(theme::radius::medium())
                 .key(index)
                 .child(
                     rect()
-                        .width(Size::percent(theme::layout::SKELETON_BAR_PERCENT))
-                        .height(Size::px(theme::font::LINE_HEIGHT))
-                        .background(theme::SURFACE_ACTIVE)
-                        .corner_radius(theme::radius::SMALL),
+                        .width(Size::percent(theme::layout::skeleton_bar_percent()))
+                        .height(Size::px(theme::font::line_height()))
+                        .background(theme::surface_active())
+                        .corner_radius(theme::radius::small()),
                 )
                 .into_element(),
         );
@@ -194,7 +217,7 @@ fn loading_rows() -> Element {
         .vertical()
         .width(Size::fill())
         .height(Size::flex(1.0))
-        .spacing(theme::space::XS)
+        .spacing(theme::space::xs())
         .children(rows)
         .into_element()
 }
@@ -220,7 +243,12 @@ impl OpenSave {
 }
 
 /// Height of one savegame row plus the gap before the next row.
-const SAVE_ROW_PITCH: f32 = theme::layout::SAVE_ROW_HEIGHT + theme::space::XS;
+///
+/// A function rather than a constant so the pitch follows the user's text
+/// scale; the row must grow with its text or the name and level clip.
+fn save_row_pitch() -> f32 {
+    theme::layout::save_row_height() + theme::space::xs()
+}
 
 /// Everything the virtual save list needs to build one row on demand.
 #[derive(Clone)]
@@ -292,15 +320,15 @@ impl Component for SaveList {
 
         let content = if visible.is_empty() {
             rect()
-                .padding(Gaps::new_all(theme::space::XL))
+                .padding(Gaps::new_all(theme::space::xl()))
                 .child(
                     crate::widgets::a11y_text(if self.data.entries.is_empty() {
-                        "No savegames in this folder."
+                        t(keys::SAVE_BROWSER_EMPTY_FOLDER)
                     } else {
-                        "No savegame matches this filter."
+                        t(keys::SAVE_BROWSER_NO_MATCH)
                     })
-                    .font_size(theme::font::CAPTION)
-                    .color(theme::DIM),
+                    .font_size(theme::font::caption())
+                    .color(theme::dim()),
                 )
                 .into_element()
         } else {
@@ -312,7 +340,7 @@ impl Component for SaveList {
                 )
             })
             .length(visible.len())
-            .item_size(SAVE_ROW_PITCH)
+            .item_size(save_row_pitch())
             .show_scrollbar(true)
             .auto_hide_scrollbars(false)
             .scroll_controller(scroll)
@@ -327,15 +355,15 @@ impl Component for SaveList {
             .a11y_id(a11y_id)
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::ListBox)
-            .a11y_alt("Savegames")
+            .a11y_alt(capitalize(t(keys::COUNT_SAVEGAME_OTHER)))
             .border(
                 Border::new()
                     .fill(if is_focused {
-                        theme::TEXT
+                        theme::text()
                     } else {
                         Color::TRANSPARENT
                     })
-                    .width(theme::stroke::FOCUS),
+                    .width(theme::stroke::focus()),
             )
             .on_press(move |_| a11y_id.request_focus())
             .on_key_down(move |event: Event<KeyboardEventData>| {
@@ -409,7 +437,7 @@ fn save_row(data: &SaveRows, index: usize, size: f32) -> Element {
     rect()
         .width(Size::fill())
         .height(Size::px(size))
-        .padding(Gaps::new(0.0, 0.0, theme::space::XS, 0.0))
+        .padding(Gaps::new(0.0, 0.0, theme::space::xs(), 0.0))
         .key(index)
         .child(
             AccessibleButton::new(
@@ -418,24 +446,24 @@ fn save_row(data: &SaveRows, index: usize, size: f32) -> Element {
                 rect()
                     .horizontal()
                     .width(Size::fill())
-                    .height(Size::px(theme::layout::SAVE_ROW_HEIGHT))
-                    .corner_radius(theme::radius::MEDIUM)
+                    .height(Size::px(theme::layout::save_row_height()))
+                    .corner_radius(theme::radius::medium())
                     .background(if is_selected {
-                        theme::SURFACE_ACTIVE
+                        theme::surface_active()
                     } else if is_focused {
-                        theme::SURFACE_HOVER
+                        theme::surface_hover()
                     } else {
-                        theme::SURFACE
+                        theme::surface()
                     })
                     // The bar is always present, transparent until the row
                     // is selected, so the row text does not shift by its
                     // width when the selection moves.
                     .child(
                         rect()
-                            .width(Size::px(theme::layout::SELECTION_BAR_WIDTH))
+                            .width(Size::px(theme::layout::selection_bar_width()))
                             .height(Size::fill())
                             .background(if is_selected {
-                                theme::ACCENT
+                                theme::accent()
                             } else {
                                 Color::TRANSPARENT
                             }),
@@ -444,23 +472,27 @@ fn save_row(data: &SaveRows, index: usize, size: f32) -> Element {
                         rect()
                             .vertical()
                             .width(Size::flex(1.0))
-                            .spacing(theme::space::XXS)
-                            .padding(Gaps::new_symmetric(theme::space::MD, theme::space::LG))
+                            .spacing(theme::space::xxs())
+                            .padding(Gaps::new_symmetric(theme::space::md(), theme::space::lg()))
                             .child(crate::widgets::with_tooltip(
                                 format!("{}, {summary}", entry.label),
                                 crate::widgets::a11y_text(title)
-                                    .font_size(theme::font::LABEL)
+                                    .font_size(theme::font::label())
                                     .max_lines(1)
                                     .text_overflow(TextOverflow::Ellipsis)
-                                    .color(if broken { theme::DANGER } else { theme::TEXT }),
+                                    .color(if broken {
+                                        theme::danger()
+                                    } else {
+                                        theme::text()
+                                    }),
                             ))
                             .child(crate::widgets::with_tooltip(
                                 format!("{}, {summary}", entry.label),
                                 crate::widgets::a11y_text(summary)
-                                    .font_size(theme::font::MICRO)
+                                    .font_size(theme::font::micro())
                                     .max_lines(1)
                                     .text_overflow(TextOverflow::Ellipsis)
-                                    .color(theme::DIM),
+                                    .color(theme::dim()),
                             )),
                     )
                     .into_element(),
@@ -468,7 +500,7 @@ fn save_row(data: &SaveRows, index: usize, size: f32) -> Element {
             .role(AccessibilityRole::ListBoxOption)
             .selected(is_selected)
             .focusable(false)
-            .hover_background(theme::SURFACE_HOVER)
+            .hover_background(theme::surface_hover())
             .fill_width()
             .into_element(),
         )
@@ -508,8 +540,8 @@ fn reveal_row(controller: &mut ScrollController, position: usize) {
     if viewport.height <= 0.0 {
         return;
     }
-    let top = position as f32 * SAVE_ROW_PITCH;
-    let bottom = top + SAVE_ROW_PITCH;
+    let top = position as f32 * save_row_pitch();
+    let bottom = top + save_row_pitch();
     let viewport_top = -controller.position().y;
     let viewport_bottom = viewport_top + viewport.height;
     if top < viewport_top {
@@ -541,17 +573,22 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
             }
         });
         let accessible = if is_active {
-            format!(
-                "Sort by {} ({})",
-                key.label(),
-                if descending {
-                    "descending"
-                } else {
-                    "ascending"
-                }
+            fill(
+                keys::SAVE_BROWSER_SORT_BY_ACTIVE,
+                &[
+                    ("name", t(key.label())),
+                    (
+                        "direction",
+                        if descending {
+                            t(keys::SORT_DESCENDING)
+                        } else {
+                            t(keys::SORT_ASCENDING)
+                        },
+                    ),
+                ],
             )
         } else {
-            format!("Sort by {}", key.label())
+            fill(keys::SAVE_BROWSER_SORT_BY, &[("name", t(key.label()))])
         };
         buttons.push(
             AccessibleButton::new(
@@ -560,14 +597,14 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                 rect()
                     .horizontal()
                     .cross_align(Alignment::Center)
-                    .padding(Gaps::new_symmetric(theme::space::SM, theme::space::XS))
+                    .padding(Gaps::new_symmetric(theme::space::sm(), theme::space::xs()))
                     .child(
-                        crate::widgets::a11y_text(key.label())
-                            .font_size(theme::font::MICRO)
+                        crate::widgets::a11y_text(t(key.label()))
+                            .font_size(theme::font::micro())
                             .color(if is_active {
-                                theme::ACCENT
+                                theme::accent()
                             } else {
-                                theme::MUTED
+                                theme::muted()
                             }),
                     )
                     // The arrow lives in a fixed slot on every button. Its
@@ -576,28 +613,28 @@ fn sort_bar(ctx: &Ctx, mut state: State<(SaveSort, bool)>, active: (SaveSort, bo
                     // buttons.
                     .child(
                         rect()
-                            .width(Size::px(theme::layout::SORT_ARROW_WIDTH))
-                            .height(Size::px(theme::layout::SORT_ARROW_HEIGHT))
+                            .width(Size::px(theme::layout::sort_arrow_width()))
+                            .height(Size::px(theme::layout::sort_arrow_height()))
                             .center()
                             .child(if is_active {
                                 crate::widgets::a11y_text(arrow)
-                                    .font_size(theme::font::MICRO)
-                                    .color(theme::ACCENT)
+                                    .font_size(theme::font::micro())
+                                    .color(theme::accent())
                             } else {
-                                crate::widgets::a11y_text("").font_size(theme::font::MICRO)
+                                crate::widgets::a11y_text("").font_size(theme::font::micro())
                             }),
                     ),
             )
-            .hover_background(theme::SURFACE_HOVER)
-            .key(key.label())
+            .hover_background(theme::surface_hover())
+            .key(t(key.label()))
             .into_element(),
         );
     }
     rect()
         .horizontal()
         .width(Size::fill())
-        .spacing(theme::space::XS)
-        .content(Content::wrap_spacing(theme::space::XS))
+        .spacing(theme::space::xs())
+        .content(Content::wrap_spacing(theme::space::xs()))
         .children(buttons)
         .into_element()
 }

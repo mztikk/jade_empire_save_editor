@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::app::HoverKey;
+use crate::i18n::{fill, keys, t};
 use crate::session::{Section, Session, StyleRow, StyleSuggestion, StyleUpgrade};
 use crate::theme;
 use crate::widgets::{self, Action};
@@ -25,11 +26,9 @@ pub fn view(
     game_loading: bool,
     names_ready: bool,
     learnable: Option<usize>,
-    matching: usize,
     expanded: State<Option<u16>>,
     hovered: State<Option<crate::app::HoverKey>>,
     filter_id: AccessibilityId,
-    show_more: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let mut rows: Vec<Element> = Vec::new();
     for style in styles {
@@ -39,11 +38,10 @@ pub fn view(
     }
     if rows.is_empty() {
         rows.push(match ctx.session.borrow().section_error(Section::Styles) {
-            Some(error) => widgets::hint(format!(
-                "The styles section could not be read: {}",
-                error.message
-            )),
-            None => widgets::hint("The player has not learned any fighting styles."),
+            Some(error) => {
+                widgets::hint(super::section_unreadable(Section::Styles, &error.message))
+            }
+            None => widgets::hint(t(keys::STYLES_EMPTY_HINT)),
         });
     }
 
@@ -51,107 +49,128 @@ pub fn view(
         rect()
             .vertical()
             .width(Size::fill())
-            .spacing(theme::space::XS)
+            .spacing(theme::space::xs())
             .children(rows)
             .into_element(),
         widgets::divider(),
-        widgets::section_label("LEARN A STYLE"),
-        widgets::hint(
-            "A new style is stored with the same field layout as one the player already owns; \
-             the game fills in the remaining data from its own tables.",
-        ),
+        widgets::section_label(t(keys::STYLES_LEARN_HEADING)),
+        widgets::hint(t(keys::STYLES_INTRO)),
     ];
 
     if game_ready {
         children.push(widgets::filter_input(
             query,
             crate::app::STYLE_FILTER_PLACEHOLDER,
-            "Clear the style filter",
+            keys::STYLES_CLEAR_FILTER,
             filter_id,
         ));
         if matches.is_empty() {
             children.push(widgets::hint(if query.read().trim().is_empty() {
-                "Every style in the game data is already learned."
+                t(keys::STYLES_ALL_LEARNED)
             } else {
-                "No styles match this search."
+                t(keys::STYLES_NO_MATCH)
             }));
         } else {
             let browsing = query.read().trim().is_empty();
-            let shown = matches.len();
+            let total = matches.len();
             let heading = rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::LG)
+                .spacing(theme::space::lg())
                 .content(Content::Flex)
                 .child(widgets::section_label(if browsing {
-                    "STYLES TO LEARN"
+                    t(keys::COUNT_STYLE_TOLEARN_OTHER).to_uppercase()
                 } else {
-                    "SEARCH RESULTS"
+                    t(keys::INVENTORY_SEARCH_RESULTS).to_owned()
                 }))
                 .child(rect().width(Size::flex(1.0)))
                 .child(
-                    widgets::a11y_text(match (browsing, shown == matching) {
-                        (true, _) => format!(
-                            "{shown} of {}",
-                            crate::widgets::plural(matching, "style to learn", "styles to learn")
-                        ),
-                        (false, true) => crate::widgets::plural(matching, "match", "matches"),
-                        (false, false) => format!(
-                            "{shown} of {}",
-                            crate::widgets::plural(matching, "match", "matches")
-                        ),
+                    widgets::a11y_text(if browsing {
+                        crate::widgets::plural(
+                            total,
+                            keys::COUNT_STYLE_TOLEARN_ONE,
+                            keys::COUNT_STYLE_TOLEARN_OTHER,
+                        )
+                    } else {
+                        crate::widgets::plural(
+                            total,
+                            keys::COUNT_MATCH_ONE,
+                            keys::COUNT_MATCH_OTHER,
+                        )
                     })
-                    .font_size(theme::font::MICRO)
-                    .color(theme::DIM),
-                )
-                .maybe(shown < matching, |el| {
-                    el.child(
-                        Button::new()
-                            .compact()
-                            .outline()
-                            .child("Show more")
-                            .on_press(show_more),
-                    )
-                });
+                    .font_size(theme::font::micro())
+                    .color(theme::dim()),
+                );
             children.push(heading.into_element());
-            let mut result_rows: Vec<Element> = Vec::new();
+            let selected = *expanded.read();
+            let mut picker_rows = Vec::with_capacity(matches.len());
             for suggestion in matches {
-                result_rows.push(learn_row(ctx, suggestion, expanded, hovered));
+                let id = suggestion.style_id;
+                let subtitle =
+                    style_subtitle(id, &suggestion.label).unwrap_or_else(|| format!("#{id}"));
+                let selectable = suggestion
+                    .description
+                    .as_deref()
+                    .is_some_and(|text| !text.trim().is_empty());
+                let select = selectable.then_some(expanded);
+                picker_rows.push(widgets::PickerRow {
+                    key: id,
+                    title: suggestion.name.clone(),
+                    subtitle: format!(
+                        "{} · {}",
+                        subtitle,
+                        crate::session::style_kind_label(suggestion.kind)
+                    ),
+                    accessible: fill(keys::STYLES_ACCESSIBLE, &[("name", &suggestion.name)]),
+                    action_label: fill(keys::STYLES_LEARN_ACTION, &[("name", &suggestion.name)]),
+                    action_text: t(keys::STYLES_LEARN).to_owned(),
+                    action: {
+                        let ctx = ctx.clone();
+                        Action::new(move || ctx.run(|session| session.add_style(id)))
+                    },
+                    select,
+                    selected: selected == Some(id),
+                });
             }
-            children.push(
-                rect()
-                    .vertical()
-                    .width(Size::fill())
-                    .spacing(theme::space::XXS)
-                    .children(result_rows)
-                    .into_element(),
-            );
+            children.push(widgets::picker_list(
+                t(keys::STYLES_LEARN_LIST),
+                picker_rows,
+            ));
+            if let Some(selected) = selected
+                && let Some(suggestion) = matches.iter().find(|row| row.style_id == selected)
+            {
+                children.extend(widgets::details(suggestion.description.as_deref()));
+            }
         }
     } else if game_loading {
-        children.push(widgets::hint(
-            "Reading the game data; learned styles can already be inspected and removed.",
-        ));
+        children.push(widgets::hint(t(keys::STYLES_READING_HINT)));
     } else if names_ready {
-        children.push(widgets::hint(
-            "Bundled English names are loaded, but new styles and upgrade details still need \
-             the game data. Levels, weapons and time spent come from the savegame.",
-        ));
+        children.push(widgets::hint(t(keys::STYLES_BUNDLED_HINT)));
     } else {
-        children.push(widgets::hint(
-            "The game data was not found, so style names and new styles are unavailable. \
-             Levels, weapons and time spent come from the savegame.",
-        ));
+        children.push(widgets::hint(t(keys::STYLES_MISSING_HINT)));
     }
 
     widgets::card(
-        "Fighting styles",
+        t(keys::STYLES_FIGHTING_STYLES),
         Some(match learnable {
             Some(learnable) => format!(
                 "{} · {}",
-                crate::widgets::plural(styles.len(), "style learned", "styles learned"),
-                crate::widgets::plural(learnable, "style to learn", "styles to learn")
+                crate::widgets::plural(
+                    styles.len(),
+                    keys::COUNT_STYLE_LEARNED_ONE,
+                    keys::COUNT_STYLE_LEARNED_OTHER
+                ),
+                crate::widgets::plural(
+                    learnable,
+                    keys::COUNT_STYLE_TOLEARN_ONE,
+                    keys::COUNT_STYLE_TOLEARN_OTHER
+                )
             ),
-            None => crate::widgets::plural(styles.len(), "style learned", "styles learned"),
+            None => crate::widgets::plural(
+                styles.len(),
+                keys::COUNT_STYLE_LEARNED_ONE,
+                keys::COUNT_STYLE_LEARNED_OTHER,
+            ),
         }),
         children,
     )
@@ -174,10 +193,8 @@ fn style_row(
         let name = style.name.clone();
         Action::new(move || {
             if !crate::dialog::confirm(
-                "Remove style?",
-                &format!(
-                    "Remove {name} from the fighting styles? You can still press Revert before saving."
-                ),
+                &fill(keys::DIALOG_REMOVE, &[("kind", t(keys::COUNT_STYLE_ONE))]),
+                &fill(keys::STYLES_REMOVE_CONFIRM, &[("name", &name)]),
             ) {
                 return;
             }
@@ -195,13 +212,13 @@ fn style_row(
         .width(Size::fill())
         .key(style.struct_index)
         .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(format!("{} style", style.name))
+        .a11y_alt(fill(keys::STYLES_ACCESSIBLE, &[("name", &style.name)]))
         .background(if is_hovered {
-            theme::SURFACE_HOVER
+            theme::surface_hover()
         } else {
-            theme::SURFACE
+            theme::surface()
         })
-        .corner_radius(theme::radius::MEDIUM)
+        .corner_radius(theme::radius::medium())
         .on_pointer_enter(move |_| *hovered.write() = Some(key))
         .on_pointer_leave(move |_| {
             if *hovered.read() == Some(key) {
@@ -212,31 +229,31 @@ fn style_row(
             rect()
                 .horizontal()
                 .width(Size::fill())
-                .spacing(theme::space::LG)
+                .spacing(theme::space::lg())
                 .content(Content::Flex)
-                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::SM))
+                .padding(Gaps::new_symmetric(theme::space::xs(), theme::space::sm()))
                 .child(widgets::expanding_name(
                     style.style_id,
                     style.name.clone(),
                     subtitle,
                     expanded,
-                    theme::font::BODY,
+                    theme::font::body(),
                 ))
                 .child(widgets::badge(
                     crate::session::style_kind_label(style.kind),
-                    theme::SURFACE_ACTIVE,
+                    theme::surface_active(),
                     style_badge_color(style.kind),
                 ))
                 .child(
-                    widgets::a11y_text(format!("Level {level}"))
-                        .font_size(theme::font::LABEL)
-                        .width(Size::px(theme::layout::LEVEL_WIDTH))
+                    widgets::a11y_text(format!("{} {level}", t(keys::CHARACTER_LEVEL)))
+                        .font_size(theme::font::label())
+                        .width(Size::px(theme::layout::level_width()))
                         .text_align(TextAlign::Center)
-                        .color(theme::ACCENT),
+                        .color(theme::accent()),
                 )
                 .child(widgets::row_action(
-                    format!("Remove {} style", style.name),
-                    "Remove",
+                    fill(keys::STYLES_REMOVE_ACTION, &[("name", &style.name)]),
+                    t(keys::GEMS_REMOVE),
                     remove,
                 )),
         )
@@ -269,18 +286,18 @@ fn upgrade_panel(
         return rect()
             .vertical()
             .width(Size::fill())
-            .spacing(theme::space::XS)
+            .spacing(theme::space::xs())
             .padding(Gaps::new(
-                theme::space::NONE,
-                theme::space::LG,
-                theme::space::SM,
-                theme::space::LG,
+                theme::space::none(),
+                theme::space::lg(),
+                theme::space::sm(),
+                theme::space::lg(),
             ))
             .children(rows)
             .into_element();
     }
 
-    rows.push(widgets::section_label("UPGRADES"));
+    rows.push(widgets::section_label(t(keys::STYLES_UPGRADES)));
     let mut family: Option<&str> = None;
     let mut chips: Vec<Element> = Vec::new();
     for upgrade in &style.upgrades {
@@ -304,9 +321,7 @@ fn upgrade_panel(
     if let Some(family) = family {
         rows.push(upgrade_row(family, chips));
     }
-    rows.push(widgets::hint(
-        "Filled gold orbs are owned; an empty ring is available. Clicking tier N buys every missing tier up to N; clicking an owned tier removes it and everything above it.",
-    ));
+    rows.push(widgets::hint(t(keys::STYLES_ORB_HINT)));
     // A hovered (or keyboard-focused) orb explains itself under the family:
     // name, effect, cost and what a click would do.
     if let Some(crate::app::HoverKey::Orb(struct_index, slot)) = *hovered.read()
@@ -318,12 +333,12 @@ fn upgrade_panel(
     rect()
         .vertical()
         .width(Size::fill())
-        .spacing(theme::space::SM)
+        .spacing(theme::space::sm())
         .padding(Gaps::new(
-            theme::space::NONE,
-            theme::space::LG,
-            theme::space::MD,
-            theme::space::LG,
+            theme::space::none(),
+            theme::space::lg(),
+            theme::space::md(),
+            theme::space::lg(),
         ))
         .children(rows)
         .into_element()
@@ -335,13 +350,13 @@ fn upgrade_row(family: &str, chips: Vec<Element>) -> Element {
         .horizontal()
         .width(Size::fill())
         .key(family.to_owned())
-        .spacing(theme::space::NONE)
+        .spacing(theme::space::none())
         .content(Content::Flex)
         .child(
             widgets::a11y_text(family_title(family))
-                .font_size(theme::font::CAPTION)
-                .width(Size::px(theme::layout::UPGRADE_LABEL_WIDTH))
-                .color(theme::MUTED),
+                .font_size(theme::font::caption())
+                .width(Size::px(theme::layout::upgrade_label_width()))
+                .color(theme::muted()),
         )
         .children(chips)
         .into_element()
@@ -389,26 +404,26 @@ impl Component for UpgradeOrb {
         let taken = self.upgrade.taken;
         let background = if taken {
             if is_hovered || focused {
-                theme::ORB_HOVER
+                theme::orb_hover()
             } else {
-                theme::ORB
+                theme::orb()
             }
         } else if is_hovered || focused {
-            theme::SURFACE_ACTIVE
+            theme::surface_active()
         } else {
-            theme::BACKGROUND
+            theme::background()
         };
         let border = if focused {
-            theme::TEXT
+            theme::text()
         } else if taken || is_hovered {
-            theme::ORB_HOVER
+            theme::orb_hover()
         } else {
-            theme::ORB
+            theme::orb()
         };
         let border_width = if focused {
-            theme::stroke::EMPHASIS
+            theme::stroke::emphasis()
         } else {
-            theme::stroke::FOCUS
+            theme::stroke::focus()
         };
         let mut hovered = self.hovered;
         let session = self.session.clone();
@@ -420,7 +435,10 @@ impl Component for UpgradeOrb {
             // The hit target reaches halfway into the gap to each neighbour
             // (the row itself has no spacing), so sweeping from one orb to the
             // next never lands on the row background in between.
-            .padding(Gaps::new_symmetric(theme::space::NONE, theme::space::XS))
+            .padding(Gaps::new_symmetric(
+                theme::space::none(),
+                theme::space::xs(),
+            ))
             .a11y_id(a11y_id)
             .a11y_focusable(true)
             .a11y_role(AccessibilityRole::Button)
@@ -449,9 +467,9 @@ impl Component for UpgradeOrb {
             .child(
                 rect()
                     .center()
-                    .width(Size::px(theme::layout::ORB))
-                    .height(Size::px(theme::layout::ORB))
-                    .corner_radius(theme::radius::PILL)
+                    .width(Size::px(theme::layout::orb()))
+                    .height(Size::px(theme::layout::orb()))
+                    .corner_radius(theme::radius::pill())
                     .background(background)
                     .border(Border::new().fill(border).width(border_width)),
             )
@@ -487,9 +505,9 @@ fn upgrade_chip(
 #[must_use]
 pub fn upgrade_notice(game_ready: bool) -> Option<&'static str> {
     Some(if game_ready {
-        "This style has no level-up table in the game data, so its upgrades are read-only here."
+        t(keys::STYLES_READ_ONLY_HINT)
     } else {
-        "Upgrade details need the game data: point JadeForge at the game installation to see them."
+        t(keys::STYLES_UPGRADE_NEEDS_DATA)
     })
 }
 
@@ -500,19 +518,28 @@ fn orb_accessible_name(style_name: &str, upgrade: &StyleUpgrade) -> String {
     } else {
         format!(", {}", upgrade.effect)
     };
+    let family = family_title(&upgrade.family);
+    let tier = upgrade.tier.to_string();
     if upgrade.taken {
-        format!(
-            "{style_name}, {}, tier {}, {}, owned: removes this tier and every tier above it",
-            family_title(&upgrade.family),
-            upgrade.tier,
-            upgrade.name
+        fill(
+            keys::STYLES_ORB_OWNED,
+            &[
+                ("style", style_name),
+                ("family", &family),
+                ("tier", &tier),
+                ("name", &upgrade.name),
+            ],
         )
     } else {
-        format!(
-            "{style_name}, {}, tier {}, {}{effect}, buys every missing tier up to this one",
-            family_title(&upgrade.family),
-            upgrade.tier,
-            upgrade.name
+        fill(
+            keys::STYLES_ORB_AVAILABLE,
+            &[
+                ("style", style_name),
+                ("family", &family),
+                ("tier", &tier),
+                ("name", &upgrade.name),
+                ("effect", &effect),
+            ],
         )
     }
 }
@@ -520,40 +547,52 @@ fn orb_accessible_name(style_name: &str, upgrade: &StyleUpgrade) -> String {
 /// The detail line shown under a family while an orb is hovered or focused.
 fn orb_detail(style: &StyleRow, upgrade: &StyleUpgrade) -> Element {
     let action = if upgrade.taken {
-        "owned: clicking removes this tier and every tier above it"
+        t(keys::STYLES_OWNED_ACTION)
     } else {
-        "available: clicking buys every missing tier up to this one"
+        t(keys::STYLES_AVAILABLE_ACTION)
     };
     let effect = if upgrade.effect.is_empty() {
-        "no listed effect".to_owned()
+        t(keys::STYLES_NO_EFFECT).to_owned()
     } else {
         upgrade.effect.clone()
     };
     let cost = if upgrade.cost == 0 {
-        "no style point cost".to_owned()
+        t(keys::STYLES_NO_COST).to_owned()
     } else {
-        widgets::plural(usize::from(upgrade.cost), "style point", "style points")
+        widgets::plural(
+            usize::from(upgrade.cost),
+            keys::COUNT_STYLE_POINT_ONE,
+            keys::COUNT_STYLE_POINT_OTHER,
+        )
     };
     rect()
         .vertical()
         .width(Size::fill())
         .key((style.struct_index, upgrade.slot))
-        .spacing(theme::space::XXS)
-        .padding(Gaps::new_symmetric(theme::space::XS, theme::space::NONE))
-        .child(orb_detail_line(
-            format!(
-                "{} tier {}: {}",
-                family_title(&upgrade.family),
-                upgrade.tier,
-                upgrade.name
-            ),
-            theme::font::CAPTION,
-            theme::TEXT,
+        .spacing(theme::space::xxs())
+        .padding(Gaps::new_symmetric(
+            theme::space::xs(),
+            theme::space::none(),
         ))
         .child(orb_detail_line(
-            format!("{effect} · {cost} · {action}"),
-            theme::font::MICRO,
-            theme::MUTED,
+            fill(
+                keys::STYLES_ORB_TITLE,
+                &[
+                    ("family", &family_title(&upgrade.family)),
+                    ("tier", &upgrade.tier.to_string()),
+                    ("name", &upgrade.name),
+                ],
+            ),
+            theme::font::caption(),
+            theme::text(),
+        ))
+        .child(orb_detail_line(
+            fill(
+                keys::STYLES_ORB_DETAIL,
+                &[("effect", &effect), ("cost", &cost), ("action", action)],
+            ),
+            theme::font::micro(),
+            theme::muted(),
         ))
         .into_element()
 }
@@ -567,7 +606,7 @@ fn orb_detail_line(text: String, font_size: f32, color: Color) -> Element {
     let value = text.clone();
     paragraph()
         .width(Size::fill())
-        .max_width(Size::px(theme::layout::TEXT_MEASURE))
+        .max_width(Size::px(theme::layout::text_measure()))
         .font_size(font_size)
         .color(color)
         .a11y_builder(move |node| node.set_value(value))
@@ -601,17 +640,20 @@ pub fn style_subtitle(style_id: u16, label: &str) -> Option<String> {
 fn saved_style_subtitle(style: &StyleRow) -> String {
     let mut parts = vec![format!("#{}", style.style_id)];
     if let Some(icon) = &style.icon {
-        parts.push(format!("icon {icon}"));
+        parts.push(fill(keys::STYLES_ICON, &[("icon", icon)]));
     }
     if style.weapon_count > 0 {
         parts.push(widgets::plural(
             usize::from(style.weapon_count),
-            "weapon",
-            "weapons",
+            keys::COUNT_WEAPON_ONE,
+            keys::COUNT_WEAPON_OTHER,
         ));
     }
     if style.time_spent >= 60 {
-        parts.push(format!("{} used", style_time(style.time_spent)));
+        parts.push(fill(
+            keys::STYLES_TIME_USED,
+            &[("time", &style_time(style.time_spent))],
+        ));
     }
     parts.join(" · ")
 }
@@ -624,22 +666,25 @@ fn saved_style_fields(style: &StyleRow) -> Option<String> {
     }
     let mut parts = Vec::new();
     if let Some(icon) = &style.icon {
-        parts.push(format!("icon {icon}"));
+        parts.push(fill(keys::STYLES_ICON, &[("icon", icon)]));
     }
     if let Some(weapon) = &style.weapon {
-        parts.push(format!("weapon {weapon}"));
+        parts.push(fill(keys::STYLES_WEAPON, &[("weapon", weapon)]));
     }
     if style.weapon_count > 0 {
         parts.push(widgets::plural(
             usize::from(style.weapon_count),
-            "weapon",
-            "weapons",
+            keys::COUNT_WEAPON_ONE,
+            keys::COUNT_WEAPON_OTHER,
         ));
     }
     if style.time_spent >= 1 {
-        parts.push(format!("{} used", style_time(style.time_spent)));
+        parts.push(fill(
+            keys::STYLES_TIME_USED,
+            &[("time", &style_time(style.time_spent))],
+        ));
     }
-    (!parts.is_empty()).then(|| format!("Saved style data: {}.", parts.join(" · ")))
+    (!parts.is_empty()).then(|| fill(keys::STYLES_SAVED_DATA, &[("fields", &parts.join(" · "))]))
 }
 
 /// Formats a duration from the savegame's `TimeSpentInStyle` seconds.
@@ -650,78 +695,10 @@ fn style_time(seconds: u32) -> String {
 /// Badge colour for a style kind.
 fn style_badge_color(kind: &str) -> Color {
     match kind {
-        "magic" | "support" => theme::JADE,
-        "transformation" | "unique" => theme::ACCENT,
-        _ => theme::MUTED,
+        "magic" | "support" => theme::jade(),
+        "transformation" | "unique" => theme::accent(),
+        _ => theme::muted(),
     }
-}
-
-fn learn_row(
-    ctx: &Ctx,
-    suggestion: &StyleSuggestion,
-    expanded: State<Option<u16>>,
-    mut hovered: State<Option<crate::app::HoverKey>>,
-) -> Element {
-    let key = crate::app::HoverKey::StyleSuggestion(suggestion.style_id);
-    let is_hovered = *hovered.read() == Some(key);
-    let learn = {
-        let ctx = ctx.clone();
-        let style_id = suggestion.style_id;
-        Action::new(move || ctx.run(|session| session.add_style(style_id)))
-    };
-    let subtitle = style_subtitle(suggestion.style_id, &suggestion.label)
-        .unwrap_or_else(|| format!("#{}", suggestion.style_id));
-    let is_expanded = *expanded.read() == Some(suggestion.style_id);
-
-    rect()
-        .vertical()
-        .width(Size::fill())
-        .key(suggestion.style_id)
-        .a11y_role(AccessibilityRole::Group)
-        .a11y_alt(format!("{} style", suggestion.name))
-        .background(if is_hovered {
-            theme::SURFACE
-        } else {
-            theme::PANEL
-        })
-        .corner_radius(theme::radius::CONTROL)
-        .on_pointer_enter(move |_| *hovered.write() = Some(key))
-        .on_pointer_leave(move |_| {
-            if *hovered.read() == Some(key) {
-                *hovered.write() = None;
-            }
-        })
-        .child(
-            rect()
-                .horizontal()
-                .width(Size::fill())
-                .spacing(theme::space::LG)
-                .content(Content::Flex)
-                .padding(Gaps::new_symmetric(theme::space::XS, theme::space::XS))
-                .child(widgets::expanding_name(
-                    suggestion.style_id,
-                    suggestion.name.clone(),
-                    subtitle,
-                    expanded,
-                    theme::font::LABEL,
-                ))
-                .child(widgets::badge(
-                    crate::session::style_kind_label(suggestion.kind),
-                    theme::SURFACE_ACTIVE,
-                    style_badge_color(suggestion.kind),
-                ))
-                .child(widgets::row_action(
-                    format!("Learn {} style", suggestion.name),
-                    "Learn",
-                    learn,
-                )),
-        )
-        .maybe_child(if is_expanded {
-            widgets::details(suggestion.description.as_deref())
-        } else {
-            None
-        })
-        .into_element()
 }
 
 #[cfg(test)]

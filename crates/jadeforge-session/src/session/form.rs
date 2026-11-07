@@ -3,7 +3,9 @@
 use std::fmt;
 
 use jadeforge_core::Character;
+use jadeforge_i18n::{Key, keys};
 
+use crate::message;
 use crate::session::format;
 
 /// A character form value that could not be parsed.
@@ -363,55 +365,101 @@ impl CharacterField {
         }
     }
 
-    /// Caption of the input.
+    /// Base caption key of the input.
+    ///
+    /// The maximum fields reuse their stat label; [`CharacterField::caption`]
+    /// adds the catalogued maximum suffix when the caption is rendered.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> Key {
         match self {
-            Self::Name => "NAME",
-            Self::Level => "LEVEL",
-            Self::Experience => "EXPERIENCE",
-            Self::Gold => "GOLD",
-            Self::AttributePoints => "UNSPENT ATTRIBUTE POINTS",
-            Self::Health => "HEALTH",
-            Self::HealthMax => "HEALTH MAX",
-            Self::Chi => "CHI",
-            Self::ChiMax => "CHI MAX",
-            Self::Focus => "FOCUS",
-            Self::FocusMax => "FOCUS MAX",
-            Self::Body => "BODY",
-            Self::Mind => "MIND",
-            Self::Spirit => "SPIRIT",
-            Self::Charm => "CHARM",
-            Self::Intuition => "INTUITION",
-            Self::Intimidate => "INTIMIDATE",
-            Self::Alignment => "ALIGNMENT",
-            Self::Appearance => "APPEARANCE",
-            Self::Chapter => "CHAPTER",
-            Self::Kills => "KILLS",
+            Self::Name => keys::CHARACTER_NAME,
+            Self::Level => keys::CHARACTER_LEVEL,
+            Self::Experience => keys::FIELD_EXPERIENCE,
+            Self::Gold => keys::FIELD_GOLD,
+            Self::AttributePoints => keys::FIELD_ATTRIBUTE_POINTS,
+            Self::Health | Self::HealthMax => keys::FIELD_HEALTH,
+            Self::Chi | Self::ChiMax => keys::FIELD_CHI,
+            Self::Focus | Self::FocusMax => keys::FIELD_FOCUS,
+            Self::Body => keys::FIELD_BODY,
+            Self::Mind => keys::FIELD_MIND,
+            Self::Spirit => keys::FIELD_SPIRIT,
+            Self::Charm => keys::FIELD_CHARM,
+            Self::Intuition => keys::FIELD_INTUITION,
+            Self::Intimidate => keys::FIELD_INTIMIDATE,
+            Self::Alignment => keys::FIELD_ALIGNMENT,
+            Self::Appearance => keys::FIELD_APPEARANCE,
+            Self::Chapter => keys::CHARACTER_CHAPTER,
+            Self::Kills => keys::COUNT_KILL_OTHER,
         }
     }
 
-    /// Accepted values, mirroring the range checks in `jadeforge-core`.
+    /// Translated caption of the input.
+    ///
+    /// The maximum fields are composed from their stat label and one shared
+    /// suffix, so the catalog does not need a separate copy of each stat name.
     #[must_use]
-    pub fn range(self) -> &'static str {
+    pub fn caption(self) -> String {
         match self {
-            Self::Name => "at most 64 characters",
-            Self::Level => "1 to 255 (level)",
-            Self::Experience => "0 to 4294967295 XP",
-            Self::AttributePoints => "0 to 4294967295 points",
-            Self::Kills => "0 to 4294967295 kills",
-            Self::Gold => "empty or 0 to 4294967295 gold",
-            Self::Health => "0 to 1000000 health points",
-            Self::Chi => "0 to 1000000 chi points",
-            Self::Focus => "0 to 1000000 focus points",
-            Self::HealthMax => "1 to 1000000 health points",
-            Self::ChiMax => "1 to 1000000 chi points",
-            Self::FocusMax => "1 to 1000000 focus points",
-            Self::Appearance => "0 to 1000000 (index)",
-            Self::Body | Self::Mind | Self::Spirit => "0 to 1000 points",
-            Self::Charm | Self::Intuition | Self::Intimidate => "-1000000 to 1000000 points",
-            Self::Alignment => "-1000000 to 1000000, 128 balanced",
-            Self::Chapter => "0 to 100 (chapter)",
+            Self::HealthMax | Self::ChiMax | Self::FocusMax => {
+                message::fill(keys::FIELD_MAX, &[("stat", message::tr(self.label()))])
+            }
+            _ => message::tr(self.label()).to_owned(),
+        }
+    }
+
+    /// Accepted values, or the range template key for a composed range.
+    #[must_use]
+    pub fn range(self) -> Key {
+        match self {
+            Self::Name => keys::FIELD_NAME_RANGE,
+            Self::Level => keys::FIELD_LEVEL_RANGE,
+            Self::Gold => keys::FIELD_GOLD_RANGE,
+            Self::Appearance => keys::FIELD_APPEARANCE_RANGE,
+            Self::Alignment => keys::FIELD_ALIGNMENT_RANGE,
+            Self::Chapter => keys::FIELD_CHAPTER_RANGE,
+            Self::Experience
+            | Self::AttributePoints
+            | Self::Kills
+            | Self::Health
+            | Self::Chi
+            | Self::Focus
+            | Self::HealthMax
+            | Self::ChiMax
+            | Self::FocusMax
+            | Self::Body
+            | Self::Mind
+            | Self::Spirit
+            | Self::Charm
+            | Self::Intuition
+            | Self::Intimidate => keys::FIELD_RANGE,
+        }
+    }
+
+    /// Accepted values, composed from the range template and a unit.
+    #[must_use]
+    pub fn range_text(self) -> String {
+        match self {
+            Self::Name
+            | Self::Level
+            | Self::Gold
+            | Self::Appearance
+            | Self::Alignment
+            | Self::Chapter => message::tr(self.range()).to_owned(),
+            Self::Experience => compose_range(0, u64::from(u32::MAX), keys::FIELD_UNIT_XP),
+            Self::AttributePoints => compose_range(0, u64::from(u32::MAX), keys::FIELD_UNIT_POINTS),
+            Self::Kills => compose_range(0, u64::from(u32::MAX), keys::COUNT_KILL_OTHER),
+            Self::Health => compose_range(0, 1_000_000, keys::FIELD_UNIT_HEALTHPOINTS),
+            Self::Chi => compose_range(0, 1_000_000, keys::FIELD_UNIT_CHIPOINTS),
+            Self::Focus => compose_range(0, 1_000_000, keys::FIELD_UNIT_FOCUSPOINTS),
+            Self::HealthMax => compose_range(1, 1_000_000, keys::FIELD_UNIT_HEALTHPOINTS),
+            Self::ChiMax => compose_range(1, 1_000_000, keys::FIELD_UNIT_CHIPOINTS),
+            Self::FocusMax => compose_range(1, 1_000_000, keys::FIELD_UNIT_FOCUSPOINTS),
+            Self::Body | Self::Mind | Self::Spirit => {
+                compose_range(0, 1000, keys::FIELD_UNIT_POINTS)
+            }
+            Self::Charm | Self::Intuition | Self::Intimidate => {
+                compose_range(-1_000_000, 1_000_000, keys::FIELD_UNIT_POINTS)
+            }
         }
     }
 
@@ -470,10 +518,21 @@ impl FieldError {
                 "{}: {:?} is outside {}",
                 field.key(),
                 raw.trim(),
-                field.range()
+                field.range_text()
             ),
         )
     }
+}
+
+fn compose_range(min: i64, max: u64, unit: Key) -> String {
+    message::fill(
+        keys::FIELD_RANGE,
+        &[
+            ("min", &min.to_string()),
+            ("max", &max.to_string()),
+            ("unit", message::tr(unit)),
+        ],
+    )
 }
 
 fn check_name(name: &str) -> Result<(), String> {
