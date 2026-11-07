@@ -14,7 +14,7 @@ and 1600 px. The windowed suite is never run without explicit permission
 | # | item | note | status |
 | --- | --- | --- | --- |
 | 1 | light/system-following theme | [theme-light.md](theme-light.md) | implemented |
-| 2 | high contrast and forced colours | [high-contrast.md](high-contrast.md) | implemented manually; the platform contrast signal is a documented follow-up |
+| 2 | high contrast and forced colours | [high-contrast.md](high-contrast.md) | implemented manually; automatic platform contrast is tracked in #33 |
 | 3 | text scaling to 200 % | [text-scaling.md](text-scaling.md) | implemented |
 | 4 | UI localization | [localization.md](localization.md) | Stable-id English/German peer catalogs in `jadeforge-i18n`, both complete (472 ids); generated typed keys, markers instead of English fallback, strict key/placeholder/completeness tests, and a preview path for future incomplete languages; the Overview stat lists reuse the shared field ids |
 | 5 | virtualized browser and pickers | [virtual-lists.md](virtual-lists.md) | implemented |

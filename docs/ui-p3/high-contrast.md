@@ -26,7 +26,7 @@ Upstream evidence:
   contrast is exposed too):
   <https://docs.rs/mundy/0.2.3/mundy/enum.Contrast.html>. That is the likely
   route to automatic high contrast; it is not wired into the `System` choice
-  yet, so the theme remains a manual selection.
+  yet, so the theme remains a manual selection. Tracked in #33.
 
 ## Approach
 
