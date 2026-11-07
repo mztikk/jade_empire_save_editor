@@ -43,21 +43,24 @@ same tag.
 
 ## Running inside a sandbox
 
-An automated session that restricts writes to the workspace needs two one-shot
-escalations, one per build recipe:
+An automated session that restricts writes to the workspace needs a one-shot
+full-access escalation for the build command:
 
 | command | why the sandbox blocks it |
 | --- | --- |
 | `just publish-linux` | podman needs a writable `/run/user/<uid>/libpod` and a working rootless user namespace |
 | `just publish-windows-cross` | cargo-xwin refreshes `~/.cache/cargo-xwin/clang-cl` |
+| `just --jobs 2 publish-all` | runs both of the above in one command |
 
-Run each recipe verbatim and request the escalation for that exact command,
-after the version bump so the artifacts carry the right version. Everything
-else in this runbook (the gate, git, `gh`, notices, SBOM, assembly and
-verification) runs inside a workspace-only sandbox. Do not probe podman with
-separate commands, move its storage into the workspace, use `unshare`, or
-substitute another runtime: those are workarounds, not the release path. If the
-escalation is refused, stop and ask instead of working around it.
+Run the chosen command verbatim and request the escalation for that exact
+command, after the version bump so the artifacts carry the right version. The
+two sequential recipes need one approval each; `publish-all` is one command and
+needs one approval covering both. Everything else in this runbook (the gate,
+git, `gh`, notices, SBOM, assembly and verification) runs inside a
+workspace-only sandbox. Do not probe podman with separate commands, move its
+storage into the workspace, use `unshare`, or substitute another runtime: those
+are workarounds, not the release path. If the escalation is refused, stop and
+ask instead of working around it.
 
 Keep persistent logs in `scratch/`, not `/tmp`, which is often a per-command
 tmpfs in a sandboxed session.
@@ -136,6 +139,23 @@ rm -rf dist
 
 `ci/assemble-release.sh` zips every `dist/jadeforge-*` folder it finds, so a
 stale folder from an older version would silently end up in the release.
+
+### Parallel build option
+
+The Linux and Windows builds write to separate Cargo target directories and
+separate `dist/` folders, so on a Linux host they can run concurrently:
+
+```sh
+just --jobs 2 publish-all
+```
+
+Use this instead of the two build commands in sections 4 and 5. Run the
+verification commands from both sections after both recipes have finished. The
+recipe is marked `[parallel]`, and `--jobs 2` caps the run at the two recipes.
+Each recipe builds the x86-64-v3 and baseline binaries, so the parallel run
+roughly doubles peak CPU and memory use; on a smaller machine use the sequential
+commands below. Do not assemble the release until both sides exit successfully,
+because a failed side leaves its `dist/` folder missing.
 
 ## 4. Build the Linux release
 
