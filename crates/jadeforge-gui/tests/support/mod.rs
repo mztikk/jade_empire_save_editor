@@ -19,6 +19,7 @@ const GEM: u32 = 5;
 const GEM_DESC: u32 = 6;
 const GENERIC_ITEM: u32 = 7;
 const ADVANCE_DESC: u32 = 8;
+const GENERIC_ITEM_DESC: u32 = 9;
 
 /// Builds the installation and one `Test Save` below `root`.
 pub fn synthetic(root: &Path) -> Option<(PathBuf, PathBuf)> {
@@ -41,6 +42,7 @@ pub fn synthetic(root: &Path) -> Option<(PathBuf, PathBuf)> {
         "This upgrade makes every strike hit harder and adds enough words that \
          the hover detail wraps like a real upgrade instead of collapsing \
          into a narrow column.",
+        "A generic test item.",
     ];
     write_tlk(&game.join("dialog.tlk"), &strings)?;
     write(&override_dir.join("items.2da"), items_2da().as_bytes())?;
@@ -82,7 +84,7 @@ fn items_2da() -> String {
         }
         let _ = writeln!(
             table,
-            "{id} Item_{id} {GENERIC_ITEM} {GENERIC_ITEM} weapons 1 ****"
+            "{id} Item_{id} {GENERIC_ITEM} {GENERIC_ITEM_DESC} weapons 1 ****"
         );
     }
     table
