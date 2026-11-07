@@ -214,7 +214,8 @@ coverage` writes a line/function summary plus HTML and lcov reports to
 
 ## Using the desktop application
 
-1. Start `jadeforge`.
+1. Start `jadeforge`. On Windows the GUI executable links for the GUI subsystem,
+   so it opens only the editor window, not a console.
 2. Pick your Jade Empire `Save` folder with **Browse…** (the native dialog, or
    type the path) and
    press **Scan**. JadeForge has no built-in guess where the game is installed:
@@ -272,8 +273,10 @@ a few milliseconds here and an idle window uses no measurable CPU.
 The backends are Freya's, not reimplemented here. A backend that cannot
 initialize falls back instead of preventing the editor from starting, and the
 one the window actually got is printed at startup, for example
-`jadeforge: renderer OpenGL (AMD Radeon RX 9070 XT)`. Run the editor from a
-terminal or check the journal to see it.
+`jadeforge: renderer OpenGL (AMD Radeon RX 9070 XT)`. On Linux, run the editor
+from a terminal or check the journal to see it. On Windows, redirect stderr to a
+file (`jadeforge.exe 2> jadeforge.log`) because the GUI subsystem has no console
+attached.
 
 | platform | `auto` picks | explicit choices |
 | --- | --- | --- |

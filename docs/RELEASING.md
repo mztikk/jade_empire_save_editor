@@ -163,7 +163,9 @@ wine dist/jadeforge-X.Y.Z-x86_64-pc-windows-msvc/jadeforge-cli.exe --help
 
 The GUI can also be started under Wine if the desktop supports it, but the
 headless test suite is the normal verification. The Windows executables embed
-the application icon through the build script.
+the application icon through the build script. The GUI executables also link as
+GUI-subsystem binaries, so Explorer opens no console window next to the editor;
+`crates/jadeforge-gui/tests/windows_subsystem.rs` checks the PE subsystem.
 
 ## 6. Write the notices and SBOM
 
@@ -264,6 +266,7 @@ Check that:
   the builds are unsigned.
 - The Linux archive contains the four binaries and the `share/` tree.
 - The Windows archive contains the four `.exe` files.
+- The Windows GUI `.exe` opens no console window.
 - The Windows icon resolves in Explorer on a Windows machine.
 - `github.com` shows the same assets and checksum file.
 

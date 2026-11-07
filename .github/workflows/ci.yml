@@ -58,9 +58,9 @@ jobs:
           cargo nextest run --locked
           -p jadeforge-gff -p jadeforge-core -p jadeforge-session
           -p jadeforge-gamedata -p jadeforge-cli
-      - name: Windows icon resource
+      - name: Windows icon resource and GUI subsystem
         if: runner.os == 'Windows'
-        run: cargo check --locked -p jadeforge-gui
+        run: cargo test --locked -p jadeforge-gui --test windows_subsystem
       - name: macOS GUI check
         if: runner.os == 'macOS'
         run: cargo check --locked -p jadeforge-gui

@@ -1,5 +1,10 @@
 //! `JadeForge` - a savegame editor for Jade Empire.
 
+// Windows links binaries as console programs by default, so Explorer would open
+// a console window next to the editor. The GUI has no console interface;
+// redirect stderr to a file when the renderer diagnostics are needed.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 use freya::prelude::*;
 use jadeforge_gui::app::{app, window_config};
 use jadeforge_gui::geometry::WindowGeometryPlugin;
