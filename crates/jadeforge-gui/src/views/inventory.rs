@@ -135,17 +135,13 @@ pub fn view(
                     },
                     select,
                     selected: selected == Some(id),
+                    description: suggestion.description.clone(),
                 });
             }
             children.push(widgets::picker_list(
                 t(keys::INVENTORY_ADD_LIST),
                 picker_rows,
             ));
-            if let Some(selected) = selected
-                && let Some(suggestion) = results.iter().find(|row| row.item_id == selected)
-            {
-                children.extend(widgets::details(suggestion.description.as_deref()));
-            }
         }
     } else if game_loading {
         children.push(widgets::hint(t(keys::INVENTORY_READING_HINT)));

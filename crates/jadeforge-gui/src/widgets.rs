@@ -1,6 +1,7 @@
 //! Small reusable pieces of the `JadeForge` interface.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::hash::Hash;
 use std::rc::Rc;
 
@@ -258,7 +259,7 @@ pub fn label_row(label_text: impl Into<String>, trailing: impl IntoElement) -> E
 /// The description is shown in full: an expanded row is the user asking for
 /// the text, so it must not stop mid-sentence at five lines. The paragraph is
 /// capped at a readable measure on very wide windows.
-pub fn details(description: Option<&str>) -> Option<Element> {
+pub fn details(description: Option<&str>) -> Option<Rect> {
     description
         .map(str::trim)
         .filter(|text| !text.is_empty())
@@ -281,7 +282,6 @@ pub fn details(description: Option<&str>) -> Option<Element> {
                         .a11y_builder(move |node| node.set_value(value))
                         .span(text.to_owned()),
                 )
-                .into_element()
         })
 }
 
@@ -755,8 +755,60 @@ pub fn outline_action(
 
 #[cfg(test)]
 mod tests {
-    use super::plural;
+    use super::{Action, HashMap, PickerRow, picker_details_height, plural};
     use crate::i18n::keys;
+
+    fn picker_row(selected: bool, description: Option<&str>) -> PickerRow {
+        PickerRow {
+            key: 7,
+            title: "Item".to_owned(),
+            subtitle: "Weapons · #7".to_owned(),
+            accessible: "Item item".to_owned(),
+            action_label: "Add Item".to_owned(),
+            action_text: "Add".to_owned(),
+            action: Action::new(|| {}),
+            select: None,
+            selected,
+            description: description.map(ToOwned::to_owned),
+        }
+    }
+
+    #[test]
+    fn only_selected_picker_rows_add_description_height() {
+        let collapsed = picker_row(false, Some("A description."));
+        assert_eq!(picker_details_height(&collapsed, &HashMap::new()), 0.0);
+        assert_eq!(
+            picker_details_height(&picker_row(true, None), &HashMap::new()),
+            0.0
+        );
+        assert_eq!(
+            picker_details_height(&picker_row(true, Some("   ")), &HashMap::new()),
+            0.0
+        );
+
+        let selected = picker_row(true, Some("A description."));
+        assert!(
+            picker_details_height(&selected, &HashMap::new()) > 0.0,
+            "a selected description has no estimated height"
+        );
+        let mut measured = HashMap::new();
+        measured.insert(7, 42.0);
+        assert!(
+            (picker_details_height(&selected, &measured) - 42.0).abs() < f32::EPSILON,
+            "the measured description height was not used"
+        );
+    }
+
+    #[test]
+    fn a_longer_description_estimates_more_lines() {
+        let short = picker_row(true, Some("A description."));
+        let long = picker_row(true, Some(&"A longer description. ".repeat(8)));
+        assert!(
+            picker_details_height(&long, &HashMap::new())
+                > picker_details_height(&short, &HashMap::new()),
+            "the estimate does not grow with the text"
+        );
+    }
 
     #[test]
     fn plural_counts_use_the_singular_only_for_one() {
@@ -779,7 +831,9 @@ mod tests {
 ///
 /// The row model is deliberately UI independent of the picker that produced it:
 /// the item, style and gem lists all render the same compact two-line row, so a
-/// very large database only builds the rows inside the viewport.
+/// very large database only builds the rows inside the viewport. A row with a
+/// description grows in place when selected; its measured height is what keeps
+/// the dynamic virtual list accurate.
 #[derive(Clone, PartialEq)]
 pub struct PickerRow {
     /// Stable key, the game id of the item or style.
@@ -796,17 +850,21 @@ pub struct PickerRow {
     pub action_text: String,
     /// Adds or learns the row.
     pub action: Action,
-    /// Toggles the description panel below the list, when the row has one.
+    /// Toggles the inline description, when the row has one.
     pub select: Option<State<Option<u16>>>,
-    /// Whether the description panel is currently open for this row.
+    /// Whether the inline description is currently open for this row.
     pub selected: bool,
+    /// Game description revealed under the title row when selected.
+    pub description: Option<String>,
 }
 
 /// The data a virtualized picker builds its visible rows from.
 #[derive(Clone, PartialEq)]
-pub struct PickerData {
+struct PickerData {
     /// Every filtered row, in display order.
-    pub rows: Rc<Vec<PickerRow>>,
+    rows: Rc<Vec<PickerRow>>,
+    /// Measured heights of the expanded descriptions, keyed by row id.
+    measured: State<HashMap<u16, f32>>,
 }
 
 /// Number of picker rows a virtualized list shows before it scrolls.
@@ -816,20 +874,26 @@ pub struct PickerData {
 /// outside the list.
 const PICKER_VISIBLE_ROWS: usize = 7;
 
-/// Builds a virtualized picker list with a fixed visible height.
+/// Conservative wrap width used before a description has been measured.
+///
+/// The first render of an expanded row has no measured height yet. Estimating
+/// the line count at the narrowest useful picker width overestimates the height,
+/// so the text is never clipped in the frame before the exact measure arrives.
+const ESTIMATED_DESCRIPTION_WIDTH: f32 = 320.0;
+
+/// Builds a virtualized picker list with a viewport of at most seven rows.
 ///
 /// Only the rows inside the viewport are built. The rows keep their stable
 /// `u16` keys across filtering, and the list is a single accessibility list
-/// box rather than a tab stop per off-screen row.
+/// box rather than a tab stop per off-screen row. The viewport grows by the
+/// expanded description's height, so the selected row and its text stay
+/// visible without a nested scroll.
 pub fn picker_list(label: &'static str, rows: Vec<PickerRow>) -> Element {
     let row_count = rows.len();
     let visible = row_count.clamp(1, PICKER_VISIBLE_ROWS);
-    let height = theme::layout::picker_row_height() * visible as f32;
     PickerList {
-        data: PickerData {
-            rows: Rc::new(rows),
-        },
-        height,
+        rows: Rc::new(rows),
+        height: theme::layout::picker_row_height() * visible as f32,
         label,
         key: DiffKey::None,
     }
@@ -839,7 +903,7 @@ pub fn picker_list(label: &'static str, rows: Vec<PickerRow>) -> Element {
 
 #[derive(PartialEq)]
 struct PickerList {
-    data: PickerData,
+    rows: Rc<Vec<PickerRow>>,
     height: f32,
     label: &'static str,
     key: DiffKey,
@@ -853,21 +917,41 @@ impl KeyExt for PickerList {
 
 impl Component for PickerList {
     fn render(&self) -> impl IntoElement {
-        let data = self.data.clone();
-        let length = self.data.rows.len();
-        let item_size = theme::layout::picker_row_height();
+        let rows = self.rows.clone();
+        let length = rows.len();
+        let measured = use_state(HashMap::<u16, f32>::new);
+        // The item-size callback is where the measured heights are read; this
+        // read subscribes the component itself, so a new measurement rebuilds
+        // the rows even if only the callback ever touched the map.
+        let _measured_count = measured.read().len();
+        let base = theme::layout::picker_row_height();
+        let expanded = rows
+            .iter()
+            .find(|row| row.selected)
+            .map_or(0.0, |row| picker_details_height(row, &measured.read()));
+        let item_size = {
+            let rows = rows.clone();
+            move |index: usize| {
+                rows.get(index).map_or(base, |row| {
+                    base + picker_details_height(row, &measured.read())
+                })
+            }
+        };
         rect()
             .width(Size::fill())
-            .height(Size::px(self.height))
+            .height(Size::px(self.height + expanded))
             .a11y_role(AccessibilityRole::ListBox)
             .a11y_alt(self.label)
             .child(
-                VirtualScrollView::new_with_data(data, |item, data: &PickerData| {
-                    data.rows.get(item.index).map_or_else(
-                        || rect().height(Size::px(item.size)).into_element(),
-                        |row| picker_row(row, item.size),
-                    )
-                })
+                VirtualScrollView::new_with_data(
+                    PickerData { rows, measured },
+                    |item, data: &PickerData| {
+                        data.rows.get(item.index).map_or_else(
+                            || rect().height(Size::px(item.size)).into_element(),
+                            |row| picker_row(row, item.size, data.measured),
+                        )
+                    },
+                )
                 .length(length)
                 .item_size(item_size)
                 .show_scrollbar(true)
@@ -881,8 +965,41 @@ impl Component for PickerList {
     }
 }
 
+/// Height an expanded description adds to its row.
+///
+/// The exact height is stored by the description's `on_sized` handler once the
+/// text has been laid out. Until then a conservative estimate keeps the first
+/// frame from clipping the text.
+fn picker_details_height(row: &PickerRow, measured: &HashMap<u16, f32>) -> f32 {
+    if !row.selected {
+        return 0.0;
+    }
+    let Some(description) = row
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+    else {
+        return 0.0;
+    };
+    measured
+        .get(&row.key)
+        .copied()
+        .unwrap_or_else(|| estimated_details_height(description))
+}
+
+/// Estimates the wrapped height of a description line block.
+fn estimated_details_height(description: &str) -> f32 {
+    let average_glyph = theme::font::caption() * 0.5;
+    let chars_per_line = (ESTIMATED_DESCRIPTION_WIDTH / average_glyph).max(1.0);
+    let lines = (description.chars().count() as f32 / chars_per_line)
+        .ceil()
+        .max(1.0);
+    theme::font::line_height() * lines + theme::space::xxs() + theme::space::sm()
+}
+
 /// One compact row inside a virtualized picker.
-fn picker_row(row: &PickerRow, height: f32) -> Element {
+fn picker_row(row: &PickerRow, height: f32, measured: State<HashMap<u16, f32>>) -> Element {
     let content = rect()
         .vertical()
         .width(Size::flex(1.0))
@@ -911,28 +1028,67 @@ fn picker_row(row: &PickerRow, height: f32) -> Element {
         ),
         None => content.into_element(),
     };
+    let details = picker_details(row, measured);
     rect()
-        .horizontal()
+        .vertical()
         .width(Size::fill())
         .height(Size::px(height))
         .key(row.key)
         .a11y_role(AccessibilityRole::Group)
         .a11y_alt(row.accessible.clone())
-        .spacing(theme::space::md())
-        .content(Content::Flex)
-        .cross_align(Alignment::Center)
-        .padding(Gaps::new_symmetric(theme::space::xxs(), theme::space::md()))
         .background(if row.selected {
             theme::surface_hover()
         } else {
             theme::surface()
         })
         .corner_radius(theme::radius::control())
-        .child(rect().width(Size::flex(1.0)).child(title))
-        .child(row_action(
-            row.action_label.clone(),
-            row.action_text.clone(),
-            row.action.clone(),
-        ))
+        .child(
+            rect()
+                .horizontal()
+                .width(Size::fill())
+                .height(Size::px(theme::layout::picker_row_height()))
+                .spacing(theme::space::md())
+                .content(Content::Flex)
+                .cross_align(Alignment::Center)
+                .padding(Gaps::new_symmetric(theme::space::xxs(), theme::space::md()))
+                .child(rect().width(Size::flex(1.0)).child(title))
+                .child(row_action(
+                    row.action_label.clone(),
+                    row.action_text.clone(),
+                    row.action.clone(),
+                )),
+        )
+        .maybe_child(details)
         .into_element()
+}
+
+/// The inline description element of a selected picker row.
+///
+/// The element reports its laid-out height back into the picker's measurement
+/// state. The virtual list uses that height for the next layout, so the row
+/// grows around the real text instead of reserving a guessed slot.
+fn picker_details(row: &PickerRow, measured: State<HashMap<u16, f32>>) -> Option<Element> {
+    if !row.selected {
+        return None;
+    }
+    let mut measured = measured;
+    let key = row.key;
+    details(row.description.as_deref()).map(|details| {
+        details
+            .key("picker-details")
+            .on_sized(move |event: Event<SizedEventData>| {
+                let height = event.area.height();
+                if height <= 0.0 {
+                    return;
+                }
+                let changed = measured
+                    .peek()
+                    .get(&key)
+                    .is_none_or(|known| (known - height).abs() > 0.5);
+                if changed {
+                    measured.write().insert(key, height);
+                }
+            })
+            .into_element()
+    })
 }

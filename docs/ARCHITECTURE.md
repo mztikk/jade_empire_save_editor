@@ -253,8 +253,9 @@ The savegame sidebar is a `VirtualScrollView`, so only the rows inside it are
 built; each row carries two tooltips and two text paragraphs, and building all
 of them for a few hundred saves dominated the idle footprint. The P3 item, style
 and gem pickers use the same mechanism through `widgets::picker_list`: the full
-filtered corpus is available, the list shows seven fixed-height rows, and the
-selected description renders in a panel below it.
+filtered corpus is available, the list shows seven rows at a time, and an
+expanded item or style row grows to its measured description height while the
+other rows stay collapsed.
 
 There are no hardcoded installation paths anywhere. The folder comes from
 `JADEFORGE_SAVE_DIR`, the settings file or the native folder dialog, in that order.

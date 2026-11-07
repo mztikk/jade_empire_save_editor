@@ -135,6 +135,11 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- Expanding an item or style in the add/learn picker now grows that row and
+  shows the description inline, like the owned inventory and style rows,
+  instead of appending a panel below the whole list. The virtual picker
+  measures the laid-out text and uses a dynamic item size, so the full corpus
+  stays virtualized.
 - A `System` theme choice now follows a dark KDE or GNOME desktop on Linux.
   winit reports no desktop theme there, so the editor reads the freedesktop
   appearance portal (and KDE's `kdeglobals` for the first frame) instead of
