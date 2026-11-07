@@ -254,7 +254,10 @@ procedure; the tracked `pre-commit` hook refuses direct commits on `main`.
 17. **Never interpolate prose into a double-quoted shell argument.** Backticks
     and `$()` are command substitution, not text. Pass multi-line prose or
     Markdown through a file (`gh pr create --body-file`, a heredoc) or single
-    quotes. Never put backticked commands in a double-quoted argument.
+    quotes. A double-quoted `-m` does not expand `\n`, so it stores a literal
+    backslash and `n`; use one `-m` per paragraph or `git commit -F <file>`
+    instead. See "Commits" for the pull request body. Never put backticked
+    commands in a double-quoted argument.
 18. **Read and edit tracked files through the harness tools.** A regular UTF-8
     file in the working tree is read with `read` (`offset`/`limit` for a
     range), searched with `grep` and found with `glob`. A content change goes
@@ -466,6 +469,17 @@ documentation, not ground truth: verify against the game files where possible).
 - Imperative, lower-case subject lines, one logical change per commit
   (`add focus editing`, `fix zero-length locstring parsing`).
 - The body explains *why* when the change is not obvious.
+- Put multi-paragraph bodies in one `-m` per paragraph
+  (`git commit -m "subject" -m "paragraph one" -m "paragraph two"`) or with
+  `git commit -F <file>`. Never use `\n` in a double-quoted `-m` as a line
+  break: it stores a literal backslash and `n`, and `gh pr create --fill`
+  copies that into the pull request body.
+- A literal `\n` is fine when it is intentional, for example when quoting
+  another tool's output. The mistake is using it as a line break, not the
+  characters themselves.
+- Check `git log -1 --format=%B` after a multi-paragraph commit. For a prose
+  pull request body, use `gh pr create --body-file` instead of `--fill`, and
+  inspect the result with `gh pr view <number> --json body --jq '.body'`.
 - Do not commit `target/`, savegames, screenshots other than the ones in
   `docs/`, or editor state.
 
