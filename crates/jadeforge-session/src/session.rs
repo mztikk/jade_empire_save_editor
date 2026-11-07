@@ -5221,6 +5221,11 @@ mod tests {
 
     #[test]
     fn appearance_options_cover_the_seven_player_models() {
+        // The bundled English label is the deterministic contract here; a
+        // real installation behind JADEFORGE_GAME_DIR can be localized.
+        let guard = GameDataGuard::capture();
+        jadeforge_gamedata::set_test_game_root(None);
+        jadeforge_gamedata::set_test_game_data_missing(true);
         let (_directory, session) = fixture();
         let options = session.appearance_options();
         assert_eq!(options.len(), 7);
@@ -5232,6 +5237,7 @@ mod tests {
             [0, 5, 7, 2, 3, 6, 8]
         );
         assert_eq!(options[1].label, "Furious Ming");
+        drop(guard);
     }
 
     #[test]
