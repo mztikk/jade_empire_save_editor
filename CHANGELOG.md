@@ -15,6 +15,11 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- GUI render work now follows the active tab: inactive item and style searches
+  are skipped, derived character/form/picker data is shared instead of cloned,
+  the save list keeps one stable open action per document, the gems picker
+  reuses a memoized row model, and category chips have stable keys. Character
+  auto-apply also reuses one canonical serialization for dirty and history.
 - The direct item stack and companion level inputs now keep their typed draft
   across hover and revision renders, sync from committed stepper changes,
   normalize after a successful submit, and keep the row context for assistive

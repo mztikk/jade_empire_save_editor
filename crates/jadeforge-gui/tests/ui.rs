@@ -509,6 +509,59 @@ fn long_status_messages_do_not_move_the_tab_bar() {
 }
 
 #[test]
+fn opening_a_save_updates_the_save_list_selection() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_unopened(fixture.save_dir.clone(), 1200.0);
+    wait_for_text(&mut test, "1 SAVEGAME");
+    let row = test
+        .find(|node, _| {
+            (a11y_role(&node) == "ListBoxOption"
+                && a11y_label(&node)
+                    .as_deref()
+                    .is_some_and(|label| label.starts_with("Test Save, ")))
+            .then_some(node)
+        })
+        .expect("the save row is missing");
+    assert!(!a11y_selected(&row));
+    click_node(&mut test, &row);
+    test.sync_and_update();
+    let row = test
+        .find(|node, _| {
+            (a11y_role(&node) == "ListBoxOption"
+                && a11y_label(&node)
+                    .as_deref()
+                    .is_some_and(|label| label.starts_with("Test Save, ")))
+            .then_some(node)
+        })
+        .expect("the save row disappeared");
+    assert!(
+        a11y_selected(&row),
+        "the save list did not show the opened row"
+    );
+}
+
+#[test]
+fn unrelated_tab_renders_do_not_rebuild_the_save_list() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_unopened(fixture.save_dir.clone(), 1200.0);
+    wait_for_text(&mut test, "1 SAVEGAME");
+    let before = jadeforge_gui::perf::save_list_renders();
+    assert!(click_text(&mut test, "About"), "About is missing");
+    test.sync_and_update();
+    assert_eq!(
+        jadeforge_gui::perf::save_list_renders(),
+        before,
+        "the save list rebuilt on an unrelated page render"
+    );
+}
+
+#[test]
 fn switching_tabs_does_not_move_the_tab_bar() {
     let Some(fixture) = Fixture::create() else {
         eprintln!("skipping: no savegames found (set JADEFORGE_SAVE_DIR)");
@@ -1669,6 +1722,32 @@ fn character_edits_apply_immediately() {
     assert!(
         find_label_text(&test, "unsaved changes").is_some(),
         "scanning was not blocked"
+    );
+}
+
+#[test]
+fn character_edits_do_not_run_inactive_picker_searches() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let mut test = launch_sized(fixture.save_dir.clone(), 1200.0);
+    assert!(click_text(&mut test, "Character"));
+    let items_before = jadeforge_gui::perf::item_searches();
+    let styles_before = jadeforge_gui::perf::style_searches();
+    assert!(click_text(&mut test, "+1 point"), "no quick add button");
+    for _ in 0..3 {
+        test.sync_and_update();
+    }
+    assert_eq!(
+        jadeforge_gui::perf::item_searches(),
+        items_before,
+        "a Character edit searched the inactive item database"
+    );
+    assert_eq!(
+        jadeforge_gui::perf::style_searches(),
+        styles_before,
+        "a Character edit searched the inactive style database"
     );
 }
 
@@ -3569,6 +3648,43 @@ fn rows_show_a_details_chevron() {
         })
         .expect("the row action has no Details affordance");
     assert!(a11y_label(&row).is_some());
+}
+
+#[test]
+fn hovering_a_gem_row_does_not_rebuild_the_picker() {
+    let Some(fixture) = Fixture::create() else {
+        eprintln!("skipping: no savegames found");
+        return;
+    };
+    let Some(mut session) = probe_session(&fixture) else {
+        eprintln!("skipping: the fixture save could not be opened");
+        return;
+    };
+    let Some(gem) = session.available_gems().first().cloned() else {
+        eprintln!("skipping: no gem can be resolved from the game data");
+        return;
+    };
+    session.add_gem(gem.item_id);
+    session.save().expect("add a gem to the fixture");
+    let mut test = launch_sized(fixture.save_dir.clone(), 1600.0);
+    assert!(click_text(&mut test, "Gems"), "no gems tab");
+    test.sync_and_update();
+    let Some(row) = find_node_with_text(&test, &gem.name) else {
+        eprintln!("skipping: no gem row is rendered");
+        return;
+    };
+    let before = jadeforge_gui::perf::picker_renders();
+    let area = row.layout().area;
+    test.move_cursor(CursorPoint::new(
+        f64::from(area.origin.x) + f64::from(area.size.width) / 2.0,
+        f64::from(area.origin.y) + f64::from(area.size.height) / 2.0,
+    ));
+    test.sync_and_update();
+    assert_eq!(
+        jadeforge_gui::perf::picker_renders(),
+        before,
+        "hovering a gem rebuilt the gems picker"
+    );
 }
 
 #[test]
